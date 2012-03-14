@@ -7,7 +7,6 @@ import java.util.List;
 import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.commons.lang3.mutable.MutableObject;
 
-import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
 import edu.uci.ics.asterix.common.functions.FunctionArgumentsConstants;
 import edu.uci.ics.asterix.common.functions.FunctionUtils;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledDatasetDecl;
@@ -19,10 +18,8 @@ import edu.uci.ics.asterix.om.base.AInt32;
 import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
 import edu.uci.ics.asterix.om.types.ARecordType;
-import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.asterix.om.util.NonTaggedFormatUtil;
-import edu.uci.ics.asterix.optimizer.base.AnalysisUtil;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IOptimizationContext;
@@ -55,31 +52,14 @@ public class IntroduceRTreeIndexSearchRule extends IntroduceTreeIndexSearchRule 
         return AsterixBuiltinFunctions.isSpatialFilterFunction(funcIdent);
     }
     
-	/**
-	 * Tries to optimize spatial-intersect(var, spatialObject) with an existing RTree index.
-	 * 
-	 * Matches this operator pattern: (select) <-- (assign) <-- (datasource scan)
-	 * Replaces it with this pattern: (select) <-- (assign) <-- (btree search) <-- (rteee search)
-	 * 
-	 * Note that the spatial-intersect condition is not removed from the select, 
-	 * since the RTree only acts as a filtering condition.
-	 * 
-	 * The basic outline of this rule is:
-	 * 1. Match operator pattern.
-	 * 2. Analyze select to see if there is an optimizable spatial function.
-	 * 3. Check metadata to see if there is an index.
-	 * 4. Rewrite plan.
-	 * 
-	 * @throws AlgebricksException
-	 * 
-	 */
     @Override
     public boolean rewritePost(Mutable<ILogicalOperator> opRef, IOptimizationContext context) throws AlgebricksException {
         // Match operator pattern and initialize operator members.
         if (!matchesPattern(opRef, context, false)) {
             return false;
         }
-		// List of constant values participating in spatial filter that we can
+
+        // List of constant values participating in spatial filter that we can
 		// push to the index. Used to generate the input tuple an index lookup.
 		ArrayList<IAlgebricksConstantValue> outFilters = new ArrayList<IAlgebricksConstantValue>();
 		// List of variables participating in a spatial filter that we can push
@@ -89,57 +69,24 @@ public class IntroduceRTreeIndexSearchRule extends IntroduceTreeIndexSearchRule 
 		if (!analyzeCondition(selectCond, outFilters, outComparedVars)) {
 			return false;
 		}
-        // Find the dataset corresponding to the datasource scan in the metadata.
-        String datasetName = AnalysisUtil.getDatasetName(dataSourceScan);
-        if (datasetName == null) {
-            return false;
-        }
-        AqlMetadataProvider metadataProvider = (AqlMetadataProvider) context.getMetadataProvider();
-        AqlCompiledMetadataDeclarations metadata = metadataProvider.getMetadataDeclarations();
-        AqlCompiledDatasetDecl datasetDecl = metadata.findDataset(datasetName);
-        if (datasetDecl == null) {
-            throw new AlgebricksException("No metadata for dataset " + datasetName);
-        }
-        if (datasetDecl.getDatasetType() != DatasetType.INTERNAL && datasetDecl.getDatasetType() != DatasetType.FEED) {
-            return false;
-        }
-        // Get the record type for that dataset.
-        IAType itemType = metadata.findType(datasetDecl.getItemTypeName());
-        if (itemType.getTypeTag() != ATypeTag.RECORD) {
-            return false;
-        }
-        ARecordType recordType = (ARecordType) itemType;
-        
-        // Contains candidate indexes and corresponding expressions that we could optimize. 
+		
+		// Set dataset and type metadata.
+		if (!setDatasetAndTypeMetadata((AqlMetadataProvider)context.getMetadataProvider())) {
+		    return false;
+		}
+       
+		// Contains candidate indexes and corresponding expressions that we could optimize. 
         // Maps from index to a list of pairs. Each list-entry is a <fieldName,varPos> pair. 
         // The varPos is an index into outComparedVars, and fieldName is the corresponding fieldName.
         HashMap<AqlCompiledIndexDecl, List<Pair<String, Integer>>> indexExprs = new HashMap<AqlCompiledIndexDecl, List<Pair<String, Integer>>>();
         List<LogicalVariable> varList = assign.getVariables();
-        for (int varIndex = 0; varIndex < varList.size(); varIndex++) {
-        	int outVarIndex = findVarInOutComparedVars(varList.get(varIndex), outComparedVars);
-        	// Current var does not match any vars in outComparedVars, 
-        	// so it's irrelevant for our purpose of optimizing with an index.
-        	if (outVarIndex < 0) {
-        		continue;
-        	}
-        	// Get the fieldName corresponding to the assigned variable at varIndex.
-        	// If the expr at varIndex is not a fieldAccess we get back null.
-        	String fieldName = getFieldNameOfFieldAccess(assign, recordType, varIndex);
-        	if (fieldName == null) {
-        		continue;
-        	}
-            // TODO: Don't just ignore open record types.
-            if (recordType.isOpen()) {
-            	continue;
-            }
-            fillIndexExprs(datasetDecl, indexExprs, fieldName, outVarIndex, false);
-        }
+        fillAllIndexExprs(varList, outComparedVars, indexExprs);
         // We didn't find any applicable indexes.
         if (indexExprs.isEmpty()) {
         	return false;
         }
+        
         AqlCompiledIndexDecl chosenIndex = chooseIndex(datasetDecl, indexExprs);
-        // No usable index found.
         if (chosenIndex == null) {
         	context.addToDontApplySet(this, select);
         	return false;

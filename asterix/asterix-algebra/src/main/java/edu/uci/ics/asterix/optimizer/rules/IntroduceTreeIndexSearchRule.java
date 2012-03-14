@@ -6,16 +6,20 @@ import java.util.List;
 
 import org.apache.commons.lang3.mutable.Mutable;
 
+import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledDatasetDecl;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
+import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
 import edu.uci.ics.asterix.metadata.utils.DatasetUtils;
 import edu.uci.ics.asterix.om.base.AInt32;
 import edu.uci.ics.asterix.om.base.AString;
 import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
 import edu.uci.ics.asterix.om.types.ARecordType;
+import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.asterix.om.types.IAType;
+import edu.uci.ics.asterix.optimizer.base.AnalysisUtil;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IOptimizationContext;
@@ -33,6 +37,7 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AssignOpera
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.DataSourceScanOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluatorFactory;
+import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.rewriter.base.IAlgebraicRewriteRule;
 import edu.uci.ics.hyracks.algebricks.core.utils.Pair;
 import edu.uci.ics.hyracks.algebricks.core.utils.Triple;
@@ -76,6 +81,9 @@ public abstract class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteR
 	// Condition of the select operator.
 	protected AbstractFunctionCallExpression selectCond = null;
 	protected boolean includePrimaryIndex = true;
+	// Dataaset and type metadata. Set in setDatasetAndTypeMetadata().
+	protected ARecordType recordType = null;
+	protected AqlCompiledDatasetDecl datasetDecl = null;
 	
     @Override
     public boolean rewritePre(Mutable<ILogicalOperator> opRef, IOptimizationContext context) {
@@ -140,6 +148,34 @@ public abstract class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteR
         return true;
     }
     
+    /**
+     * Find the dataset corresponding to the datasource scan in the metadata.
+     * Also sets recordType to be the type of that dataset.
+     */  
+    protected boolean setDatasetAndTypeMetadata(AqlMetadataProvider metadataProvider) throws AlgebricksException {
+        // Find the dataset corresponding to the datasource scan in the metadata.
+        String datasetName = AnalysisUtil.getDatasetName(dataSourceScan);
+        if (datasetName == null) {
+            return false;
+        }
+        AqlCompiledMetadataDeclarations metadata = metadataProvider.getMetadataDeclarations();
+        datasetDecl = metadata.findDataset(datasetName);
+        if (datasetDecl == null) {
+            throw new AlgebricksException("No metadata for dataset " + datasetName);
+        }
+        if (datasetDecl.getDatasetType() != DatasetType.INTERNAL && datasetDecl.getDatasetType() != DatasetType.FEED) {
+            return false;
+        }
+        // Get the record type for that dataset.
+        IAType itemType = metadata.findType(datasetDecl.getItemTypeName());
+        if (itemType.getTypeTag() != ATypeTag.RECORD) {
+            return false;
+        }
+        recordType = (ARecordType) itemType;
+        return true;
+    }
+       
+    
 	/**
 	 * Picks the first index for which all the expressions are mentioned.
 	 */
@@ -183,9 +219,8 @@ public abstract class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteR
 	 * @return returns true if a candidate index was added to foundIndexExprs,
 	 *         false otherwise
 	 */
-    protected boolean fillIndexExprs(AqlCompiledDatasetDecl datasetDecl, 
-    		HashMap<AqlCompiledIndexDecl, List<Pair<String, Integer>>> foundIndexExprs,
-            String fieldName, int varIndex, boolean includePrimaryIndex) {
+    protected boolean fillIndexExprs(String fieldName, int varIndex,
+    		HashMap<AqlCompiledIndexDecl, List<Pair<String, Integer>>> foundIndexExprs) {
     	AqlCompiledIndexDecl primaryIndexDecl = DatasetUtils.getPrimaryIndex(datasetDecl);
     	List<String> primaryIndexFields = primaryIndexDecl.getFieldExprs();    	
         List<AqlCompiledIndexDecl> indexCandidates = DatasetUtils.findSecondaryIndexesByOneOfTheKeys(datasetDecl, fieldName);
@@ -212,7 +247,45 @@ public abstract class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteR
         return true;
     }
 
-    protected int findVarInOutComparedVars(LogicalVariable var, ArrayList<LogicalVariable> outComparedVars) {
+    protected void fillAllIndexExprs(List<LogicalVariable> varList, List<LogicalVariable> outComparedVars,
+            HashMap<AqlCompiledIndexDecl, List<Pair<String, Integer>>> indexExprs) {
+        for (int varIndex = 0; varIndex < varList.size(); varIndex++) {
+            int outVarIndex = findVarInOutComparedVars(varList.get(varIndex), outComparedVars);
+            // Current var does not match any vars in outComparedVars, 
+            // so it's irrelevant for our purpose of optimizing with an index.
+            if (outVarIndex < 0) {
+                continue;
+            }
+            String fieldName = null;
+            if (assign != null) {
+                // Get the fieldName corresponding to the assigned variable at varIndex.
+                // If the expr at varIndex is not a fieldAccess we get back null.
+                fieldName = getFieldNameOfFieldAccess(assign, recordType, varIndex);
+                if (fieldName == null) {
+                    continue;
+                }
+            } else {
+				if (!includePrimaryIndex) {
+					throw new IllegalStateException(
+							"Assign operator not set but only looking for secondary index optimizations.");
+				}
+                // We don't have an assign, only a datasource scan.
+                // The last var. is the record itself, so skip it.
+                if (varIndex >= varList.size() - 1) {
+                    break;
+                }
+                // The variable value is one of the partitioning fields.
+                fieldName = DatasetUtils.getPartitioningExpressions(datasetDecl).get(varIndex);
+            }
+            // TODO: Don't just ignore open record types.
+            if (recordType.isOpen()) {
+                continue;
+            }
+            fillIndexExprs(fieldName, outVarIndex, indexExprs);
+        }
+    }
+    
+    protected int findVarInOutComparedVars(LogicalVariable var, List<LogicalVariable> outComparedVars) {
     	int outVarIndex = 0;
     	while (outVarIndex < outComparedVars.size()) {
     		if (var == outComparedVars.get(outVarIndex)) {
@@ -233,7 +306,7 @@ public abstract class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteR
      * @return
      */
     protected String getFieldNameOfFieldAccess(AssignOperator assign, ARecordType recordType, int varIndex) {
-    	// Get expression corresponding to var at varIndex.
+        // Get expression corresponding to var at varIndex.
     	AbstractLogicalExpression assignExpr = (AbstractLogicalExpression) assign.getExpressions()
     			.get(varIndex).getValue();
     	if (assignExpr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {

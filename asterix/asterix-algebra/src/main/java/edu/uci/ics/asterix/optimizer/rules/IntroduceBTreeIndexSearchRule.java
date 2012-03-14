@@ -7,7 +7,6 @@ import java.util.List;
 import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.commons.lang3.mutable.MutableObject;
 
-import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
 import edu.uci.ics.asterix.common.functions.FunctionArgumentsConstants;
 import edu.uci.ics.asterix.common.functions.FunctionUtils;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledDatasetDecl;
@@ -16,20 +15,16 @@ import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
 import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
 import edu.uci.ics.asterix.metadata.utils.DatasetUtils;
 import edu.uci.ics.asterix.om.base.AInt32;
-import edu.uci.ics.asterix.om.base.AString;
 import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
 import edu.uci.ics.asterix.om.types.ARecordType;
-import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.asterix.om.types.IAType;
-import edu.uci.ics.asterix.optimizer.base.AnalysisUtil;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IOptimizationContext;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalExpressionTag;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
-import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractLogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IAlgebricksConstantValue;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
@@ -72,7 +67,6 @@ public class IntroduceBTreeIndexSearchRule extends IntroduceTreeIndexSearchRule 
      * @throws AlgebricksException
      * 
      */
-
     @Override
     public boolean rewritePost(Mutable<ILogicalOperator> opRef, IOptimizationContext context) throws AlgebricksException {
         // Match operator pattern and initialize operator members.
@@ -88,101 +82,28 @@ public class IntroduceBTreeIndexSearchRule extends IntroduceTreeIndexSearchRule 
         if (!analyzeCondition(selectCond, outFilters, outComparedVars, outLimits, outRest, foundedExprList)) {
             return false;
         }
-
-        String datasetName = AnalysisUtil.getDatasetName(dataSourceScan);
-        if (datasetName == null) {
+        // Set dataset and type metadata.
+        if (!setDatasetAndTypeMetadata((AqlMetadataProvider)context.getMetadataProvider())) {
             return false;
         }
-        AqlMetadataProvider mp = (AqlMetadataProvider) context.getMetadataProvider();
-        AqlCompiledMetadataDeclarations metadata = mp.getMetadataDeclarations();
-        AqlCompiledDatasetDecl adecl = metadata.findDataset(datasetName);
-        if (adecl == null) {
-            throw new AlgebricksException("No metadata for dataset " + datasetName);
-        }
-        if (adecl.getDatasetType() != DatasetType.INTERNAL && adecl.getDatasetType() != DatasetType.FEED) {
-            return false;
-        }
-        IAType t = metadata.findType(adecl.getItemTypeName());
-        if (t.getTypeTag() != ATypeTag.RECORD) {
-            return false;
-        }
-        ARecordType recordType = (ARecordType) t;
-        int fldPos = 0;
-        boolean foundVar = false;
-
-        HashMap<AqlCompiledIndexDecl, List<Pair<String, Integer>>> foundIdxExprs = new HashMap<AqlCompiledIndexDecl, List<Pair<String, Integer>>>();
-
+        
+        HashMap<AqlCompiledIndexDecl, List<Pair<String, Integer>>> indexExprs = new HashMap<AqlCompiledIndexDecl, List<Pair<String, Integer>>>();
         List<LogicalVariable> varList = (assign != null) ? assign.getVariables() : dataSourceScan
                 .getVariables();
-
-        for (LogicalVariable var : varList) {
-        	int outVarIndex = findVarInOutComparedVars(var, outComparedVars);
-        	// Current var does not match any vars in outComparedVars, 
-        	// so it's irrelevant for our purpose of optimizing with an index.
-        	if (outVarIndex < 0) {
-        		continue;
-        	}
-        	
-            String fieldName = null;
-            if (assign != null) {
-                AbstractLogicalExpression exprP = (AbstractLogicalExpression) assign.getExpressions()
-                        .get(fldPos).getValue();
-                if (exprP.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
-                    continue;
-                }
-                AbstractFunctionCallExpression fce = (AbstractFunctionCallExpression) exprP;
-                FunctionIdentifier fi = fce.getFunctionIdentifier();
-
-                int fieldIndex = -1;
-                if (fi == AsterixBuiltinFunctions.FIELD_ACCESS_BY_NAME) {
-                    ILogicalExpression nameArg = fce.getArguments().get(1).getValue();
-                    if (nameArg.getExpressionTag() != LogicalExpressionTag.CONSTANT) {
-                        return false;
-                    }
-                    ConstantExpression cNameExpr = (ConstantExpression) nameArg;
-                    fieldName = ((AString) ((AsterixConstantValue) cNameExpr.getValue()).getObject()).getStringValue();
-                } else if (fi == AsterixBuiltinFunctions.FIELD_ACCESS_BY_INDEX) {
-                    ILogicalExpression idxArg = fce.getArguments().get(1).getValue();
-                    if (idxArg.getExpressionTag() != LogicalExpressionTag.CONSTANT) {
-                        return false;
-                    }
-                    ConstantExpression cNameExpr = (ConstantExpression) idxArg;
-                    fieldIndex = ((AInt32) ((AsterixConstantValue) cNameExpr.getValue()).getObject()).getIntegerValue();
-                } else {
-                    return false;
-                }
-                if (fieldName == null) {
-                    if (recordType.isOpen()) {
-                        continue;
-                    }
-                    fieldName = recordType.getFieldNames()[fieldIndex];
-                }
-            } else { // it is a scan, not an assign
-                if (fldPos >= varList.size() - 1) {
-                    // the last var. is the record itself, so skip it
-                    break;
-                }
-                // so the variable value is one of the partitioning fields
-                fieldName = DatasetUtils.getPartitioningExpressions(adecl).get(fldPos);
-            }
-            foundVar = fillIndexExprs(adecl, foundIdxExprs, fieldName, outVarIndex, true);
-            if (foundVar) {
-                break;
-            }
-            fldPos++;
-        }
-        if (!foundVar) {
+        fillAllIndexExprs(varList, outComparedVars, indexExprs);
+        // We didn't find any applicable indexes.
+        if (indexExprs.isEmpty()) {
             return false;
         }
-        AqlCompiledIndexDecl picked = chooseIndex(adecl, foundIdxExprs);
+        AqlCompiledIndexDecl picked = chooseIndex(datasetDecl, indexExprs);
         boolean res;
         if (picked == null) {
             res = false;
         } else {
         	// TODO: Do we need really need the primary index decl here?
-        	AqlCompiledIndexDecl primIdxDecl = DatasetUtils.getPrimaryIndex(adecl);
-            res = pickIndex(selectRef, dataSourceScanRef, dataSourceScan, assign, outFilters, outLimits, adecl, picked,
-                    picked == primIdxDecl, foundIdxExprs, context, outRest, foundedExprList);
+        	AqlCompiledIndexDecl primIdxDecl = DatasetUtils.getPrimaryIndex(datasetDecl);
+            res = pickIndex(selectRef, dataSourceScanRef, dataSourceScan, assign, outFilters, outLimits, datasetDecl, picked,
+                    picked == primIdxDecl, indexExprs, context, outRest, foundedExprList);
         }
         context.addToDontApplySet(this, select);
         if (res) {
