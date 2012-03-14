@@ -90,7 +90,7 @@ public class IndexOperations {
                 return createKeywordIndexJobSpec(createIndexStmt, datasetDecls);
             }
 
-            case QGRAM: {
+            case NGRAM: {
                 // return createQgramIndexJobSpec(createIndexStmt,
                 // datasetDecls);
             }

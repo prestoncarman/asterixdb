@@ -40,7 +40,7 @@ public class DatasetConfig {
     public enum IndexType {
         BTREE,
         KEYWORD,
-        QGRAM,
+        NGRAM,
         RTREE
     }
 

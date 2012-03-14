@@ -27,7 +27,6 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IOptimizationContext;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalExpressionTag;
-import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalOperatorTag;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractLogicalExpression;
@@ -61,10 +60,10 @@ public class IntroduceBTreeIndexSearchRule extends IntroduceTreeIndexSearchRule 
     }
 
     @Override
-    public boolean rewritePre(Mutable<ILogicalOperator> opRef, IOptimizationContext context) {
-        return false;
+    protected boolean matchesConcreteRule(FunctionIdentifier funcIdent) {
+        return AlgebricksBuiltinFunctions.isComparisonFunction(funcIdent);
     }
-
+    
     /**
      * 
      * Matches one equality of the type var EQ const, where var is bound to an
@@ -76,67 +75,21 @@ public class IntroduceBTreeIndexSearchRule extends IntroduceTreeIndexSearchRule 
 
     @Override
     public boolean rewritePost(Mutable<ILogicalOperator> opRef, IOptimizationContext context) throws AlgebricksException {
-        AbstractLogicalOperator op0 = (AbstractLogicalOperator) opRef.getValue();
-        if (op0.getOperatorTag() == LogicalOperatorTag.SELECT) {
+        // Match operator pattern and initialize operator members.
+        if (!matchesPattern(opRef, context, true)) {
             return false;
         }
-        List<Mutable<ILogicalOperator>> children = op0.getInputs();
-        if (children == null || children.size() < 1) {
-            return false;
-        }
-        Mutable<ILogicalOperator> opRef1 = children.get(0);
-        AbstractLogicalOperator op1 = (AbstractLogicalOperator) opRef1.getValue();
-        if (context.checkIfInDontApplySet(this, op1)) {
-            return false;
-        }
-
-        if (op1.getOperatorTag() != LogicalOperatorTag.SELECT) {
-            return false;
-        }
-        SelectOperator select = (SelectOperator) op1;
-        ILogicalExpression expr = select.getCondition().getValue();
-
-        if (expr.getExpressionTag() == LogicalExpressionTag.FUNCTION_CALL) {
-            AbstractFunctionCallExpression fce = (AbstractFunctionCallExpression) expr;
-            FunctionIdentifier fi = fce.getFunctionIdentifier();
-            if (!AlgebricksBuiltinFunctions.isComparisonFunction(fi) && fi != AlgebricksBuiltinFunctions.AND) {
-                return false;
-            }
-        } else {
-            return false;
-        }
-
+        
         ArrayList<IAlgebricksConstantValue> outFilters = new ArrayList<IAlgebricksConstantValue>();
         ArrayList<LogicalVariable> outComparedVars = new ArrayList<LogicalVariable>();
         ArrayList<LimitType> outLimits = new ArrayList<LimitType>();
         ArrayList<Mutable<ILogicalExpression>> outRest = new ArrayList<Mutable<ILogicalExpression>>();
         ArrayList<Integer> foundedExprList = new ArrayList<Integer>();
-        if (!analyzeCondition(expr, outFilters, outComparedVars, outLimits, outRest, foundedExprList)) {
-            return false;
-        }
-        Mutable<ILogicalOperator> opRef2 = op1.getInputs().get(0);
-        AbstractLogicalOperator op2 = (AbstractLogicalOperator) opRef2.getValue();
-
-        DataSourceScanOperator scanDataset;
-        Mutable<ILogicalOperator> opRef3;
-        AssignOperator assignFieldAccess = null;
-
-        if (op2.getOperatorTag() == LogicalOperatorTag.ASSIGN) {
-            assignFieldAccess = (AssignOperator) op2;
-            opRef3 = op2.getInputs().get(0);
-            AbstractLogicalOperator op3 = (AbstractLogicalOperator) opRef3.getValue();
-            if (op3.getOperatorTag() != LogicalOperatorTag.DATASOURCESCAN) {
-                return false;
-            }
-            scanDataset = (DataSourceScanOperator) op3;
-        } else if (op2.getOperatorTag() == LogicalOperatorTag.DATASOURCESCAN) {
-            scanDataset = (DataSourceScanOperator) op2;
-            opRef3 = opRef2;
-        } else {
+        if (!analyzeCondition(selectCond, outFilters, outComparedVars, outLimits, outRest, foundedExprList)) {
             return false;
         }
 
-        String datasetName = AnalysisUtil.getDatasetName(scanDataset);
+        String datasetName = AnalysisUtil.getDatasetName(dataSourceScan);
         if (datasetName == null) {
             return false;
         }
@@ -159,7 +112,7 @@ public class IntroduceBTreeIndexSearchRule extends IntroduceTreeIndexSearchRule 
 
         HashMap<AqlCompiledIndexDecl, List<Pair<String, Integer>>> foundIdxExprs = new HashMap<AqlCompiledIndexDecl, List<Pair<String, Integer>>>();
 
-        List<LogicalVariable> varList = (assignFieldAccess != null) ? assignFieldAccess.getVariables() : scanDataset
+        List<LogicalVariable> varList = (assign != null) ? assign.getVariables() : dataSourceScan
                 .getVariables();
 
         for (LogicalVariable var : varList) {
@@ -171,8 +124,8 @@ public class IntroduceBTreeIndexSearchRule extends IntroduceTreeIndexSearchRule 
         	}
         	
             String fieldName = null;
-            if (assignFieldAccess != null) {
-                AbstractLogicalExpression exprP = (AbstractLogicalExpression) assignFieldAccess.getExpressions()
+            if (assign != null) {
+                AbstractLogicalExpression exprP = (AbstractLogicalExpression) assign.getExpressions()
                         .get(fldPos).getValue();
                 if (exprP.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
                     continue;
@@ -228,12 +181,12 @@ public class IntroduceBTreeIndexSearchRule extends IntroduceTreeIndexSearchRule 
         } else {
         	// TODO: Do we need really need the primary index decl here?
         	AqlCompiledIndexDecl primIdxDecl = DatasetUtils.getPrimaryIndex(adecl);
-            res = pickIndex(opRef1, opRef3, scanDataset, assignFieldAccess, outFilters, outLimits, adecl, picked,
+            res = pickIndex(selectRef, dataSourceScanRef, dataSourceScan, assign, outFilters, outLimits, adecl, picked,
                     picked == primIdxDecl, foundIdxExprs, context, outRest, foundedExprList);
         }
-        context.addToDontApplySet(this, op1);
+        context.addToDontApplySet(this, select);
         if (res) {
-            OperatorPropertiesUtil.typeOpRec(opRef1, context);
+            OperatorPropertiesUtil.typeOpRec(selectRef, context);
         }
         return res;
     }
@@ -465,9 +418,9 @@ public class IntroduceBTreeIndexSearchRule extends IntroduceTreeIndexSearchRule 
         ArrayList<Mutable<ILogicalExpression>> keyExprList = new ArrayList<Mutable<ILogicalExpression>>();
         ArrayList<LogicalVariable> keyVarList = new ArrayList<LogicalVariable>();
         ArrayList<Mutable<ILogicalExpression>> rangeSearchFunArgs = new ArrayList<Mutable<ILogicalExpression>>();
-        rangeSearchFunArgs.add(new MutableObject<ILogicalExpression>(mkStrConstExpr(picked.getIndexName())));
-        rangeSearchFunArgs.add(new MutableObject<ILogicalExpression>(mkStrConstExpr(FunctionArgumentsConstants.BTREE_INDEX)));
-        rangeSearchFunArgs.add(new MutableObject<ILogicalExpression>(mkStrConstExpr(ddecl.getName())));
+        rangeSearchFunArgs.add(new MutableObject<ILogicalExpression>(createStringConstant(picked.getIndexName())));
+        rangeSearchFunArgs.add(new MutableObject<ILogicalExpression>(createStringConstant(FunctionArgumentsConstants.BTREE_INDEX)));
+        rangeSearchFunArgs.add(new MutableObject<ILogicalExpression>(createStringConstant(ddecl.getName())));
 
         if (loLimit[0] != null) {
             Mutable<ILogicalExpression> nkRef = new MutableObject<ILogicalExpression>(new ConstantExpression(
@@ -553,9 +506,9 @@ public class IntroduceBTreeIndexSearchRule extends IntroduceTreeIndexSearchRule 
             order.setExecutionMode(ExecutionMode.LOCAL);
 
             List<Mutable<ILogicalExpression>> argList2 = new ArrayList<Mutable<ILogicalExpression>>();
-            argList2.add(new MutableObject<ILogicalExpression>(mkStrConstExpr(ddecl.getName())));
-            argList2.add(new MutableObject<ILogicalExpression>(mkStrConstExpr(FunctionArgumentsConstants.BTREE_INDEX)));
-            argList2.add(new MutableObject<ILogicalExpression>(mkStrConstExpr(ddecl.getName())));
+            argList2.add(new MutableObject<ILogicalExpression>(createStringConstant(ddecl.getName())));
+            argList2.add(new MutableObject<ILogicalExpression>(createStringConstant(FunctionArgumentsConstants.BTREE_INDEX)));
+            argList2.add(new MutableObject<ILogicalExpression>(createStringConstant(ddecl.getName())));
             argList2.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(new AInt32(
                     numPrimaryKeys)))));
             for (LogicalVariable v : secIdxPrimKeysVarList) {

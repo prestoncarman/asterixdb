@@ -60,6 +60,17 @@ public class TestsUtils {
         BufferedReader readerExpected = new BufferedReader(new FileReader(expectedFile));
         BufferedReader readerActual = new BufferedReader(new FileReader(actualFile));
         String lineExpected, lineActual;
+        StringBuilder actualBuilder = new StringBuilder();
+        try {
+        	while((lineActual = readerActual.readLine()) != null) {
+        		actualBuilder.append(lineActual);
+        		actualBuilder.append('\n');
+        	}
+        } finally {
+        	readerActual.close();
+        }
+        System.out.println(actualBuilder.toString());
+        readerActual = new BufferedReader(new FileReader(actualFile));
         int num = 1;
         try {
             while ((lineExpected = readerExpected.readLine()) != null) {

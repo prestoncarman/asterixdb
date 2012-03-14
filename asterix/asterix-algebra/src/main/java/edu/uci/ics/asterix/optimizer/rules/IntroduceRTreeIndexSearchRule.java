@@ -16,7 +16,6 @@ import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
 import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
 import edu.uci.ics.asterix.metadata.utils.DatasetUtils;
 import edu.uci.ics.asterix.om.base.AInt32;
-import edu.uci.ics.asterix.om.base.AString;
 import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
 import edu.uci.ics.asterix.om.types.ARecordType;
@@ -28,25 +27,20 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IOptimizationContext;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalExpressionTag;
-import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalOperatorTag;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
-import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractLogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IAlgebricksConstantValue;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.UnnestingFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
-import edu.uci.ics.hyracks.algebricks.core.algebra.functions.AlgebricksBuiltinFunctions;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.IFunctionInfo;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator.ExecutionMode;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.DataSourceScanOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.OrderOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluatorFactory;
 import edu.uci.ics.hyracks.algebricks.core.algebra.util.OperatorPropertiesUtil;
@@ -56,6 +50,11 @@ import edu.uci.ics.hyracks.algebricks.core.utils.Triple;
 
 public class IntroduceRTreeIndexSearchRule extends IntroduceTreeIndexSearchRule {
 
+    @Override
+    protected boolean matchesConcreteRule(FunctionIdentifier funcIdent) {
+        return AsterixBuiltinFunctions.isSpatialFilterFunction(funcIdent);
+    }
+    
 	/**
 	 * Tries to optimize spatial-intersect(var, spatialObject) with an existing RTree index.
 	 * 
@@ -76,45 +75,10 @@ public class IntroduceRTreeIndexSearchRule extends IntroduceTreeIndexSearchRule 
 	 */
     @Override
     public boolean rewritePost(Mutable<ILogicalOperator> opRef, IOptimizationContext context) throws AlgebricksException {
-        // First check that the operator is a select and its condition is a function call.
-    	AbstractLogicalOperator op1 = (AbstractLogicalOperator) opRef.getValue();
-        if (context.checkIfInDontApplySet(this, op1)) {
+        // Match operator pattern and initialize operator members.
+        if (!matchesPattern(opRef, context, false)) {
             return false;
         }
-        // Check op is a select.
-        if (op1.getOperatorTag() != LogicalOperatorTag.SELECT) {
-            return false;
-        }
-        // Check that the select's condition is a function call.
-        SelectOperator select = (SelectOperator) op1;
-        ILogicalExpression condExpr = select.getCondition().getValue();
-        if (condExpr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
-        	return false;
-        }
-        AbstractFunctionCallExpression funcExpr = (AbstractFunctionCallExpression) condExpr;
-        FunctionIdentifier funcIdent = funcExpr.getFunctionIdentifier();
-        // Make sure the function is a spatial filter or an AND condition. We will look at the conjuncts one-by-one in analyzeCondition().
-        if (!AsterixBuiltinFunctions.isSpatialFilterFunction(funcIdent) && funcIdent != AlgebricksBuiltinFunctions.AND) {
-        	return false;
-        }
-        
-        // Examine the select's children to match the expected pattern:
-        // (select) <-- (assign) <-- (datasource scan)
-        // Match assign.
-        Mutable<ILogicalOperator> opRef2 = op1.getInputs().get(0);
-        AbstractLogicalOperator op2 = (AbstractLogicalOperator) opRef2.getValue();
-        if (op2.getOperatorTag() != LogicalOperatorTag.ASSIGN) {
-        	return false;
-        }
-        AssignOperator assign = (AssignOperator) op2;
-        // Match datasource scan.
-        Mutable<ILogicalOperator> opRef3 = op2.getInputs().get(0);
-        AbstractLogicalOperator op3 = (AbstractLogicalOperator) opRef3.getValue();
-        if (op3.getOperatorTag() != LogicalOperatorTag.DATASOURCESCAN) {
-        	return false;
-        }
-        DataSourceScanOperator dataSourceScan = (DataSourceScanOperator) op3;
-        
 		// List of constant values participating in spatial filter that we can
 		// push to the index. Used to generate the input tuple an index lookup.
 		ArrayList<IAlgebricksConstantValue> outFilters = new ArrayList<IAlgebricksConstantValue>();
@@ -122,10 +86,9 @@ public class IntroduceRTreeIndexSearchRule extends IntroduceTreeIndexSearchRule 
 		// to the index. Used to consult the metadata whether there is an applicable index.
 		ArrayList<LogicalVariable> outComparedVars = new ArrayList<LogicalVariable>();
 		// Analyzes the select condition, filling outFilters and outComparedVars.
-		if (!analyzeCondition(condExpr, outFilters, outComparedVars)) {
+		if (!analyzeCondition(selectCond, outFilters, outComparedVars)) {
 			return false;
 		}
-		
         // Find the dataset corresponding to the datasource scan in the metadata.
         String datasetName = AnalysisUtil.getDatasetName(dataSourceScan);
         if (datasetName == null) {
@@ -147,9 +110,6 @@ public class IntroduceRTreeIndexSearchRule extends IntroduceTreeIndexSearchRule 
         }
         ARecordType recordType = (ARecordType) itemType;
         
-        // The vars may correspond to a an item with a different number of dimensions.
-        int[] varDimensions = new int[outComparedVars.size()];
-        int numDimensions = 0;
         // Contains candidate indexes and corresponding expressions that we could optimize. 
         // Maps from index to a list of pairs. Each list-entry is a <fieldName,varPos> pair. 
         // The varPos is an index into outComparedVars, and fieldName is the corresponding fieldName.
@@ -162,61 +122,36 @@ public class IntroduceRTreeIndexSearchRule extends IntroduceTreeIndexSearchRule 
         	if (outVarIndex < 0) {
         		continue;
         	}
-        	
-        	// Get expression corresponding to var at varIndex.
-            AbstractLogicalExpression assignExpr = (AbstractLogicalExpression) assign.getExpressions()
-                    .get(varIndex).getValue();
-            if (assignExpr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
-                continue;
+        	// Get the fieldName corresponding to the assigned variable at varIndex.
+        	// If the expr at varIndex is not a fieldAccess we get back null.
+        	String fieldName = getFieldNameOfFieldAccess(assign, recordType, varIndex);
+        	if (fieldName == null) {
+        		continue;
+        	}
+            // TODO: Don't just ignore open record types.
+            if (recordType.isOpen()) {
+            	continue;
             }
-			// Analyze the assign op to get the field name
-            // corresponding to the field being assigned at varIndex.
-        	String fieldName = null;
-            AbstractFunctionCallExpression assignFuncExpr = (AbstractFunctionCallExpression) assignExpr;
-            FunctionIdentifier assignFuncIdent = assignFuncExpr.getFunctionIdentifier();
-            if (assignFuncIdent == AsterixBuiltinFunctions.FIELD_ACCESS_BY_NAME) {
-                ILogicalExpression nameArg = assignFuncExpr.getArguments().get(1).getValue();
-                if (nameArg.getExpressionTag() != LogicalExpressionTag.CONSTANT) {
-                    return false;
-                }
-                ConstantExpression constExpr = (ConstantExpression) nameArg;
-                fieldName = ((AString) ((AsterixConstantValue) constExpr.getValue()).getObject()).getStringValue();
-            } else if (assignFuncIdent == AsterixBuiltinFunctions.FIELD_ACCESS_BY_INDEX) {
-                ILogicalExpression idxArg = assignFuncExpr.getArguments().get(1).getValue();
-                if (idxArg.getExpressionTag() != LogicalExpressionTag.CONSTANT) {
-                    return false;
-                }
-                ConstantExpression constExpr = (ConstantExpression) idxArg;
-                int fieldIndex = ((AInt32) ((AsterixConstantValue) constExpr.getValue()).getObject()).getIntegerValue();
-                // TODO: Don't just ignore open record types.
-                if (recordType.isOpen()) {
-                	continue;
-                }
-                fieldName = recordType.getFieldNames()[fieldIndex];
-            } else {
-                return false;
-            }
-            boolean foundIndexCandidate = fillIndexExprs(datasetDecl, indexExprs, fieldName, outVarIndex, false);
-            if (foundIndexCandidate) {            	
-                IAType spatialType = AqlCompiledIndexDecl.keyFieldType(fieldName, recordType);
-                varDimensions[outVarIndex] = NonTaggedFormatUtil.getNumDimensions(spatialType.getTypeTag());
-                numDimensions = NonTaggedFormatUtil.getNumDimensions(spatialType.getTypeTag());                
-            }
+            fillIndexExprs(datasetDecl, indexExprs, fieldName, outVarIndex, false);
         }
         // We didn't find any applicable indexes.
         if (indexExprs.isEmpty()) {
         	return false;
         }
-        AqlCompiledIndexDecl usableIndex = chooseIndex(datasetDecl, indexExprs);
+        AqlCompiledIndexDecl chosenIndex = chooseIndex(datasetDecl, indexExprs);
         // No usable index found.
-        if (usableIndex == null) {
-        	context.addToDontApplySet(this, op1);
+        if (chosenIndex == null) {
+        	context.addToDontApplySet(this, select);
         	return false;
         }
-        applyPlanTransformation(opRef3, dataSourceScan, assign, outFilters, datasetDecl, usableIndex,
+        List<Pair<String, Integer>> psiList = indexExprs.get(chosenIndex);
+        // Get the number of dimensions corresponding to the field indexed by chosenIndex.
+        IAType spatialType = AqlCompiledIndexDecl.keyFieldType(psiList.get(0).first, recordType);
+        int numDimensions = NonTaggedFormatUtil.getNumDimensions(spatialType.getTypeTag());
+        applyPlanTransformation(dataSourceScanRef, dataSourceScan, assign, outFilters, datasetDecl, chosenIndex,
         		context, numDimensions);
         OperatorPropertiesUtil.typeOpRec(opRef, context);
-        context.addToDontApplySet(this, op1);
+        context.addToDontApplySet(this, select);
         return true;
     }
 
@@ -323,9 +258,9 @@ public class IntroduceRTreeIndexSearchRule extends IntroduceTreeIndexSearchRule 
         ArrayList<Mutable<ILogicalExpression>> keyExprList = new ArrayList<Mutable<ILogicalExpression>>();
         ArrayList<LogicalVariable> keyVarList = new ArrayList<LogicalVariable>();
         ArrayList<Mutable<ILogicalExpression>> rangeSearchFunArgs = new ArrayList<Mutable<ILogicalExpression>>();
-        rangeSearchFunArgs.add(new MutableObject<ILogicalExpression>(mkStrConstExpr(picked.getIndexName())));
-        rangeSearchFunArgs.add(new MutableObject<ILogicalExpression>(mkStrConstExpr(FunctionArgumentsConstants.RTREE_INDEX)));
-        rangeSearchFunArgs.add(new MutableObject<ILogicalExpression>(mkStrConstExpr(ddecl.getName())));
+        rangeSearchFunArgs.add(new MutableObject<ILogicalExpression>(createStringConstant(picked.getIndexName())));
+        rangeSearchFunArgs.add(new MutableObject<ILogicalExpression>(createStringConstant(FunctionArgumentsConstants.RTREE_INDEX)));
+        rangeSearchFunArgs.add(new MutableObject<ILogicalExpression>(createStringConstant(ddecl.getName())));
 
         Mutable<ILogicalExpression> nkRef = new MutableObject<ILogicalExpression>(new ConstantExpression(
                 new AsterixConstantValue(new AInt32(numKeys))));
@@ -390,9 +325,9 @@ public class IntroduceRTreeIndexSearchRule extends IntroduceTreeIndexSearchRule 
         order.setExecutionMode(ExecutionMode.LOCAL);
 
         List<Mutable<ILogicalExpression>> argList2 = new ArrayList<Mutable<ILogicalExpression>>();
-        argList2.add(new MutableObject<ILogicalExpression>(mkStrConstExpr(ddecl.getName())));
-        argList2.add(new MutableObject<ILogicalExpression>(mkStrConstExpr(FunctionArgumentsConstants.BTREE_INDEX)));
-        argList2.add(new MutableObject<ILogicalExpression>(mkStrConstExpr(ddecl.getName())));
+        argList2.add(new MutableObject<ILogicalExpression>(createStringConstant(ddecl.getName())));
+        argList2.add(new MutableObject<ILogicalExpression>(createStringConstant(FunctionArgumentsConstants.BTREE_INDEX)));
+        argList2.add(new MutableObject<ILogicalExpression>(createStringConstant(ddecl.getName())));
         argList2.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(new AInt32(
         		numPrimaryKeys)))));
         for (LogicalVariable v : secIdxPrimKeysVarList) {
