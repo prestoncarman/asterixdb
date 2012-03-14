@@ -157,16 +157,19 @@ public class IntroduceBTreeIndexSearchRule extends IntroduceTreeIndexSearchRule 
         int fldPos = 0;
         boolean foundVar = false;
 
-        AqlCompiledIndexDecl primIdxDecl = DatasetUtils.getPrimaryIndex(adecl);
-        List<String> primIdxFields = primIdxDecl.getFieldExprs();
-
         HashMap<AqlCompiledIndexDecl, List<Pair<String, Integer>>> foundIdxExprs = new HashMap<AqlCompiledIndexDecl, List<Pair<String, Integer>>>();
 
         List<LogicalVariable> varList = (assignFieldAccess != null) ? assignFieldAccess.getVariables() : scanDataset
                 .getVariables();
 
         for (LogicalVariable var : varList) {
-
+        	int outVarIndex = findVarInOutComparedVars(var, outComparedVars);
+        	// Current var does not match any vars in outComparedVars, 
+        	// so it's irrelevant for our purpose of optimizing with an index.
+        	if (outVarIndex < 0) {
+        		continue;
+        	}
+        	
             String fieldName = null;
             if (assignFieldAccess != null) {
                 AbstractLogicalExpression exprP = (AbstractLogicalExpression) assignFieldAccess.getExpressions()
@@ -209,7 +212,7 @@ public class IntroduceBTreeIndexSearchRule extends IntroduceTreeIndexSearchRule 
                 // so the variable value is one of the partitioning fields
                 fieldName = DatasetUtils.getPartitioningExpressions(adecl).get(fldPos);
             }
-            foundVar = findIdxExprs(adecl, primIdxFields, primIdxDecl, foundIdxExprs, outComparedVars, var, fieldName);
+            foundVar = fillIndexExprs(adecl, foundIdxExprs, fieldName, outVarIndex, true);
             if (foundVar) {
                 break;
             }
@@ -218,11 +221,13 @@ public class IntroduceBTreeIndexSearchRule extends IntroduceTreeIndexSearchRule 
         if (!foundVar) {
             return false;
         }
-        AqlCompiledIndexDecl picked = findUsableIndex(adecl, foundIdxExprs);
+        AqlCompiledIndexDecl picked = chooseIndex(adecl, foundIdxExprs);
         boolean res;
         if (picked == null) {
             res = false;
         } else {
+        	// TODO: Do we need really need the primary index decl here?
+        	AqlCompiledIndexDecl primIdxDecl = DatasetUtils.getPrimaryIndex(adecl);
             res = pickIndex(opRef1, opRef3, scanDataset, assignFieldAccess, outFilters, outLimits, adecl, picked,
                     picked == primIdxDecl, foundIdxExprs, context, outRest, foundedExprList);
         }
