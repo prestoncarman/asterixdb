@@ -368,7 +368,7 @@ CreateIndexStatement CreateIndexStatement() throws ParseException:
     ("type"
   		("btree" { cis.setIndexType(IndexType.BTREE); }
   		| "keyword" { cis.setIndexType(IndexType.KEYWORD); }
-  		| "qgram" { cis.setIndexType(IndexType.QGRAM); } 
+  		| "ngram" { cis.setIndexType(IndexType.NGRAM); } 
   		| "rtree" { cis.setIndexType(IndexType.RTREE); }   		  		  
 		)  
   	";"  	
