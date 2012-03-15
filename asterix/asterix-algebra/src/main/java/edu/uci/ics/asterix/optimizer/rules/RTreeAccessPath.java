@@ -64,7 +64,7 @@ public class RTreeAccessPath implements IAccessPath {
         IAlgebricksConstantValue constFilterVal = null;
         LogicalVariable fieldVar = null;
         ILogicalExpression arg1 = funcExpr.getArguments().get(0).getValue();
-        ILogicalExpression arg2 = funcExpr.getArguments().get(1).getValue();
+        ILogicalExpression arg2 = funcExpr.getArguments().get(1).getValue();        
         // One of the args must be a constant, and the other arg must be a variable.
         if (arg1.getExpressionTag() == LogicalExpressionTag.CONSTANT
                 && arg2.getExpressionTag() == LogicalExpressionTag.VARIABLE) {
@@ -81,8 +81,7 @@ public class RTreeAccessPath implements IAccessPath {
         } else {
             return false;
         }
-        analysisCtx.outFilters.add(constFilterVal);
-        analysisCtx.outComparedVars.add(fieldVar);
+        analysisCtx.matchedFuncExprs.add(new OptimizableFuncExpr(funcExpr, constFilterVal, fieldVar));
         return true;
     }
 

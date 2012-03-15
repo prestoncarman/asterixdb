@@ -128,11 +128,11 @@ public class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteRule {
             return false;
         }
         
-        List<LogicalVariable> varList = assign.getVariables();        
+        List<LogicalVariable> varList = assign.getVariables();     
         for (Map.Entry<IAccessPath, AccessPathAnalysisContext> entry : analyzedAccPaths.entrySet()) {
             AccessPathAnalysisContext accPathCtx = entry.getValue();
-            fillAllIndexExprs(varList, accPathCtx.outComparedVars, accPathCtx.indexExprs);
-            removeIndexCandidates(entry.getKey(), accPathCtx.indexExprs);
+            fillAllIndexExprs(varList, accPathCtx.matchedFuncExprs, accPathCtx.indexExprs);
+            removeIndexCandidates(entry.getKey(), accPathCtx);
         }
         
         // Choose index to be applied.
@@ -164,9 +164,9 @@ public class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteRule {
         while (accPathIt.hasNext()) {
             Map.Entry<IAccessPath, AccessPathAnalysisContext> accPathEntry = accPathIt.next();
             AccessPathAnalysisContext analysisCtx = accPathEntry.getValue();
-            Iterator<Map.Entry<AqlCompiledIndexDecl, List<Pair<String, Integer>>>> indexIt = analysisCtx.indexExprs.entrySet().iterator();
+            Iterator<Map.Entry<AqlCompiledIndexDecl, List<Integer>>> indexIt = analysisCtx.indexExprs.entrySet().iterator();
             if (indexIt.hasNext()) {
-                Map.Entry<AqlCompiledIndexDecl, List<Pair<String, Integer>>> indexEntry = indexIt.next();
+                Map.Entry<AqlCompiledIndexDecl, List<Integer>> indexEntry = indexIt.next();
                 return indexEntry.getKey();
             }
         }
@@ -182,19 +182,19 @@ public class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteRule {
      * applicable according to the expressions involved.
      * 
      */
-    public void removeIndexCandidates(IAccessPath accessPath, Map<AqlCompiledIndexDecl, List<Pair<String, Integer>>> indexExprs) {
-        Iterator<Map.Entry<AqlCompiledIndexDecl, List<Pair<String, Integer>>>> it = indexExprs.entrySet().iterator();
+    public void removeIndexCandidates(IAccessPath accessPath, AccessPathAnalysisContext analysisCtx) {
+        Iterator<Map.Entry<AqlCompiledIndexDecl, List<Integer>>> it = analysisCtx.indexExprs.entrySet().iterator();
         while (it.hasNext()) {
-            Map.Entry<AqlCompiledIndexDecl, List<Pair<String, Integer>>> entry = it.next();
+            Map.Entry<AqlCompiledIndexDecl, List<Integer>> entry = it.next();
             AqlCompiledIndexDecl index = entry.getKey();
-            List<Pair<String, Integer>> psiList = entry.getValue();
+            List<Integer> exprs = entry.getValue();
             boolean allUsed = true;
             int lastFieldMatched = -1;
             for (int i = 0; i < index.getFieldExprs().size(); i++) {
                 String keyField = index.getFieldExprs().get(i);
                 boolean foundKeyField = false;
-                for (Pair<String, Integer> psi : psiList) {
-                    if (psi.first.equals(keyField)) {
+                for (Integer ix : exprs) {
+                    if (analysisCtx.matchedFuncExprs.get(ix).getFieldName().equals(keyField)) {
                         foundKeyField = true;
                         if (lastFieldMatched == i - 1) {
                             lastFieldMatched = i;
@@ -268,12 +268,11 @@ public class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteRule {
             AccessPathAnalysisContext analysisCtx = analyzedAccPaths.get(accessPath);
             // Use the current placeholder.
             if (analysisCtx == null) {
-                analysisCtx = newAnalysisCtx;                
+                analysisCtx = newAnalysisCtx;
             }
             // Analyzes the funcExpr's arguments to see if the accessPath is truly applicable.
             boolean matchFound = accessPath.analyzeFuncExprArgs(funcExpr, analysisCtx);
             if (matchFound) {
-                analysisCtx.matchedExprs.add(funcExpr);
                 // If we've used the current new context placeholder, replace it with a new one.
                 if (analysisCtx == newAnalysisCtx) {
                     analyzedAccPaths.put(accessPath, analysisCtx);
@@ -399,15 +398,15 @@ public class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteRule {
 	/**
 	 * 
 	 * @param datasetDecl
-	 * @param foundIndexExprs
-	 * @param comparedVars
+	 * @param indexExprs
+	 * @param matchedFuncVars
 	 * @param var
 	 * @param fieldName
 	 * @return returns true if a candidate index was added to foundIndexExprs,
 	 *         false otherwise
 	 */
-    protected boolean fillIndexExprs(String fieldName, int varIndex,
-    		HashMap<AqlCompiledIndexDecl, List<Pair<String, Integer>>> foundIndexExprs) {
+    protected boolean fillIndexExprs(String fieldName, int matchedVarIndex,
+    		HashMap<AqlCompiledIndexDecl, List<Integer>> indexExprs) {
     	AqlCompiledIndexDecl primaryIndexDecl = DatasetUtils.getPrimaryIndex(datasetDecl);
     	List<String> primaryIndexFields = primaryIndexDecl.getFieldExprs();    	
         List<AqlCompiledIndexDecl> indexCandidates = DatasetUtils.findSecondaryIndexesByOneOfTheKeys(datasetDecl, fieldName);
@@ -422,27 +421,27 @@ public class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteRule {
         if (indexCandidates == null) {
         	return false;
         }
-        // Go through the candidates and fill foundIndexExprs.
+        // Go through the candidates and fill indexExprs.
         for (AqlCompiledIndexDecl index : indexCandidates) {
-        	List<Pair<String, Integer>> psi = foundIndexExprs.get(index);
-        	if (psi == null) {
-        		psi = new ArrayList<Pair<String, Integer>>();
-        		foundIndexExprs.put(index, psi);
+        	List<Integer> exprs = indexExprs.get(index);
+        	if (exprs == null) {
+        	    exprs = new ArrayList<Integer>();
+        		indexExprs.put(index, exprs);
         	}
-        	psi.add(new Pair<String, Integer>(fieldName, varIndex));
+        	exprs.add(matchedVarIndex);
         }
         return true;
     }
 
-    protected void fillAllIndexExprs(List<LogicalVariable> varList, List<LogicalVariable> outComparedVars,
-            HashMap<AqlCompiledIndexDecl, List<Pair<String, Integer>>> indexExprs) {
+    protected void fillAllIndexExprs(List<LogicalVariable> varList, List<OptimizableFuncExpr> matchedFuncExprs,
+            HashMap<AqlCompiledIndexDecl, List<Integer>> indexExprs) {
         for (int varIndex = 0; varIndex < varList.size(); varIndex++) {
-            int outVarIndex = findVarInOutComparedVars(varList.get(varIndex), outComparedVars);
+            int matchedFuncExprIndex = findVarInMatchedFuncExprs(varList.get(varIndex), matchedFuncExprs);
             // Current var does not match any vars in outComparedVars, 
             // so it's irrelevant for our purpose of optimizing with an index.
-            if (outVarIndex < 0) {
+            if (matchedFuncExprIndex < 0) {
                 continue;
-            }
+            }            
             String fieldName = null;
             if (assign != null) {
                 // Get the fieldName corresponding to the assigned variable at varIndex.
@@ -464,18 +463,19 @@ public class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteRule {
                 // The variable value is one of the partitioning fields.
                 fieldName = DatasetUtils.getPartitioningExpressions(datasetDecl).get(varIndex);
             }
+            matchedFuncExprs.get(matchedFuncExprIndex).setFieldName(fieldName);
             // TODO: Don't just ignore open record types.
             if (recordType.isOpen()) {
                 continue;
             }
-            fillIndexExprs(fieldName, outVarIndex, indexExprs);
+            fillIndexExprs(fieldName, matchedFuncExprIndex, indexExprs);
         }
     }
     
-    protected int findVarInOutComparedVars(LogicalVariable var, List<LogicalVariable> outComparedVars) {
+    protected int findVarInMatchedFuncExprs(LogicalVariable var, List<OptimizableFuncExpr> matchedFuncExprs) {
     	int outVarIndex = 0;
-    	while (outVarIndex < outComparedVars.size()) {
-    		if (var == outComparedVars.get(outVarIndex)) {
+    	while (outVarIndex < matchedFuncExprs.size()) {
+    		if (var == matchedFuncExprs.get(outVarIndex).getLogicalVar()) {
     			return outVarIndex;
     		}
     		outVarIndex++;

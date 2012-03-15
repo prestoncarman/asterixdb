@@ -90,7 +90,8 @@ public class IntroduceBTreeIndexSearchRule extends IntroduceTreeIndexSearchRule 
         HashMap<AqlCompiledIndexDecl, List<Pair<String, Integer>>> indexExprs = new HashMap<AqlCompiledIndexDecl, List<Pair<String, Integer>>>();
         List<LogicalVariable> varList = (assign != null) ? assign.getVariables() : dataSourceScan
                 .getVariables();
-        fillAllIndexExprs(varList, outComparedVars, indexExprs);
+        // TODO: I hacked this to make it compile.
+        //fillAllIndexExprs(varList, outComparedVars, indexExprs);
         // We didn't find any applicable indexes.
         if (indexExprs.isEmpty()) {
             return false;
