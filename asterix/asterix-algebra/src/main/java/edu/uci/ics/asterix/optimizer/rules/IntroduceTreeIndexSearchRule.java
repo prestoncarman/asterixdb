@@ -2,7 +2,9 @@ package edu.uci.ics.asterix.optimizer.rules;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.commons.lang3.mutable.Mutable;
 
@@ -37,6 +39,7 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AssignOpera
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.DataSourceScanOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluatorFactory;
+import edu.uci.ics.hyracks.algebricks.core.algebra.util.OperatorPropertiesUtil;
 import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.rewriter.base.IAlgebraicRewriteRule;
 import edu.uci.ics.hyracks.algebricks.core.utils.Pair;
@@ -64,8 +67,9 @@ import edu.uci.ics.hyracks.algebricks.core.utils.Triple;
  * 
  */
 // TODO: Rename this to IntroduceIndexSearchRule because secondary inverted indexes may also apply.
-public abstract class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteRule {
+public class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteRule {
 
+    
 	// Operators representing the pattern to be matched:
 	// (select) <-- (assign) <-- (datasource scan)
     // OR
@@ -85,14 +89,207 @@ public abstract class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteR
 	protected ARecordType recordType = null;
 	protected AqlCompiledDatasetDecl datasetDecl = null;
 	
+	protected static Map<FunctionIdentifier, List<IAccessPath>> accessPaths = new HashMap<FunctionIdentifier, List<IAccessPath>>();
+	static {
+	    registerAccessPath(RTreeAccessPath.INSTANCE);
+	}
+	
+	public static void registerAccessPath(IAccessPath accessPath) {
+	    List<FunctionIdentifier> funcs = accessPath.getOptimizableFunctions();
+	    for (FunctionIdentifier funcIdent : funcs) {
+	        List<IAccessPath> l = accessPaths.get(funcIdent);
+	        if (l == null) {
+	            l = new ArrayList<IAccessPath>();
+	            accessPaths.put(funcIdent, l);
+	        }
+	        l.add(accessPath);
+	    }
+	}
+	
     @Override
     public boolean rewritePre(Mutable<ILogicalOperator> opRef, IOptimizationContext context) {
         return false;
     }
-
-    protected abstract boolean matchesConcreteRule(FunctionIdentifier funcIdent);
     
-    protected boolean matchesPattern(Mutable<ILogicalOperator> opRef, IOptimizationContext context, boolean includePrimaryIndex) {
+    @Override
+    public boolean rewritePost(Mutable<ILogicalOperator> opRef, IOptimizationContext context) throws AlgebricksException {
+        // Match operator pattern and initialize operator members.
+        if (!matchesOperatorPattern(opRef, context, true)) {
+            return false;
+        }
+        
+        Map<IAccessPath, AccessPathAnalysisContext> analyzedAccPaths = new HashMap<IAccessPath, AccessPathAnalysisContext>();
+        if (!analyzeSelectCondition(selectCond, analyzedAccPaths)) {
+            return false;
+        }
+
+        // Set dataset and type metadata.
+        if (!setDatasetAndTypeMetadata((AqlMetadataProvider)context.getMetadataProvider())) {
+            return false;
+        }
+        
+        List<LogicalVariable> varList = assign.getVariables();        
+        for (Map.Entry<IAccessPath, AccessPathAnalysisContext> entry : analyzedAccPaths.entrySet()) {
+            AccessPathAnalysisContext accPathCtx = entry.getValue();
+            fillAllIndexExprs(varList, accPathCtx.outComparedVars, accPathCtx.indexExprs);
+            removeIndexCandidates(entry.getKey(), accPathCtx.indexExprs);
+        }
+        
+        // Choose index to be applied.
+        AqlCompiledIndexDecl chosenIndex = chooseIndex(analyzedAccPaths);
+        if (chosenIndex == null) {
+            context.addToDontApplySet(this, select);
+            return false;
+        }
+        
+        System.out.println("HUHU");
+        
+        OperatorPropertiesUtil.typeOpRec(opRef, context);
+        context.addToDontApplySet(this, select);
+        
+        return false;
+    }
+    
+    /**
+     * Simply picks the first index that it finds.
+     * TODO: Improve this decision process by making it more systematic.
+     * 
+     * @param datasetDecl
+     * @param indexExprs
+     * @return
+     */
+    protected AqlCompiledIndexDecl chooseIndex(
+            Map<IAccessPath, AccessPathAnalysisContext> analyzedAccPaths) {
+        Iterator<Map.Entry<IAccessPath, AccessPathAnalysisContext>> accPathIt = analyzedAccPaths.entrySet().iterator();
+        while (accPathIt.hasNext()) {
+            Map.Entry<IAccessPath, AccessPathAnalysisContext> accPathEntry = accPathIt.next();
+            AccessPathAnalysisContext analysisCtx = accPathEntry.getValue();
+            Iterator<Map.Entry<AqlCompiledIndexDecl, List<Pair<String, Integer>>>> indexIt = analysisCtx.indexExprs.entrySet().iterator();
+            if (indexIt.hasNext()) {
+                Map.Entry<AqlCompiledIndexDecl, List<Pair<String, Integer>>> indexEntry = indexIt.next();
+                return indexEntry.getKey();
+            }
+        }
+        return null;
+    }
+    
+    /**
+     * Removes irrelevant access path candidates, based on whether the
+     * expressions in the query match those in the index. For example, some
+     * index may require all its expressions to be matched, and some indexes may
+     * only require a match on a prefix of fields to be applicable. This methods
+     * removes all index candidates indexExprs that are definitely not
+     * applicable according to the expressions involved.
+     * 
+     */
+    public void removeIndexCandidates(IAccessPath accessPath, Map<AqlCompiledIndexDecl, List<Pair<String, Integer>>> indexExprs) {
+        Iterator<Map.Entry<AqlCompiledIndexDecl, List<Pair<String, Integer>>>> it = indexExprs.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<AqlCompiledIndexDecl, List<Pair<String, Integer>>> entry = it.next();
+            AqlCompiledIndexDecl index = entry.getKey();
+            List<Pair<String, Integer>> psiList = entry.getValue();
+            boolean allUsed = true;
+            int lastFieldMatched = -1;
+            for (int i = 0; i < index.getFieldExprs().size(); i++) {
+                String keyField = index.getFieldExprs().get(i);
+                boolean foundKeyField = false;
+                for (Pair<String, Integer> psi : psiList) {
+                    if (psi.first.equals(keyField)) {
+                        foundKeyField = true;
+                        if (lastFieldMatched == i - 1) {
+                            lastFieldMatched = i;
+                        }
+                        break;
+                    }
+                }
+                if (!foundKeyField) {
+                    allUsed = false;
+                    break;
+                }                
+            }
+            // If the access path requires all exprs to be matched but they are not, remove this candidate.
+            if (!allUsed && accessPath.matchAllIndexExprs()) {
+                it.remove();
+                return;
+            }
+            // A prefix of the index exprs may have been matched.
+            if (lastFieldMatched < 0 && accessPath.matchPrefixIndexExprs()) {
+                it.remove();
+                return;
+            }
+        }
+    }
+    
+    /**
+     * Analyzes the given selection condition, filling analyzedAccPaths with applicable access path types.
+     * At this point we are not yet consulting the metadata whether an actual index exists or not.
+     * 
+     * @param cond
+     * @param analyzedAccPaths
+     * @return
+     */
+    protected boolean analyzeSelectCondition(ILogicalExpression cond, Map<IAccessPath, AccessPathAnalysisContext> analyzedAccPaths) {
+        AbstractFunctionCallExpression funcExpr = (AbstractFunctionCallExpression) cond;
+        boolean found = analyzeFunctionExpr(funcExpr, analyzedAccPaths);        
+        for (Mutable<ILogicalExpression> arg : funcExpr.getArguments()) {
+            ILogicalExpression argExpr = arg.getValue();
+            if (argExpr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
+                continue;
+            }
+            AbstractFunctionCallExpression argFuncExpr = (AbstractFunctionCallExpression) argExpr;
+            found = found || analyzeFunctionExpr(argFuncExpr, analyzedAccPaths);
+        }
+        return found;
+    }
+    
+    /**
+     * Finds applicable access paths for the given function expression based on
+     * the function identifier, and an analysis of the function's arguments.
+     * Updates the analyzedAccPaths accordingly.
+     * 
+     * @param cond
+     * @param analyzedAccPaths
+     * @return
+     */
+    protected boolean analyzeFunctionExpr(AbstractFunctionCallExpression funcExpr, Map<IAccessPath, AccessPathAnalysisContext> analyzedAccPaths) {
+        FunctionIdentifier funcIdent = funcExpr.getFunctionIdentifier();        
+        if (funcIdent == AlgebricksBuiltinFunctions.AND) {
+            return false;
+        }
+        // Retrieves the list of access paths that are relevant based on the funcIdent.
+        List<IAccessPath> relevantAccessPaths = accessPaths.get(funcIdent);
+        if (relevantAccessPaths == null) {
+            return false;
+        }
+        boolean atLeastOneMatchFound = false;
+        // Placeholder for a new analysis context in case we need one.
+        AccessPathAnalysisContext newAnalysisCtx = new AccessPathAnalysisContext();
+        for(IAccessPath accessPath : relevantAccessPaths) {
+            AccessPathAnalysisContext analysisCtx = analyzedAccPaths.get(accessPath);
+            // Use the current placeholder.
+            if (analysisCtx == null) {
+                analysisCtx = newAnalysisCtx;                
+            }
+            // Analyzes the funcExpr's arguments to see if the accessPath is truly applicable.
+            boolean matchFound = accessPath.analyzeFuncExprArgs(funcExpr, analysisCtx);
+            if (matchFound) {
+                analysisCtx.matchedExprs.add(funcExpr);
+                // If we've used the current new context placeholder, replace it with a new one.
+                if (analysisCtx == newAnalysisCtx) {
+                    analyzedAccPaths.put(accessPath, analysisCtx);
+                    newAnalysisCtx = new AccessPathAnalysisContext();
+                }
+                atLeastOneMatchFound = true;
+            }
+        }
+        return atLeastOneMatchFound;
+    }
+    
+    protected boolean matchesConcreteRule(FunctionIdentifier funcIdent) {
+        return false;
+    }
+    
+    protected boolean matchesOperatorPattern(Mutable<ILogicalOperator> opRef, IOptimizationContext context, boolean includePrimaryIndex) {
         this.includePrimaryIndex = includePrimaryIndex;
         // First check that the operator is a select and its condition is a function call.
         AbstractLogicalOperator op1 = (AbstractLogicalOperator) opRef.getValue();
@@ -112,12 +309,6 @@ public abstract class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteR
         }
         // Check that the select's condition is a function call.
         selectCond = (AbstractFunctionCallExpression) condExpr;
-        FunctionIdentifier funcIdent = selectCond.getFunctionIdentifier();
-        // Make sure the function matches the concrete rule's spec 
-        // or an AND condition. We will look at the conjuncts one-by-one in analyzeCondition().
-        if (!matchesConcreteRule(funcIdent) && funcIdent != AlgebricksBuiltinFunctions.AND) {
-            return false;
-        }
         // Examine the select's children to match the expected pattern:
         // (select) <-- (assign) <-- (datasource scan)
         // OR
@@ -147,7 +338,7 @@ public abstract class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteR
         dataSourceScan = (DataSourceScanOperator) op3;
         return true;
     }
-    
+
     /**
      * Find the dataset corresponding to the datasource scan in the metadata.
      * Also sets recordType to be the type of that dataset.
@@ -204,10 +395,6 @@ public abstract class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteR
 		}
 		return null;
 	}
-
-    protected static ConstantExpression createStringConstant(String str) {
-        return new ConstantExpression(new AsterixConstantValue(new AString(str)));
-    }
 
 	/**
 	 * 
@@ -347,4 +534,8 @@ public abstract class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteR
         return types;
     }
 
+
+    protected static ConstantExpression createStringConstant(String str) {
+        return new ConstantExpression(new AsterixConstantValue(new AString(str)));
+    }
 }

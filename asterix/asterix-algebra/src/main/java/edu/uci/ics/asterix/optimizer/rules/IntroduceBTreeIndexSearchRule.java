@@ -70,7 +70,7 @@ public class IntroduceBTreeIndexSearchRule extends IntroduceTreeIndexSearchRule 
     @Override
     public boolean rewritePost(Mutable<ILogicalOperator> opRef, IOptimizationContext context) throws AlgebricksException {
         // Match operator pattern and initialize operator members.
-        if (!matchesPattern(opRef, context, true)) {
+        if (!matchesOperatorPattern(opRef, context, true)) {
             return false;
         }
         
