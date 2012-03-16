@@ -19,7 +19,7 @@ public class LogType {
     public static final byte UPDATE = 0;
     public static final byte COMMIT = 1;
     public static final byte CLR = 2;
-    public static final byte BGN_CHPKT = 3;
-    public static final byte END_CHPKT = 4;
+    public static final byte BGN_CHKPT = 3;
+    public static final byte END_CHKPT = 4;
 
 }

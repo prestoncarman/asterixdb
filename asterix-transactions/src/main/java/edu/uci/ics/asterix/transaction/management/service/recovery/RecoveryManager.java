@@ -17,9 +17,11 @@ package edu.uci.ics.asterix.transaction.management.service.recovery;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,6 +43,8 @@ import edu.uci.ics.asterix.transaction.management.service.logging.LogUtil;
 import edu.uci.ics.asterix.transaction.management.service.logging.LogicalLogLocator;
 import edu.uci.ics.asterix.transaction.management.service.logging.PhysicalLogLocator;
 import edu.uci.ics.asterix.transaction.management.service.transaction.IResourceManager;
+import edu.uci.ics.asterix.transaction.management.service.transaction.ITransactionManager;
+import edu.uci.ics.asterix.transaction.management.service.transaction.MemoryComponentTable;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionContext;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionManagementConstants;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionProvider;
@@ -67,14 +71,42 @@ public class RecoveryManager implements IRecoveryManager {
 
     public RecoveryManager(TransactionProvider TransactionProvider) throws ACIDException {
         this.transactionProvider = TransactionProvider;
-        try {
-            FileUtil.createFileIfNotExists(checkpoint_record_file);
-        } catch (IOException ioe) {
-            throw new ACIDException(" unable to create checkpoint record file " + checkpoint_record_file, ioe);
-        }
+        //        checkpoint_record_file is created in getSystemState()
+        //        try {
+        //            FileUtil.createFileIfNotExists(checkpoint_record_file);
+        //        } catch (IOException ioe) {
+        //            throw new ACIDException(" unable to create checkpoint record file " + checkpoint_record_file, ioe);
+        //        }
     }
 
     public SystemState getSystemState() throws ACIDException {
+        try {
+            if (FileUtil.createFileIfNotExists(checkpoint_record_file)) {
+                //If checkpoint_record_file doesn't exist, this is the initial system bootstrap. 
+                //The system state is healthy.
+                //Do the first checkpoint. It doesn't have to be done in efficiency perspective, 
+                //but it is done to make checking the healthy state simple and this is only one time overhead.
+                state = SystemState.HEALTHY;
+                checkpoint();
+            } else {
+                //check if checkponitLogRecord.LSN == lastCheckpointLSN from checkpoint_record_file.
+                //If they are same, state is HEALTHY. Otherwise, it's not healthy.
+                try {
+                    if (LogUtil.initializeLogAnchor(transactionProvider.getLogManager()).getLsn() == this
+                            .getLastCheckpointRecordLSN()) {
+                        state = SystemState.HEALTHY;
+                    } else {
+                        state = SystemState.CORRUPTED;
+                    }
+                } catch (ACIDException ae) {
+                    // TODO Auto-generated catch block
+                    state = SystemState.CORRUPTED;
+                    throw new ACIDException("checkpoint_record_file is corrupted" + checkpoint_record_file, ae);
+                }
+            }
+        } catch (IOException ioe) {
+            throw new ACIDException(" unable to create checkpoint record file " + checkpoint_record_file, ioe);
+        }
         return state;
     }
 
@@ -125,7 +157,7 @@ public class RecoveryManager implements IRecoveryManager {
                         default: /* do nothing */
                     }
                 }
-                writeCheckpointRecord(memLSN.getLsn());
+                //writeCheckpointRecord(memLSN.getLsn());
             }
             state = SystemState.HEALTHY;
         } catch (Exception e) {
@@ -135,32 +167,134 @@ public class RecoveryManager implements IRecoveryManager {
         return state;
     }
 
-    private void writeCheckpointRecord(long lsn) throws ACIDException {
+    @Override
+    /*
+     * Checkpoint executes the following tasks: 
+     * write <chkpt, minMCTFirstLSN> log record, 
+     * flush logs up to the checkpoint log record, 
+     * save the LSN of the checkpoint log record into checkpoint_log_record file.
+     * However, dirty data in memory is not flushed.
+     */
+    public void checkpoint() throws ACIDException {
+        // write <chkpt, minMCTFirstLSN> log record, 
+        // flush logs upto the checkpoint log record, 
+        // save the LSN of the checkpoint log record into checkpoint_log_record file.
+        ILogManager logMgr = transactionProvider.getLogManager();
+        LogicalLogLocator logLocator = LogUtil.getDummyLogicalLogLocator(logMgr);
+
+        //write checkpoint log record
         try {
-            FileWriter writer = new FileWriter(new File(checkpoint_record_file));
-            BufferedWriter buffWriter = new BufferedWriter(writer);
-            buffWriter.write("" + lsn);
-            buffWriter.flush();
+            logMgr.log(logLocator, null, (byte) (-1), 0, LogType.END_CHKPT, LogActionType.NO_OP, 0, null, null);
+        } catch (ACIDException ae) {
+            if (LOGGER.isLoggable(Level.SEVERE)) {
+                LOGGER.severe(" caused exception in checkpoint !");
+            }
+            throw ae;
+        }
+
+        //update checkpoint_log_record file. 
+        long minMCTFirstLSN = MemoryComponentTable.getMinFirstLSN();
+
+        try {
+            //write checkpoint log record LSN as well as minMCTFirstLSN twice
+            //to check whether they are corrupted or not.
+            byte[] buffer = new byte[Long.SIZE * 4];
+            BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(checkpoint_record_file));
+            bufferedWriter.write("" + logLocator.getLsn());
+            bufferedWriter.newLine();
+            bufferedWriter.write("" + logLocator.getLsn());
+            bufferedWriter.newLine();
+            bufferedWriter.write("" + minMCTFirstLSN);
+            bufferedWriter.newLine();
+            bufferedWriter.write("" + minMCTFirstLSN);
+            bufferedWriter.newLine();
+            bufferedWriter.flush();
         } catch (IOException ioe) {
             throw new ACIDException(" unable to create check point record", ioe);
         }
     }
 
-    /*
-     * Currently this method is not used, but will be used as part of crash
-     * recovery logic.
+    /**
+     * read the last checkpoint LSN from checkpoint_record_file
+     * 
+     * @throws
+     * @throws Exception
      */
-    private long getLastCheckpointRecordLSN() throws Exception {
-        FileReader reader;
-        BufferedReader buffReader;
+    private long getLastCheckpointRecordLSN() throws ACIDException {
         String content = null;
-        reader = new FileReader(new File(checkpoint_record_file));
-        buffReader = new BufferedReader(reader);
-        content = buffReader.readLine();
-        if (content != null) {
-            return Long.parseLong(content);
+        long lastCheckpointLSN;
+        BufferedReader bufferedReader;
+        try {
+            bufferedReader = new BufferedReader(new FileReader(checkpoint_record_file));
+        } catch (FileNotFoundException e) {
+            throw new ACIDException("checkpoint_record_file is corrupted", e);
         }
-        return -1;
+
+        //read the last checkpoint LSN
+        try {
+            content = bufferedReader.readLine();
+        } catch (IOException e) {
+            throw new ACIDException("checkpoint_record_file is corrupted", e);
+        }
+        if (content == null) {
+            throw new ACIDException("checkpoint_record_file is corrupted");
+        } else {
+            lastCheckpointLSN = Long.parseLong(content);
+        }
+
+        try {
+            content = bufferedReader.readLine();
+        } catch (IOException e) {
+            throw new ACIDException("checkpoint_record_file is corrupted", e);
+        }
+        if (content == null) {
+            throw new ACIDException("checkpoint_record_file is corrupted");
+        } else {
+            if (lastCheckpointLSN == Long.parseLong(content)) {
+                return lastCheckpointLSN;
+            } else {
+                throw new ACIDException("checkpoint_record_file is corrupted");
+            }
+        }
+    }
+
+    /**
+     * read the minMCTFirstLSN from checkpoint_record_file.
+     * 
+     * @throws Exception
+     */
+    private long getMinMCTFirstLSNFromCheckpointRecordFile() throws Exception {
+        String content = null;
+        long minMCTFirstLSN;
+        BufferedReader bufferedReader = new BufferedReader(new FileReader(checkpoint_record_file));
+
+        //read the checkpoint LSN twice. Then, read the minMCTFirstLSN twice.
+        //read the lastCheckpointLSN
+        for (int i = 0; i < 2; i++) {
+            content = bufferedReader.readLine();
+            if (content == null) {
+                throw new ACIDException("checkpoint_record_file is corrupted");
+            }
+        }
+
+        //read the minMCTFirstLSN
+        content = bufferedReader.readLine();
+        if (content == null) {
+            throw new ACIDException("checkpoint_record_file is corrupted");
+        } else {
+            minMCTFirstLSN = Long.parseLong(content);
+        }
+
+        content = bufferedReader.readLine();
+        if (content == null) {
+            throw new ACIDException("checkpoint_record_file is corrupted");
+        } else {
+            if (minMCTFirstLSN == Long.parseLong(content)) {
+                return minMCTFirstLSN;
+            } else {
+                throw new ACIDException("checkpoint_record_file is corrupted");
+            }
+        }
     }
 
     /**

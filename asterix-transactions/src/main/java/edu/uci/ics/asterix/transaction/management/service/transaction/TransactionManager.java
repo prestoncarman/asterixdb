@@ -14,14 +14,23 @@
  */
 package edu.uci.ics.asterix.transaction.management.service.transaction;
 
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
+import edu.uci.ics.asterix.transaction.management.service.logging.FileUtil;
+import edu.uci.ics.asterix.transaction.management.service.logging.ILogManager;
+import edu.uci.ics.asterix.transaction.management.service.logging.ILogger;
 import edu.uci.ics.asterix.transaction.management.service.logging.LogActionType;
 import edu.uci.ics.asterix.transaction.management.service.logging.LogType;
+import edu.uci.ics.asterix.transaction.management.service.logging.LogUtil;
+import edu.uci.ics.asterix.transaction.management.service.logging.LogicalLogLocator;
 
 /**
  * An implementation of the {@link ITransactionManager} interface that provides
@@ -129,5 +138,16 @@ public class TransactionManager implements ITransactionManager {
     public TransactionProvider getTransactionProvider() {
         return transactionProvider;
     }
-
+    
+    @Override
+    /*
+     * Checkpoint executes the following tasks: 
+     * write <chkpt, minMCTFirstLSN> log record, 
+     * flush logs up to the checkpoint log record, 
+     * save the LSN of the checkpoint log record into checkpoint_log_record file.
+     * However, dirty data in memory is not flushed.
+     */
+    public void checkpoint() throws ACIDException {
+        transactionProvider.getRecoveryManager().checkpoint();
+    }
 }

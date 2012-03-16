@@ -29,6 +29,8 @@ import edu.uci.ics.asterix.metadata.api.IMetadataNode;
 import edu.uci.ics.asterix.metadata.bootstrap.AsterixProperties;
 import edu.uci.ics.asterix.metadata.bootstrap.MetadataBootstrap;
 import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
+import edu.uci.ics.asterix.transaction.management.service.recovery.IRecoveryManager;
+import edu.uci.ics.asterix.transaction.management.service.recovery.IRecoveryManager.SystemState;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionProvider;
 import edu.uci.ics.hyracks.api.application.INCApplicationContext;
 import edu.uci.ics.hyracks.api.application.INCBootstrap;
@@ -65,6 +67,15 @@ public class NCBootstrapImpl implements INCBootstrap {
             Thread.sleep(5000);
             AsterixAppRuntimeContext.initialize(ncAppContext);
             LOGGER.info("Initialized AsterixRuntimeContext: " + AsterixAppRuntimeContext.getInstance());
+        }
+        
+        //Check the system state whether it is healthy or not.
+        //If it is not healthy, start synchronous recovery.
+        IRecoveryManager recoveryMgr = ((TransactionProvider) ncAppContext.getApplicationObject()).getRecoveryManager();
+        
+        if (recoveryMgr.getSystemState() != SystemState.HEALTHY) {
+            initializeResources();
+            recoveryMgr.startRecovery(true);
         }
 
         IAsterixStateProxy proxy = (IAsterixStateProxy) ncAppContext.getDistributedState();
@@ -112,5 +123,15 @@ public class NCBootstrapImpl implements INCBootstrap {
             e.printStackTrace();
             LOGGER.severe(" Could not initialize transaction support ");
         }
+    }
+    
+    /**
+     *  Bring up resources and resourceMgrs
+     *  Place into TransactionalResourceRepository
+     */
+    private void initializeResources() {
+        // bring up resources and resourceMgrs
+        // place into TransactionalResourceRepository(TRR)
+        // TODO
     }
 }

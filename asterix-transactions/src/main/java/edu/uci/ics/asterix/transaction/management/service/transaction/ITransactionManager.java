@@ -119,5 +119,11 @@ public interface ITransactionManager {
      * @return TransactionProvider
      */
     public TransactionProvider getTransactionProvider();
+    
+    /**
+     * Checkpoints. 
+     * @throws ACIDException 
+     */
+    public void checkpoint() throws ACIDException;
 
 }
