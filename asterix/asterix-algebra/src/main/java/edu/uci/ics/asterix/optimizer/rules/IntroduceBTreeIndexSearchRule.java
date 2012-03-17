@@ -96,6 +96,7 @@ public class IntroduceBTreeIndexSearchRule extends IntroduceTreeIndexSearchRule 
         if (indexExprs.isEmpty()) {
             return false;
         }
+        /*
         AqlCompiledIndexDecl picked = chooseIndex(datasetDecl, indexExprs);
         boolean res;
         if (picked == null) {
@@ -111,6 +112,8 @@ public class IntroduceBTreeIndexSearchRule extends IntroduceTreeIndexSearchRule 
             OperatorPropertiesUtil.typeOpRec(selectRef, context);
         }
         return res;
+        */
+        return false;
     }
 
     private boolean analyzeCondition(ILogicalExpression cond, List<IAlgebricksConstantValue> outFilters,

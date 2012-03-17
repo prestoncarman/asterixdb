@@ -92,10 +92,10 @@ public class RTreeAccessPath implements IAccessPath {
     }
 
     @Override
-    public void applyPlanTransformation(Mutable<ILogicalOperator> dataSourceScanRef,
-            Mutable<ILogicalOperator> assignRef, Mutable<ILogicalOperator> selectRef,
-            AqlCompiledDatasetDecl datasetDecl, ARecordType recordType, AqlCompiledIndexDecl chosenIndex,
-            AccessPathAnalysisContext analysisCtx, IOptimizationContext context) throws AlgebricksException {
+    public void applyPlanTransformation(Mutable<ILogicalOperator> selectRef, Mutable<ILogicalOperator> assignRef,
+            Mutable<ILogicalOperator> dataSourceScanRef, AqlCompiledDatasetDecl datasetDecl, ARecordType recordType,
+            AqlCompiledIndexDecl chosenIndex, AccessPathAnalysisContext analysisCtx, IOptimizationContext context)
+            throws AlgebricksException {
         // Get the number of dimensions corresponding to the field indexed by
         // chosenIndex.
         IAType spatialType = AqlCompiledIndexDecl.keyFieldType(analysisCtx.matchedFuncExprs.get(0).getFieldName(), recordType);

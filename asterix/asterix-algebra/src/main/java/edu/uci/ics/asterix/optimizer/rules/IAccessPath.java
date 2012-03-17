@@ -30,8 +30,8 @@ public interface IAccessPath {
      */
     public boolean matchPrefixIndexExprs();
     
-    public void applyPlanTransformation(Mutable<ILogicalOperator> dataSourceScanRef,
-            Mutable<ILogicalOperator> assignRef, Mutable<ILogicalOperator> selectRef,
+    public void applyPlanTransformation(Mutable<ILogicalOperator> selectRef, Mutable<ILogicalOperator> assignRef, 
+            Mutable<ILogicalOperator> dataSourceScanRef,
             AqlCompiledDatasetDecl datasetDecl, ARecordType recordType, AqlCompiledIndexDecl chosenIndex,
             AccessPathAnalysisContext analysisCtx, IOptimizationContext context) throws AlgebricksException;
 }

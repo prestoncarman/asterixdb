@@ -41,6 +41,7 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.util.OperatorPropertiesUtil;
 import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.rewriter.base.IAlgebraicRewriteRule;
 import edu.uci.ics.hyracks.algebricks.core.utils.Pair;
+import edu.uci.ics.hyracks.algebricks.core.utils.Triple;
 
 /**
  * This rule tries to optimize simple selections with indexes.
@@ -116,6 +117,7 @@ public class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteRule {
             return false;
         }
         
+        // Analyze select condition.
         Map<IAccessPath, AccessPathAnalysisContext> analyzedAccPaths = new HashMap<IAccessPath, AccessPathAnalysisContext>();
         if (!analyzeSelectCondition(selectCond, analyzedAccPaths)) {
             return false;
@@ -128,18 +130,29 @@ public class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteRule {
         
         // The assign may be null if there is only a filter on the primary index key.
         List<LogicalVariable> varList = (assign != null) ? assign.getVariables() : dataSourceScan.getVariables();
-        for (Map.Entry<IAccessPath, AccessPathAnalysisContext> entry : analyzedAccPaths.entrySet()) {
+        Iterator<Map.Entry<IAccessPath, AccessPathAnalysisContext>> accPathIt = analyzedAccPaths.entrySet().iterator();
+        while (accPathIt.hasNext()) {
+            Map.Entry<IAccessPath, AccessPathAnalysisContext> entry = accPathIt.next();
             AccessPathAnalysisContext accPathCtx = entry.getValue();
             fillAllIndexExprs(varList, accPathCtx);
             pruneIndexCandidates(entry.getKey(), accPathCtx);
+            // Remove access paths for which there are definitely no applicable indexes.
+            if (entry.getValue().indexExprs.isEmpty()) {
+                accPathIt.remove();
+            }
         }
         
         // Choose index to be applied.
-        AqlCompiledIndexDecl chosenIndex = chooseIndex(analyzedAccPaths);
+        Pair<IAccessPath, AqlCompiledIndexDecl> chosenIndex = chooseIndex(analyzedAccPaths);
         if (chosenIndex == null) {
             context.addToDontApplySet(this, select);
             return false;
         }
+        
+        // Apply plan transformation using chosen index.
+        AccessPathAnalysisContext analysisCtx = analyzedAccPaths.get(chosenIndex.first);
+        chosenIndex.first.applyPlanTransformation(selectRef, assignRef, dataSourceScanRef, datasetDecl, recordType,
+                chosenIndex.second, analysisCtx, context);
         
         System.out.println("HUHU");
         
@@ -157,7 +170,7 @@ public class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteRule {
      * @param indexExprs
      * @return
      */
-    protected AqlCompiledIndexDecl chooseIndex(
+    protected Pair<IAccessPath, AqlCompiledIndexDecl> chooseIndex(
             Map<IAccessPath, AccessPathAnalysisContext> analyzedAccPaths) {
         Iterator<Map.Entry<IAccessPath, AccessPathAnalysisContext>> accPathIt = analyzedAccPaths.entrySet().iterator();
         while (accPathIt.hasNext()) {
@@ -166,7 +179,7 @@ public class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteRule {
             Iterator<Map.Entry<AqlCompiledIndexDecl, List<Integer>>> indexIt = analysisCtx.indexExprs.entrySet().iterator();
             if (indexIt.hasNext()) {
                 Map.Entry<AqlCompiledIndexDecl, List<Integer>> indexEntry = indexIt.next();
-                return indexEntry.getKey();
+                return new Pair<IAccessPath, AqlCompiledIndexDecl>(accPathEntry.getKey(), indexEntry.getKey());
             }
         }
         return null;
@@ -364,36 +377,6 @@ public class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteRule {
         return true;
     }
        
-    
-	/**
-	 * Picks the first index for which all the expressions are mentioned.
-	 */
-	protected AqlCompiledIndexDecl chooseIndex(
-			AqlCompiledDatasetDecl datasetDecl,
-			HashMap<AqlCompiledIndexDecl, List<Pair<String, Integer>>> indexExprs) {
-		for (AqlCompiledIndexDecl index : indexExprs.keySet()) {
-			List<Pair<String, Integer>> psiList = indexExprs.get(index);
-			boolean allUsed = true;
-			for (String keyField : index.getFieldExprs()) {
-				boolean foundKeyField = false;
-				for (Pair<String, Integer> psi : psiList) {
-					if (psi.first.equals(keyField)) {
-						foundKeyField = true;
-						break;
-					}
-				}
-				if (!foundKeyField) {
-					allUsed = false;
-					break;
-				}
-			}
-			if (allUsed) {
-				return index;
-			}
-		}
-		return null;
-	}
-
 	/**
 	 * 
 	 * @return returns true if a candidate index was added to foundIndexExprs,
