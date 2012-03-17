@@ -193,7 +193,7 @@ public class RecoveryManager implements IRecoveryManager {
         }
 
         //update checkpoint_log_record file. 
-        long minMCTFirstLSN = MemoryComponentTable.getMinFirstLSN();
+        long minMCTFirstLSN = 0;//MemoryComponentTable.getMinFirstLSN();
 
         try {
             //write checkpoint log record LSN as well as minMCTFirstLSN twice

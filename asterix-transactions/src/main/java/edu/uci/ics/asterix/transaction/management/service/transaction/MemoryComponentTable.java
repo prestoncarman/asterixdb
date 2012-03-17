@@ -24,85 +24,135 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
- * Any operation in this class should follow MGL(Multiple Granularity Locking) protocol.
  * Currently, this class provides the following lock granularity with read and write mode only(no intention mode).
- * Must follow Crabbing protocol: 
- * Writer should get write lock from the root resource, then the acquired write lock can be released after getting the child resource's write lock, and so on. 
- * Reader should get read lock as writer does.  
- * 
  * tableLatch -----> entryLatch ---> lsnLatch
- *                              |
- *                              ---> transactionIdLatch  
+ *                            | 
+ *                              ---> transactionIdLatch
+ * TODO Currently, this code only use tableLatch. When higher concurrency than partition level,
+ * finer granule latch should be used correctly.
  */
 public class MemoryComponentTable {
-    private static HashMap<ByteBuffer, MemoryComponentTableEntry> memoryComponentTable = new HashMap<ByteBuffer, MemoryComponentTableEntry>();
-    private static final ReadWriteLock tableLatch = new ReentrantReadWriteLock(true);
+    private HashMap<ByteBuffer, MemoryComponentTableEntry> memoryComponentTable = new HashMap<ByteBuffer, MemoryComponentTableEntry>();
+    private final ReadWriteLock tableLatch = new ReentrantReadWriteLock(true);
 
-    public static long getMinFirstLSN() {
+    public long getMinFirstLSN() {
         long minFirstLSN = Long.MAX_VALUE;
         long curLSN;
         tableLatch.readLock().lock();
         Set<Map.Entry<ByteBuffer, MemoryComponentTableEntry>> entries = memoryComponentTable.entrySet();
-        
+
         for (Map.Entry<ByteBuffer, MemoryComponentTableEntry> entry : entries) {
-            curLSN = entry.getValue().firstLSN;
+            curLSN = entry.getValue().getFirstLSN();
             if (minFirstLSN > curLSN) {
                 minFirstLSN = curLSN;
             }
         }
-        
+
         try {
             return minFirstLSN;
         } finally {
             tableLatch.readLock().unlock();
         }
     }
+
+    /**
+     * updates the existing resource's information. 
+     * If the resource doesn't exist, it is created and then the information is inserted.
+     * @param resourceBytes
+     * @param lsn
+     * @param txnId
+     */
+    public void upsertLSN(byte[] resourceBytes, long lsn, long txnId) {
+        ByteBuffer resourceId = ByteBuffer.wrap(resourceBytes);
+
+        //check whether the resource is existing.
+        //If it doesn't exist, create an entry.
+        tableLatch.writeLock().lock();
+        MemoryComponentTableEntry mctEntry = memoryComponentTable.get(resourceId);
+        if (mctEntry == null) {
+            mctEntry = new MemoryComponentTableEntry();
+            mctEntry.upsertTransactionId(txnId);
+        }
+        
+        //update LSN
+        mctEntry.setLastLSN(lsn);
+        tableLatch.writeLock().unlock();
+    }
     
-    //public void registerMemoryComponent(byte[] resourceId, )
-    //EEEEEEEEEEEEEEEEEEEEEEEEeee
+    public void removeTransactionId(byte[] resourceBytes, long txnId) {
+        ByteBuffer resourceId = ByteBuffer.wrap(resourceBytes);
+        tableLatch.writeLock().lock();
+        MemoryComponentTableEntry mctEntry = memoryComponentTable.get(resourceId);
+        if (mctEntry != null) {
+            mctEntry.deleteTransactionId(txnId);
+        }
+        tableLatch.writeLock().unlock();
+    }
+
+    /**
+     * Deletes a requested resource. 
+     * Regardless of the resource's existence, remove() is called.
+     * @param resourceBytes
+     */
+    public void deleteResource(byte[] resourceBytes) {
+        ByteBuffer resourceId = ByteBuffer.wrap(resourceBytes);
+        
+        tableLatch.writeLock().lock();
+        memoryComponentTable.remove(resourceId);
+        tableLatch.writeLock().unlock();
+    }
 
     public class MemoryComponentTableEntry {
-        public long firstLSN;
-        public long lastLSN;
-        public Map transactionIds;
-        public ReadWriteLock entryLatch;
-        public ReadWriteLock lsnLatch;
-        public ReadWriteLock transactionIdLatch;
+        private long firstLSN;
+        private long lastLSN;
+        private HashMap transactionIds;
+
+        //        public ReadWriteLock entryLatch;
+        //        public ReadWriteLock lsnLatch;
+        //        public ReadWriteLock transactionIdLatch;
 
         public MemoryComponentTableEntry() {
             firstLSN = -1;
             lastLSN = -1;
             transactionIds = new HashMap();
-            entryLatch = new ReentrantReadWriteLock(true);
-            lsnLatch = new ReentrantReadWriteLock(true);
-            transactionIdLatch = new ReentrantReadWriteLock(true);
+            //            entryLatch = new ReentrantReadWriteLock(true);
+            //            lsnLatch = new ReentrantReadWriteLock(true);
+            //            transactionIdLatch = new ReentrantReadWriteLock(true);
         }
 
         public long getFirstLSN() {
-            entryLatch.readLock().lock();
-            try {
-                return firstLSN;
-            } finally {
-                entryLatch.readLock().unlock();
-            }
+            //            entryLatch.readLock().lock();
+            //            try {
+            return firstLSN;
+            //            } finally {
+            //                entryLatch.readLock().unlock();
+            //            }
         }
 
         public long getLastLSN() {
-            entryLatch.readLock().lock();
-            try {
-                return lastLSN;
-            } finally {
-                entryLatch.readLock().unlock();
-            }
+            //            entryLatch.readLock().lock();
+            //            try {
+            return lastLSN;
+            //            } finally {
+            //                entryLatch.readLock().unlock();
+            //            }
         }
 
         public void setLastLSN(long lsn) {
-            entryLatch.writeLock().lock();
+            //            entryLatch.writeLock().lock();
             if (firstLSN == -1) {
                 firstLSN = lsn;
             }
             lastLSN = lsn;
-            entryLatch.writeLock().unlock();
+            //            entryLatch.writeLock().unlock();
+        }
+        
+        public void upsertTransactionId(long txnId) {
+            transactionIds.put(txnId, 0);
+        }
+        
+        public void deleteTransactionId(long txnId) {
+            transactionIds.remove(txnId);
         }
     }
 }
