@@ -15,20 +15,23 @@
 package edu.uci.ics.asterix.hyracks.bootstrap;
 
 import java.rmi.server.UnicastRemoteObject;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import edu.uci.ics.asterix.api.aqlj.server.NodeDataClientThreadFactory;
 import edu.uci.ics.asterix.api.aqlj.server.ThreadedServer;
 import edu.uci.ics.asterix.api.common.AsterixAppContextInfoImpl;
+import edu.uci.ics.asterix.common.context.AsterixAppRuntimeContext;
+import edu.uci.ics.asterix.common.context.INodeApplicationState;
+import edu.uci.ics.asterix.common.context.NodeApplicationState;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
-import edu.uci.ics.asterix.context.AsterixAppRuntimeContext;
 import edu.uci.ics.asterix.metadata.MetadataManager;
 import edu.uci.ics.asterix.metadata.MetadataNode;
 import edu.uci.ics.asterix.metadata.api.IAsterixStateProxy;
 import edu.uci.ics.asterix.metadata.api.IMetadataNode;
-import edu.uci.ics.asterix.metadata.bootstrap.AsterixProperties;
 import edu.uci.ics.asterix.metadata.bootstrap.MetadataBootstrap;
 import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
+import edu.uci.ics.asterix.transaction.management.resource.TransactionalResourceRepository;
 import edu.uci.ics.asterix.transaction.management.service.recovery.IRecoveryManager;
 import edu.uci.ics.asterix.transaction.management.service.recovery.IRecoveryManager.SystemState;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionProvider;
@@ -38,100 +41,112 @@ import edu.uci.ics.hyracks.api.application.INCBootstrap;
 public class NCBootstrapImpl implements INCBootstrap {
     private static final Logger LOGGER = Logger.getLogger(NCBootstrapImpl.class.getName());
 
-    public static final int DEFAULT_AQLJ_NODE_DATA_SERVER_PORT = 6061;
-
-    private INCApplicationContext ncAppContext = null;
-
-    private static IMetadataNode metadataNode;
+    private INCApplicationContext ncApplicationContext = null;
+    private INodeApplicationState applicationState = new NodeApplicationState();
     private String nodeId;
 
+    // Metadata
+    private boolean isMetadataNode = false;
+
+    // API
     private ThreadedServer apiNodeDataServer;
 
     @Override
     public void start() throws Exception {
+        ncApplicationContext.setApplicationObject(applicationState);
+        nodeId = ncApplicationContext.getNodeId();
 
-        LOGGER.info("Starting Asterix NC " + nodeId + " Bootstrap");
-        IAsterixStateProxy p = (IAsterixStateProxy) ncAppContext.getDistributedState();
-        LOGGER.info("\nMetadata node " + p.getAsterixProperties().getMetadataNodeName());
-        initializeTransactionSupport(ncAppContext, nodeId);
-        if (nodeId.equals(p.getAsterixProperties().getMetadataNodeName())) {
-            AsterixAppRuntimeContext.initialize(ncAppContext);
-            LOGGER.info("Initialized AsterixRuntimeContext: " + AsterixAppRuntimeContext.getInstance());
-            metadataNode = registerRemoteObject(ncAppContext, p.getAsterixProperties());
-            p.setMetadataNode(metadataNode);
-            MetadataManager.INSTANCE = new MetadataManager(p);
-            LOGGER.info("Bootstrapping Metadata");
-            MetadataManager.INSTANCE.init();
-            MetadataBootstrap.startUniverse(p.getAsterixProperties(), AsterixAppContextInfoImpl.INSTANCE);
-        } else {
-            Thread.sleep(5000);
-            AsterixAppRuntimeContext.initialize(ncAppContext);
-            LOGGER.info("Initialized AsterixRuntimeContext: " + AsterixAppRuntimeContext.getInstance());
+        if (LOGGER.isLoggable(Level.INFO)) {
+            LOGGER.info("Starting Asterix node controller: " + nodeId);
         }
-        
-        //Check the system state whether it is healthy or not.
-        //If it is not healthy, start synchronous recovery.
-        IRecoveryManager recoveryMgr = ((TransactionProvider) ncAppContext.getApplicationObject()).getRecoveryManager();
-        
+
+        // Check if this node is the metadata node
+        IAsterixStateProxy proxy = (IAsterixStateProxy) ncApplicationContext.getDistributedState();
+        isMetadataNode = nodeId.equals(proxy.getAsterixProperties().getMetadataNodeName());
+
+        // Initialize the runtime context
+        AsterixAppRuntimeContext runtimeContext = new AsterixAppRuntimeContext(ncApplicationContext);
+        applicationState.setApplicationRuntimeContext(runtimeContext);
+        runtimeContext.initialize();
+
+        // Initialize the transaction sub-system
+        initializeTransactionSupport();
+
+        // Initialize metadata if this node is the metadata node
+        if (isMetadataNode) {
+            registerRemoteMetadataNode(proxy);
+
+            if (LOGGER.isLoggable(Level.INFO)) {
+                LOGGER.info("Bootstrapping metadata");
+            }
+
+            MetadataManager.INSTANCE = new MetadataManager(proxy);
+            MetadataManager.INSTANCE.init();
+            MetadataBootstrap.startUniverse(proxy.getAsterixProperties(), ncApplicationContext);
+        }
+
+        // Check the system state whether it is healthy or not.
+        // If it is not healthy, start synchronous recovery.
+        IRecoveryManager recoveryMgr = applicationState.getTransactionProvider().getRecoveryManager();
         if (recoveryMgr.getSystemState() != SystemState.HEALTHY) {
             initializeResources();
             recoveryMgr.startRecovery(true);
         }
 
-        IAsterixStateProxy proxy = (IAsterixStateProxy) ncAppContext.getDistributedState();
-        AsterixNodeState ns = (AsterixNodeState) proxy.getAsterixNodeState(ncAppContext.getNodeId());
+        // Start a sub-component for the API server. This server is only connected to by the 
+        // API server that lives on the CC and never by a client wishing to execute AQL.
+        // TODO: The API sub-system will change dramatically in the future and this code will go away, 
+        // but leave it for now.
+        APINodeState ns = (APINodeState) proxy.getAsterixNodeState(nodeId);
         apiNodeDataServer = new ThreadedServer(ns.getAPINodeDataServerPort(), new NodeDataClientThreadFactory());
         apiNodeDataServer.start();
     }
 
-    public static IMetadataNode registerRemoteObject(INCApplicationContext ncAppContext,
-            AsterixProperties asterixProperties) throws AsterixException {
+    @Override
+    public void stop() throws Exception {
+        if (LOGGER.isLoggable(Level.INFO)) {
+            LOGGER.info("Stopping Asterix node controller: " + nodeId);
+        }
+
+        // Quiesce metadata
+        if (isMetadataNode) {
+            MetadataBootstrap.stopUniverse();
+        }
+
+        apiNodeDataServer.shutdown();
+        applicationState.getApplicationRuntimeContext().deinitialize();
+    }
+
+    private void initializeTransactionSupport() throws ACIDException {
+        TransactionProvider provider = new TransactionProvider(nodeId);
+        applicationState.setTransactionProvider(provider);
+    }
+
+    public void registerRemoteMetadataNode(IAsterixStateProxy proxy) throws Exception {
+        IMetadataNode stub = null;
         try {
-            TransactionProvider factory = (TransactionProvider) ncAppContext.getApplicationObject();
-            MetadataNode.INSTANCE = new MetadataNode(asterixProperties, AsterixAppContextInfoImpl.INSTANCE, factory);
-            IMetadataNode stub = (IMetadataNode) UnicastRemoteObject.exportObject(MetadataNode.INSTANCE, 0);
-            LOGGER.info("MetadataNode bound.");
-            return stub;
+            TransactionProvider provider = applicationState.getTransactionProvider();
+            MetadataNode.INSTANCE = new MetadataNode(proxy.getAsterixProperties(), AsterixAppContextInfoImpl.INSTANCE,
+                    provider);
+            stub = (IMetadataNode) UnicastRemoteObject.exportObject(MetadataNode.INSTANCE, 0);
         } catch (Exception e) {
-            LOGGER.info("MetadataNode exception.");
             throw new AsterixException(e);
+        }
+        proxy.setMetadataNode(stub);
+
+        if (LOGGER.isLoggable(Level.INFO)) {
+            LOGGER.info("Metadata node bound");
         }
     }
 
-    @Override
-    public void stop() throws Exception {
-        LOGGER.info("Stopping Asterix NC Bootstrap");
-        IAsterixStateProxy p = (IAsterixStateProxy) ncAppContext.getDistributedState();
-        if (nodeId.equals(p.getAsterixProperties().getMetadataNodeName())) {
-            MetadataBootstrap.stopUniverse();
-        }
-        AsterixAppRuntimeContext.deinitialize();
-        apiNodeDataServer.shutdown();
+    private void initializeResources() {
+        // TODO: bring up resources and resourceMgrs; register in resource repository
+        TransactionalResourceRepository resourceRepository = applicationState.getTransactionProvider()
+                .getResourceRepository();
     }
 
     @Override
     public void setApplicationContext(INCApplicationContext appCtx) {
-        this.ncAppContext = appCtx;
-        this.nodeId = ncAppContext.getNodeId();
-    }
-
-    private void initializeTransactionSupport(INCApplicationContext ncAppContext, String nodeId) {
-        try {
-            TransactionProvider factory = new TransactionProvider(nodeId);
-            ncAppContext.setApplicationObject(factory);
-        } catch (ACIDException e) {
-            e.printStackTrace();
-            LOGGER.severe(" Could not initialize transaction support ");
-        }
-    }
-    
-    /**
-     *  Bring up resources and resourceMgrs
-     *  Place into TransactionalResourceRepository
-     */
-    private void initializeResources() {
-        // bring up resources and resourceMgrs
-        // place into TransactionalResourceRepository(TRR)
-        // TODO
+        this.ncApplicationContext = appCtx;
     }
 }

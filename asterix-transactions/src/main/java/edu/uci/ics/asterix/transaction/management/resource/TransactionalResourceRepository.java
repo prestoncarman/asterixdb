@@ -26,89 +26,70 @@ import edu.uci.ics.asterix.transaction.management.service.transaction.IResourceM
  * transaction eco-system. Operations on a resource require acquiring
  * appropriate locks (for isolation) and writing logs (durability). Every
  * resource is managed by an associated resource manager that contains the logic
- * to interpret the logs and take necessary action(s) during roll back or
- * recovery. An example of resource is a @see ITreeIndex that is managed by a
- * resource manager @see TreeResourceManager
+ * to interpret the logs and take the necessary action(s) during rollback and
+ * recovery. An example of resource is a {@link ITreeIndex} that is managed by a
+ * resource manager {@link TreeResourceManager}.
  */
 public class TransactionalResourceRepository {
 
-    private static Map<ByteBuffer, Object> resourceRepository = new HashMap<ByteBuffer, Object>(); // repository
-    // containing
-    // resources
-    // that
-    // participate
-    // in
-    // transactions
+    // Maps resource IDs to resource instances
+    private Map<ByteBuffer, Object> resourceRepository = new HashMap<ByteBuffer, Object>();
 
-    private static Map<Byte, IResourceManager> resourceMgrRepository = new HashMap<Byte, IResourceManager>(); // repository
+    // Maps resource manager IDs to resource manager instances
+    private Map<Byte, IResourceManager> resourceMgrRepository = new HashMap<Byte, IResourceManager>();
 
-    // containing
-    // resource
-    // managers
-
-    public static void registerTransactionalResource(byte[] resourceBytes, Object resource) {
-        ByteBuffer resourceId = ByteBuffer.wrap(resourceBytes); // need to
-        // convert to
-        // ByteBuffer so
-        // that a byte[]
-        // can be used
-        // as a key in a
-        // hash map.
+    public void registerTransactionalResource(byte[] resourceBytes, Object resource) {
+        // need to convert to ByteBuffer so that a byte[] can be used as a key in a hash map.
+        ByteBuffer resourceId = ByteBuffer.wrap(resourceBytes);
         synchronized (resourceRepository) {
             if (resourceRepository.get(resourceId) == null) {
                 resourceRepository.put(resourceId, resource);
-                resourceRepository.notifyAll(); // notify all reader threads
-                // that are waiting to retrieve
-                // a resource from the
-                // repository
 
+                // notify all reader threads that are waiting to retrieve a resource from the repository
+                resourceRepository.notifyAll();
             }
         }
     }
 
-    public static void registerTransactionalResourceManager(byte id, IResourceManager resourceMgr) {
+    public void registerTransactionalResourceManager(byte id, IResourceManager resourceMgr) {
         synchronized (resourceMgrRepository) {
             if (resourceMgrRepository.get(id) == null) {
                 resourceMgrRepository.put(id, resourceMgr);
-                resourceMgrRepository.notifyAll(); // notify all reader threads
-                // that are waiting to
-                // retrieve a resource
-                // manager from the
-                // repository
+
+                // notify all reader threads that are waiting to retrieve a resource manager from the repository
+                resourceMgrRepository.notifyAll();
             }
         }
     }
 
-    public static Object getTransactionalResource(byte[] resourceIdBytes) {
+    public Object getTransactionalResource(byte[] resourceIdBytes) {
         ByteBuffer buffer = ByteBuffer.wrap(resourceIdBytes);
         synchronized (resourceRepository) {
             while (resourceRepository.get(buffer) == null) {
                 try {
                     resourceRepository.wait();
                 } catch (InterruptedException ie) {
+                    // the thread might be interrupted due to other failures occurring elsewhere
                     ie.printStackTrace();
-                    break; // the thread might be interrupted due to other
-                    // failures occurring elsewhere, break from the loop
+                    break;
                 }
             }
             return resourceRepository.get(buffer);
         }
     }
 
-    public static IResourceManager getTransactionalResourceMgr(byte id) {
+    public IResourceManager getTransactionalResourceMgr(byte id) {
         synchronized (resourceMgrRepository) {
             while (resourceMgrRepository.get(id) == null) {
                 try {
                     resourceMgrRepository.wait();
                 } catch (InterruptedException ie) {
+                    // the thread might be interrupted due to other failures occurring elsewhere
                     ie.printStackTrace();
-                    break; // the thread might be interrupted due to other
-                    // failures occurring elsewhere, break from the loop
+                    break;
                 }
             }
             return resourceMgrRepository.get(id);
         }
-
     }
-
 }

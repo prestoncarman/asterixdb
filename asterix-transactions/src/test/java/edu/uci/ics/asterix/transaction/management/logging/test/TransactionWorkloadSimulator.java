@@ -51,7 +51,8 @@ public class TransactionWorkloadSimulator {
         provider = new TransactionProvider("nc1");
         logManager = provider.getLogManager();
         lockManager = provider.getLockManager();
-        TransactionalResourceRepository.registerTransactionalResourceManager(DummyResourceMgr.id,
+        TransactionalResourceRepository resourceRepository = provider.getResourceRepository();
+        resourceRepository.registerTransactionalResourceManager(DummyResourceMgr.id,
                 new DummyResourceMgr());
         Transaction[] transactions = new Transaction[workload.numActiveThreads];
         long startTime = System.nanoTime();

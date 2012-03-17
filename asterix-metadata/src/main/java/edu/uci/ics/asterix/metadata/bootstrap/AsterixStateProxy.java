@@ -32,17 +32,17 @@ public class AsterixStateProxy implements IAsterixStateProxy {
 
     private IMetadataNode metadataNode;
     private AsterixProperties asterixProperties;
-    private static final IAsterixStateProxy cc = new AsterixStateProxy();
+    private static final IAsterixStateProxy proxy = new AsterixStateProxy();
     private final HashMap<String, Object> nodeStateMap = new HashMap<String, Object>();
 
     public static IAsterixStateProxy registerRemoteObject() throws RemoteException {
-        IAsterixStateProxy stub = (IAsterixStateProxy) UnicastRemoteObject.exportObject(cc, 0);
+        IAsterixStateProxy stub = (IAsterixStateProxy) UnicastRemoteObject.exportObject(proxy, 0);
         LOGGER.info("Asterix Distributed State Proxy Bound");
         return stub;
     }
 
-    public static void deRegisterRemoteObject() throws RemoteException {
-        UnicastRemoteObject.unexportObject(cc, true);
+    public static void unregisterRemoteObject() throws RemoteException {
+        UnicastRemoteObject.unexportObject(proxy, true);
         LOGGER.info("Asterix Distributed State Proxy Unbound");
     }
 

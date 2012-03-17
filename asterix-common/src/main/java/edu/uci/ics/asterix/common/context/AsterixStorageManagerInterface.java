@@ -1,4 +1,4 @@
-package edu.uci.ics.asterix.context;
+package edu.uci.ics.asterix.common.context;
 
 import edu.uci.ics.hyracks.api.context.IHyracksTaskContext;
 import edu.uci.ics.hyracks.storage.common.IStorageManagerInterface;
@@ -9,14 +9,21 @@ public class AsterixStorageManagerInterface implements IStorageManagerInterface 
     private static final long serialVersionUID = 1L;
 
     public static AsterixStorageManagerInterface INSTANCE = new AsterixStorageManagerInterface();
+    
+    private AsterixStorageManagerInterface() {
+    }
 
     @Override
     public IBufferCache getBufferCache(IHyracksTaskContext ctx) {
-        return AsterixAppRuntimeContext.getInstance().getBufferCache();
+        INodeApplicationState applicationState = (INodeApplicationState) ctx.getJobletContext().getApplicationContext()
+                .getApplicationObject();
+        return applicationState.getApplicationRuntimeContext().getBufferCache();
     }
 
     @Override
     public IFileMapProvider getFileMapProvider(IHyracksTaskContext ctx) {
-        return AsterixAppRuntimeContext.getInstance().getFileMapManager();
+        INodeApplicationState applicationState = (INodeApplicationState) ctx.getJobletContext().getApplicationContext()
+                .getApplicationObject();
+        return applicationState.getApplicationRuntimeContext().getFileMapManager();
     }
 }

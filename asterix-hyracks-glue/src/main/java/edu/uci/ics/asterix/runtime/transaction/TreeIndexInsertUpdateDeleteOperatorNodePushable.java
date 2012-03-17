@@ -65,11 +65,12 @@ public class TreeIndexInsertUpdateDeleteOperatorNodePushable extends AbstractUna
     }
 
     public void initializeTransactionSupport() {
-        TransactionalResourceRepository.registerTransactionalResourceManager(TreeResourceManager.ID,
+        TransactionalResourceRepository resourceRepository = transactionProvider.getResourceRepository();
+        resourceRepository.registerTransactionalResourceManager(TreeResourceManager.ID,
                 TreeResourceManager.getInstance());
         int fileId = treeIndexHelper.getIndexFileId();
         byte[] resourceId = DataUtil.intToByteArray(fileId);
-        TransactionalResourceRepository.registerTransactionalResource(resourceId, treeIndexHelper.getIndex());
+        resourceRepository.registerTransactionalResource(resourceId, treeIndexHelper.getIndex());
         lockManager = transactionProvider.getLockManager();
         bTreeLogger = TreeLoggerRepository.getTreeLogger(resourceId);
     }

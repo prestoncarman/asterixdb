@@ -1,4 +1,4 @@
-package edu.uci.ics.asterix.context;
+package edu.uci.ics.asterix.common.context;
 
 import java.io.File;
 import java.util.HashMap;
@@ -9,8 +9,8 @@ import edu.uci.ics.hyracks.api.io.FileReference;
 import edu.uci.ics.hyracks.storage.common.file.IFileMapManager;
 
 public class AsterixFileMapManager implements IFileMapManager {
-
     private static final long serialVersionUID = 1L;
+
     private Map<Integer, String> id2nameMap = new HashMap<Integer, String>();
     private Map<String, Integer> name2IdMap = new HashMap<String, Integer>();
     private int idCounter = 0;

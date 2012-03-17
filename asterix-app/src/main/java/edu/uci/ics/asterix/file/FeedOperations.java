@@ -19,9 +19,9 @@ import java.util.List;
 import java.util.logging.Logger;
 
 import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
+import edu.uci.ics.asterix.common.context.AsterixStorageManagerInterface;
+import edu.uci.ics.asterix.common.context.AsterixTreeRegistryProvider;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
-import edu.uci.ics.asterix.context.AsterixStorageManagerInterface;
-import edu.uci.ics.asterix.context.AsterixTreeRegistryProvider;
 import edu.uci.ics.asterix.feed.comm.AlterFeedMessage;
 import edu.uci.ics.asterix.feed.comm.FeedMessage;
 import edu.uci.ics.asterix.feed.comm.IFeedMessage;
