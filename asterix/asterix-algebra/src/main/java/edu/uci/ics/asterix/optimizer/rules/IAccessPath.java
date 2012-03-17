@@ -7,6 +7,7 @@ import org.apache.commons.lang3.mutable.Mutable;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledDatasetDecl;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl;
 import edu.uci.ics.asterix.om.types.ARecordType;
+import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IOptimizationContext;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
@@ -30,8 +31,8 @@ public interface IAccessPath {
      */
     public boolean matchPrefixIndexExprs();
     
-    public void applyPlanTransformation(Mutable<ILogicalOperator> selectRef, Mutable<ILogicalOperator> assignRef, 
-            Mutable<ILogicalOperator> dataSourceScanRef,
-            AqlCompiledDatasetDecl datasetDecl, ARecordType recordType, AqlCompiledIndexDecl chosenIndex,
-            AccessPathAnalysisContext analysisCtx, IOptimizationContext context) throws AlgebricksException;
+    public boolean applyPlanTransformation(Mutable<ILogicalOperator> selectRef, Mutable<ILogicalOperator> assignRef,
+            Mutable<ILogicalOperator> dataSourceScanRef, AqlCompiledDatasetDecl datasetDecl, ARecordType recordType,
+            AqlCompiledIndexDecl chosenIndex, AccessPathAnalysisContext analysisCtx, IOptimizationContext context)
+            throws AlgebricksException;
 }

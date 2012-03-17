@@ -41,7 +41,6 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.util.OperatorPropertiesUtil;
 import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.rewriter.base.IAlgebraicRewriteRule;
 import edu.uci.ics.hyracks.algebricks.core.utils.Pair;
-import edu.uci.ics.hyracks.algebricks.core.utils.Triple;
 
 /**
  * This rule tries to optimize simple selections with indexes.
@@ -60,9 +59,9 @@ import edu.uci.ics.hyracks.algebricks.core.utils.Triple;
  * The basic outline of this rule is:
  * 1. Match operator pattern.
  * 2. Analyze select to see if there are optimizable functions.
- * 3. Check metadata to see if there are applicable indexex.
- * 4. Choose an index to apply.
- * 4. Rewrite plan using index.
+ * 3. Check metadata to see if there are applicable indexes.
+ * 4. Choose an index to apply (for now only a single index will be chosen).
+ * 5. Rewrite plan using index.
  * 
  */
 // TODO: Rename this to IntroduceIndexSearchRule because secondary inverted indexes may also apply.
@@ -90,6 +89,7 @@ public class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteRule {
 	
 	protected static Map<FunctionIdentifier, List<IAccessPath>> accessPaths = new HashMap<FunctionIdentifier, List<IAccessPath>>();
 	static {
+	    registerAccessPath(BTreeAccessPath.INSTANCE);
 	    registerAccessPath(RTreeAccessPath.INSTANCE);
 	}
 	
@@ -151,15 +151,13 @@ public class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteRule {
         
         // Apply plan transformation using chosen index.
         AccessPathAnalysisContext analysisCtx = analyzedAccPaths.get(chosenIndex.first);
-        chosenIndex.first.applyPlanTransformation(selectRef, assignRef, dataSourceScanRef, datasetDecl, recordType,
-                chosenIndex.second, analysisCtx, context);
-        
-        System.out.println("HUHU");
-        
-        OperatorPropertiesUtil.typeOpRec(opRef, context);
+        boolean res = chosenIndex.first.applyPlanTransformation(selectRef, assignRef, dataSourceScanRef,
+                datasetDecl, recordType, chosenIndex.second, analysisCtx, context);
+        if (res) {
+            OperatorPropertiesUtil.typeOpRec(opRef, context);
+        }
         context.addToDontApplySet(this, select);
-        
-        return false;
+        return res;
     }
     
     /**
@@ -242,7 +240,7 @@ public class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteRule {
      */
     protected boolean analyzeSelectCondition(ILogicalExpression cond, Map<IAccessPath, AccessPathAnalysisContext> analyzedAccPaths) {
         AbstractFunctionCallExpression funcExpr = (AbstractFunctionCallExpression) cond;
-        boolean found = analyzeFunctionExpr(funcExpr, analyzedAccPaths);        
+        boolean found = analyzeFunctionExpr(funcExpr, analyzedAccPaths);
         for (Mutable<ILogicalExpression> arg : funcExpr.getArguments()) {
             ILogicalExpression argExpr = arg.getValue();
             if (argExpr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {

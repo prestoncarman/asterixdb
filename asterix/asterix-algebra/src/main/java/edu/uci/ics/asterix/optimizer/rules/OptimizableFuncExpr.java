@@ -35,4 +35,9 @@ public class OptimizableFuncExpr {
     public String getFieldName() {
         return fieldName;
     }
+    
+    // Returns true if the constant value is on the "left hand side" (assuming a binary function).
+    public boolean constantIsOnLhs() {
+        return funcExpr.getArguments().get(0) == constantVal;
+    }
 }
