@@ -1,7 +1,5 @@
 package edu.uci.ics.asterix.optimizer.rules;
 
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 
 import org.apache.commons.lang3.mutable.Mutable;
@@ -12,12 +10,8 @@ import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IOptimizationContext;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
-import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IAlgebricksConstantValue;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.DataSourceScanOperator;
 import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
-import edu.uci.ics.hyracks.algebricks.core.utils.Pair;
 
 public interface IAccessPath {
     public List<FunctionIdentifier> getOptimizableFunctions();
@@ -36,8 +30,8 @@ public interface IAccessPath {
      */
     public boolean matchPrefixIndexExprs();
     
-    public void applyPlanTransformation(Mutable<ILogicalOperator> dataSourceScanRef, DataSourceScanOperator dataSourceScan,
-            AssignOperator assign, ArrayList<IAlgebricksConstantValue> filters,
-            AqlCompiledDatasetDecl datasetDecl, AqlCompiledIndexDecl chosenIndex, 
-            HashMap<AqlCompiledIndexDecl, List<Pair<String, Integer>>> indexExprs, ARecordType recordType, IOptimizationContext context) throws AlgebricksException;
+    public void applyPlanTransformation(Mutable<ILogicalOperator> dataSourceScanRef,
+            Mutable<ILogicalOperator> assignRef, Mutable<ILogicalOperator> selectRef,
+            AqlCompiledDatasetDecl datasetDecl, ARecordType recordType, AqlCompiledIndexDecl chosenIndex,
+            AccessPathAnalysisContext analysisCtx, IOptimizationContext context) throws AlgebricksException;
 }

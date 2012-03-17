@@ -31,19 +31,16 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractLogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
-import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.AlgebricksBuiltinFunctions;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.DataSourceScanOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluatorFactory;
 import edu.uci.ics.hyracks.algebricks.core.algebra.util.OperatorPropertiesUtil;
 import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.rewriter.base.IAlgebraicRewriteRule;
 import edu.uci.ics.hyracks.algebricks.core.utils.Pair;
-import edu.uci.ics.hyracks.algebricks.core.utils.Triple;
 
 /**
  * This rule tries to optimize simple selections with indexes.
@@ -51,8 +48,9 @@ import edu.uci.ics.hyracks.algebricks.core.utils.Triple;
  * Matches this operator pattern: (select) <-- (assign) <-- (datasource scan)
  * Replaces it with this pattern: (select) <-- (assign) <-- (btree search) <-- (index search)
  * 
- * For the special case of primary index lookups it may also match the following pattern:
+ * For the special case of only primary index lookups it may also match the following pattern:
  * (select) <-- (datasource scan)
+ * since no assign is necessary to get the primary key fields (they are already stored fields in the BTree tuples).
  * 
  * Note that for some index-based optimizations do not remove the triggering condition from the select, 
  * since the index only acts as a filter, and the final verification must still be done 
@@ -128,11 +126,12 @@ public class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteRule {
             return false;
         }
         
-        List<LogicalVariable> varList = assign.getVariables();     
+        // The assign may be null if there is only a filter on the primary index key.
+        List<LogicalVariable> varList = (assign != null) ? assign.getVariables() : dataSourceScan.getVariables();
         for (Map.Entry<IAccessPath, AccessPathAnalysisContext> entry : analyzedAccPaths.entrySet()) {
             AccessPathAnalysisContext accPathCtx = entry.getValue();
-            fillAllIndexExprs(varList, accPathCtx.matchedFuncExprs, accPathCtx.indexExprs);
-            removeIndexCandidates(entry.getKey(), accPathCtx);
+            fillAllIndexExprs(varList, accPathCtx);
+            pruneIndexCandidates(entry.getKey(), accPathCtx);
         }
         
         // Choose index to be applied.
@@ -182,7 +181,7 @@ public class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteRule {
      * applicable according to the expressions involved.
      * 
      */
-    public void removeIndexCandidates(IAccessPath accessPath, AccessPathAnalysisContext analysisCtx) {
+    public void pruneIndexCandidates(IAccessPath accessPath, AccessPathAnalysisContext analysisCtx) {
         Iterator<Map.Entry<AqlCompiledIndexDecl, List<Integer>>> it = analysisCtx.indexExprs.entrySet().iterator();
         while (it.hasNext()) {
             Map.Entry<AqlCompiledIndexDecl, List<Integer>> entry = it.next();
@@ -397,16 +396,11 @@ public class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteRule {
 
 	/**
 	 * 
-	 * @param datasetDecl
-	 * @param indexExprs
-	 * @param matchedFuncVars
-	 * @param var
-	 * @param fieldName
 	 * @return returns true if a candidate index was added to foundIndexExprs,
 	 *         false otherwise
 	 */
-    protected boolean fillIndexExprs(String fieldName, int matchedVarIndex,
-    		HashMap<AqlCompiledIndexDecl, List<Integer>> indexExprs) {
+    protected boolean fillIndexExprs(String fieldName, int matchedFuncExprIndex,
+    		AccessPathAnalysisContext analysisCtx) {
     	AqlCompiledIndexDecl primaryIndexDecl = DatasetUtils.getPrimaryIndex(datasetDecl);
     	List<String> primaryIndexFields = primaryIndexDecl.getFieldExprs();    	
         List<AqlCompiledIndexDecl> indexCandidates = DatasetUtils.findSecondaryIndexesByOneOfTheKeys(datasetDecl, fieldName);
@@ -423,20 +417,14 @@ public class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteRule {
         }
         // Go through the candidates and fill indexExprs.
         for (AqlCompiledIndexDecl index : indexCandidates) {
-        	List<Integer> exprs = indexExprs.get(index);
-        	if (exprs == null) {
-        	    exprs = new ArrayList<Integer>();
-        		indexExprs.put(index, exprs);
-        	}
-        	exprs.add(matchedVarIndex);
+        	analysisCtx.addIndexExpr(index, matchedFuncExprIndex);
         }
         return true;
     }
 
-    protected void fillAllIndexExprs(List<LogicalVariable> varList, List<OptimizableFuncExpr> matchedFuncExprs,
-            HashMap<AqlCompiledIndexDecl, List<Integer>> indexExprs) {
+    protected void fillAllIndexExprs(List<LogicalVariable> varList, AccessPathAnalysisContext analysisCtx) {
         for (int varIndex = 0; varIndex < varList.size(); varIndex++) {
-            int matchedFuncExprIndex = findVarInMatchedFuncExprs(varList.get(varIndex), matchedFuncExprs);
+            int matchedFuncExprIndex = analysisCtx.findVarInMatchedFuncExprs(varList.get(varIndex));
             // Current var does not match any vars in outComparedVars, 
             // so it's irrelevant for our purpose of optimizing with an index.
             if (matchedFuncExprIndex < 0) {
@@ -463,24 +451,14 @@ public class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteRule {
                 // The variable value is one of the partitioning fields.
                 fieldName = DatasetUtils.getPartitioningExpressions(datasetDecl).get(varIndex);
             }
-            matchedFuncExprs.get(matchedFuncExprIndex).setFieldName(fieldName);
+            // Set the fieldName in the corresponding matched function expression.
+            analysisCtx.setFuncExprFieldName(matchedFuncExprIndex, fieldName);
             // TODO: Don't just ignore open record types.
             if (recordType.isOpen()) {
                 continue;
             }
-            fillIndexExprs(fieldName, matchedFuncExprIndex, indexExprs);
+            fillIndexExprs(fieldName, matchedFuncExprIndex, analysisCtx);
         }
-    }
-    
-    protected int findVarInMatchedFuncExprs(LogicalVariable var, List<OptimizableFuncExpr> matchedFuncExprs) {
-    	int outVarIndex = 0;
-    	while (outVarIndex < matchedFuncExprs.size()) {
-    		if (var == matchedFuncExprs.get(outVarIndex).getLogicalVar()) {
-    			return outVarIndex;
-    		}
-    		outVarIndex++;
-    	}
-    	return -1;
     }
     
     /**
@@ -520,22 +498,5 @@ public class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteRule {
     		return recordType.getFieldNames()[fieldIndex];
     	}
     	return null;
-    }
-    
-    protected static List<Object> primaryIndexTypes(AqlCompiledMetadataDeclarations metadata,
-            AqlCompiledDatasetDecl ddecl, IAType itemType) {
-        List<Object> types = new ArrayList<Object>();
-        List<Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType>> partitioningFunctions = DatasetUtils
-                .getPartitioningFunctions(ddecl);
-        for (Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType> t : partitioningFunctions) {
-            types.add(t.third);
-        }
-        types.add(itemType);
-        return types;
-    }
-
-
-    protected static ConstantExpression createStringConstant(String str) {
-        return new ConstantExpression(new AsterixConstantValue(new AString(str)));
     }
 }

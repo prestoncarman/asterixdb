@@ -227,6 +227,9 @@ public class IntroduceBTreeIndexSearchRule extends IntroduceTreeIndexSearchRule 
             AqlCompiledIndexDecl picked, boolean isPrimaryIdx,
             HashMap<AqlCompiledIndexDecl, List<Pair<String, Integer>>> foundIdxExprs, IOptimizationContext context,
             List<Mutable<ILogicalExpression>> outRest, List<Integer> foundedExprList) throws AlgebricksException {
+        return false;
+        /*
+        
         int numKeys = picked.getFieldExprs().size();
         IAlgebricksConstantValue[] loFilter = new IAlgebricksConstantValue[numKeys];
         IAlgebricksConstantValue[] hiFilter = new IAlgebricksConstantValue[numKeys];
@@ -479,6 +482,7 @@ public class IntroduceBTreeIndexSearchRule extends IntroduceTreeIndexSearchRule 
         }
 
         return true;
+        */
     }
 
     private void validateRemainingPreds(List<Mutable<ILogicalExpression>> predList) {

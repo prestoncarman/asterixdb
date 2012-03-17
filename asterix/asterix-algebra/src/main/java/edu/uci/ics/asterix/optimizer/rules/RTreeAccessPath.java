@@ -1,7 +1,6 @@
 package edu.uci.ics.asterix.optimizer.rules;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 
 import org.apache.commons.lang3.mutable.Mutable;
@@ -15,7 +14,6 @@ import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
 import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
 import edu.uci.ics.asterix.metadata.utils.DatasetUtils;
 import edu.uci.ics.asterix.om.base.AInt32;
-import edu.uci.ics.asterix.om.base.AString;
 import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
 import edu.uci.ics.asterix.om.types.ARecordType;
@@ -40,10 +38,8 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.DataSourceS
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.OrderOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOperator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluatorFactory;
 import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.utils.Pair;
-import edu.uci.ics.hyracks.algebricks.core.utils.Triple;
 
 public class RTreeAccessPath implements IAccessPath {
 
@@ -97,30 +93,23 @@ public class RTreeAccessPath implements IAccessPath {
 
     @Override
     public void applyPlanTransformation(Mutable<ILogicalOperator> dataSourceScanRef,
-            DataSourceScanOperator dataSourceScan, AssignOperator assign, ArrayList<IAlgebricksConstantValue> outFilters,
-            AqlCompiledDatasetDecl datasetDecl, AqlCompiledIndexDecl chosenIndex,
-            HashMap<AqlCompiledIndexDecl, List<Pair<String, Integer>>> indexExprs, ARecordType recordType, IOptimizationContext context) throws AlgebricksException {
-        List<Pair<String, Integer>> psiList = indexExprs.get(chosenIndex);
+            Mutable<ILogicalOperator> assignRef, Mutable<ILogicalOperator> selectRef,
+            AqlCompiledDatasetDecl datasetDecl, ARecordType recordType, AqlCompiledIndexDecl chosenIndex,
+            AccessPathAnalysisContext analysisCtx, IOptimizationContext context) throws AlgebricksException {
         // Get the number of dimensions corresponding to the field indexed by
         // chosenIndex.
-        IAType spatialType = AqlCompiledIndexDecl.keyFieldType(psiList.get(0).first, recordType);
+        IAType spatialType = AqlCompiledIndexDecl.keyFieldType(analysisCtx.matchedFuncExprs.get(0).getFieldName(), recordType);
         int numDimensions = NonTaggedFormatUtil.getNumDimensions(spatialType.getTypeTag());
-        applyPlanTransformation(dataSourceScanRef, dataSourceScan, assign, outFilters, datasetDecl, chosenIndex,
-                context, numDimensions);
-    }
-    
-    private void applyPlanTransformation(Mutable<ILogicalOperator> opRef3, DataSourceScanOperator scanDataset,
-            AssignOperator assignFieldAccess, ArrayList<IAlgebricksConstantValue> filters,
-            AqlCompiledDatasetDecl ddecl, AqlCompiledIndexDecl picked, 
-            IOptimizationContext context, int dimension) throws AlgebricksException {
-        int numKeys = dimension * 2;
+        int numKeys = numDimensions * 2;
+        
+        DataSourceScanOperator dataSourceScan = (DataSourceScanOperator) dataSourceScanRef.getValue();
 
         ArrayList<Mutable<ILogicalExpression>> keyExprList = new ArrayList<Mutable<ILogicalExpression>>();
         ArrayList<LogicalVariable> keyVarList = new ArrayList<LogicalVariable>();
         ArrayList<Mutable<ILogicalExpression>> rangeSearchFunArgs = new ArrayList<Mutable<ILogicalExpression>>();
-        rangeSearchFunArgs.add(new MutableObject<ILogicalExpression>(createStringConstant(picked.getIndexName())));
-        rangeSearchFunArgs.add(new MutableObject<ILogicalExpression>(createStringConstant(FunctionArgumentsConstants.RTREE_INDEX)));
-        rangeSearchFunArgs.add(new MutableObject<ILogicalExpression>(createStringConstant(ddecl.getName())));
+        rangeSearchFunArgs.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(chosenIndex.getIndexName())));
+        rangeSearchFunArgs.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(FunctionArgumentsConstants.RTREE_INDEX)));
+        rangeSearchFunArgs.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(datasetDecl.getName())));
 
         Mutable<ILogicalExpression> nkRef = new MutableObject<ILogicalExpression>(new ConstantExpression(
                 new AsterixConstantValue(new AInt32(numKeys))));
@@ -128,13 +117,12 @@ public class RTreeAccessPath implements IAccessPath {
         for (int i = 0; i < numKeys; i++) {
             LogicalVariable keyVar = context.newVar();
             keyVarList.add(keyVar);
-
             AbstractFunctionCallExpression createMBR = new ScalarFunctionCallExpression(
                     FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.CREATE_MBR));
-            createMBR.getArguments().add(new MutableObject<ILogicalExpression>(new ConstantExpression(filters.get(0))));
+            createMBR.getArguments().add(new MutableObject<ILogicalExpression>(new ConstantExpression(analysisCtx.matchedFuncExprs.get(0).getConstVal())));
             createMBR.getArguments().add(
                     new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(
-                            new AInt32(dimension)))));
+                            new AInt32(numDimensions)))));
             createMBR.getArguments().add(
                     new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(new AInt32(i)))));
             keyExprList.add(new MutableObject<ILogicalExpression>(createMBR));
@@ -144,21 +132,21 @@ public class RTreeAccessPath implements IAccessPath {
         }
 
         AssignOperator assignSearchKeys = new AssignOperator(keyVarList, keyExprList);
-        assignSearchKeys.getInputs().add(scanDataset.getInputs().get(0));
-        assignSearchKeys.setExecutionMode(scanDataset.getExecutionMode());
+        assignSearchKeys.getInputs().add(dataSourceScan.getInputs().get(0));
+        assignSearchKeys.setExecutionMode(dataSourceScan.getExecutionMode());
 
         IFunctionInfo finfo = FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.INDEX_SEARCH);
         UnnestingFunctionCallExpression rangeSearchFun = new UnnestingFunctionCallExpression(finfo, rangeSearchFunArgs);
         rangeSearchFun.setReturnsUniqueValues(true);
 
-        List<LogicalVariable> primIdxVarList = scanDataset.getVariables();
-        int numPrimaryKeys = DatasetUtils.getPartitioningFunctions(ddecl).size();
+        List<LogicalVariable> primIdxVarList = dataSourceScan.getVariables();
+        int numPrimaryKeys = DatasetUtils.getPartitioningFunctions(datasetDecl).size();
 
         UnnestMapOperator primIdxUnnestMap;
         AqlMetadataProvider mp = (AqlMetadataProvider) context.getMetadataProvider();
         AqlCompiledMetadataDeclarations metadata = mp.getMetadataDeclarations();
 
-        String itemTypeName = ddecl.getItemTypeName();
+        String itemTypeName = datasetDecl.getItemTypeName();
         ARecordType itemType = (ARecordType) metadata.findType(itemTypeName);
         ArrayList<LogicalVariable> secIdxPrimKeysVarList = new ArrayList<LogicalVariable>(numPrimaryKeys);
         for (int i = 0; i < numPrimaryKeys; i++) {
@@ -171,7 +159,7 @@ public class RTreeAccessPath implements IAccessPath {
         }
         secIdxUnnestVars.addAll(secIdxPrimKeysVarList);
         UnnestMapOperator secIdxUnnest = new UnnestMapOperator(secIdxUnnestVars, new MutableObject<ILogicalExpression>(
-                rangeSearchFun), secondaryIndexTypes(ddecl, picked, itemType, numKeys));
+                rangeSearchFun), AccessPathUtils.secondaryIndexTypes(datasetDecl, chosenIndex, itemType, numKeys));
         secIdxUnnest.getInputs().add(new MutableObject<ILogicalOperator>(assignSearchKeys));
         secIdxUnnest.setExecutionMode(ExecutionMode.PARTITIONED);
 
@@ -185,9 +173,9 @@ public class RTreeAccessPath implements IAccessPath {
         order.setExecutionMode(ExecutionMode.LOCAL);
 
         List<Mutable<ILogicalExpression>> argList2 = new ArrayList<Mutable<ILogicalExpression>>();
-        argList2.add(new MutableObject<ILogicalExpression>(createStringConstant(ddecl.getName())));
-        argList2.add(new MutableObject<ILogicalExpression>(createStringConstant(FunctionArgumentsConstants.BTREE_INDEX)));
-        argList2.add(new MutableObject<ILogicalExpression>(createStringConstant(ddecl.getName())));
+        argList2.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(datasetDecl.getName())));
+        argList2.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(FunctionArgumentsConstants.BTREE_INDEX)));
+        argList2.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(datasetDecl.getName())));
         argList2.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(new AInt32(
                 numPrimaryKeys)))));
         for (LogicalVariable v : secIdxPrimKeysVarList) {
@@ -203,42 +191,10 @@ public class RTreeAccessPath implements IAccessPath {
         IFunctionInfo finfoSearch2 = FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.INDEX_SEARCH);
         AbstractFunctionCallExpression searchPrimIdxFun = new ScalarFunctionCallExpression(finfoSearch2, argList2);
         primIdxUnnestMap = new UnnestMapOperator(primIdxVarList, new MutableObject<ILogicalExpression>(searchPrimIdxFun),
-                primaryIndexTypes(metadata, ddecl, itemType));
+                AccessPathUtils.primaryIndexTypes(datasetDecl, itemType));
         primIdxUnnestMap.getInputs().add(new MutableObject<ILogicalOperator>(order));
 
         primIdxUnnestMap.setExecutionMode(ExecutionMode.PARTITIONED);
-        opRef3.setValue(primIdxUnnestMap);
-    }
-
-    private static List<Object> secondaryIndexTypes(AqlCompiledDatasetDecl ddecl, AqlCompiledIndexDecl acid,
-            ARecordType itemType, int numKeys) throws AlgebricksException {
-        List<Object> types = new ArrayList<Object>();
-        IAType keyType = AqlCompiledIndexDecl.keyFieldType(acid.getFieldExprs().get(0), itemType);
-        IAType nestedKeyType = NonTaggedFormatUtil.getNestedSpatialType(keyType.getTypeTag());
-
-        for (int i = 0; i < numKeys; i++) {
-            types.add(nestedKeyType);
-        }
-        for (Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType> t : DatasetUtils
-                .getPartitioningFunctions(ddecl)) {
-            types.add(t.third);
-        }
-        return types;
-    }
-    
-    protected static List<Object> primaryIndexTypes(AqlCompiledMetadataDeclarations metadata,
-            AqlCompiledDatasetDecl ddecl, IAType itemType) {
-        List<Object> types = new ArrayList<Object>();
-        List<Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType>> partitioningFunctions = DatasetUtils
-                .getPartitioningFunctions(ddecl);
-        for (Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType> t : partitioningFunctions) {
-            types.add(t.third);
-        }
-        types.add(itemType);
-        return types;
-    }
-    
-    protected static ConstantExpression createStringConstant(String str) {
-        return new ConstantExpression(new AsterixConstantValue(new AString(str)));
+        dataSourceScanRef.setValue(primIdxUnnestMap);
     }
 }
