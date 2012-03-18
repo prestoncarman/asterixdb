@@ -35,8 +35,8 @@ import edu.uci.ics.asterix.aql.base.Statement.Kind;
 import edu.uci.ics.asterix.aql.context.Scope;
 import edu.uci.ics.asterix.aql.context.RootScopeFactory;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
-
 import edu.uci.ics.asterix.om.functions.AsterixFunction;
+
 
 public class AQLPlusParser extends ScopeChecker {
 
@@ -393,7 +393,7 @@ UnorderedListTypeDefinition UnorderedListTypeDef() throws ParseException:
 FunctionDecl FunctionDeclaration() throws ParseException:
 {
   FunctionDecl func = new FunctionDecl();
-  AsterixFunction ident;
+  AsterixFunction asterixFunction;
   String functionName;
   int arity = 0;
   List<VarIdentifier> paramList = new ArrayList<VarIdentifier>();
@@ -426,9 +426,9 @@ FunctionDecl FunctionDeclaration() throws ParseException:
     })*)? <RIGHTPAREN> "{" funcBody = Expression() "}"
 
     {
-      ident = new AsterixFunction(functionName, arity);
-      getCurrentScope().addFunctionDescriptor(ident, false);
-      func.setIdent(ident);
+      asterixFunction = new AsterixFunction(functionName, arity);
+      getCurrentScope().addFunctionDescriptor(asterixFunction, false);
+      func.setIdent(asterixFunction);
       func.setFuncBody(funcBody);
       func.setParamList(paramList);
       return func;
@@ -1060,9 +1060,7 @@ Expression FunctionCallExpr() throws ParseException:
 	     if(fd == null)
 	     {
 	        fd = new AsterixFunction(funcName.toString(), arity);
-//	     	notFoundFunctionList.add(fd);
 	     }
-//	     	throw new ParseException("can't find function "+ funcName.toString() + "@" + arity);
        pf.setIdent(fd);
        pf.setExprList(argList);
        return pf;

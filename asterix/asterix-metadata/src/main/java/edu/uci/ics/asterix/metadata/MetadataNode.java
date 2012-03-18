@@ -230,28 +230,22 @@ public class MetadataNode implements IMetadataNode {
     }
 
     @Override
-	public void addFunction(long txnId, Function function)
-			throws MetadataException, RemoteException {
-		try {
-			// Insert into the 'function' dataset.
-			FunctionTupleTranslator tupleReaderWriter = new FunctionTupleTranslator(
-					true);
-			ITupleReference functionTuple = tupleReaderWriter
-					.getTupleFromMetadataEntity(function);
-			insertTupleIntoIndex(txnId,
-					MetadataPrimaryIndexes.FUNCTION_DATASET, functionTuple);
+    public void addFunction(long txnId, Function function) throws MetadataException, RemoteException {
+        try {
+            // Insert into the 'function' dataset.
+            FunctionTupleTranslator tupleReaderWriter = new FunctionTupleTranslator(true);
+            ITupleReference functionTuple = tupleReaderWriter.getTupleFromMetadataEntity(function);
+            insertTupleIntoIndex(txnId, MetadataPrimaryIndexes.FUNCTION_DATASET, functionTuple);
 
-		} catch (BTreeDuplicateKeyException e) {
-			throw new MetadataException("A dataset with this name "
-					+ function.getFunctionName() + " and arity "
-					+ function.getFunctionArity()
-					+ " already exists in dataverse '"
-					+ function.getDataverseName() + "'.", e);
-		} catch (Exception e) {
-			throw new MetadataException(e);
-		}
-	}
-    
+        } catch (BTreeDuplicateKeyException e) {
+            throw new MetadataException("A function with this name " + function.getFunctionName() + " and arity "
+                    + function.getFunctionArity() + " already exists in dataverse '" + function.getDataverseName()
+                    + "'.", e);
+        } catch (Exception e) {
+            throw new MetadataException(e);
+        }
+    }
+
     public void insertIntoDatatypeSecondaryIndex(long txnId, String dataverseName, String nestedTypeName,
             String topTypeName) throws Exception {
         ITupleReference tuple = createTuple(dataverseName, nestedTypeName, topTypeName);
@@ -707,65 +701,57 @@ public class MetadataNode implements IMetadataNode {
             throw new MetadataException(e);
         }
     }
-    
-    @Override
-	public Function getFunction(long txnId, String dataverseName,
-			String functionName, int arity) throws MetadataException,
-			RemoteException {
-		try {
-			ITupleReference searchKey = createTuple(dataverseName,
-					functionName, "" + arity);
-			FunctionTupleTranslator tupleReaderWriter = new FunctionTupleTranslator(
-					false);
-			List<Function> results = new ArrayList<Function>();
-			IValueExtractor<Function> valueExtractor = new MetadataEntityValueExtractor<Function>(
-					tupleReaderWriter);
-			searchIndex(txnId, MetadataPrimaryIndexes.FUNCTION_DATASET,
-					searchKey, valueExtractor, results);
-			if (results.isEmpty()) {
-				return null;
-			}
-			return results.get(0);
-		} catch (Exception e) {
-			throw new MetadataException(e);
-		}
-	}
 
     @Override
-	public void dropFunction(long txnId, String dataverseName,
-			String functionName, int arity) throws MetadataException,
-			RemoteException {
-		Function function;
-		try {
-			function = getFunction(txnId, dataverseName, functionName, arity);
-		} catch (Exception e) {
-			throw new MetadataException(e);
-		}
-		if (function == null) {
-			throw new MetadataException("Cannot drop function '" + functionName
-					+ " and arity " + arity + "' because it doesn't exist.");
-		}
-		try {
-			// Delete entry from the 'function' dataset.
-			ITupleReference searchKey = createTuple(dataverseName,
-					functionName, "" + arity);
-			// Searches the index for the tuple to be deleted. Acquires an S
-			// lock on the 'function' dataset.
-			ITupleReference datasetTuple = getTupleToBeDeleted(txnId,
-					MetadataPrimaryIndexes.FUNCTION_DATASET, searchKey);
-			deleteTupleFromIndex(txnId, MetadataPrimaryIndexes.FUNCTION_DATASET,
-					datasetTuple);
+    public Function getFunction(long txnId, String dataverseName, String functionName, int arity)
+            throws MetadataException, RemoteException {
+        try {
+            ITupleReference searchKey = createTuple(dataverseName, functionName, "" + arity);
+            FunctionTupleTranslator tupleReaderWriter = new FunctionTupleTranslator(false);
+            List<Function> results = new ArrayList<Function>();
+            IValueExtractor<Function> valueExtractor = new MetadataEntityValueExtractor<Function>(tupleReaderWriter);
+            searchIndex(txnId, MetadataPrimaryIndexes.FUNCTION_DATASET, searchKey, valueExtractor, results);
+            if (results.isEmpty()) {
+                return null;
+            }
+            return results.get(0);
+        } catch (Exception e) {
+            throw new MetadataException(e);
+        }
+    }
 
-			// TODO: Change this to be a BTree specific exception, e.g.,
-			// BTreeKeyDoesNotExistException.
-		} catch (TreeIndexException e) {
-			throw new MetadataException("Cannot drop function '" + functionName
-					+ " and arity " + arity + "' because it doesn't exist.", e);
-		} catch (Exception e) {
-			throw new MetadataException(e);
-		}
-	}
-    
+    @Override
+    public void dropFunction(long txnId, String dataverseName, String functionName, int arity)
+            throws MetadataException, RemoteException {
+        Function function;
+        try {
+            function = getFunction(txnId, dataverseName, functionName, arity);
+        } catch (Exception e) {
+            throw new MetadataException(e);
+        }
+        if (function == null) {
+            throw new MetadataException("Cannot drop function '" + functionName + " and arity " + arity
+                    + "' because it doesn't exist.");
+        }
+        try {
+            // Delete entry from the 'function' dataset.
+            ITupleReference searchKey = createTuple(dataverseName, functionName, "" + arity);
+            // Searches the index for the tuple to be deleted. Acquires an S
+            // lock on the 'function' dataset.
+            ITupleReference datasetTuple = getTupleToBeDeleted(txnId, MetadataPrimaryIndexes.FUNCTION_DATASET,
+                    searchKey);
+            deleteTupleFromIndex(txnId, MetadataPrimaryIndexes.FUNCTION_DATASET, datasetTuple);
+
+            // TODO: Change this to be a BTree specific exception, e.g.,
+            // BTreeKeyDoesNotExistException.
+        } catch (TreeIndexException e) {
+            throw new MetadataException("Cannot drop function '" + functionName + " and arity " + arity
+                    + "' because it doesn't exist.", e);
+        } catch (Exception e) {
+            throw new MetadataException(e);
+        }
+    }
+
     private ITupleReference getTupleToBeDeleted(long txnId, IMetadataIndex metadataIndex, ITupleReference searchKey)
             throws Exception {
         IValueExtractor<ITupleReference> valueExtractor = new TupleCopyValueExtractor(metadataIndex.getTypeTraits());

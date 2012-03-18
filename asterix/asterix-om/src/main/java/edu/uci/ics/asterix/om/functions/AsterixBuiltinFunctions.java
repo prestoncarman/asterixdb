@@ -350,7 +350,7 @@ public class AsterixBuiltinFunctions {
     public static IFunctionInfo getAsterixFunctionInfo(FunctionIdentifier fid) {
         IFunctionInfo finfo = asterixFunctionIdToInfo.get(fid);
         if (finfo == null) {
-            finfo = new AsterixFunctionInfo(fid, fid.isBuiltin());
+            finfo = new AsterixFunctionInfo(fid);
             if(fid.isBuiltin()){
                 asterixFunctionIdToInfo.put(fid, finfo);
             }

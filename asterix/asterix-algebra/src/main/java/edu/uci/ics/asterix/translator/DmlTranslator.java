@@ -73,7 +73,7 @@ public class DmlTranslator extends AbstractAqlTranslator {
     private List<ICompiledDmlStatement> compileDmlStatements() throws AlgebricksException {
         List<ICompiledDmlStatement> dmlStatements = new ArrayList<ICompiledDmlStatement>();
         for (Statement stmt : aqlStatements) {
-            validateOperation(compiledDeclarations, stmt);
+            //validateOperation(compiledDeclarations, stmt);
             switch (stmt.getKind()) {
                 case LOAD_FROM_FILE: {
                     LoadFromFileStatement st1 = (LoadFromFileStatement) stmt;
@@ -100,15 +100,15 @@ public class DmlTranslator extends AbstractAqlTranslator {
                 }
                 case INSERT: {
                     InsertStatement is = (InsertStatement) stmt;
-                    CompiledInsertStatement clfrqs = new CompiledInsertStatement(is.getDatasetName().getValue(), is
-                            .getQuery(), is.getVarCounter());
+                    CompiledInsertStatement clfrqs = new CompiledInsertStatement(is.getDatasetName().getValue(),
+                            is.getQuery(), is.getVarCounter());
                     dmlStatements.add(clfrqs);
                     break;
                 }
                 case DELETE: {
                     DeleteStatement ds = (DeleteStatement) stmt;
-                    CompiledDeleteStatement clfrqs = new CompiledDeleteStatement(ds.getVariableExpr(), ds
-                            .getDatasetName(), ds.getCondition(), ds.getDieClause(), ds.getVarCounter(),
+                    CompiledDeleteStatement clfrqs = new CompiledDeleteStatement(ds.getVariableExpr(),
+                            ds.getDatasetName(), ds.getCondition(), ds.getDieClause(), ds.getVarCounter(),
                             compiledDeclarations);
                     dmlStatements.add(clfrqs);
                     break;
@@ -116,8 +116,8 @@ public class DmlTranslator extends AbstractAqlTranslator {
 
                 case BEGIN_FEED: {
                     BeginFeedStatement bfs = (BeginFeedStatement) stmt;
-                    CompiledBeginFeedStatement cbfs = new CompiledBeginFeedStatement(bfs.getDatasetName(), bfs
-                            .getQuery(), bfs.getVarCounter());
+                    CompiledBeginFeedStatement cbfs = new CompiledBeginFeedStatement(bfs.getDatasetName(),
+                            bfs.getQuery(), bfs.getVarCounter());
                     dmlStatements.add(cbfs);
                     Dataset dataset;
                     try {
@@ -138,8 +138,8 @@ public class DmlTranslator extends AbstractAqlTranslator {
 
                 case CONTROL_FEED: {
                     ControlFeedStatement cfs = (ControlFeedStatement) stmt;
-                    CompiledControlFeedStatement clcfs = new CompiledControlFeedStatement(cfs.getOperationType(), cfs
-                            .getDatasetName(), cfs.getAlterAdapterConfParams());
+                    CompiledControlFeedStatement clcfs = new CompiledControlFeedStatement(cfs.getOperationType(),
+                            cfs.getDatasetName(), cfs.getAlterAdapterConfParams());
                     dmlStatements.add(clcfs);
                     break;
 
@@ -449,5 +449,5 @@ public class DmlTranslator extends AbstractAqlTranslator {
         }
 
     }
-
+   
 }

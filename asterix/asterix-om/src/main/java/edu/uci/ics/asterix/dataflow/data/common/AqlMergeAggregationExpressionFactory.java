@@ -6,7 +6,6 @@ import java.util.List;
 import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.commons.lang3.mutable.MutableObject;
 
-import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IOptimizationContext;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
@@ -30,7 +29,7 @@ public class AqlMergeAggregationExpressionFactory implements IMergeAggregationEx
         List<Mutable<ILogicalExpression>> arguments = new ArrayList<Mutable<ILogicalExpression>>();
         Mutable<ILogicalExpression> mutableExpression = new MutableObject<ILogicalExpression>(tempVarExpr);
         arguments.add(mutableExpression);
-        ILogicalExpression aggExpr = AsterixBuiltinFunctions.makeAggregateFunctionExpression(fid, arguments);
+        ILogicalExpression aggExpr = FunctionUtils.makeAggregateFunctionExpression(fid, arguments);
         return aggExpr;
     }
 }

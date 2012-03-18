@@ -14,21 +14,27 @@
  */
 package edu.uci.ics.asterix.om.functions;
 
+import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression.FunctionKind;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.IFunctionInfo;
 
-public class AsterixFunctionInfo implements IFunctionInfo {
+public  class AsterixFunctionInfo implements IFunctionInfo {
 
-    private final FunctionIdentifier functionIdentifier;
+    protected final FunctionIdentifier functionIdentifier;
+    protected FunctionKind kind;
     
-
     public AsterixFunctionInfo(String namespace, AsterixFunction asterixFunction, boolean isBuiltin) {
         this.functionIdentifier = new FunctionIdentifier(namespace, asterixFunction.getFunctionName(),
                 asterixFunction.getArity(), isBuiltin);
     }
+    
+    public AsterixFunctionInfo(String namespace, AsterixFunction asterixFunction, FunctionKind kind, boolean isBuiltin) {
+        this.functionIdentifier = new FunctionIdentifier(namespace, asterixFunction.getFunctionName(),
+                asterixFunction.getArity(), isBuiltin);
+        this.kind = kind;
+    }
 
-    public AsterixFunctionInfo(FunctionIdentifier functionIdentifier,
-            boolean isBuiltin) {
+    public AsterixFunctionInfo(FunctionIdentifier functionIdentifier) {
         this.functionIdentifier = functionIdentifier;
     }
 
@@ -41,6 +47,14 @@ public class AsterixFunctionInfo implements IFunctionInfo {
     @Override
     public Object getInfo() {
         throw new IllegalStateException();
+    }
+
+    public FunctionKind getKind() {
+        return kind;
+    }
+
+    public void setKind(FunctionKind kind) {
+        this.kind = kind;
     }
 
     @Override

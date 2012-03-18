@@ -37,8 +37,11 @@ import edu.uci.ics.asterix.aql.context.Scope;
 import edu.uci.ics.asterix.aql.context.RootScopeFactory;
 import edu.uci.ics.asterix.common.annotations.*;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
-import edu.uci.ics.asterix.om.functions.AsterixFunction;
 
+import edu.uci.ics.asterix.metadata.entities.Function;
+import edu.uci.ics.asterix.common.functions.FunctionConstants;
+import edu.uci.ics.asterix.aql.util.FunctionUtil;
+import edu.uci.ics.asterix.om.functions.AsterixFunction;
 
 public class AQLParser extends ScopeChecker {
 
@@ -119,6 +122,9 @@ Statement Statement() throws ParseException:
           | "declare" "function" { 
                               decls.add(FunctionDeclaration()); 
              }
+          | "register" "function" {
+           		decls.add(FunctionRegistration());
+           }  
 	  	   |  "create" (
 	  	   	  {
                 String hint = getHint(token);
@@ -1028,8 +1034,8 @@ UnorderedListTypeDefinition UnorderedListTypeDef() throws ParseException:
 FunctionDecl FunctionDeclaration() throws ParseException:
 {
   FunctionDecl func = new FunctionDecl();
-  AsterixFunction ident;
   String functionName;
+  AsterixFunction asterixFunction;
   int arity = 0;
   List<VarIdentifier> paramList = new ArrayList<VarIdentifier>();
   Expression funcBody;
@@ -1061,23 +1067,100 @@ FunctionDecl FunctionDeclaration() throws ParseException:
     })*)? <RIGHTPAREN> "{" funcBody = Expression() "}"
 
     {
-      ident = new AsterixFunction(functionName,arity);
-      getCurrentScope().addFunctionDescriptor(ident, false);
-      func.setIdent(ident);
+      asterixFunction = new AsterixFunction(functionName, arity);
+      getCurrentScope().addFunctionDescriptor(asterixFunction, false);
+      func.setIdent(asterixFunction);
       func.setFuncBody(funcBody);
       func.setParamList(paramList);
       return func;
     }
 }
 
+CreateFunctionStatement FunctionRegistration() throws ParseException:
+{
+  CreateFunctionStatement cfs = null;
+  String functionName;
+  AsterixFunction asterixFunction;
+  int arity = 0;
+  boolean ifNotExists = false;
+  List<String> paramList = new ArrayList<String>();
+  String funcBody;
+  String dependencies;
+  String returnType;
+  String language;
+  VarIdentifier var = null;
+  String functionKind;
+  createNewScope();
+  Token t;
+}  
+{
+   <IDENTIFIER>
+	{
+	  t = getToken(0);
+	  functionName = t.toString();
+	}
+	
+	(
+      "if not exists"
+       {
+         ifNotExists = true;
+       }
+    )?
+	
+    <LEFTPAREN> (<IDENTIFIER>
+    {
+      t = getToken(0);
+	  paramList.add(t.toString());
+      arity++;
+    }
+    ("," <IDENTIFIER>
+    {
+      t = getToken(0);
+	  paramList.add(t.toString());
+      arity++;
+    })*)? <RIGHTPAREN>
+    
+    "returns"
+    <STRING_LITERAL> {
+         returnType = removeQuotesAndEscapes(token.image);
+    }
+    
+    "definition"
+    <STRING_LITERAL> {
+         funcBody = removeQuotesAndEscapes(token.image);
+    }
+    
+    "requires" 
+     <STRING_LITERAL> {
+          dependencies = removeQuotesAndEscapes(token.image);
+     }
+     
+     "language" 
+     <STRING_LITERAL> {
+          language = removeQuotesAndEscapes(token.image);
+     }
+     
+     "kind" 
+     <IDENTIFIER> {
+     	functionKind = getToken(0).toString();
+     }
+    
+     {
+     asterixFunction = new AsterixFunction(functionName, arity);
+     getCurrentScope().addFunctionDescriptor(asterixFunction, false);
+     cfs = new CreateFunctionStatement(asterixFunction, paramList, funcBody, returnType, dependencies, language, functionKind, ifNotExists);
+     return cfs;
+     }
+}
+
 CreateFunctionStatement FunctionCreation() throws ParseException:
 {
   CreateFunctionStatement cfs = null;
-  AsterixFunction ident;
   String functionName;
+  AsterixFunction asterixFunction;
   int arity = 0;
   boolean ifNotExists = false;
-  List<VarIdentifier> paramList = new ArrayList<VarIdentifier>();
+  List<String> paramList = new ArrayList<String>();
   String funcBody;
   VarIdentifier var = null;
   createNewScope();
@@ -1087,7 +1170,7 @@ CreateFunctionStatement FunctionCreation() throws ParseException:
     <IDENTIFIER>
 	{
 	  Token t = getToken(0);
-	  functionName= t.toString();
+	  functionName = t.toString();
 	}
 	
 	(
@@ -1101,7 +1184,7 @@ CreateFunctionStatement FunctionCreation() throws ParseException:
     {
       var = new VarIdentifier();
       var.setValue(getToken(0).toString());
-      paramList.add(var);
+      paramList.add(var.getValue());
       getCurrentScope().addNewVarSymbolToScope(var);
       arity++;
     }
@@ -1109,7 +1192,7 @@ CreateFunctionStatement FunctionCreation() throws ParseException:
     {
       var = new VarIdentifier();
       var.setValue(getToken(0).toString());
-      paramList.add(var);
+      paramList.add(var.getValue());
       getCurrentScope().addNewVarSymbolToScope(var);
       arity++;
     })*)? <RIGHTPAREN>  "{" <STRING_LITERAL>
@@ -1118,9 +1201,9 @@ CreateFunctionStatement FunctionCreation() throws ParseException:
           }
           "}"
     {
-      ident = new AsterixFunction(functionName, arity);
-      getCurrentScope().addFunctionDescriptor(ident, false);
-      cfs = new CreateFunctionStatement(ident, paramList, funcBody, ifNotExists);
+     asterixFunction = new AsterixFunction(functionName, arity);
+     getCurrentScope().addFunctionDescriptor(asterixFunction, false);
+     cfs = new CreateFunctionStatement(asterixFunction, paramList, funcBody, null, null, Function.LANGUAGE_AQL, null, ifNotExists);
       return cfs;
     }
 }
@@ -1731,14 +1814,12 @@ Expression FunctionCallExpr() throws ParseException:
      } ("," tmp = Expression() { argList.add(tmp); arity++; })*)? <RIGHTPAREN>
 
      {
-       AsterixFunction fd = lookupFunctionSignature(funcName.toString(), arity);
-	     if(fd == null)
+       AsterixFunction  asterixFunction = lookupFunctionSignature(funcName.toString(), arity);
+	     if(asterixFunction == null)
 	     {
-	        fd = new AsterixFunction(funcName.toString(), arity);
-//	     	notFoundFunctionList.add(fd);
+	        asterixFunction = new AsterixFunction(funcName.toString(),arity);
 	     }
-//	     	throw new ParseException("can't find function "+ funcName.toString() + "@" + arity);
-       pf.setIdent(fd);
+       pf.setIdent(asterixFunction);
        pf.setExprList(argList);
        return pf;
      }

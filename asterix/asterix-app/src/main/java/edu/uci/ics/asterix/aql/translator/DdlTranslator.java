@@ -85,6 +85,7 @@ import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.asterix.translator.AbstractAqlTranslator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
+import edu.uci.ics.hyracks.api.client.HyracksConnection;
 import edu.uci.ics.hyracks.api.client.IHyracksClientConnection;
 import edu.uci.ics.hyracks.api.job.JobId;
 import edu.uci.ics.hyracks.api.job.JobSpecification;
@@ -111,21 +112,21 @@ public class DdlTranslator extends AbstractAqlTranslator {
         builtinTypeMap = AsterixBuiltinTypeMap.getBuiltinTypes();
     }
 
-    public void translate(IHyracksClientConnection hcc, boolean disconnectFromDataverse) throws AlgebricksException {
+    public void translate(boolean disconnectFromDataverse) throws AlgebricksException {
         try {
             compiledDeclarations = compileMetadata(mdTxnCtx, aqlStatements, true);
-            compileAndExecuteDDLstatements(hcc, mdTxnCtx, disconnectFromDataverse);
+            compileAndExecuteDDLstatements(mdTxnCtx, disconnectFromDataverse);
         } catch (Exception e) {
             throw new AlgebricksException(e);
         }
     }
 
-    private void compileAndExecuteDDLstatements(IHyracksClientConnection hcc, MetadataTransactionContext mdTxnCtx,
-            boolean disconnectFromDataverse) throws Exception {
+    private void compileAndExecuteDDLstatements(MetadataTransactionContext mdTxnCtx, boolean disconnectFromDataverse)
+            throws Exception {
         for (Statement stmt : aqlStatements) {
-            validateOperation(compiledDeclarations, stmt);
+            //validateOperation(compiledDeclarations, stmt);
             switch (stmt.getKind()) {
-            // connect statement
+                // connect statement
                 case DATAVERSE_DECL: {
                     checkForDataverseConnection(false);
                     DataverseDecl dvd = (DataverseDecl) stmt;
@@ -133,7 +134,7 @@ public class DdlTranslator extends AbstractAqlTranslator {
                     compiledDeclarations.connectToDataverse(dataverseName);
                     break;
                 }
-                // create statements
+                    // create statements
                 case CREATE_DATAVERSE: {
                     checkForDataverseConnection(false);
                     CreateDataverseStatement stmtCreateDataverse = (CreateDataverseStatement) stmt;
@@ -224,7 +225,7 @@ public class DdlTranslator extends AbstractAqlTranslator {
                         // the data for such a dataset is never persisted in
                         // Asterix storage.
                         if (dd.getDatasetType() == DatasetType.INTERNAL || dd.getDatasetType() == DatasetType.FEED) {
-                            compileDatasetInitializeStatement(hcc, mdTxnCtx.getTxnId(), datasetName);
+                            compileDatasetInitializeStatement(mdTxnCtx.getTxnId(), datasetName);
                         }
                     }
                     break;
@@ -292,7 +293,7 @@ public class DdlTranslator extends AbstractAqlTranslator {
                     }
                     break;
                 }
-                // drop statements
+                    // drop statements
                 case DATAVERSE_DROP: {
                     DataverseDropStatement stmtDelete = (DataverseDropStatement) stmt;
                     String dvName = stmtDelete.getDataverseName().getValue();
@@ -320,12 +321,11 @@ public class DdlTranslator extends AbstractAqlTranslator {
                                         datasetName);
                                 for (int k = 0; k < indexes.size(); k++) {
                                     if (indexes.get(k).isSecondaryIndex()) {
-                                        compileIndexDropStatement(hcc, mdTxnCtx, datasetName, indexes.get(k)
-                                                .getIndexName());
+                                        compileIndexDropStatement(mdTxnCtx, datasetName, indexes.get(k).getIndexName());
                                     }
                                 }
                             }
-                            compileDatasetDropStatement(hcc, mdTxnCtx, datasetName);
+                            compileDatasetDropStatement(mdTxnCtx, datasetName);
                         }
                         MetadataManager.INSTANCE.dropDataverse(mdTxnCtx, dvName);
                         if (compiledDeclarations.isConnectedToDataverse())
@@ -352,11 +352,11 @@ public class DdlTranslator extends AbstractAqlTranslator {
                                     compiledDeclarations.getDataverseName(), datasetName);
                             for (int j = 0; j < indexes.size(); j++) {
                                 if (indexes.get(j).isPrimaryIndex()) {
-                                    compileIndexDropStatement(hcc, mdTxnCtx, datasetName, indexes.get(j).getIndexName());
+                                    compileIndexDropStatement(mdTxnCtx, datasetName, indexes.get(j).getIndexName());
                                 }
                             }
                         }
-                        compileDatasetDropStatement(hcc, mdTxnCtx, datasetName);
+                        compileDatasetDropStatement(mdTxnCtx, datasetName);
                     }
                     break;
                 }
@@ -376,7 +376,7 @@ public class DdlTranslator extends AbstractAqlTranslator {
                             if (!stmtDelete.getIfExists())
                                 throw new AlgebricksException("\nThere is no index with this name " + indexName + ".");
                         } else
-                            compileIndexDropStatement(hcc, mdTxnCtx, datasetName, indexName);
+                            compileIndexDropStatement(mdTxnCtx, datasetName, indexName);
                     } else {
                         throw new AlgebricksException(datasetName
                                 + " is an external dataset. Indexes are not maintained for external datasets.");
@@ -416,25 +416,31 @@ public class DdlTranslator extends AbstractAqlTranslator {
 
                 case CREATE_FUNCTION: {
                     CreateFunctionStatement cfs = (CreateFunctionStatement) stmt;
-                    Function function = new Function(compiledDeclarations.getDataverseName(), cfs.getFunctionIdentifier().getFunctionName(),
-                            cfs.getFunctionIdentifier().getArity(), cfs.getParamList(), cfs.getFunctionBody());
-                    
-                    
-                    try {
-                        FunctionUtils.getFunctionDecl(function);
-                    } catch (Exception e) {
-                        throw new AsterixException("unable to compile function definition", e);
+                    Function function = new Function(compiledDeclarations.getDataverseName(), cfs
+                            .getAsterixFunction().getFunctionName(), cfs.getAsterixFunction().getArity(),
+                            cfs.getParamList(), cfs.getFunctionBody(), cfs.getReturnType(), cfs.getDependencies(),
+                            cfs.getLanguage());
+                    if (function.getLanguage() == Function.LANGUAGE_AQL) {
+                        try {
+                            FunctionUtils.getFunctionDecl(function);
+                        } catch (Exception e) {
+                            throw new AsterixException("unable to compile function definition", e);
+                        }
+
                     }
-                    MetadataManager.INSTANCE.addFunction(mdTxnCtx, new Function(
-                            compiledDeclarations.getDataverseName(), cfs.getFunctionIdentifier().getFunctionName(), cfs
-                                    .getFunctionIdentifier().getArity(), cfs.getParamList(), cfs.getFunctionBody()));
+                    MetadataManager.INSTANCE.addFunction(
+                            mdTxnCtx,
+                            new Function(compiledDeclarations.getDataverseName(),
+                                    cfs.getAsterixFunction().getFunctionName(), cfs.getAsterixFunction().getArity(), cfs
+                                            .getParamList(), cfs.getFunctionBody(), cfs.getReturnType(), cfs
+                                            .getDependencies(), cfs.getLanguage()));
                     break;
                 }
 
                 case FUNCTION_DROP: {
                     checkForDataverseConnection(true);
                     FunctionDropStatement stmtDropFunction = (FunctionDropStatement) stmt;
-                    String functionName = stmtDropFunction.getFunctionName().getValue();
+                    String functionName = stmtDropFunction.getFunctionName();
                     FunctionIdentifier fId = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, functionName,
                             stmtDropFunction.getArity(), false);
                     if (AsterixBuiltinArtifactMap.isSystemProtectedArtifact(ARTIFACT_KIND.FUNCTION, fId)) {
@@ -471,13 +477,15 @@ public class DdlTranslator extends AbstractAqlTranslator {
         }
     }
 
-    private void runJob(IHyracksClientConnection hcc, JobSpecification jobSpec) throws Exception {
+    private void runJob(JobSpecification jobSpec) throws Exception {
         System.out.println(jobSpec.toString());
-        executeJobArray(hcc, new JobSpecification[] { jobSpec }, out, pdf);
+        executeJobArray(new JobSpecification[] { jobSpec }, pc.getPort(), out, pdf);
     }
 
-    public void executeJobArray(IHyracksClientConnection hcc, JobSpecification[] specs, PrintWriter out,
-            DisplayFormat pdf) throws Exception {
+    public void executeJobArray(JobSpecification[] specs, int port, PrintWriter out, DisplayFormat pdf)
+            throws Exception {
+        IHyracksClientConnection hcc = new HyracksConnection("localhost", port);
+
         for (int i = 0; i < specs.length; i++) {
             specs[i].setMaxReattempts(0);
             JobId jobId = hcc.createJob(GlobalConfig.HYRACKS_APP_NAME, specs[i]);
@@ -486,25 +494,23 @@ public class DdlTranslator extends AbstractAqlTranslator {
         }
     }
 
-    private void compileDatasetDropStatement(IHyracksClientConnection hcc, MetadataTransactionContext mdTxnCtx,
-            String datasetName) throws Exception {
+    private void compileDatasetDropStatement(MetadataTransactionContext mdTxnCtx, String datasetName) throws Exception {
         CompiledDatasetDropStatement cds = new CompiledDatasetDropStatement(datasetName);
         Dataset ds = MetadataManager.INSTANCE
                 .getDataset(mdTxnCtx, compiledDeclarations.getDataverseName(), datasetName);
         if (ds.getType() == DatasetType.INTERNAL || ds.getType() == DatasetType.FEED) {
             JobSpecification[] jobs = DatasetOperations.createDropDatasetJobSpec(cds, compiledDeclarations);
             for (JobSpecification job : jobs)
-                runJob(hcc, job);
+                runJob(job);
         }
         MetadataManager.INSTANCE.dropDataset(mdTxnCtx, compiledDeclarations.getDataverseName(), datasetName);
     }
 
-    private void compileDatasetInitializeStatement(IHyracksClientConnection hcc, long txnId, String datasetName)
-            throws Exception {
+    private void compileDatasetInitializeStatement(long txnId, String datasetName) throws Exception {
         JobSpecification[] jobs = DatasetOperations.createInitializeDatasetJobSpec(txnId, datasetName,
                 compiledDeclarations);
         for (JobSpecification job : jobs) {
-            runJob(hcc, job);
+            runJob(job);
         }
     }
 
@@ -512,10 +518,10 @@ public class DdlTranslator extends AbstractAqlTranslator {
         return compiledDeclarations;
     }
 
-    private void compileIndexDropStatement(IHyracksClientConnection hcc, MetadataTransactionContext mdTxnCtx,
-            String datasetName, String indexName) throws Exception {
+    private void compileIndexDropStatement(MetadataTransactionContext mdTxnCtx, String datasetName, String indexName)
+            throws Exception {
         CompiledIndexDropStatement cds = new CompiledIndexDropStatement(datasetName, indexName);
-        runJob(hcc, IndexOperations.createSecondaryIndexDropJobSpec(cds, compiledDeclarations));
+        runJob(IndexOperations.createSecondaryIndexDropJobSpec(cds, compiledDeclarations));
         MetadataManager.INSTANCE.dropIndex(mdTxnCtx, compiledDeclarations.getDataverseName(), datasetName, indexName);
     }
 

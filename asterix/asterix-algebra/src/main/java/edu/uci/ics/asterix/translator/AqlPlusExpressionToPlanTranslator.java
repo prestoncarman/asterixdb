@@ -481,9 +481,9 @@ public class AqlPlusExpressionToPlanTranslator extends AbstractAqlTranslator imp
             }
         }
         AbstractFunctionCallExpression f;
-        if (AsterixBuiltinFunctions.isBuiltinAggregateFunction(fi)) {
+        if (FunctionUtils.isAggregateFunction(fi)) {
             f = AsterixBuiltinFunctions.makeAggregateFunctionExpression(fi, args);
-        } else if (AsterixBuiltinFunctions.isBuiltinUnnestingFunction(fi)) {
+        } else if (FunctionUtils.isBuiltinUnnestingFunction(fi)) {
             UnnestingFunctionCallExpression ufce = new UnnestingFunctionCallExpression(
                     FunctionUtils.getFunctionInfo(fi), args);
             ufce.setReturnsUniqueValues(AsterixBuiltinFunctions.returnsUniqueValues(fi));
@@ -1114,7 +1114,7 @@ public class AqlPlusExpressionToPlanTranslator extends AbstractAqlTranslator imp
 
     private Pair<ILogicalOperator, LogicalVariable> aggListify(LogicalVariable var, Mutable<ILogicalOperator> opRef,
             boolean bProject) {
-        AggregateFunctionCallExpression funAgg = AsterixBuiltinFunctions.makeAggregateFunctionExpression(
+        AggregateFunctionCallExpression funAgg = FunctionUtils.makeAggregateFunctionExpression(
                 AsterixBuiltinFunctions.LISTIFY, new ArrayList<Mutable<ILogicalExpression>>());
         funAgg.getArguments().add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(var)));
         LogicalVariable varListified = context.newVar();

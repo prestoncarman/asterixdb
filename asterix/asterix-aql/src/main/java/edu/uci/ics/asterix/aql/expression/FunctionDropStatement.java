@@ -22,8 +22,8 @@ public class FunctionDropStatement implements Statement {
         return Kind.FUNCTION_DROP;
     }
 
-    public Identifier getFunctionName() {
-        return functionName;
+    public String getFunctionName() {
+        return functionName.getValue();
     }
 
     public boolean getIfExists() {

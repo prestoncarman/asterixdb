@@ -1,4 +1,4 @@
-package edu.uci.ics.asterix.aql.util;
+package edu.uci.ics.asterix.om.functions;
 
 /*
  * Copyright 2009-2011 by The Regents of the University of California
@@ -44,38 +44,7 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.functions.IFunctionInfo;
 
 public class FunctionUtils {
 
-    public static FunctionDecl getFunctionDecl(Function function) throws AsterixException {
-        String functionBody = function.getFunctionBody();
-        List<String> params = function.getParams();
-        List<VarIdentifier> varIdentifiers = new ArrayList<VarIdentifier>();
-
-        StringBuilder builder = new StringBuilder();
-        builder.append(" declare function " + function.getFunctionName());
-        builder.append("(");
-        for (String param : params) {
-            VarIdentifier varId = new VarIdentifier(param);
-            varIdentifiers.add(varId);
-            builder.append(param);
-            builder.append(",");
-        }
-        builder.delete(builder.length() - 1, builder.length());
-        builder.append(")");
-        builder.append("{");
-        builder.append(functionBody);
-        builder.append("}");
-        AQLParser parser = new AQLParser(new StringReader(new String(builder)));
-
-        Query query = null;
-        try {
-            query = (Query) parser.Statement();
-        } catch (ParseException pe) {
-            throw new AsterixException(pe);
-        }
-
-        FunctionDecl decl = (FunctionDecl) query.getPrologDeclList().get(0);
-        return decl;
-    }
-
+   
     public static IFunctionInfo getFunctionInfo(FunctionIdentifier fi) {
         return AsterixBuiltinFunctions.getAsterixFunctionInfo(fi);
     }

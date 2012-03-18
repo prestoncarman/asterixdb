@@ -150,7 +150,7 @@ public class APIFramework {
         MetadataManager.INSTANCE.lock(mdTxnCtx, LockMode.EXCLUSIVE);
         try {
             DdlTranslator ddlt = new DdlTranslator(mdTxnCtx, query.getPrologDeclList(), out, pc, pdf);
-            ddlt.translate(hcc, false);
+            ddlt.translate(false);
             MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
             return ddlt.getCompiledDeclarations().getDataverseName();
         } catch (Exception e) {
