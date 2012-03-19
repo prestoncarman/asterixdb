@@ -24,7 +24,7 @@ public class LogCursor implements ILogCursor {
     private final ILogManager logManager;
     private final ILogFilter logFilter;
     private IFileBasedBuffer readOnlyBuffer;
-    private LogicalLogLocator logicalLogLocator = null;
+    private LogicalLogLocator nextLogicalLogLocator = null;
     private int bufferIndex = 0;
 
     /**
@@ -46,8 +46,7 @@ public class LogCursor implements ILogCursor {
     private void initialize(final PhysicalLogLocator startingPhysicalLogLocator) throws IOException {
         readOnlyBuffer = getReadOnlyBuffer(startingPhysicalLogLocator.getLsn(), logManager.getLogManagerProperties()
                 .getLogBufferSize());
-        logicalLogLocator = new LogicalLogLocator(startingPhysicalLogLocator.getLsn(), readOnlyBuffer, 0, logManager);
-
+        nextLogicalLogLocator = new LogicalLogLocator(startingPhysicalLogLocator.getLsn(), readOnlyBuffer, 0, logManager);
     }
 
     private IFileBasedBuffer getReadOnlyBuffer(long lsn, int size) throws IOException {
@@ -62,30 +61,45 @@ public class LogCursor implements ILogCursor {
     }
 
     /**
-     * Moves the cursor to the next log record that satisfies the configured
-     * filter. The parameter nextLogLocator is set to the point to the next log
-     * record.
+     * Moves the cursor to the next log record. 
+     * The parameter, logLocator is set to the point to the next log record.
+     * The usage of this method is as follows.
+     * When next() is called for the first time, the cursor is set to the log record of which LSN is the LSN 
+     * specified by the LogCursor constructor and the parameter, logLocator indicates the same log record.
+     * [Notice] The log cursor user has to know the first valid log record's LSN.
+     * Now, Whenever next() is called, the cursor and the logLocator moves to the next log record and so on.
+     * The user of the cursor can examine the log record using the logLocator and LogRecordHelper class.
+     * If next() reaches the end of log file, it returns false as return value. Otherwise, it returns true.
+     * For example, there are three log records. 
+     *      logRec1, logRec2, logRec3
+     * To create log cursor, users have to know the LSN of the first log record and provide it with logCursor constructor. 
+     * Then, if the first next() is called, the logCursor and the logLocator indicates the LSN of the first log record(logRec1). 
+     * When the second next() is called, the logCursor and the logLocator moves to the next log record(logRec2). 
+     * When the third next() is called, the logCursor and the logLocator moves to the last log record(logRec3).
+     * When the fourth next() is called, it returns false as return value and the logCursor may or may not move, but 
+     * the logLocator is not updated.
      * 
-     * @param nextLogicalLogLocator
+     * @param logLocator
      * @return true if the cursor was successfully moved to the next log record
-     *         false if there are no more log records that satisfy the
-     *         configured filter.
+     *         false if there are no more log records.
      */
     @Override
-    public boolean next(LogicalLogLocator nextLogicalLogLocator) throws IOException, ACIDException {
+    public boolean next(LogicalLogLocator logLocator) throws IOException, ACIDException {
 
         int integerRead = -1;
         boolean logRecordBeginPosFound = false;
         long bytesSkipped = 0;
-        while (logicalLogLocator.getMemoryOffset() <= readOnlyBuffer.getSize()
+        
+        // find the starting position of the next log record by checking the logMagicNumber.
+        while (nextLogicalLogLocator.getMemoryOffset() <= readOnlyBuffer.getSize()
                 - logManager.getLogManagerProperties().getLogHeaderSize()) {
-            integerRead = readOnlyBuffer.readInt(logicalLogLocator.getMemoryOffset());
+            integerRead = readOnlyBuffer.readInt(nextLogicalLogLocator.getMemoryOffset());
             if (integerRead == logManager.getLogManagerProperties().logMagicNumber) {
                 logRecordBeginPosFound = true;
                 break;
             }
-            logicalLogLocator.increaseMemoryOffset(1);
-            logicalLogLocator.incrementLsn();
+            nextLogicalLogLocator.increaseMemoryOffset(1);
+            nextLogicalLogLocator.incrementLsn();
             bytesSkipped++;
             if (bytesSkipped > logManager.getLogManagerProperties().getLogPageSize()) {
                 return false; // the maximum size of a log record is limited to
@@ -95,34 +109,36 @@ public class LogCursor implements ILogCursor {
             }
         }
 
+        // load the next log page if the logMagicNumber is not found in the current log page.
         if (!logRecordBeginPosFound) {
             // need to reload the buffer
             long lsnpos = (++bufferIndex * logManager.getLogManagerProperties().getLogBufferSize());
             readOnlyBuffer = getReadOnlyBuffer(lsnpos, logManager.getLogManagerProperties().getLogBufferSize());
             if (readOnlyBuffer != null) {
-                logicalLogLocator.setBuffer(readOnlyBuffer);
-                logicalLogLocator.setLsn(lsnpos);
-                logicalLogLocator.setMemoryOffset(0);
-                return next(nextLogicalLogLocator);
+                nextLogicalLogLocator.setBuffer(readOnlyBuffer);
+                nextLogicalLogLocator.setLsn(lsnpos);
+                nextLogicalLogLocator.setMemoryOffset(0);
+                return next(logLocator);
             } else {
                 return false;
             }
         }
 
-        int logLength = logManager.getLogRecordHelper().getLogLength(logicalLogLocator);
-        if (logManager.getLogRecordHelper().validateLogRecord(logManager.getLogManagerProperties(), logicalLogLocator)) {
-            if (nextLogicalLogLocator == null) {
-                nextLogicalLogLocator = new LogicalLogLocator(0, readOnlyBuffer, -1, logManager);
+        // If you reach here, you found the starting position of the next log record.
+        int logLength = logManager.getLogRecordHelper().getLogLength(nextLogicalLogLocator);
+        if (logManager.getLogRecordHelper().validateLogRecord(logManager.getLogManagerProperties(), nextLogicalLogLocator)) {
+            if (logLocator == null) {
+                logLocator = new LogicalLogLocator(0, readOnlyBuffer, -1, logManager);
             }
-            nextLogicalLogLocator.setLsn(logicalLogLocator.getLsn());
-            nextLogicalLogLocator.setMemoryOffset(logicalLogLocator.getMemoryOffset());
-            nextLogicalLogLocator.setBuffer(readOnlyBuffer);
-            logicalLogLocator.incrementLsn(logLength);
-            logicalLogLocator.setMemoryOffset(logicalLogLocator.getMemoryOffset() + logLength);
+            logLocator.setLsn(nextLogicalLogLocator.getLsn());
+            logLocator.setMemoryOffset(nextLogicalLogLocator.getMemoryOffset());
+            logLocator.setBuffer(readOnlyBuffer);
+            nextLogicalLogLocator.incrementLsn(logLength);
+            nextLogicalLogLocator.setMemoryOffset(nextLogicalLogLocator.getMemoryOffset() + logLength);
         } else {
             throw new ACIDException("Invalid Log Record found ! checksums do not match :( ");
         }
-        return logFilter.accept(readOnlyBuffer, nextLogicalLogLocator.getMemoryOffset(), logLength);
+        return logFilter.accept(readOnlyBuffer, logLocator.getMemoryOffset(), logLength);
     }
 
     /**

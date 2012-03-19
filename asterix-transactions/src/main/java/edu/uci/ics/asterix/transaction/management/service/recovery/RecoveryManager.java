@@ -16,20 +16,15 @@ package edu.uci.ics.asterix.transaction.management.service.recovery;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
-import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.io.RandomAccessFile;
 import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
-import edu.uci.ics.asterix.transaction.management.resource.TransactionalResourceRepository;
 import edu.uci.ics.asterix.transaction.management.service.logging.FileUtil;
 import edu.uci.ics.asterix.transaction.management.service.logging.IBuffer;
 import edu.uci.ics.asterix.transaction.management.service.logging.ILogCursor;
@@ -43,7 +38,6 @@ import edu.uci.ics.asterix.transaction.management.service.logging.LogUtil;
 import edu.uci.ics.asterix.transaction.management.service.logging.LogicalLogLocator;
 import edu.uci.ics.asterix.transaction.management.service.logging.PhysicalLogLocator;
 import edu.uci.ics.asterix.transaction.management.service.transaction.IResourceManager;
-import edu.uci.ics.asterix.transaction.management.service.transaction.ITransactionManager;
 import edu.uci.ics.asterix.transaction.management.service.transaction.MemoryComponentTable;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionContext;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionManagementConstants;
@@ -51,14 +45,13 @@ import edu.uci.ics.asterix.transaction.management.service.transaction.Transactio
 
 /**
  * This is the Recovery Manager and is responsible for rolling back a
- * transaction as well as doing a system recovery. TODO: Crash Recovery logic is
- * not in place completely. Once we have physical logging implemented, we would
- * add support for crash recovery.
+ * transaction as well as doing a system recovery. 
  */
 public class RecoveryManager implements IRecoveryManager {
 
     private static final Logger LOGGER = Logger.getLogger(RecoveryManager.class.getName());
-    private TransactionProvider transactionProvider;
+    private final TransactionProvider transactionProvider;
+    private final MemoryComponentTable memoryComponentTable;
 
     /**
      * A file at a known location that contains the LSN of the last log record
@@ -66,19 +59,20 @@ public class RecoveryManager implements IRecoveryManager {
      */
     private static final String checkpoint_record_file = "last_checkpoint_lsn";
     private SystemState state;
-    private Map<Long, TransactionTableEntry> transactionTable;
-    private Map<Long, List<PhysicalLogLocator>> dirtyPagesTable;
 
-    public RecoveryManager(TransactionProvider TransactionProvider) throws ACIDException {
-        this.transactionProvider = TransactionProvider;
-        //        checkpoint_record_file is created in getSystemState()
-        //        try {
-        //            FileUtil.createFileIfNotExists(checkpoint_record_file);
-        //        } catch (IOException ioe) {
-        //            throw new ACIDException(" unable to create checkpoint record file " + checkpoint_record_file, ioe);
-        //        }
+    public RecoveryManager(TransactionProvider transactionProvider) throws ACIDException {
+        this.transactionProvider = transactionProvider;
+        this.memoryComponentTable = transactionProvider.getMemoryComponentTable();
     }
 
+    /**
+     * returns system state which could be one of the three states: HEALTHY, RECOVERING, CORRUPTED.
+     * This state information could be used in a case where more than one thread is running 
+     * in the bootstrap process to provide higher availability. In other words, while the system
+     * is recovered, another thread may start a new transaction with understanding the side effect
+     * of the operation, or the system can be recovered concurrently. This kind of concurrency is
+     * not supported, yet. 
+     */
     public SystemState getSystemState() throws ACIDException {
         try {
             if (FileUtil.createFileIfNotExists(checkpoint_record_file)) {
@@ -99,7 +93,6 @@ public class RecoveryManager implements IRecoveryManager {
                         state = SystemState.CORRUPTED;
                     }
                 } catch (ACIDException ae) {
-                    // TODO Auto-generated catch block
                     state = SystemState.CORRUPTED;
                     throw new ACIDException("checkpoint_record_file is corrupted" + checkpoint_record_file, ae);
                 }
@@ -110,63 +103,154 @@ public class RecoveryManager implements IRecoveryManager {
         return state;
     }
 
-    private PhysicalLogLocator getBeginRecoveryLSN() throws ACIDException {
-        return new PhysicalLogLocator(0, transactionProvider.getLogManager());
+    /**
+     * get low water mark : low water mark is max(minMCTFirstLSN, minDiskLastLSN).
+     * The low water mark is used as LSN from where both analysis and redo begins.
+     * 
+     * @return
+     * @throws ACIDException
+     */
+    private PhysicalLogLocator getLowWaterMark() throws ACIDException {
+        long minMCTFirstLSN = this.memoryComponentTable.getMinFirstLSN();
+        long minDiskLastLSN = -1; 
+        long lowWaterMarkLSN = -1;
+        
+        //TODO get minDiskLastLSN from all resources.
+        if (minMCTFirstLSN > minDiskLastLSN) {
+            lowWaterMarkLSN = minMCTFirstLSN;
+        } else {
+            lowWaterMarkLSN = minDiskLastLSN;
+        }
+        
+        return new PhysicalLogLocator(lowWaterMarkLSN, this.transactionProvider.getLogManager());
     }
 
     /**
-     * TODO:This method is currently not implemented completely.
+     * Recovers the crashed system by doing following two phases.
+     * First, analysis phase starts reading the log file from the low water mark and
+     * construct CTL(Committed Transactions's List) while all log records (from the log water mark) 
+     * are read up to the end of log file.
+     * Second, redo phase starts reading the log file from the low water mark, too and
+     * replay committed txns's log records while updating MCT(Memory Component Table) accordingly.
+     * Notice! Checkpoint is not done at the end of recovery since the checkpoint is done periodically,
+     * we avoid additional IO overhead caused by the checkpoint.
      */
     public SystemState startRecovery(boolean synchronous) throws IOException, ACIDException {
-        ILogManager logManager = transactionProvider.getLogManager();
+        
         state = SystemState.RECOVERING;
-        transactionTable = new HashMap<Long, TransactionTableEntry>();
-        dirtyPagesTable = new HashMap<Long, List<PhysicalLogLocator>>();
+        HashMap committedTransactions = new HashMap(); 
 
-        PhysicalLogLocator beginLSN = getBeginRecoveryLSN();
-        ILogCursor cursor = logManager.readLog(beginLSN, new ILogFilter() {
+        //get the Low Water Mark from which analysis starts reading log records.
+        PhysicalLogLocator lowWaterMarkLSN = getLowWaterMark();
+        
+        //start analysis
+        startAnalysis(lowWaterMarkLSN, committedTransactions);
+        
+        //start redo
+        startRedo(lowWaterMarkLSN, committedTransactions);
+        
+        //clean up the recovery 
+        committedTransactions.clear();
+        state = SystemState.HEALTHY;    
+
+        return state;
+    }
+
+    private void startAnalysis(PhysicalLogLocator beginLSN, HashMap committedTransactions) throws IOException, ACIDException {
+        ILogManager logManager = transactionProvider.getLogManager();
+        
+        // #. set the cursor to the beginLSN
+        // LogFilter is not used currently and the accept function always returns true.
+        // There is no scenario which requires LogFilter so far. 
+        ILogCursor logCursor = logManager.readLog(beginLSN, new ILogFilter() {
             public boolean accept(IBuffer logs, long startOffset, int endOffset) {
                 return true;
             }
         });
-        LogicalLogLocator memLSN = new LogicalLogLocator(beginLSN.getLsn(), null, -1, logManager);
+        
+        // Notice. 
+        // The buffer of the LogicalLogLocator is set to the buffer of the LogCursor when LogCursor.next() is called. 
+        LogicalLogLocator currentLogicalLogLocator = new LogicalLogLocator(beginLSN.getLsn(), null, -1, logManager);
+        
+        //#. read log records up to the end of log file while collecting committed transaction Id.
         boolean logValidity = true;
-        LogRecordHelper parser = new LogRecordHelper(logManager);
+        byte logType;
+        LogRecordHelper logParser = new LogRecordHelper(logManager);
         try {
             while (logValidity) {
-                logValidity = cursor.next(memLSN);
+                //read the next log record
+                logValidity = logCursor.next(currentLogicalLogLocator);
                 if (!logValidity) {
                     if (LOGGER.isLoggable(Level.INFO)) {
-                        LOGGER.info("reached end of log !");
+                        LOGGER.info("[Analysis Phase] reached end of log !");
                     }
                     break;
                 }
-                byte resourceMgrId = parser.getResourceMgrId(memLSN);
-                IResourceManager resourceMgr = transactionProvider.getResourceRepository().getTransactionalResourceMgr(
-                        resourceMgrId);
-                if (resourceMgr == null) {
-                    throw new ACIDException("unknown resource mgr with id " + resourceMgrId);
-                } else {
-                    byte actionType = parser.getLogActionType(memLSN);
-                    switch (actionType) {
-                        case LogActionType.REDO:
-                            resourceMgr.redo(parser, memLSN);
-                            break;
-                        case LogActionType.UNDO: /* skip these records */
-                            break;
-                        default: /* do nothing */
-                    }
+                
+                //insert a committed transaction id into HashMap, committedTransactions.
+                logType = logParser.getLogType(currentLogicalLogLocator);
+                if (logType == LogType.COMMIT) {
+                    committedTransactions.put(logParser.getLogTransactionId(currentLogicalLogLocator), null);
                 }
-                //writeCheckpointRecord(memLSN.getLsn());
             }
-            state = SystemState.HEALTHY;
         } catch (Exception e) {
             state = SystemState.CORRUPTED;
-            throw new ACIDException(" could not recover , corrputed log !", e);
+            throw new ACIDException("[Analysis Phase] could not recover, corrputed log !", e);
         }
-        return state;
     }
-
+    
+    private void startRedo(PhysicalLogLocator beginLSN, HashMap committedTransactions) throws IOException, ACIDException {
+        ILogManager logManager = transactionProvider.getLogManager();
+        
+        // #. set the cursor to the beginLSN
+        // LogFilter is not used currently and the accept function always returns true.
+        // There is no scenario which requires LogFilter so far. 
+        ILogCursor logCursor = logManager.readLog(beginLSN, new ILogFilter() {
+            public boolean accept(IBuffer logs, long startOffset, int endOffset) {
+                return true;
+            }
+        });
+        
+        // Notice. 
+        // The buffer of the LogicalLogLocator is set to the buffer of the LogCursor when LogCursor.next() is called. 
+        LogicalLogLocator currentLogicalLogLocator = new LogicalLogLocator(beginLSN.getLsn(), null, -1, logManager);
+        
+        boolean logValidity = true;
+        byte resourceMgrId;
+        IResourceManager resourceMgr;
+        LogRecordHelper logParser = new LogRecordHelper(logManager);
+        try {
+            while (logValidity) {
+                
+                //read the next log record               
+                logValidity = logCursor.next(currentLogicalLogLocator);
+                if (!logValidity) {
+                    if (LOGGER.isLoggable(Level.INFO)) {
+                        LOGGER.info("[Redo Phase] reached end of log !");
+                    }
+                    break;
+                }
+                
+                //If the log type is UPDATE and the txnId of the log record exists in the HashMap, committedTransactions, 
+                //then make resourceMgr replay the log record.
+                //ResourceMgr is in charge of guaranteeing the idempotent property by checking the diskLSN of the resource. 
+                if (logParser.getLogType(currentLogicalLogLocator) == LogType.UPDATE &&
+                    committedTransactions.containsKey(logParser.getLogTransactionId(currentLogicalLogLocator))) {
+                    resourceMgrId = logParser.getResourceMgrId(currentLogicalLogLocator);
+                    resourceMgr = transactionProvider.getResourceRepository().getTransactionalResourceMgr(resourceMgrId);
+                    if (resourceMgr == null) {
+                        throw new ACIDException("[Redo Phase] unknown resource mgr with id " + resourceMgrId);
+                    } else {      
+                        resourceMgr.redo(logParser, currentLogicalLogLocator);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            state = SystemState.CORRUPTED;
+            throw new ACIDException("[Redo Phase] could not recover , corrputed log !", e);
+        }
+    }
+    
     @Override
     /*
      * Checkpoint executes the following tasks: 
@@ -193,7 +277,7 @@ public class RecoveryManager implements IRecoveryManager {
         }
 
         //update checkpoint_log_record file. 
-        long minMCTFirstLSN = 0;//MemoryComponentTable.getMinFirstLSN();
+        long minMCTFirstLSN = this.memoryComponentTable.getMinFirstLSN();
 
         try {
             //write checkpoint log record LSN as well as minMCTFirstLSN twice
@@ -298,14 +382,14 @@ public class RecoveryManager implements IRecoveryManager {
     }
 
     /**
-     * Rollback a transaction (non-Javadoc)
+     * Rollback a transaction
      * 
      * @see edu.uci.ics.transaction.management.service.recovery.IRecoveryManager# rollbackTransaction (edu.uci.ics.transaction.management.service.transaction .TransactionContext)
      */
     @Override
     public void rollbackTransaction(TransactionContext txnContext) throws ACIDException {
         ILogManager logManager = transactionProvider.getLogManager();
-        ILogRecordHelper parser = logManager.getLogRecordHelper();
+        ILogRecordHelper logParser = logManager.getLogRecordHelper();
 
         // Obtain the last log record written by the transaction
         PhysicalLogLocator lsn = txnContext.getLastLogLocator();
@@ -324,7 +408,9 @@ public class RecoveryManager implements IRecoveryManager {
 
         // a dummy logLocator instance that is re-used during rollback
         LogicalLogLocator logLocator = LogUtil.getDummyLogicalLogLocator(logManager);
-
+        byte logType;
+        IResourceManager resourceMgr;
+        boolean moreLogs;
         while (true) {
             try {
                 // read the log record at the given position
@@ -335,45 +421,35 @@ public class RecoveryManager implements IRecoveryManager {
                 throw new ACIDException(" could not read log at lsn :" + lsn, e);
             }
 
-            byte logType = parser.getLogType(logLocator);
+            logType = logParser.getLogType(logLocator);
             if (LOGGER.isLoggable(Level.FINE)) {
                 LOGGER.fine(" reading LSN value inside rollback transaction method " + txnContext.getLastLogLocator()
-                        + " txn id " + parser.getLogTransactionId(logLocator) + " log type  " + logType);
+                        + " txn id " + logParser.getLogTransactionId(logLocator) + " log type  " + logType);
             }
 
             switch (logType) {
                 case LogType.UPDATE:
 
                     // extract the resource manager id from the log record.
-                    byte resourceMgrId = parser.getResourceMgrId(logLocator);
+                    byte resourceMgrId = logParser.getResourceMgrId(logLocator);
                     if (LOGGER.isLoggable(Level.FINE)) {
-                        LOGGER.fine(parser.getLogRecordForDisplay(logLocator));
+                        LOGGER.fine(logParser.getLogRecordForDisplay(logLocator));
                     }
 
                     // look up the repository to get the resource manager
-                    IResourceManager resourceMgr = transactionProvider.getResourceRepository().getTransactionalResourceMgr(
-                            resourceMgrId);
+                    resourceMgr = transactionProvider.getResourceRepository().getTransactionalResourceMgr(resourceMgrId);
                     if (resourceMgr == null) {
                         throw new ACIDException(txnContext, " unknown resource manager " + resourceMgrId);
                     } else {
-                        byte actionType = parser.getLogActionType(logLocator);
-                        switch (actionType) {
-                            case LogActionType.REDO: // no need to do anything
-                                break;
-                            case LogActionType.UNDO: // undo the log record
-                                resourceMgr.undo(parser, logLocator);
-                                break;
-                            case LogActionType.REDO_UNDO: // undo log record
-                                resourceMgr.undo(parser, logLocator);
-                                break;
-                            default:
-                        }
+                        resourceMgr.undo(logParser, logLocator);
                     }
-                case LogType.CLR: // skip the CLRs as they are not undone
                     break;
+                    
                 case LogType.COMMIT:
                     throw new ACIDException(txnContext, " cannot rollback commmitted transaction");
-
+                    
+                default:
+                    throw new ACIDException(txnContext, " unexpected log type: " + logType);
             }
 
             // follow the previous LSN pointer to get the previous log record
@@ -382,13 +458,12 @@ public class RecoveryManager implements IRecoveryManager {
             // the logLocator object has been
             // appropriately set to the location of the next log record to be
             // processed as part of the roll back
-            boolean moreLogs = parser.getPreviousLsnByTransaction(lsn, logLocator);
+            moreLogs = logParser.getPreviousLsnByTransaction(lsn, logLocator);
             if (!moreLogs) {
                 // no more logs to process
                 break;
             }
         }
-
     }
 
 }

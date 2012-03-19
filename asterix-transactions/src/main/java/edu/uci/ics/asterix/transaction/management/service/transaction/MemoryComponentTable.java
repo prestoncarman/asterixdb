@@ -16,7 +16,6 @@
 package edu.uci.ics.asterix.transaction.management.service.transaction;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -79,6 +78,11 @@ public class MemoryComponentTable {
         tableLatch.writeLock().unlock();
     }
     
+    /** 
+     * delete transactionId from the specified resource's transactionIds.
+     * @param resourceBytes
+     * @param txnId
+     */
     public void removeTransactionId(byte[] resourceBytes, long txnId) {
         ByteBuffer resourceId = ByteBuffer.wrap(resourceBytes);
         tableLatch.writeLock().lock();
@@ -148,7 +152,7 @@ public class MemoryComponentTable {
         }
         
         public void upsertTransactionId(long txnId) {
-            transactionIds.put(txnId, 0);
+            transactionIds.put(txnId, null);
         }
         
         public void deleteTransactionId(long txnId) {
