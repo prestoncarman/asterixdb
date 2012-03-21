@@ -67,7 +67,6 @@ import edu.uci.ics.hyracks.algebricks.core.utils.Pair;
  */
 // TODO: Rename this to IntroduceIndexSearchRule because secondary inverted indexes may also apply.
 public class IntroduceAccessMethodSearchRule implements IAlgebraicRewriteRule {
-
     
 	// Operators representing the pattern to be matched:
 	// (select) <-- (assign) <-- (datasource scan)

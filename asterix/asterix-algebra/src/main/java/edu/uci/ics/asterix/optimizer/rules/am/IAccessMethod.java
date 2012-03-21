@@ -13,13 +13,45 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionC
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
 
+/**
+ * Interface an access method should implement to work with the
+ * IntroduceAccessMethodSearchRule that optimizes simple scan-select queries
+ * with access methods (the am must still be manually registered in the
+ * IntroduceAccessMethodSearchRule). The IntroduceAccessMethodSearchRule will
+ * match an operator pattern, and take care of choosing an index to be applied.
+ * This interface abstracts away the analysis of the select condition to see
+ * whether this access method is applicable. We also provide a method for
+ * transforming the plan if an access method of this type has been chosen, since
+ * this step is access method specific.
+ * 
+ */
 public interface IAccessMethod {
+    
+    /**
+     * @return A list of function identifiers that are optimizable by this
+     *         access method.
+     * 
+     */
     public List<FunctionIdentifier> getOptimizableFunctions();
     
+    /**
+     * Analyzes the arguments of the given funcExpr to see if funcExpr is
+     * optimizable (e.g., one arg is a constant and one is a var). We assume
+     * that the funcExpr has already been determined to be optimizable by this
+     * access method based on its function identifier. If funcExpr has been
+     * found to be optimizable, this method adds an OptimizableFunction to
+     * analysisCtx.matchedFuncExprs for further analysis.
+     * 
+     * @param funcExpr
+     * @param analysisCtx
+     * @return true if funcExpr is optimizable by this access method, false otherwise 
+     */
     public boolean analyzeFuncExprArgs(AbstractFunctionCallExpression funcExpr, AccessMethodAnalysisContext analysisCtx);
  
-    /** 
-     * Indicates whether all index expressions must be matched in order for this index to be applicable. 
+    /**
+     * Indicates whether all index expressions must be matched in order for this
+     * index to be applicable.
+     * 
      * @return boolean
      */
     public boolean matchAllIndexExprs();
@@ -30,6 +62,20 @@ public interface IAccessMethod {
      */
     public boolean matchPrefixIndexExprs();
     
+    /**
+     * Applies the plan transformation to use chosenIndex which must be an access method of this type.
+     * 
+     * @param selectRef
+     * @param assignRef
+     * @param dataSourceScanRef
+     * @param datasetDecl
+     * @param recordType
+     * @param chosenIndex
+     * @param analysisCtx
+     * @param context
+     * @return
+     * @throws AlgebricksException
+     */
     public boolean applyPlanTransformation(Mutable<ILogicalOperator> selectRef, Mutable<ILogicalOperator> assignRef,
             Mutable<ILogicalOperator> dataSourceScanRef, AqlCompiledDatasetDecl datasetDecl, ARecordType recordType,
             AqlCompiledIndexDecl chosenIndex, AccessMethodAnalysisContext analysisCtx, IOptimizationContext context)

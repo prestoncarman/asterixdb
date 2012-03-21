@@ -19,7 +19,6 @@ import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.IAType;
-import edu.uci.ics.asterix.optimizer.rules.OptimizableFuncExpr;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IOptimizationContext;
@@ -82,7 +81,7 @@ public class BTreeAccessMethod implements IAccessMethod {
 
     @Override
     public boolean matchPrefixIndexExprs() {
-        // TODO: The BTree can support this. Enable this later and add tests.
+        // TODO: The BTree can support prefix searches. Enable this later and add tests.
         return false;
     }
 
