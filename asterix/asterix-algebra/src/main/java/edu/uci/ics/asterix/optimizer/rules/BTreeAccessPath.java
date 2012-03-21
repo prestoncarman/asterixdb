@@ -38,13 +38,10 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractLog
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator.ExecutionMode;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.DataSourceScanOperator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.OrderOperator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluatorFactory;
 import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
-import edu.uci.ics.hyracks.algebricks.core.utils.Pair;
 import edu.uci.ics.hyracks.algebricks.core.utils.Triple;
 
 public class BTreeAccessPath implements IAccessPath {
@@ -238,8 +235,11 @@ public class BTreeAccessPath implements IAccessPath {
         UnnestMapOperator primaryIndexUnnestMap;
         boolean isPrimaryIndex = chosenIndex == DatasetUtils.getPrimaryIndex(datasetDecl);
         if (!isPrimaryIndex) {
-            primaryIndexUnnestMap = createPrimaryIndexUnnestMap(datasetDecl, recordType, primaryIndexVars, chosenIndex,
-                    rangeSearchFun, assignSearchKeys, context);
+            List<Object> secondaryIndexTypes = getSecondaryIndexTypes(datasetDecl, chosenIndex, recordType);
+            int numSecondaryKeys = chosenIndex.getFieldExprs().size();
+            primaryIndexUnnestMap = AccessPathUtils.createPrimaryIndexUnnestMap(datasetDecl, recordType,
+                    primaryIndexVars, chosenIndex, numSecondaryKeys, secondaryIndexTypes, rangeSearchFun,
+                    assignSearchKeys, context, true);
         } else {
             primaryIndexUnnestMap = new UnnestMapOperator(primaryIndexVars, new MutableObject<ILogicalExpression>(rangeSearchFun),
                     AccessPathUtils.primaryIndexTypes(datasetDecl, recordType));
@@ -272,75 +272,6 @@ public class BTreeAccessPath implements IAccessPath {
         return true;
     }
 
-    private UnnestMapOperator createPrimaryIndexUnnestMap(AqlCompiledDatasetDecl datasetDecl, ARecordType recordType,
-            List<LogicalVariable> primaryIndexVars, AqlCompiledIndexDecl secondaryIndex, UnnestingFunctionCallExpression rangeSearchFun,
-            AssignOperator assignSearchKeys, IOptimizationContext context) throws AlgebricksException {
-        int numPrimaryKeys = DatasetUtils.getPartitioningFunctions(datasetDecl).size();
-        int numSecondaryKeys = secondaryIndex.getFieldExprs().size();
-        // List of variables for the primary keys coming out of a secondary-index search.
-        ArrayList<LogicalVariable> secondaryIndexPrimaryKeys = new ArrayList<LogicalVariable>(numPrimaryKeys);
-        for (int i = 0; i < numPrimaryKeys; i++) {
-            secondaryIndexPrimaryKeys.add(context.newVar());
-        }
-        // List of variables coming out of the secondary-index search. It contains the secondary keys, and the primary keys.
-        ArrayList<LogicalVariable> secondaryIndexUnnestVars = new ArrayList<LogicalVariable>(numSecondaryKeys
-                + secondaryIndexPrimaryKeys.size());
-        // Add one variable per secondary-index key.
-        for (int i = 0; i < numSecondaryKeys; i++) {
-            secondaryIndexUnnestVars.add(context.newVar());
-        }
-        // Add the primary keys after the secondary keys.
-        secondaryIndexUnnestVars.addAll(secondaryIndexPrimaryKeys);
-        // This is the operator that the physical rewrite will be looking for. It contains an unnest function that has all necessary arguments to determine
-        // which index to use, which variables contain the index-search keys, what is the original dataset, etc.
-        UnnestMapOperator secondaryIndexUnnestOp = new UnnestMapOperator(secondaryIndexUnnestVars, new MutableObject<ILogicalExpression>(
-                rangeSearchFun), secondaryIndexTypes(datasetDecl, secondaryIndex, recordType));
-        secondaryIndexUnnestOp.getInputs().add(new MutableObject<ILogicalOperator>(assignSearchKeys));
-        secondaryIndexUnnestOp.setExecutionMode(ExecutionMode.PARTITIONED);
-
-        // Add a sort on the primary-index keys before searching the primary index.
-        OrderOperator order = new OrderOperator();
-        for (LogicalVariable v : secondaryIndexPrimaryKeys) {
-            Mutable<ILogicalExpression> vRef = new MutableObject<ILogicalExpression>(new VariableReferenceExpression(v));
-            order.getOrderExpressions().add(
-                    new Pair<IOrder, Mutable<ILogicalExpression>>(OrderOperator.ASC_ORDER, vRef));
-        }
-        // The secondary-index search feeds into the sort.
-        order.getInputs().add(new MutableObject<ILogicalOperator>(secondaryIndexUnnestOp));
-        order.setExecutionMode(ExecutionMode.LOCAL);
-
-        // List of arguments to be passed into the primary index unnest (these arguments will be consumed by the corresponding physical rewrite rule). 
-        // The arguments are: the name of the primary index, the type of index, the name of the dataset, 
-        // the number of primary-index keys, and the variable references corresponding to the primary-index search keys.
-        List<Mutable<ILogicalExpression>> primaryIndexFuncArgs = new ArrayList<Mutable<ILogicalExpression>>();
-        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(datasetDecl.getName())));
-        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(FunctionArgumentsConstants.BTREE_INDEX)));
-        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(datasetDecl.getName())));
-        // Add the variables corresponding to the primary-index search keys (low key).
-        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(new AInt32(
-                numPrimaryKeys)))));
-        for (LogicalVariable v : secondaryIndexPrimaryKeys) {
-            primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(v)));
-        }
-        // Add the variables corresponding to the primary-index search keys (high key).
-        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(new AInt32(
-                numPrimaryKeys)))));
-        for (LogicalVariable v : secondaryIndexPrimaryKeys) {
-            primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(v)));
-        }
-        // Low key inclusive, and high key inclusive are both true, meaning the search interval is closed.
-        // Since the low key and high key are also the same, we have a point lookup.
-        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(ConstantExpression.TRUE));
-        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(ConstantExpression.TRUE));
-        IFunctionInfo primaryIndexSearch = FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.INDEX_SEARCH);
-        AbstractFunctionCallExpression searchPrimIdxFun = new ScalarFunctionCallExpression(primaryIndexSearch, primaryIndexFuncArgs);
-        UnnestMapOperator primaryIndexUnnestMap = new UnnestMapOperator(primaryIndexVars, new MutableObject<ILogicalExpression>(searchPrimIdxFun),
-                AccessPathUtils.primaryIndexTypes(datasetDecl, recordType));
-        // Fed by the order operator.
-        primaryIndexUnnestMap.getInputs().add(new MutableObject<ILogicalOperator>(order));
-        return primaryIndexUnnestMap;
-    }
-    
     private void createKeyVarsAndExprs(LimitType[] keyLimits, IAlgebricksConstantValue[] keyConstants,
             ArrayList<Mutable<ILogicalExpression>> keyExprList, ArrayList<LogicalVariable> keyVarList,
             ArrayList<Mutable<ILogicalExpression>> secondaryIndexFuncArgs, IOptimizationContext context) {
@@ -448,7 +379,7 @@ public class BTreeAccessPath implements IAccessPath {
      * @return A list of types corresponding to fields produced by the given
      *         index when searched.
      */
-    private static List<Object> secondaryIndexTypes(AqlCompiledDatasetDecl datasetDecl, AqlCompiledIndexDecl index,
+    private static List<Object> getSecondaryIndexTypes(AqlCompiledDatasetDecl datasetDecl, AqlCompiledIndexDecl index,
             ARecordType recordType) throws AlgebricksException {
         List<Object> types = new ArrayList<Object>();
         for (String sk : index.getFieldExprs()) {
