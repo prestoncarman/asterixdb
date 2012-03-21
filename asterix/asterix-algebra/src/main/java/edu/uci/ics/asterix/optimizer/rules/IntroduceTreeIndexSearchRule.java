@@ -43,10 +43,11 @@ import edu.uci.ics.hyracks.algebricks.core.rewriter.base.IAlgebraicRewriteRule;
 import edu.uci.ics.hyracks.algebricks.core.utils.Pair;
 
 /**
- * This rule tries to optimize simple selections with indexes.
+ * This rule tries to optimize simple selections with indexes. The rewrite is still logical in nature.
+ * The use of an index is expressed as an unnest over an index-search function.
  * 
  * Matches this operator pattern: (select) <-- (assign) <-- (datasource scan)
- * Replaces it with this pattern: (select) <-- (assign) <-- (btree search) <-- (index search)
+ * Replaces it with this pattern: (select) <-- (assign) <-- (btree search) <-- (sort) <-- (unnest(index search)) <-- (assign)
  * 
  * For the special case of only primary index lookups it may also match the following pattern:
  * (select) <-- (datasource scan)
@@ -131,9 +132,11 @@ public class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteRule {
         // The assign may be null if there is only a filter on the primary index key.
         List<LogicalVariable> varList = (assign != null) ? assign.getVariables() : dataSourceScan.getVariables();
         Iterator<Map.Entry<IAccessPath, AccessPathAnalysisContext>> accPathIt = analyzedAccPaths.entrySet().iterator();
+        // Check applicability of indexes by access path type.
         while (accPathIt.hasNext()) {
             Map.Entry<IAccessPath, AccessPathAnalysisContext> entry = accPathIt.next();
             AccessPathAnalysisContext accPathCtx = entry.getValue();
+            // For the current access path type, map variables from the assign op to applicable indexes.
             fillAllIndexExprs(varList, accPathCtx);
             pruneIndexCandidates(entry.getKey(), accPathCtx);
             // Remove access paths for which there are definitely no applicable indexes.

@@ -51,6 +51,7 @@ import edu.uci.ics.hyracks.algebricks.core.utils.Triple;
 
 public class BTreeAccessPath implements IAccessPath {
 
+    // Describes whether a search predicate is an open/closed interval.
     private enum LimitType {
         LOW_INCLUSIVE, LOW_EXCLUSIVE, HIGH_INCLUSIVE, HIGH_EXCLUSIVE, EQUAL
     }
@@ -426,6 +427,7 @@ public class BTreeAccessPath implements IAccessPath {
             }
             case NEQ: {
                 limit = null;
+                break;
             }
             default: {
                 throw new IllegalStateException();
@@ -451,8 +453,7 @@ public class BTreeAccessPath implements IAccessPath {
         if (predList.size() > 1) {
             IFunctionInfo finfo = AlgebricksBuiltinFunctions.getBuiltinFunctionInfo(AlgebricksBuiltinFunctions.AND);
             return new ScalarFunctionCallExpression(finfo, predList);
-        } else {
-            return predList.get(0).getValue();
         }
+        return predList.get(0).getValue();
     }
 }
