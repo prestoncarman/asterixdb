@@ -1,1 +1,0 @@
-rtree-secondary-index.aql

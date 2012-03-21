@@ -13,8 +13,6 @@ import edu.uci.ics.asterix.common.functions.FunctionArgumentsConstants;
 import edu.uci.ics.asterix.common.functions.FunctionUtils;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledDatasetDecl;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl;
-import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
-import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
 import edu.uci.ics.asterix.metadata.utils.DatasetUtils;
 import edu.uci.ics.asterix.om.base.AInt32;
 import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
@@ -102,12 +100,12 @@ public class BTreeAccessPath implements IAccessPath {
             assign = (AssignOperator) assignRef.getValue();
         }
         int numKeys = chosenIndex.getFieldExprs().size();
-        IAlgebricksConstantValue[] loFilter = new IAlgebricksConstantValue[numKeys];
-        IAlgebricksConstantValue[] hiFilter = new IAlgebricksConstantValue[numKeys];
-        LimitType[] loLimit = new LimitType[numKeys];
-        LimitType[] hiLimit = new LimitType[numKeys];
-        boolean[] loInclusive = new boolean[numKeys];
-        boolean[] hiInclusive = new boolean[numKeys];
+        IAlgebricksConstantValue[] lowKeyConstants = new IAlgebricksConstantValue[numKeys];
+        IAlgebricksConstantValue[] highKeyConstants = new IAlgebricksConstantValue[numKeys];
+        LimitType[] lowKeyLimits = new LimitType[numKeys];
+        LimitType[] highKeyLimits = new LimitType[numKeys];
+        boolean[] lowKeyInclusive = new boolean[numKeys];
+        boolean[] highKeyInclusive = new boolean[numKeys];
         List<Integer> exprList = analysisCtx.indexExprs.get(chosenIndex);
         List<OptimizableFuncExpr> matchedFuncExprs = analysisCtx.matchedFuncExprs;
                 
@@ -122,10 +120,10 @@ public class BTreeAccessPath implements IAccessPath {
             LimitType limit = getLimitType(matchedFuncExprs.get(exprIndex));
             switch (limit) {
                 case EQUAL: {
-                    if (loLimit[keyPos] == null && hiLimit[keyPos] == null) {
-                        loLimit[keyPos] = hiLimit[keyPos] = limit;
-                        loInclusive[keyPos] = hiInclusive[keyPos] = true;
-                        loFilter[keyPos] = hiFilter[keyPos] = matchedFuncExprs.get(exprIndex).getConstVal();
+                    if (lowKeyLimits[keyPos] == null && highKeyLimits[keyPos] == null) {
+                        lowKeyLimits[keyPos] = highKeyLimits[keyPos] = limit;
+                        lowKeyInclusive[keyPos] = highKeyInclusive[keyPos] = true;
+                        lowKeyConstants[keyPos] = highKeyConstants[keyPos] = matchedFuncExprs.get(exprIndex).getConstVal();
                     } else {
                         couldntFigureOut = true;
                     }
@@ -134,10 +132,10 @@ public class BTreeAccessPath implements IAccessPath {
                     break;
                 }
                 case HIGH_EXCLUSIVE: {
-                    if (hiLimit[keyPos] == null || (hiLimit[keyPos] != null && hiInclusive[keyPos])) {
-                        hiLimit[keyPos] = limit;
-                        hiFilter[keyPos] = matchedFuncExprs.get(exprIndex).getConstVal();
-                        hiInclusive[keyPos] = false;
+                    if (highKeyLimits[keyPos] == null || (highKeyLimits[keyPos] != null && highKeyInclusive[keyPos])) {
+                        highKeyLimits[keyPos] = limit;
+                        highKeyConstants[keyPos] = matchedFuncExprs.get(exprIndex).getConstVal();
+                        highKeyInclusive[keyPos] = false;
                     } else {
                         couldntFigureOut = true;
                         doneWithExprs = true;
@@ -145,10 +143,10 @@ public class BTreeAccessPath implements IAccessPath {
                     break;
                 }
                 case HIGH_INCLUSIVE: {
-                    if (hiLimit[keyPos] == null) {
-                        hiLimit[keyPos] = limit;
-                        hiFilter[keyPos] = matchedFuncExprs.get(exprIndex).getConstVal();
-                        hiInclusive[keyPos] = true;
+                    if (highKeyLimits[keyPos] == null) {
+                        highKeyLimits[keyPos] = limit;
+                        highKeyConstants[keyPos] = matchedFuncExprs.get(exprIndex).getConstVal();
+                        highKeyInclusive[keyPos] = true;
                     } else {
                         couldntFigureOut = true;
                         doneWithExprs = true;
@@ -156,10 +154,10 @@ public class BTreeAccessPath implements IAccessPath {
                     break;
                 }
                 case LOW_EXCLUSIVE: {
-                    if (loLimit[keyPos] == null || (loLimit[keyPos] != null && loInclusive[keyPos])) {
-                        loLimit[keyPos] = limit;
-                        loFilter[keyPos] = matchedFuncExprs.get(exprIndex).getConstVal();
-                        loInclusive[keyPos] = false;
+                    if (lowKeyLimits[keyPos] == null || (lowKeyLimits[keyPos] != null && lowKeyInclusive[keyPos])) {
+                        lowKeyLimits[keyPos] = limit;
+                        lowKeyConstants[keyPos] = matchedFuncExprs.get(exprIndex).getConstVal();
+                        lowKeyInclusive[keyPos] = false;
                     } else {
                         couldntFigureOut = true;
                         doneWithExprs = true;
@@ -167,10 +165,10 @@ public class BTreeAccessPath implements IAccessPath {
                     break;
                 }
                 case LOW_INCLUSIVE: {
-                    if (loLimit[keyPos] == null) {
-                        loLimit[keyPos] = limit;
-                        loFilter[keyPos] = matchedFuncExprs.get(exprIndex).getConstVal();
-                        loInclusive[keyPos] = true;
+                    if (lowKeyLimits[keyPos] == null) {
+                        lowKeyLimits[keyPos] = limit;
+                        lowKeyConstants[keyPos] = matchedFuncExprs.get(exprIndex).getConstVal();
+                        lowKeyInclusive[keyPos] = true;
                     } else {
                         couldntFigureOut = true;
                         doneWithExprs = true;
@@ -195,141 +193,59 @@ public class BTreeAccessPath implements IAccessPath {
         // Rule out the cases unsupported by the current btree search
         // implementation.
         for (int i = 1; i < numKeys; i++) {
-            if (loInclusive[i] != loInclusive[0] || hiInclusive[i] != hiInclusive[0]) {
+            if (lowKeyInclusive[i] != lowKeyInclusive[0] || highKeyInclusive[i] != highKeyInclusive[0]) {
                 return false;
             }
-            if (loLimit[0] == null && loLimit[i] != null || loLimit[0] != null && loLimit[i] == null) {
+            if (lowKeyLimits[0] == null && lowKeyLimits[i] != null || lowKeyLimits[0] != null && lowKeyLimits[i] == null) {
                 return false;
             }
-            if (hiLimit[0] == null && hiLimit[i] != null || hiLimit[0] != null && hiLimit[i] == null) {
+            if (highKeyLimits[0] == null && highKeyLimits[i] != null || highKeyLimits[0] != null && highKeyLimits[i] == null) {
                 return false;
             }
         }
-        if (loLimit[0] == null) {
-            loInclusive[0] = true;
+        if (lowKeyLimits[0] == null) {
+            lowKeyInclusive[0] = true;
         }
-        if (hiLimit[0] == null) {
-            hiInclusive[0] = true;
+        if (highKeyLimits[0] == null) {
+            highKeyInclusive[0] = true;
         }
+
+        ArrayList<Mutable<ILogicalExpression>> secondaryIndexFuncArgs = new ArrayList<Mutable<ILogicalExpression>>();
+        secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(chosenIndex.getIndexName())));
+        secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(FunctionArgumentsConstants.BTREE_INDEX)));
+        secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(datasetDecl.getName())));
 
         ArrayList<Mutable<ILogicalExpression>> keyExprList = new ArrayList<Mutable<ILogicalExpression>>();
         ArrayList<LogicalVariable> keyVarList = new ArrayList<LogicalVariable>();
-        ArrayList<Mutable<ILogicalExpression>> rangeSearchFunArgs = new ArrayList<Mutable<ILogicalExpression>>();
-        rangeSearchFunArgs.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(chosenIndex.getIndexName())));
-        rangeSearchFunArgs.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(FunctionArgumentsConstants.BTREE_INDEX)));
-        rangeSearchFunArgs.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(datasetDecl.getName())));
+        createKeyVarsAndExprs(lowKeyLimits, lowKeyConstants, keyExprList, keyVarList, secondaryIndexFuncArgs, context);
+        createKeyVarsAndExprs(highKeyLimits, highKeyConstants, keyExprList, keyVarList, secondaryIndexFuncArgs, context);
 
-        if (loLimit[0] != null) {
-            Mutable<ILogicalExpression> nkRef = new MutableObject<ILogicalExpression>(new ConstantExpression(
-                    new AsterixConstantValue(new AInt32(numKeys))));
-            rangeSearchFunArgs.add(nkRef);
-            for (int i = 0; i < numKeys; i++) {
-                LogicalVariable lokVar = context.newVar();
-                keyVarList.add(lokVar);
-                keyExprList.add(new MutableObject<ILogicalExpression>(new ConstantExpression(loFilter[i])));
-                Mutable<ILogicalExpression> loRef = new MutableObject<ILogicalExpression>(new VariableReferenceExpression(
-                        lokVar));
-                rangeSearchFunArgs.add(loRef);
-            }
-        } else {
-            Mutable<ILogicalExpression> zeroRef = new MutableObject<ILogicalExpression>(new ConstantExpression(
-                    new AsterixConstantValue(new AInt32(0))));
-            rangeSearchFunArgs.add(zeroRef);
-        }
-
-        if (hiLimit[0] != null) {
-            Mutable<ILogicalExpression> nkRef = new MutableObject<ILogicalExpression>(new ConstantExpression(
-                    new AsterixConstantValue(new AInt32(numKeys))));
-            rangeSearchFunArgs.add(nkRef);
-            for (int i = 0; i < numKeys; i++) {
-                LogicalVariable hikVar = context.newVar();
-                keyVarList.add(hikVar);
-                keyExprList.add(new MutableObject<ILogicalExpression>(new ConstantExpression(hiFilter[i])));
-                Mutable<ILogicalExpression> hiRef = new MutableObject<ILogicalExpression>(new VariableReferenceExpression(
-                        hikVar));
-                rangeSearchFunArgs.add(hiRef);
-            }
-        } else {
-            Mutable<ILogicalExpression> zeroRef = new MutableObject<ILogicalExpression>(new ConstantExpression(
-                    new AsterixConstantValue(new AInt32(0))));
-            rangeSearchFunArgs.add(zeroRef);
-        }
-
-        ILogicalExpression loExpr = loInclusive[0] ? ConstantExpression.TRUE : ConstantExpression.FALSE;
-        rangeSearchFunArgs.add(new MutableObject<ILogicalExpression>(loExpr));
-        ILogicalExpression hiExpr = hiInclusive[0] ? ConstantExpression.TRUE : ConstantExpression.FALSE;
-        rangeSearchFunArgs.add(new MutableObject<ILogicalExpression>(hiExpr));
+        // Set low and high key inclusive for secondary-index search.
+        ILogicalExpression lowKeyExpr = lowKeyInclusive[0] ? ConstantExpression.TRUE : ConstantExpression.FALSE;
+        secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(lowKeyExpr));
+        ILogicalExpression highKeyExpr = highKeyInclusive[0] ? ConstantExpression.TRUE : ConstantExpression.FALSE;
+        secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(highKeyExpr));
 
         AssignOperator assignSearchKeys = new AssignOperator(keyVarList, keyExprList);
         assignSearchKeys.getInputs().add(dataSourceScan.getInputs().get(0));
         assignSearchKeys.setExecutionMode(dataSourceScan.getExecutionMode());
 
-        IFunctionInfo finfo = FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.INDEX_SEARCH);
-        UnnestingFunctionCallExpression rangeSearchFun = new UnnestingFunctionCallExpression(finfo, rangeSearchFunArgs);
+        IFunctionInfo secondaryIndexSearch = FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.INDEX_SEARCH);
+        UnnestingFunctionCallExpression rangeSearchFun = new UnnestingFunctionCallExpression(secondaryIndexSearch, secondaryIndexFuncArgs);
         rangeSearchFun.setReturnsUniqueValues(true);
 
-        List<LogicalVariable> primIdxVarList = dataSourceScan.getVariables();
-        int numPrimaryKeys = DatasetUtils.getPartitioningFunctions(datasetDecl).size();
-
-        UnnestMapOperator primIdxUnnestMap;
-        AqlMetadataProvider mp = (AqlMetadataProvider) context.getMetadataProvider();
-        AqlCompiledMetadataDeclarations metadata = mp.getMetadataDeclarations();
-
-        String itemTypeName = datasetDecl.getItemTypeName();
-        ARecordType itemType = (ARecordType) metadata.findType(itemTypeName);
+        List<LogicalVariable> primaryIndexVars = dataSourceScan.getVariables();
+        UnnestMapOperator primaryIndexUnnestMap;
         boolean isPrimaryIndex = chosenIndex == DatasetUtils.getPrimaryIndex(datasetDecl);
         if (!isPrimaryIndex) {
-            ArrayList<LogicalVariable> secIdxPrimKeysVarList = new ArrayList<LogicalVariable>(numPrimaryKeys);
-            for (int i = 0; i < numPrimaryKeys; i++) {
-                secIdxPrimKeysVarList.add(context.newVar());
-            }
-            ArrayList<LogicalVariable> secIdxUnnestVars = new ArrayList<LogicalVariable>(numKeys
-                    + secIdxPrimKeysVarList.size());
-            for (int i = 0; i < numKeys; i++) {
-                secIdxUnnestVars.add(context.newVar());
-            }
-            secIdxUnnestVars.addAll(secIdxPrimKeysVarList);
-            UnnestMapOperator secIdxUnnest = new UnnestMapOperator(secIdxUnnestVars, new MutableObject<ILogicalExpression>(
-                    rangeSearchFun), secondaryIndexTypes(datasetDecl, chosenIndex, itemType));
-            secIdxUnnest.getInputs().add(new MutableObject<ILogicalOperator>(assignSearchKeys));
-            secIdxUnnest.setExecutionMode(ExecutionMode.PARTITIONED);
-
-            OrderOperator order = new OrderOperator();
-            for (LogicalVariable v : secIdxPrimKeysVarList) {
-                Mutable<ILogicalExpression> vRef = new MutableObject<ILogicalExpression>(new VariableReferenceExpression(v));
-                order.getOrderExpressions().add(
-                        new Pair<IOrder, Mutable<ILogicalExpression>>(OrderOperator.ASC_ORDER, vRef));
-            }
-            order.getInputs().add(new MutableObject<ILogicalOperator>(secIdxUnnest));
-            order.setExecutionMode(ExecutionMode.LOCAL);
-
-            List<Mutable<ILogicalExpression>> argList2 = new ArrayList<Mutable<ILogicalExpression>>();
-            argList2.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(datasetDecl.getName())));
-            argList2.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(FunctionArgumentsConstants.BTREE_INDEX)));
-            argList2.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(datasetDecl.getName())));
-            argList2.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(new AInt32(
-                    numPrimaryKeys)))));
-            for (LogicalVariable v : secIdxPrimKeysVarList) {
-                argList2.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(v)));
-            }
-            argList2.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(new AInt32(
-                    numPrimaryKeys)))));
-            for (LogicalVariable v : secIdxPrimKeysVarList) {
-                argList2.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(v)));
-            }
-            argList2.add(new MutableObject<ILogicalExpression>(ConstantExpression.TRUE));
-            argList2.add(new MutableObject<ILogicalExpression>(ConstantExpression.TRUE));
-            IFunctionInfo finfoSearch2 = FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.INDEX_SEARCH);
-            AbstractFunctionCallExpression searchPrimIdxFun = new ScalarFunctionCallExpression(finfoSearch2, argList2);
-            primIdxUnnestMap = new UnnestMapOperator(primIdxVarList, new MutableObject<ILogicalExpression>(searchPrimIdxFun),
-                    AccessPathUtils.primaryIndexTypes(datasetDecl, itemType));
-            primIdxUnnestMap.getInputs().add(new MutableObject<ILogicalOperator>(order));
+            primaryIndexUnnestMap = createPrimaryIndexUnnestMap(datasetDecl, recordType, primaryIndexVars, chosenIndex,
+                    rangeSearchFun, assignSearchKeys, context);
         } else {
-            primIdxUnnestMap = new UnnestMapOperator(primIdxVarList, new MutableObject<ILogicalExpression>(rangeSearchFun),
-                    AccessPathUtils.primaryIndexTypes(datasetDecl, itemType));
-            primIdxUnnestMap.getInputs().add(new MutableObject<ILogicalOperator>(assignSearchKeys));
+            primaryIndexUnnestMap = new UnnestMapOperator(primaryIndexVars, new MutableObject<ILogicalExpression>(rangeSearchFun),
+                    AccessPathUtils.primaryIndexTypes(datasetDecl, recordType));
+            primaryIndexUnnestMap.getInputs().add(new MutableObject<ILogicalOperator>(assignSearchKeys));
         }
-        primIdxUnnestMap.setExecutionMode(ExecutionMode.PARTITIONED);
+        primaryIndexUnnestMap.setExecutionMode(ExecutionMode.PARTITIONED);
 
         List<Mutable<ILogicalExpression>> remainingFuncExprs = new ArrayList<Mutable<ILogicalExpression>>();
         getNewSelectCondition(select, replacedFuncExprs, remainingFuncExprs);
@@ -337,25 +253,117 @@ public class BTreeAccessPath implements IAccessPath {
             ILogicalExpression pulledCond = createSelectCondition(remainingFuncExprs);
             SelectOperator selectRest = new SelectOperator(new MutableObject<ILogicalExpression>(pulledCond));            
             if (assign != null) {
-                dataSourceScanRef.setValue(primIdxUnnestMap);
+                dataSourceScanRef.setValue(primaryIndexUnnestMap);
                 selectRest.getInputs().add(new MutableObject<ILogicalOperator>(assign));
             } else {
-                selectRest.getInputs().add(new MutableObject<ILogicalOperator>(primIdxUnnestMap));
+                selectRest.getInputs().add(new MutableObject<ILogicalOperator>(primaryIndexUnnestMap));
             }
             selectRest.setExecutionMode(((AbstractLogicalOperator) selectRef.getValue()).getExecutionMode());
             selectRef.setValue(selectRest);
         } else {
-            primIdxUnnestMap.setExecutionMode(ExecutionMode.PARTITIONED);
+            primaryIndexUnnestMap.setExecutionMode(ExecutionMode.PARTITIONED);
             if (assign != null) {
-                dataSourceScanRef.setValue(primIdxUnnestMap);
+                dataSourceScanRef.setValue(primaryIndexUnnestMap);
                 selectRef.setValue(assign);
             } else {
-                selectRef.setValue(primIdxUnnestMap);
+                selectRef.setValue(primaryIndexUnnestMap);
             }
         }
         return true;
     }
 
+    private UnnestMapOperator createPrimaryIndexUnnestMap(AqlCompiledDatasetDecl datasetDecl, ARecordType recordType,
+            List<LogicalVariable> primaryIndexVars, AqlCompiledIndexDecl secondaryIndex, UnnestingFunctionCallExpression rangeSearchFun,
+            AssignOperator assignSearchKeys, IOptimizationContext context) throws AlgebricksException {
+        int numPrimaryKeys = DatasetUtils.getPartitioningFunctions(datasetDecl).size();
+        int numSecondaryKeys = secondaryIndex.getFieldExprs().size();
+        // List of variables for the primary keys coming out of a secondary-index search.
+        ArrayList<LogicalVariable> secondaryIndexPrimaryKeys = new ArrayList<LogicalVariable>(numPrimaryKeys);
+        for (int i = 0; i < numPrimaryKeys; i++) {
+            secondaryIndexPrimaryKeys.add(context.newVar());
+        }
+        // List of variables coming out of the secondary-index search. It contains the secondary keys, and the primary keys.
+        ArrayList<LogicalVariable> secondaryIndexUnnestVars = new ArrayList<LogicalVariable>(numSecondaryKeys
+                + secondaryIndexPrimaryKeys.size());
+        // Add one variable per secondary-index key.
+        for (int i = 0; i < numSecondaryKeys; i++) {
+            secondaryIndexUnnestVars.add(context.newVar());
+        }
+        // Add the primary keys after the secondary keys.
+        secondaryIndexUnnestVars.addAll(secondaryIndexPrimaryKeys);
+        // This is the operator that the physical rewrite will be looking for. It contains an unnest function that has all necessary arguments to determine
+        // which index to use, which variables contain the index-search keys, what is the original dataset, etc.
+        UnnestMapOperator secondaryIndexUnnestOp = new UnnestMapOperator(secondaryIndexUnnestVars, new MutableObject<ILogicalExpression>(
+                rangeSearchFun), secondaryIndexTypes(datasetDecl, secondaryIndex, recordType));
+        secondaryIndexUnnestOp.getInputs().add(new MutableObject<ILogicalOperator>(assignSearchKeys));
+        secondaryIndexUnnestOp.setExecutionMode(ExecutionMode.PARTITIONED);
+
+        // Add a sort on the primary-index keys before searching the primary index.
+        OrderOperator order = new OrderOperator();
+        for (LogicalVariable v : secondaryIndexPrimaryKeys) {
+            Mutable<ILogicalExpression> vRef = new MutableObject<ILogicalExpression>(new VariableReferenceExpression(v));
+            order.getOrderExpressions().add(
+                    new Pair<IOrder, Mutable<ILogicalExpression>>(OrderOperator.ASC_ORDER, vRef));
+        }
+        // The secondary-index search feeds into the sort.
+        order.getInputs().add(new MutableObject<ILogicalOperator>(secondaryIndexUnnestOp));
+        order.setExecutionMode(ExecutionMode.LOCAL);
+
+        // List of arguments to be passed into the primary index unnest (these arguments will be consumed by the corresponding physical rewrite rule). 
+        // The arguments are: the name of the primary index, the type of index, the name of the dataset, 
+        // the number of primary-index keys, and the variable references corresponding to the primary-index search keys.
+        List<Mutable<ILogicalExpression>> primaryIndexFuncArgs = new ArrayList<Mutable<ILogicalExpression>>();
+        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(datasetDecl.getName())));
+        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(FunctionArgumentsConstants.BTREE_INDEX)));
+        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(datasetDecl.getName())));
+        // Add the variables corresponding to the primary-index search keys (low key).
+        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(new AInt32(
+                numPrimaryKeys)))));
+        for (LogicalVariable v : secondaryIndexPrimaryKeys) {
+            primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(v)));
+        }
+        // Add the variables corresponding to the primary-index search keys (high key).
+        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(new AInt32(
+                numPrimaryKeys)))));
+        for (LogicalVariable v : secondaryIndexPrimaryKeys) {
+            primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(v)));
+        }
+        // Low key inclusive, and high key inclusive are both true, meaning the search interval is closed.
+        // Since the low key and high key are also the same, we have a point lookup.
+        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(ConstantExpression.TRUE));
+        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(ConstantExpression.TRUE));
+        IFunctionInfo primaryIndexSearch = FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.INDEX_SEARCH);
+        AbstractFunctionCallExpression searchPrimIdxFun = new ScalarFunctionCallExpression(primaryIndexSearch, primaryIndexFuncArgs);
+        UnnestMapOperator primaryIndexUnnestMap = new UnnestMapOperator(primaryIndexVars, new MutableObject<ILogicalExpression>(searchPrimIdxFun),
+                AccessPathUtils.primaryIndexTypes(datasetDecl, recordType));
+        // Fed by the order operator.
+        primaryIndexUnnestMap.getInputs().add(new MutableObject<ILogicalOperator>(order));
+        return primaryIndexUnnestMap;
+    }
+    
+    private void createKeyVarsAndExprs(LimitType[] keyLimits, IAlgebricksConstantValue[] keyConstants,
+            ArrayList<Mutable<ILogicalExpression>> keyExprList, ArrayList<LogicalVariable> keyVarList,
+            ArrayList<Mutable<ILogicalExpression>> secondaryIndexFuncArgs, IOptimizationContext context) {
+        int numKeys = keyLimits.length;
+        if (keyLimits[0] != null) {
+            Mutable<ILogicalExpression> numKeysRef = new MutableObject<ILogicalExpression>(new ConstantExpression(
+                    new AsterixConstantValue(new AInt32(numKeys))));
+            secondaryIndexFuncArgs.add(numKeysRef);
+            for (int i = 0; i < numKeys; i++) {
+                LogicalVariable lowKeyVar = context.newVar();
+                keyVarList.add(lowKeyVar);
+                keyExprList.add(new MutableObject<ILogicalExpression>(new ConstantExpression(keyConstants[i])));
+                Mutable<ILogicalExpression> lowKeyVarRef = new MutableObject<ILogicalExpression>(
+                        new VariableReferenceExpression(lowKeyVar));
+                secondaryIndexFuncArgs.add(lowKeyVarRef);
+            }
+        } else {
+            Mutable<ILogicalExpression> zeroRef = new MutableObject<ILogicalExpression>(new ConstantExpression(
+                    new AsterixConstantValue(new AInt32(0))));
+            secondaryIndexFuncArgs.add(zeroRef);
+        }
+    }
+    
     private void getNewSelectCondition(SelectOperator select, Set<ILogicalExpression> replacedFuncExprs, List<Mutable<ILogicalExpression>> remainingFuncExprs) {
         remainingFuncExprs.clear();
         if (replacedFuncExprs.isEmpty()) {
@@ -436,14 +444,18 @@ public class BTreeAccessPath implements IAccessPath {
         return limit;
     }
     
-    private static List<Object> secondaryIndexTypes(AqlCompiledDatasetDecl ddecl, AqlCompiledIndexDecl acid,
-            ARecordType itemType) throws AlgebricksException {
+    /**
+     * @return A list of types corresponding to fields produced by the given
+     *         index when searched.
+     */
+    private static List<Object> secondaryIndexTypes(AqlCompiledDatasetDecl datasetDecl, AqlCompiledIndexDecl index,
+            ARecordType recordType) throws AlgebricksException {
         List<Object> types = new ArrayList<Object>();
-        for (String sk : acid.getFieldExprs()) {
-            types.add(AqlCompiledIndexDecl.keyFieldType(sk, itemType));
+        for (String sk : index.getFieldExprs()) {
+            types.add(AqlCompiledIndexDecl.keyFieldType(sk, recordType));
         }
         for (Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType> t : DatasetUtils
-                .getPartitioningFunctions(ddecl)) {
+                .getPartitioningFunctions(datasetDecl)) {
             types.add(t.third);
         }
         return types;

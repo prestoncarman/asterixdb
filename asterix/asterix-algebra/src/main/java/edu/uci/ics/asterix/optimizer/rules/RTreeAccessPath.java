@@ -86,16 +86,14 @@ public class RTreeAccessPath implements IAccessPath {
         
         DataSourceScanOperator dataSourceScan = (DataSourceScanOperator) dataSourceScanRef.getValue();
         // List of arguments to be passed into an unnest. This unnest will rewritten in the appropriate physical rewrite rule.
-        // This logical rewrite rule, and the corresponding physical rewrite have a "contract" as to what does into these arguments. 
-        ArrayList<Mutable<ILogicalExpression>> rangeSearchFunArgs = new ArrayList<Mutable<ILogicalExpression>>();
-        // Name of chosen index.
-        rangeSearchFunArgs.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(chosenIndex.getIndexName())));
-        // Type of chosen index.
-        rangeSearchFunArgs.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(FunctionArgumentsConstants.RTREE_INDEX)));
-        // Name of dataset.
-        rangeSearchFunArgs.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(datasetDecl.getName())));
-        // Number of keys.
-        rangeSearchFunArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(
+        // This logical rewrite rule, and the corresponding physical rewrite have a contract as to what goes into these arguments.
+        // Here, we put the name of the chosen index, the type of index, the name of the dataset, 
+        // the number of secondary-index keys, and the variable references corresponding to the secondary-index search keys.
+        ArrayList<Mutable<ILogicalExpression>> secondaryIndexFuncArgs = new ArrayList<Mutable<ILogicalExpression>>();
+        secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(chosenIndex.getIndexName())));
+        secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(FunctionArgumentsConstants.RTREE_INDEX)));
+        secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(datasetDecl.getName())));
+        secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(
                 new AInt32(numKeys)))));
         // A spatial object is serialized in the constant of the func expr we are optimizing.
         // The R-Tree expects as input an MBR represented with 1 field per dimension. 
@@ -121,11 +119,10 @@ public class RTreeAccessPath implements IAccessPath {
             LogicalVariable keyVar = context.newVar();
             keyVarList.add(keyVar);
             keyExprList.add(new MutableObject<ILogicalExpression>(createMBR));
-            // TODO: Still not sure what this one does exactly...
+            // Add variable reference to list of arguments for the unnest (which is "consumed" by the physical rewrite rule).
             Mutable<ILogicalExpression> keyVarRef = new MutableObject<ILogicalExpression>(new VariableReferenceExpression(
                     keyVar));
-            // Add variable reference to list of arguments for the unnest (which is "consumed" by the physical rewrite rule).
-            rangeSearchFunArgs.add(keyVarRef);
+            secondaryIndexFuncArgs.add(keyVarRef);
         }
 
         // Assign operator that "extracts" the MBR fields from the func-expr constant into a tuple.
@@ -136,8 +133,8 @@ public class RTreeAccessPath implements IAccessPath {
 
         // This is the logical representation of our RTree search. The actual operator will be plugged in later during physical rewrite.
         // An index search is expressed logically as an unnest over an index-search function.
-        IFunctionInfo finfo = FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.INDEX_SEARCH);
-        UnnestingFunctionCallExpression rangeSearchFun = new UnnestingFunctionCallExpression(finfo, rangeSearchFunArgs);
+        IFunctionInfo secondaryIndexSearch = FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.INDEX_SEARCH);
+        UnnestingFunctionCallExpression rangeSearchFun = new UnnestingFunctionCallExpression(secondaryIndexSearch, secondaryIndexFuncArgs);
         rangeSearchFun.setReturnsUniqueValues(true);
 
         List<LogicalVariable> primaryIndexVars = dataSourceScan.getVariables();
@@ -160,7 +157,7 @@ public class RTreeAccessPath implements IAccessPath {
         // This is the operator that the physical rewrite will be looking for. It contains an unnest function that has all necessary arguments to determine
         // which index to use, which variables contain the index-search keys, what is the original dataset, etc.
         UnnestMapOperator secondaryIndexUnnestOp = new UnnestMapOperator(secondaryIndexUnnestVars, new MutableObject<ILogicalExpression>(
-                rangeSearchFun), secondaryIndexTypes(datasetDecl, chosenIndex, recordType, numKeys));
+                rangeSearchFun), secondaryIndexTypes(datasetDecl, chosenIndex, recordType));
         // The unnest op is fed by the op that assigns the search-key fields.
         secondaryIndexUnnestOp.getInputs().add(new MutableObject<ILogicalOperator>(assignSearchKeys));
         secondaryIndexUnnestOp.setExecutionMode(ExecutionMode.PARTITIONED);
@@ -176,39 +173,51 @@ public class RTreeAccessPath implements IAccessPath {
         order.getInputs().add(new MutableObject<ILogicalOperator>(secondaryIndexUnnestOp));
         order.setExecutionMode(ExecutionMode.LOCAL);
         
-        // Prepare 
-        List<Mutable<ILogicalExpression>> argList2 = new ArrayList<Mutable<ILogicalExpression>>();
-        argList2.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(datasetDecl.getName())));
-        argList2.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(FunctionArgumentsConstants.BTREE_INDEX)));
-        argList2.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(datasetDecl.getName())));
-        argList2.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(new AInt32(
+        // List of arguments to be passed into the primary index unnest (these arguments will be consumed by the corresponding physical rewrite rule). 
+        // The arguments are: the name of the primary index, the type of index, the name of the dataset, 
+        // the number of primary-index keys, and the variable references corresponding to the primary-index search keys.
+        List<Mutable<ILogicalExpression>> primaryIndexFuncArgs = new ArrayList<Mutable<ILogicalExpression>>();
+        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(datasetDecl.getName())));
+        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(FunctionArgumentsConstants.BTREE_INDEX)));
+        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(datasetDecl.getName())));
+        // Add the variables corresponding to the primary-index search keys (low key).
+        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(new AInt32(
                 numPrimaryKeys)))));
-        for (LogicalVariable v : secondaryIndexPrimaryKeys) {
-            argList2.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(v)));
+        for (LogicalVariable var : secondaryIndexPrimaryKeys) {
+            primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(var)));
         }
-        argList2.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(new AInt32(
+        // Add the variables corresponding to the primary-index search keys (high key).
+        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(new AInt32(
                 numPrimaryKeys)))));
-        for (LogicalVariable v : secondaryIndexPrimaryKeys) {
-            argList2.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(v)));
+        for (LogicalVariable var : secondaryIndexPrimaryKeys) {
+            primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(var)));
         }
-        argList2.add(new MutableObject<ILogicalExpression>(ConstantExpression.TRUE));
-        argList2.add(new MutableObject<ILogicalExpression>(ConstantExpression.TRUE));
-        IFunctionInfo finfoSearch2 = FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.INDEX_SEARCH);
-        AbstractFunctionCallExpression searchPrimIdxFun = new ScalarFunctionCallExpression(finfoSearch2, argList2);
+        // Low key inclusive, and high key inclusive are both true, meaning the search interval is closed.
+        // Since the low key and high key are also the same, we have a point lookup.
+        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(ConstantExpression.TRUE));
+        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(ConstantExpression.TRUE));
+        IFunctionInfo primaryIndexSearch = FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.INDEX_SEARCH);
+        AbstractFunctionCallExpression searchPrimIdxFun = new ScalarFunctionCallExpression(primaryIndexSearch, primaryIndexFuncArgs);
         UnnestMapOperator primaryIndexUnnestMap = new UnnestMapOperator(primaryIndexVars, new MutableObject<ILogicalExpression>(searchPrimIdxFun),
                 AccessPathUtils.primaryIndexTypes(datasetDecl, recordType));
+        // Fed by the order operator.
         primaryIndexUnnestMap.getInputs().add(new MutableObject<ILogicalOperator>(order));
-
         primaryIndexUnnestMap.setExecutionMode(ExecutionMode.PARTITIONED);
+        // Replace the datasource scan with the new plan rooted at primaryIndexUnnestMap.
         dataSourceScanRef.setValue(primaryIndexUnnestMap);
-        
         return true;
     }
     
+    /**
+     * @return A list of types corresponding to fields produced by the given
+     *         index when searched.
+     */
     private static List<Object> secondaryIndexTypes(AqlCompiledDatasetDecl datasetDecl, AqlCompiledIndexDecl index,
-            ARecordType itemType, int numKeys) throws AlgebricksException {
+            ARecordType itemType) throws AlgebricksException {
         List<Object> types = new ArrayList<Object>();
         IAType keyType = AqlCompiledIndexDecl.keyFieldType(index.getFieldExprs().get(0), itemType);
+        int numDimensions = NonTaggedFormatUtil.getNumDimensions(keyType.getTypeTag());
+        int numKeys = numDimensions * 2;
         IAType nestedKeyType = NonTaggedFormatUtil.getNestedSpatialType(keyType.getTypeTag());
         for (int i = 0; i < numKeys; i++) {
             types.add(nestedKeyType);
