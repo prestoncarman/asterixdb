@@ -1,4 +1,4 @@
-package edu.uci.ics.asterix.optimizer.rules;
+package edu.uci.ics.asterix.optimizer.rules.am;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -19,6 +19,7 @@ import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.IAType;
+import edu.uci.ics.asterix.optimizer.rules.OptimizableFuncExpr;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IOptimizationContext;
@@ -44,7 +45,7 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluatorFactor
 import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.utils.Triple;
 
-public class BTreeAccessPath implements IAccessPath {
+public class BTreeAccessMethod implements IAccessMethod {
 
     // Describes whether a search predicate is an open/closed interval.
     private enum LimitType {
@@ -62,7 +63,7 @@ public class BTreeAccessPath implements IAccessPath {
         funcIdents.add(AlgebricksBuiltinFunctions.NEQ);
     }
     
-    public static BTreeAccessPath INSTANCE = new BTreeAccessPath();
+    public static BTreeAccessMethod INSTANCE = new BTreeAccessMethod();
     
     @Override
     public List<FunctionIdentifier> getOptimizableFunctions() {
@@ -70,8 +71,8 @@ public class BTreeAccessPath implements IAccessPath {
     }
     
     @Override
-    public boolean analyzeFuncExprArgs(AbstractFunctionCallExpression funcExpr, AccessPathAnalysisContext analysisCtx) {
-        return AccessPathUtils.analyzeFuncExprArgsForOneConstAndVar(funcExpr, analysisCtx);
+    public boolean analyzeFuncExprArgs(AbstractFunctionCallExpression funcExpr, AccessMethodAnalysisContext analysisCtx) {
+        return AccessMethodUtils.analyzeFuncExprArgsForOneConstAndVar(funcExpr, analysisCtx);
     }
 
     @Override
@@ -88,7 +89,7 @@ public class BTreeAccessPath implements IAccessPath {
     @Override
     public boolean applyPlanTransformation(Mutable<ILogicalOperator> selectRef, Mutable<ILogicalOperator> assignRef,
             Mutable<ILogicalOperator> dataSourceScanRef, AqlCompiledDatasetDecl datasetDecl, ARecordType recordType,
-            AqlCompiledIndexDecl chosenIndex, AccessPathAnalysisContext analysisCtx, IOptimizationContext context) 
+            AqlCompiledIndexDecl chosenIndex, AccessMethodAnalysisContext analysisCtx, IOptimizationContext context) 
                     throws AlgebricksException {
         SelectOperator select = (SelectOperator) selectRef.getValue();
         DataSourceScanOperator dataSourceScan = (DataSourceScanOperator) dataSourceScanRef.getValue();
@@ -208,9 +209,9 @@ public class BTreeAccessPath implements IAccessPath {
         }
 
         ArrayList<Mutable<ILogicalExpression>> secondaryIndexFuncArgs = new ArrayList<Mutable<ILogicalExpression>>();
-        secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(chosenIndex.getIndexName())));
-        secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(FunctionArgumentsConstants.BTREE_INDEX)));
-        secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(datasetDecl.getName())));
+        secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(chosenIndex.getIndexName())));
+        secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(FunctionArgumentsConstants.BTREE_INDEX)));
+        secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(datasetDecl.getName())));
 
         ArrayList<Mutable<ILogicalExpression>> keyExprList = new ArrayList<Mutable<ILogicalExpression>>();
         ArrayList<LogicalVariable> keyVarList = new ArrayList<LogicalVariable>();
@@ -237,12 +238,12 @@ public class BTreeAccessPath implements IAccessPath {
         if (!isPrimaryIndex) {
             List<Object> secondaryIndexTypes = getSecondaryIndexTypes(datasetDecl, chosenIndex, recordType);
             int numSecondaryKeys = chosenIndex.getFieldExprs().size();
-            primaryIndexUnnestMap = AccessPathUtils.createPrimaryIndexUnnestMap(datasetDecl, recordType,
+            primaryIndexUnnestMap = AccessMethodUtils.createPrimaryIndexUnnestMap(datasetDecl, recordType,
                     primaryIndexVars, chosenIndex, numSecondaryKeys, secondaryIndexTypes, rangeSearchFun,
                     assignSearchKeys, context, true);
         } else {
             primaryIndexUnnestMap = new UnnestMapOperator(primaryIndexVars, new MutableObject<ILogicalExpression>(rangeSearchFun),
-                    AccessPathUtils.primaryIndexTypes(datasetDecl, recordType));
+                    AccessMethodUtils.primaryIndexTypes(datasetDecl, recordType));
             primaryIndexUnnestMap.getInputs().add(new MutableObject<ILogicalOperator>(assignSearchKeys));
         }
         primaryIndexUnnestMap.setExecutionMode(ExecutionMode.PARTITIONED);

@@ -1,4 +1,4 @@
-package edu.uci.ics.asterix.optimizer.rules;
+package edu.uci.ics.asterix.optimizer.rules.am;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -36,14 +36,14 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluatorFactor
 import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.utils.Triple;
 
-public class RTreeAccessPath implements IAccessPath {
+public class RTreeAccessMethod implements IAccessMethod {
 
     private static List<FunctionIdentifier> funcIdents = new ArrayList<FunctionIdentifier>();
     static {
         funcIdents.add(AsterixBuiltinFunctions.SPATIAL_INTERSECT);
     }
     
-    public static RTreeAccessPath INSTANCE = new RTreeAccessPath();
+    public static RTreeAccessMethod INSTANCE = new RTreeAccessMethod();
     
     @Override
     public List<FunctionIdentifier> getOptimizableFunctions() {
@@ -51,8 +51,8 @@ public class RTreeAccessPath implements IAccessPath {
     }
 
     @Override
-    public boolean analyzeFuncExprArgs(AbstractFunctionCallExpression funcExpr, AccessPathAnalysisContext analysisCtx) {
-        return AccessPathUtils.analyzeFuncExprArgsForOneConstAndVar(funcExpr, analysisCtx);
+    public boolean analyzeFuncExprArgs(AbstractFunctionCallExpression funcExpr, AccessMethodAnalysisContext analysisCtx) {
+        return AccessMethodUtils.analyzeFuncExprArgsForOneConstAndVar(funcExpr, analysisCtx);
     }
 
     @Override
@@ -68,7 +68,7 @@ public class RTreeAccessPath implements IAccessPath {
     @Override
     public boolean applyPlanTransformation(Mutable<ILogicalOperator> selectRef, Mutable<ILogicalOperator> assignRef,
             Mutable<ILogicalOperator> dataSourceScanRef, AqlCompiledDatasetDecl datasetDecl, ARecordType recordType,
-            AqlCompiledIndexDecl chosenIndex, AccessPathAnalysisContext analysisCtx, IOptimizationContext context)
+            AqlCompiledIndexDecl chosenIndex, AccessMethodAnalysisContext analysisCtx, IOptimizationContext context)
             throws AlgebricksException {
         // Get the number of dimensions corresponding to the field indexed by
         // chosenIndex.
@@ -87,9 +87,9 @@ public class RTreeAccessPath implements IAccessPath {
         // Here, we put the name of the chosen index, the type of index, the name of the dataset, 
         // the number of secondary-index keys, and the variable references corresponding to the secondary-index search keys.
         ArrayList<Mutable<ILogicalExpression>> secondaryIndexFuncArgs = new ArrayList<Mutable<ILogicalExpression>>();
-        secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(chosenIndex.getIndexName())));
-        secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(FunctionArgumentsConstants.RTREE_INDEX)));
-        secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(datasetDecl.getName())));
+        secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(chosenIndex.getIndexName())));
+        secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(FunctionArgumentsConstants.RTREE_INDEX)));
+        secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(datasetDecl.getName())));
         secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(
                 new AInt32(numSecondaryKeys)))));
         // A spatial object is serialized in the constant of the func expr we are optimizing.
@@ -136,7 +136,7 @@ public class RTreeAccessPath implements IAccessPath {
 
         List<LogicalVariable> primaryIndexVars = dataSourceScan.getVariables();
         List<Object> secondaryIndexTypes = getSecondaryIndexTypes(datasetDecl, chosenIndex, recordType);
-        UnnestMapOperator primaryIndexUnnestMap = AccessPathUtils.createPrimaryIndexUnnestMap(datasetDecl, recordType,
+        UnnestMapOperator primaryIndexUnnestMap = AccessMethodUtils.createPrimaryIndexUnnestMap(datasetDecl, recordType,
                 primaryIndexVars, chosenIndex, numSecondaryKeys, secondaryIndexTypes, rangeSearchFun, assignSearchKeys,
                 context, true);
         primaryIndexUnnestMap.setExecutionMode(ExecutionMode.PARTITIONED);

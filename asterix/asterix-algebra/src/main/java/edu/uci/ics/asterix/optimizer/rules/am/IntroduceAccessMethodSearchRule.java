@@ -1,4 +1,4 @@
-package edu.uci.ics.asterix.optimizer.rules;
+package edu.uci.ics.asterix.optimizer.rules.am;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -66,7 +66,7 @@ import edu.uci.ics.hyracks.algebricks.core.utils.Pair;
  * 
  */
 // TODO: Rename this to IntroduceIndexSearchRule because secondary inverted indexes may also apply.
-public class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteRule {
+public class IntroduceAccessMethodSearchRule implements IAlgebraicRewriteRule {
 
     
 	// Operators representing the pattern to be matched:
@@ -88,21 +88,21 @@ public class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteRule {
 	protected ARecordType recordType = null;
 	protected AqlCompiledDatasetDecl datasetDecl = null;
 	
-	protected static Map<FunctionIdentifier, List<IAccessPath>> accessPaths = new HashMap<FunctionIdentifier, List<IAccessPath>>();
+	protected static Map<FunctionIdentifier, List<IAccessMethod>> accessMethods = new HashMap<FunctionIdentifier, List<IAccessMethod>>();
 	static {
-	    registerAccessPath(BTreeAccessPath.INSTANCE);
-	    registerAccessPath(RTreeAccessPath.INSTANCE);
+	    registerAccessMethod(BTreeAccessMethod.INSTANCE);
+	    registerAccessMethod(RTreeAccessMethod.INSTANCE);
 	}
 	
-	public static void registerAccessPath(IAccessPath accessPath) {
-	    List<FunctionIdentifier> funcs = accessPath.getOptimizableFunctions();
+	public static void registerAccessMethod(IAccessMethod accessMethod) {
+	    List<FunctionIdentifier> funcs = accessMethod.getOptimizableFunctions();
 	    for (FunctionIdentifier funcIdent : funcs) {
-	        List<IAccessPath> l = accessPaths.get(funcIdent);
+	        List<IAccessMethod> l = accessMethods.get(funcIdent);
 	        if (l == null) {
-	            l = new ArrayList<IAccessPath>();
-	            accessPaths.put(funcIdent, l);
+	            l = new ArrayList<IAccessMethod>();
+	            accessMethods.put(funcIdent, l);
 	        }
-	        l.add(accessPath);
+	        l.add(accessMethod);
 	    }
 	}
 	
@@ -119,8 +119,8 @@ public class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteRule {
         }
         
         // Analyze select condition.
-        Map<IAccessPath, AccessPathAnalysisContext> analyzedAccPaths = new HashMap<IAccessPath, AccessPathAnalysisContext>();
-        if (!analyzeSelectCondition(selectCond, analyzedAccPaths)) {
+        Map<IAccessMethod, AccessMethodAnalysisContext> analyzedAMs = new HashMap<IAccessMethod, AccessMethodAnalysisContext>();
+        if (!analyzeSelectCondition(selectCond, analyzedAMs)) {
             return false;
         }
 
@@ -131,29 +131,29 @@ public class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteRule {
         
         // The assign may be null if there is only a filter on the primary index key.
         List<LogicalVariable> varList = (assign != null) ? assign.getVariables() : dataSourceScan.getVariables();
-        Iterator<Map.Entry<IAccessPath, AccessPathAnalysisContext>> accPathIt = analyzedAccPaths.entrySet().iterator();
-        // Check applicability of indexes by access path type.
-        while (accPathIt.hasNext()) {
-            Map.Entry<IAccessPath, AccessPathAnalysisContext> entry = accPathIt.next();
-            AccessPathAnalysisContext accPathCtx = entry.getValue();
-            // For the current access path type, map variables from the assign op to applicable indexes.
-            fillAllIndexExprs(varList, accPathCtx);
-            pruneIndexCandidates(entry.getKey(), accPathCtx);
-            // Remove access paths for which there are definitely no applicable indexes.
+        Iterator<Map.Entry<IAccessMethod, AccessMethodAnalysisContext>> amIt = analyzedAMs.entrySet().iterator();
+        // Check applicability of indexes by access method type.
+        while (amIt.hasNext()) {
+            Map.Entry<IAccessMethod, AccessMethodAnalysisContext> entry = amIt.next();
+            AccessMethodAnalysisContext amCtx = entry.getValue();
+            // For the current access method type, map variables from the assign op to applicable indexes.
+            fillAllIndexExprs(varList, amCtx);
+            pruneIndexCandidates(entry.getKey(), amCtx);
+            // Remove access methods for which there are definitely no applicable indexes.
             if (entry.getValue().indexExprs.isEmpty()) {
-                accPathIt.remove();
+                amIt.remove();
             }
         }
         
         // Choose index to be applied.
-        Pair<IAccessPath, AqlCompiledIndexDecl> chosenIndex = chooseIndex(analyzedAccPaths);
+        Pair<IAccessMethod, AqlCompiledIndexDecl> chosenIndex = chooseIndex(analyzedAMs);
         if (chosenIndex == null) {
             context.addToDontApplySet(this, select);
             return false;
         }
         
         // Apply plan transformation using chosen index.
-        AccessPathAnalysisContext analysisCtx = analyzedAccPaths.get(chosenIndex.first);
+        AccessMethodAnalysisContext analysisCtx = analyzedAMs.get(chosenIndex.first);
         boolean res = chosenIndex.first.applyPlanTransformation(selectRef, assignRef, dataSourceScanRef,
                 datasetDecl, recordType, chosenIndex.second, analysisCtx, context);
         if (res) {
@@ -171,23 +171,23 @@ public class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteRule {
      * @param indexExprs
      * @return
      */
-    protected Pair<IAccessPath, AqlCompiledIndexDecl> chooseIndex(
-            Map<IAccessPath, AccessPathAnalysisContext> analyzedAccPaths) {
-        Iterator<Map.Entry<IAccessPath, AccessPathAnalysisContext>> accPathIt = analyzedAccPaths.entrySet().iterator();
-        while (accPathIt.hasNext()) {
-            Map.Entry<IAccessPath, AccessPathAnalysisContext> accPathEntry = accPathIt.next();
-            AccessPathAnalysisContext analysisCtx = accPathEntry.getValue();
+    protected Pair<IAccessMethod, AqlCompiledIndexDecl> chooseIndex(
+            Map<IAccessMethod, AccessMethodAnalysisContext> analyzedAMs) {
+        Iterator<Map.Entry<IAccessMethod, AccessMethodAnalysisContext>> amIt = analyzedAMs.entrySet().iterator();
+        while (amIt.hasNext()) {
+            Map.Entry<IAccessMethod, AccessMethodAnalysisContext> amEntry = amIt.next();
+            AccessMethodAnalysisContext analysisCtx = amEntry.getValue();
             Iterator<Map.Entry<AqlCompiledIndexDecl, List<Integer>>> indexIt = analysisCtx.indexExprs.entrySet().iterator();
             if (indexIt.hasNext()) {
                 Map.Entry<AqlCompiledIndexDecl, List<Integer>> indexEntry = indexIt.next();
-                return new Pair<IAccessPath, AqlCompiledIndexDecl>(accPathEntry.getKey(), indexEntry.getKey());
+                return new Pair<IAccessMethod, AqlCompiledIndexDecl>(amEntry.getKey(), indexEntry.getKey());
             }
         }
         return null;
     }
     
     /**
-     * Removes irrelevant access path candidates, based on whether the
+     * Removes irrelevant access methods candidates, based on whether the
      * expressions in the query match those in the index. For example, some
      * index may require all its expressions to be matched, and some indexes may
      * only require a match on a prefix of fields to be applicable. This methods
@@ -195,7 +195,7 @@ public class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteRule {
      * applicable according to the expressions involved.
      * 
      */
-    public void pruneIndexCandidates(IAccessPath accessPath, AccessPathAnalysisContext analysisCtx) {
+    public void pruneIndexCandidates(IAccessMethod accessMethod, AccessMethodAnalysisContext analysisCtx) {
         Iterator<Map.Entry<AqlCompiledIndexDecl, List<Integer>>> it = analysisCtx.indexExprs.entrySet().iterator();
         while (it.hasNext()) {
             Map.Entry<AqlCompiledIndexDecl, List<Integer>> entry = it.next();
@@ -220,13 +220,13 @@ public class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteRule {
                     break;
                 }                
             }
-            // If the access path requires all exprs to be matched but they are not, remove this candidate.
-            if (!allUsed && accessPath.matchAllIndexExprs()) {
+            // If the access method requires all exprs to be matched but they are not, remove this candidate.
+            if (!allUsed && accessMethod.matchAllIndexExprs()) {
                 it.remove();
                 return;
             }
             // A prefix of the index exprs may have been matched.
-            if (lastFieldMatched < 0 && accessPath.matchPrefixIndexExprs()) {
+            if (lastFieldMatched < 0 && accessMethod.matchPrefixIndexExprs()) {
                 it.remove();
                 return;
             }
@@ -234,62 +234,62 @@ public class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteRule {
     }
     
     /**
-     * Analyzes the given selection condition, filling analyzedAccPaths with applicable access path types.
+     * Analyzes the given selection condition, filling analyzedAMs with applicable access method types.
      * At this point we are not yet consulting the metadata whether an actual index exists or not.
      * 
      * @param cond
-     * @param analyzedAccPaths
+     * @param analyzedAMs
      * @return
      */
-    protected boolean analyzeSelectCondition(ILogicalExpression cond, Map<IAccessPath, AccessPathAnalysisContext> analyzedAccPaths) {
+    protected boolean analyzeSelectCondition(ILogicalExpression cond, Map<IAccessMethod, AccessMethodAnalysisContext> analyzedAMs) {
         AbstractFunctionCallExpression funcExpr = (AbstractFunctionCallExpression) cond;
-        boolean found = analyzeFunctionExpr(funcExpr, analyzedAccPaths);
+        boolean found = analyzeFunctionExpr(funcExpr, analyzedAMs);
         for (Mutable<ILogicalExpression> arg : funcExpr.getArguments()) {
             ILogicalExpression argExpr = arg.getValue();
             if (argExpr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
                 continue;
             }
             AbstractFunctionCallExpression argFuncExpr = (AbstractFunctionCallExpression) argExpr;
-            found = found || analyzeFunctionExpr(argFuncExpr, analyzedAccPaths);
+            found = found || analyzeFunctionExpr(argFuncExpr, analyzedAMs);
         }
         return found;
     }
     
     /**
-     * Finds applicable access paths for the given function expression based on
+     * Finds applicable access methods for the given function expression based on
      * the function identifier, and an analysis of the function's arguments.
-     * Updates the analyzedAccPaths accordingly.
+     * Updates the analyzedAMs accordingly.
      * 
      * @param cond
-     * @param analyzedAccPaths
+     * @param analyzedAMs
      * @return
      */
-    protected boolean analyzeFunctionExpr(AbstractFunctionCallExpression funcExpr, Map<IAccessPath, AccessPathAnalysisContext> analyzedAccPaths) {
+    protected boolean analyzeFunctionExpr(AbstractFunctionCallExpression funcExpr, Map<IAccessMethod, AccessMethodAnalysisContext> analyzedAMs) {
         FunctionIdentifier funcIdent = funcExpr.getFunctionIdentifier();        
         if (funcIdent == AlgebricksBuiltinFunctions.AND) {
             return false;
         }
-        // Retrieves the list of access paths that are relevant based on the funcIdent.
-        List<IAccessPath> relevantAccessPaths = accessPaths.get(funcIdent);
-        if (relevantAccessPaths == null) {
+        // Retrieves the list of access methods that are relevant based on the funcIdent.
+        List<IAccessMethod> relevantAMs = accessMethods.get(funcIdent);
+        if (relevantAMs == null) {
             return false;
         }
         boolean atLeastOneMatchFound = false;
         // Placeholder for a new analysis context in case we need one.
-        AccessPathAnalysisContext newAnalysisCtx = new AccessPathAnalysisContext();
-        for(IAccessPath accessPath : relevantAccessPaths) {
-            AccessPathAnalysisContext analysisCtx = analyzedAccPaths.get(accessPath);
+        AccessMethodAnalysisContext newAnalysisCtx = new AccessMethodAnalysisContext();
+        for(IAccessMethod accessMethod : relevantAMs) {
+            AccessMethodAnalysisContext analysisCtx = analyzedAMs.get(accessMethod);
             // Use the current placeholder.
             if (analysisCtx == null) {
                 analysisCtx = newAnalysisCtx;
             }
-            // Analyzes the funcExpr's arguments to see if the accessPath is truly applicable.
-            boolean matchFound = accessPath.analyzeFuncExprArgs(funcExpr, analysisCtx);
+            // Analyzes the funcExpr's arguments to see if the accessMethod is truly applicable.
+            boolean matchFound = accessMethod.analyzeFuncExprArgs(funcExpr, analysisCtx);
             if (matchFound) {
                 // If we've used the current new context placeholder, replace it with a new one.
                 if (analysisCtx == newAnalysisCtx) {
-                    analyzedAccPaths.put(accessPath, analysisCtx);
-                    newAnalysisCtx = new AccessPathAnalysisContext();
+                    analyzedAMs.put(accessMethod, analysisCtx);
+                    newAnalysisCtx = new AccessMethodAnalysisContext();
                 }
                 atLeastOneMatchFound = true;
             }
@@ -384,7 +384,7 @@ public class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteRule {
 	 *         false otherwise
 	 */
     protected boolean fillIndexExprs(String fieldName, int matchedFuncExprIndex,
-    		AccessPathAnalysisContext analysisCtx) {
+    		AccessMethodAnalysisContext analysisCtx) {
     	AqlCompiledIndexDecl primaryIndexDecl = DatasetUtils.getPrimaryIndex(datasetDecl);
     	List<String> primaryIndexFields = primaryIndexDecl.getFieldExprs();    	
         List<AqlCompiledIndexDecl> indexCandidates = DatasetUtils.findSecondaryIndexesByOneOfTheKeys(datasetDecl, fieldName);
@@ -406,7 +406,7 @@ public class IntroduceTreeIndexSearchRule implements IAlgebraicRewriteRule {
         return true;
     }
 
-    protected void fillAllIndexExprs(List<LogicalVariable> varList, AccessPathAnalysisContext analysisCtx) {
+    protected void fillAllIndexExprs(List<LogicalVariable> varList, AccessMethodAnalysisContext analysisCtx) {
         for (int varIndex = 0; varIndex < varList.size(); varIndex++) {
             int matchedFuncExprIndex = analysisCtx.findVarInMatchedFuncExprs(varList.get(varIndex));
             // Current var does not match any vars in outComparedVars, 

@@ -1,4 +1,4 @@
-package edu.uci.ics.asterix.optimizer.rules;
+package edu.uci.ics.asterix.optimizer.rules.am;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -17,6 +17,7 @@ import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.IAType;
+import edu.uci.ics.asterix.optimizer.rules.OptimizableFuncExpr;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IOptimizationContext;
@@ -39,7 +40,7 @@ import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.utils.Pair;
 import edu.uci.ics.hyracks.algebricks.core.utils.Triple;
 
-public class AccessPathUtils {
+public class AccessMethodUtils {
 	public static List<Object> primaryIndexTypes(AqlCompiledDatasetDecl datasetDecl, IAType itemType) {
         List<Object> types = new ArrayList<Object>();
         List<Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType>> partitioningFunctions = DatasetUtils
@@ -56,7 +57,7 @@ public class AccessPathUtils {
     }
 	
     public static boolean analyzeFuncExprArgsForOneConstAndVar(AbstractFunctionCallExpression funcExpr,
-            AccessPathAnalysisContext analysisCtx) {
+            AccessMethodAnalysisContext analysisCtx) {
         IAlgebricksConstantValue constFilterVal = null;
         LogicalVariable fieldVar = null;
         ILogicalExpression arg1 = funcExpr.getArguments().get(0).getValue();
@@ -126,9 +127,9 @@ public class AccessPathUtils {
         // The arguments are: the name of the primary index, the type of index, the name of the dataset, 
         // the number of primary-index keys, and the variable references corresponding to the primary-index search keys.
         List<Mutable<ILogicalExpression>> primaryIndexFuncArgs = new ArrayList<Mutable<ILogicalExpression>>();
-        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(datasetDecl.getName())));
-        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(FunctionArgumentsConstants.BTREE_INDEX)));
-        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessPathUtils.createStringConstant(datasetDecl.getName())));
+        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(datasetDecl.getName())));
+        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(FunctionArgumentsConstants.BTREE_INDEX)));
+        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(datasetDecl.getName())));
         // Add the variables corresponding to the primary-index search keys (low key).
         primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(new AInt32(
                 numPrimaryKeys)))));
@@ -148,7 +149,7 @@ public class AccessPathUtils {
         IFunctionInfo primaryIndexSearch = FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.INDEX_SEARCH);
         AbstractFunctionCallExpression searchPrimIdxFun = new ScalarFunctionCallExpression(primaryIndexSearch, primaryIndexFuncArgs);
         UnnestMapOperator primaryIndexUnnestMap = new UnnestMapOperator(primaryIndexVars, new MutableObject<ILogicalExpression>(searchPrimIdxFun),
-                AccessPathUtils.primaryIndexTypes(datasetDecl, recordType));
+                AccessMethodUtils.primaryIndexTypes(datasetDecl, recordType));
         // Fed by the order operator or the secondaryIndexUnnestOp.
         if (sortPrimaryKeys) {
             primaryIndexUnnestMap.getInputs().add(new MutableObject<ILogicalOperator>(order));

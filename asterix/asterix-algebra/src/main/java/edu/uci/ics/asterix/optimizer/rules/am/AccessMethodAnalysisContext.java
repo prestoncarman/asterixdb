@@ -1,4 +1,4 @@
-package edu.uci.ics.asterix.optimizer.rules;
+package edu.uci.ics.asterix.optimizer.rules.am;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -7,10 +7,11 @@ import java.util.List;
 import org.apache.commons.lang3.mutable.Mutable;
 
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl;
+import edu.uci.ics.asterix.optimizer.rules.OptimizableFuncExpr;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
 
-public class AccessPathAnalysisContext {
+public class AccessMethodAnalysisContext {
     
     public List<OptimizableFuncExpr> matchedFuncExprs = new ArrayList<OptimizableFuncExpr>();
     public List<Mutable<ILogicalExpression>> remainingFuncExprs = new ArrayList<Mutable<ILogicalExpression>>();
