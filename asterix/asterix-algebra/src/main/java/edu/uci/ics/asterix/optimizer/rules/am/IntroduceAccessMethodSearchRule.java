@@ -43,26 +43,29 @@ import edu.uci.ics.hyracks.algebricks.core.rewriter.base.IAlgebraicRewriteRule;
 import edu.uci.ics.hyracks.algebricks.core.utils.Pair;
 
 /**
- * This rule tries to optimize simple selections with indexes. The rewrite is still logical in nature.
- * The use of an index is expressed as an unnest over an index-search function.
+ * This rule tries to optimize simple selections with indexes. The use of an
+ * index is expressed as an unnest over an index-search function which will be
+ * replaced with the appropriate embodiment during codegen.
  * 
  * Matches this operator pattern: (select) <-- (assign) <-- (datasource scan)
  * Replaces it with this pattern: (select) <-- (assign) <-- (btree search) <-- (sort) <-- (unnest(index search)) <-- (assign)
+ * The sort is optional, and some access methods may choose not to sort.
  * 
- * For the special case of only primary index lookups it may also match the following pattern:
- * (select) <-- (datasource scan)
+ * For the special case of only primary index lookups it may also match the
+ * following pattern: 
+ * (select) <-- (datasource scan) 
  * since no assign is necessary to get the primary key fields (they are already stored fields in the BTree tuples).
  * 
- * Note that for some index-based optimizations do not remove the triggering condition from the select, 
- * since the index only acts as a filter, and the final verification must still be done 
- * via the original function.
+ * Note that for some index-based optimizations do not remove the triggering
+ * condition from the select, since the index only acts as a filter, and the
+ * final verification must still be done via the original function.
  * 
- * The basic outline of this rule is:
- * 1. Match operator pattern.
- * 2. Analyze select to see if there are optimizable functions.
- * 3. Check metadata to see if there are applicable indexes.
+ * The basic outline of this rule is: 
+ * 1. Match operator pattern. 
+ * 2. Analyze select to see if there are optimizable functions (delegated to IAccessMethods). 
+ * 3. Check metadata to see if there are applicable indexes. 
  * 4. Choose an index to apply (for now only a single index will be chosen).
- * 5. Rewrite plan using index.
+ * 5. Rewrite plan using index (delegated to IAccessMethods).
  * 
  */
 // TODO: Rename this to IntroduceIndexSearchRule because secondary inverted indexes may also apply.

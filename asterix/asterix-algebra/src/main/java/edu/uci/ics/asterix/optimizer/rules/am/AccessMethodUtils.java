@@ -155,6 +155,7 @@ public class AccessMethodUtils {
         } else {
             primaryIndexUnnestMap.getInputs().add(new MutableObject<ILogicalOperator>(secondaryIndexUnnestOp));
         }
+        primaryIndexUnnestMap.setExecutionMode(ExecutionMode.PARTITIONED);
         return primaryIndexUnnestMap;
     }
     

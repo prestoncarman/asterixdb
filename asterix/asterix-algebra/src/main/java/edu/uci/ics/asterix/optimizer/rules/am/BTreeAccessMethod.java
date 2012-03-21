@@ -95,21 +95,30 @@ public class BTreeAccessMethod implements IAccessMethod {
         AssignOperator assign = null;
         if (assignRef != null) {
             assign = (AssignOperator) assignRef.getValue();
-        }
-        int numKeys = chosenIndex.getFieldExprs().size();
-        IAlgebricksConstantValue[] lowKeyConstants = new IAlgebricksConstantValue[numKeys];
-        IAlgebricksConstantValue[] highKeyConstants = new IAlgebricksConstantValue[numKeys];
-        LimitType[] lowKeyLimits = new LimitType[numKeys];
-        LimitType[] highKeyLimits = new LimitType[numKeys];
-        boolean[] lowKeyInclusive = new boolean[numKeys];
-        boolean[] highKeyInclusive = new boolean[numKeys];
+        }        
+        int numSecondaryKeys = chosenIndex.getFieldExprs().size();
+        
+        // Info on high and low keys for the BTree search predicate.
+        IAlgebricksConstantValue[] lowKeyConstants = new IAlgebricksConstantValue[numSecondaryKeys];
+        IAlgebricksConstantValue[] highKeyConstants = new IAlgebricksConstantValue[numSecondaryKeys];
+        LimitType[] lowKeyLimits = new LimitType[numSecondaryKeys];
+        LimitType[] highKeyLimits = new LimitType[numSecondaryKeys];
+        boolean[] lowKeyInclusive = new boolean[numSecondaryKeys];
+        boolean[] highKeyInclusive = new boolean[numSecondaryKeys];
+        
         List<Integer> exprList = analysisCtx.indexExprs.get(chosenIndex);
-        List<OptimizableFuncExpr> matchedFuncExprs = analysisCtx.matchedFuncExprs;
-                
+        List<OptimizableFuncExpr> matchedFuncExprs = analysisCtx.matchedFuncExprs;        
+        // List of function expressions that will be replaced by the secondary-index search.
+        // These func exprs will be removed from the select condition at the very end of this method.
         Set<ILogicalExpression> replacedFuncExprs = new HashSet<ILogicalExpression>();
+        // TODO: For now we don't do any sophisticated analysis of the func exprs to come up with "the best" range predicate.
+        // If we can't figure out how to integrate a certain funcExpr into the current predicate, we just bail by setting this flag.
         boolean couldntFigureOut = false;
         boolean doneWithExprs = false;
+        // Go through the func exprs listed as optimizable by the chosen index, 
+        // and formulate a range predicate on the secondary-index keys.
         for (Integer exprIndex : exprList) {
+            // Position of the field of matchedFuncExprs.get(exprIndex) in the chosen index's indexed exprs.
             int keyPos = indexOf(matchedFuncExprs.get(exprIndex).getFieldName(), chosenIndex.getFieldExprs());
             if (keyPos < 0) {
                 throw new InternalError();
@@ -177,6 +186,7 @@ public class BTreeAccessMethod implements IAccessMethod {
                 }
             }
             if (!couldntFigureOut) {
+                // Remember to remove this funcExpr later.
                 replacedFuncExprs.add(matchedFuncExprs.get(exprIndex).getFuncExpr());
             }
             if (doneWithExprs) {
@@ -189,7 +199,7 @@ public class BTreeAccessMethod implements IAccessMethod {
 
         // Rule out the cases unsupported by the current btree search
         // implementation.
-        for (int i = 1; i < numKeys; i++) {
+        for (int i = 1; i < numSecondaryKeys; i++) {
             if (lowKeyInclusive[i] != lowKeyInclusive[0] || highKeyInclusive[i] != highKeyInclusive[0]) {
                 return false;
             }
@@ -206,14 +216,21 @@ public class BTreeAccessMethod implements IAccessMethod {
         if (highKeyLimits[0] == null) {
             highKeyInclusive[0] = true;
         }
-
+        
+        // List of arguments to be passed into an unnest.
+        // This logical rewrite rule, and the corresponding runtime op generated in the jobgen 
+        // have a contract as to what goes into these arguments.
+        // Here, we put the name of the chosen index, the type of index, the name of the dataset, 
+        // the number of secondary-index keys, and the variable references corresponding to the secondary-index search keys.
         ArrayList<Mutable<ILogicalExpression>> secondaryIndexFuncArgs = new ArrayList<Mutable<ILogicalExpression>>();
         secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(chosenIndex.getIndexName())));
         secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(FunctionArgumentsConstants.BTREE_INDEX)));
         secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(datasetDecl.getName())));
-
-        ArrayList<Mutable<ILogicalExpression>> keyExprList = new ArrayList<Mutable<ILogicalExpression>>();
+        // Here we generate vars and funcs for assigning the secondary-index keys to be fed into the secondary-index search.
+        // List of variables for the assign.
         ArrayList<LogicalVariable> keyVarList = new ArrayList<LogicalVariable>();
+        // List of expressions for the assign.
+        ArrayList<Mutable<ILogicalExpression>> keyExprList = new ArrayList<Mutable<ILogicalExpression>>();
         createKeyVarsAndExprs(lowKeyLimits, lowKeyConstants, keyExprList, keyVarList, secondaryIndexFuncArgs, context);
         createKeyVarsAndExprs(highKeyLimits, highKeyConstants, keyExprList, keyVarList, secondaryIndexFuncArgs, context);
 
@@ -223,20 +240,24 @@ public class BTreeAccessMethod implements IAccessMethod {
         ILogicalExpression highKeyExpr = highKeyInclusive[0] ? ConstantExpression.TRUE : ConstantExpression.FALSE;
         secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(highKeyExpr));
 
+        // Assign operator that sets the sedoncary-index search-key fields.
         AssignOperator assignSearchKeys = new AssignOperator(keyVarList, keyExprList);
+        // Input to this assign is the EmptyTupleSource (which the dataSourceScan also must have had as input).
         assignSearchKeys.getInputs().add(dataSourceScan.getInputs().get(0));
         assignSearchKeys.setExecutionMode(dataSourceScan.getExecutionMode());
 
+        // This is the logical representation of our RTree search.
+        // An index search is expressed logically as an unnest over an index-search function.
         IFunctionInfo secondaryIndexSearch = FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.INDEX_SEARCH);
         UnnestingFunctionCallExpression rangeSearchFun = new UnnestingFunctionCallExpression(secondaryIndexSearch, secondaryIndexFuncArgs);
         rangeSearchFun.setReturnsUniqueValues(true);
 
+        // Generate the rest of the upstream plan which feeds the search results into the primary index.
         List<LogicalVariable> primaryIndexVars = dataSourceScan.getVariables();
         UnnestMapOperator primaryIndexUnnestMap;
         boolean isPrimaryIndex = chosenIndex == DatasetUtils.getPrimaryIndex(datasetDecl);
         if (!isPrimaryIndex) {
             List<Object> secondaryIndexTypes = getSecondaryIndexTypes(datasetDecl, chosenIndex, recordType);
-            int numSecondaryKeys = chosenIndex.getFieldExprs().size();
             primaryIndexUnnestMap = AccessMethodUtils.createPrimaryIndexUnnestMap(datasetDecl, recordType,
                     primaryIndexVars, chosenIndex, numSecondaryKeys, secondaryIndexTypes, rangeSearchFun,
                     assignSearchKeys, context, true);
@@ -244,11 +265,11 @@ public class BTreeAccessMethod implements IAccessMethod {
             primaryIndexUnnestMap = new UnnestMapOperator(primaryIndexVars, new MutableObject<ILogicalExpression>(rangeSearchFun),
                     AccessMethodUtils.primaryIndexTypes(datasetDecl, recordType));
             primaryIndexUnnestMap.getInputs().add(new MutableObject<ILogicalOperator>(assignSearchKeys));
-        }
-        primaryIndexUnnestMap.setExecutionMode(ExecutionMode.PARTITIONED);
+        }        
 
         List<Mutable<ILogicalExpression>> remainingFuncExprs = new ArrayList<Mutable<ILogicalExpression>>();
-        getNewSelectCondition(select, replacedFuncExprs, remainingFuncExprs);
+        getNewSelectExprs(select, replacedFuncExprs, remainingFuncExprs);
+        // Generate new select using the new condition.
         if (!remainingFuncExprs.isEmpty()) {
             ILogicalExpression pulledCond = createSelectCondition(remainingFuncExprs);
             SelectOperator selectRest = new SelectOperator(new MutableObject<ILogicalExpression>(pulledCond));            
@@ -295,7 +316,7 @@ public class BTreeAccessMethod implements IAccessMethod {
         }
     }
     
-    private void getNewSelectCondition(SelectOperator select, Set<ILogicalExpression> replacedFuncExprs, List<Mutable<ILogicalExpression>> remainingFuncExprs) {
+    private void getNewSelectExprs(SelectOperator select, Set<ILogicalExpression> replacedFuncExprs, List<Mutable<ILogicalExpression>> remainingFuncExprs) {
         remainingFuncExprs.clear();
         if (replacedFuncExprs.isEmpty()) {
             return;

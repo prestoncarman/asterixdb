@@ -82,8 +82,9 @@ public class RTreeAccessMethod implements IAccessMethod {
         int firstExprIndex = indexExprs.get(0);
         
         DataSourceScanOperator dataSourceScan = (DataSourceScanOperator) dataSourceScanRef.getValue();
-        // List of arguments to be passed into an unnest. This unnest will rewritten in the appropriate physical rewrite rule.
-        // This logical rewrite rule, and the corresponding physical rewrite have a contract as to what goes into these arguments.
+        // List of arguments to be passed into an unnest.
+        // This logical rewrite rule, and the corresponding runtime op generated in the jobgen 
+        // have a contract as to what goes into these arguments.
         // Here, we put the name of the chosen index, the type of index, the name of the dataset, 
         // the number of secondary-index keys, and the variable references corresponding to the secondary-index search keys.
         ArrayList<Mutable<ILogicalExpression>> secondaryIndexFuncArgs = new ArrayList<Mutable<ILogicalExpression>>();
@@ -116,7 +117,7 @@ public class RTreeAccessMethod implements IAccessMethod {
             LogicalVariable keyVar = context.newVar();
             keyVarList.add(keyVar);
             keyExprList.add(new MutableObject<ILogicalExpression>(createMBR));
-            // Add variable reference to list of arguments for the unnest (which is "consumed" by the physical rewrite rule).
+            // Add variable reference to list of arguments for the unnest (which is "consumed" by jobgen).
             Mutable<ILogicalExpression> keyVarRef = new MutableObject<ILogicalExpression>(new VariableReferenceExpression(
                     keyVar));
             secondaryIndexFuncArgs.add(keyVarRef);
@@ -128,18 +129,18 @@ public class RTreeAccessMethod implements IAccessMethod {
         assignSearchKeys.getInputs().add(dataSourceScan.getInputs().get(0));
         assignSearchKeys.setExecutionMode(dataSourceScan.getExecutionMode());
 
-        // This is the logical representation of our RTree search. The actual operator will be plugged in later during physical rewrite.
+        // This is the logical representation of our RTree search.
         // An index search is expressed logically as an unnest over an index-search function.
         IFunctionInfo secondaryIndexSearch = FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.INDEX_SEARCH);
         UnnestingFunctionCallExpression rangeSearchFun = new UnnestingFunctionCallExpression(secondaryIndexSearch, secondaryIndexFuncArgs);
         rangeSearchFun.setReturnsUniqueValues(true);
 
+        // Generate the rest of the upstream plan which feeds the search results into the primary index.
         List<LogicalVariable> primaryIndexVars = dataSourceScan.getVariables();
         List<Object> secondaryIndexTypes = getSecondaryIndexTypes(datasetDecl, chosenIndex, recordType);
         UnnestMapOperator primaryIndexUnnestMap = AccessMethodUtils.createPrimaryIndexUnnestMap(datasetDecl, recordType,
                 primaryIndexVars, chosenIndex, numSecondaryKeys, secondaryIndexTypes, rangeSearchFun, assignSearchKeys,
                 context, true);
-        primaryIndexUnnestMap.setExecutionMode(ExecutionMode.PARTITIONED);
         // Replace the datasource scan with the new plan rooted at primaryIndexUnnestMap.
         dataSourceScanRef.setValue(primaryIndexUnnestMap);
         return true;
