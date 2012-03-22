@@ -31,8 +31,10 @@ import edu.uci.ics.asterix.feed.operator.FeedIntakeOperatorDescriptor;
 import edu.uci.ics.asterix.feed.operator.FeedMessageOperatorDescriptor;
 import edu.uci.ics.asterix.formats.base.IDataFormat;
 import edu.uci.ics.asterix.formats.nontagged.AqlBinaryComparatorFactoryProvider;
+import edu.uci.ics.asterix.formats.nontagged.AqlBinaryTokenizerFactoryProvider;
 import edu.uci.ics.asterix.formats.nontagged.AqlSerializerDeserializerProvider;
 import edu.uci.ics.asterix.formats.nontagged.AqlTypeTraitProvider;
+import edu.uci.ics.asterix.metadata.MetadataException;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl.IndexKind;
 import edu.uci.ics.asterix.metadata.utils.DatasetUtils;
 import edu.uci.ics.asterix.om.types.ARecordType;
@@ -80,6 +82,7 @@ import edu.uci.ics.hyracks.storage.am.common.ophelpers.IndexOp;
 import edu.uci.ics.hyracks.storage.am.common.tuples.TypeAwareTupleWriterFactory;
 import edu.uci.ics.hyracks.storage.am.invertedindex.dataflow.InvertedIndexSearchOperatorDescriptor;
 import edu.uci.ics.hyracks.storage.am.invertedindex.searchmodifiers.ConjunctiveSearchModifierFactory;
+import edu.uci.ics.hyracks.storage.am.invertedindex.tokenizers.IBinaryTokenizerFactory;
 import edu.uci.ics.hyracks.storage.am.rtree.dataflow.RTreeDataflowHelperFactory;
 import edu.uci.ics.hyracks.storage.am.rtree.dataflow.RTreeSearchOperatorDescriptor;
 import edu.uci.ics.hyracks.storage.am.rtree.frames.RTreeNSMInteriorFrameFactory;
@@ -515,91 +518,86 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         }
 
         int numPrimaryKeys = DatasetUtils.getPartitioningFunctions(datasetDecl).size();
-        ISerializerDeserializer[] recordFields;
-        IBinaryComparatorFactory[] comparatorFactories;
-        ITypeTraits[] typeTraits;
-        IPrimitiveValueProviderFactory[] valueProviderFactories;
-        int numSecondaryKeys = 0;
-        int numNestedSecondaryKeyFields = 0;
-        int i = 0;
-
         AqlCompiledIndexDecl index = DatasetUtils.findSecondaryIndexByName(datasetDecl, indexName);
         if (index == null) {
         	throw new AlgebricksException("Code generation error: no index " + indexName + " for dataset "
         			+ datasetName);
         }
         List<String> secondaryKeyFields = index.getFieldExprs();
-        numSecondaryKeys = secondaryKeyFields.size();
-
+        int numSecondaryKeys = secondaryKeyFields.size();
         if (numSecondaryKeys != 1) {
         	throw new AlgebricksException(
         			"Cannot use "
         					+ numSecondaryKeys
         					+ " fields as a key for the R-tree index. There can be only one field as a key for the R-tree index.");
         }
-
         if (itemType.getTypeTag() != ATypeTag.RECORD) {
         	throw new AlgebricksException("Only record types can be indexed.");
         }
-        ARecordType recType = (ARecordType) itemType;
-
-        IAType keyType = AqlCompiledIndexDecl.keyFieldType(secondaryKeyFields.get(0), recType);
-        if (keyType == null) {
+        ARecordType recordType = (ARecordType) itemType;
+        IAType secondaryKeyType = AqlCompiledIndexDecl.keyFieldType(secondaryKeyFields.get(0), recordType);
+        if (secondaryKeyType == null) {
         	throw new AlgebricksException("Could not find field " + secondaryKeyFields.get(0) + " in the schema.");
         }
 
-        int dimension = NonTaggedFormatUtil.getNumDimensions(keyType.getTypeTag());
-        numNestedSecondaryKeyFields = dimension * 2;
-
-        int numFields = numNestedSecondaryKeyFields + numPrimaryKeys;
-        recordFields = new ISerializerDeserializer[numFields];
-        typeTraits = new ITypeTraits[numFields];
-        comparatorFactories = new IBinaryComparatorFactory[numNestedSecondaryKeyFields];
-        valueProviderFactories = new IPrimitiveValueProviderFactory[numNestedSecondaryKeyFields];
-
-        IAType nestedKeyType = NonTaggedFormatUtil.getNestedSpatialType(keyType.getTypeTag());
-        for (i = 0; i < numNestedSecondaryKeyFields; i++) {
-        	ISerializerDeserializer keySerde = AqlSerializerDeserializerProvider.INSTANCE
-        			.getSerializerDeserializer(nestedKeyType);
-        	recordFields[i] = keySerde;
-        	comparatorFactories[i] = AqlBinaryComparatorFactoryProvider.INSTANCE.getBinaryComparatorFactory(
-        			nestedKeyType, OrderKind.ASC);
-        	typeTraits[i] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(nestedKeyType);
-        	valueProviderFactories[i] = AqlPrimitiveValueProviderFactory.INSTANCE;
+        // TODO: For now we assume the type of the generated tokens is the same as the indexed field.
+        // We need a better way of expressing this because tokens may be hashed, or an inverted-index may index a list type, etc.
+        ITypeTraits[] tokenTypeTraits = new ITypeTraits[numSecondaryKeys];
+        IBinaryComparatorFactory[] tokenComparatorFactories = new IBinaryComparatorFactory[numSecondaryKeys];
+        for (int i = 0; i < numSecondaryKeys; i++) {
+        	ISerializerDeserializer keySerde = metadata.getFormat().getSerdeProvider()
+        			.getSerializerDeserializer(secondaryKeyType);
+            tokenComparatorFactories[i] = AqlBinaryComparatorFactoryProvider.INSTANCE.getBinaryComparatorFactory(
+            		secondaryKeyType, OrderKind.ASC);
+            tokenTypeTraits[i] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(secondaryKeyType);
         }
+        // Get tokenizer factory.
+        IBinaryTokenizerFactory queryTokenizerFactory = AqlBinaryTokenizerFactoryProvider.INSTANCE
+        		.getTokenizerFactory(secondaryKeyType, false);
         
+        // Serdes, typetraits and comparator factories describing the output of an inverted-index search.
+        // The inverted lists contain primary keys.
+        ISerializerDeserializer[] invListsRecFields = new ISerializerDeserializer[numPrimaryKeys];
+        ITypeTraits[] invListsTypeTraits = new ITypeTraits[numPrimaryKeys];
+        IBinaryComparatorFactory[] invListsComparatorFactories = new IBinaryComparatorFactory[numPrimaryKeys];
+        int i = 0;
         for (Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType> evalFactoryAndType : DatasetUtils
                 .getPartitioningFunctions(datasetDecl)) {
-            IAType keyType = evalFactoryAndType.third;
-            ISerializerDeserializer keySerde = AqlSerializerDeserializerProvider.INSTANCE
-                    .getSerializerDeserializer(keyType);
-            recordFields[i] = keySerde;
-            typeTraits[i] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(keyType);
+        	IAType keyType = evalFactoryAndType.third;
+        	ISerializerDeserializer keySerde = metadata.getFormat().getSerdeProvider()
+        			.getSerializerDeserializer(keyType);
+            invListsRecFields[i] = keySerde;
+            invListsComparatorFactories[i] = AqlBinaryComparatorFactoryProvider.INSTANCE.getBinaryComparatorFactory(
+                    keyType, OrderKind.ASC);
+            invListsTypeTraits[i] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(keyType);
             ++i;
         }
-
-        IAsterixApplicationContextInfo appContext = (IAsterixApplicationContextInfo) context.getAppContext();
-        RecordDescriptor recDesc = new RecordDescriptor(recordFields);
-
-        Pair<IFileSplitProvider, AlgebricksPartitionConstraint> spPc;
-        try {
-            spPc = metadata.splitProviderAndPartitionConstraintsForInternalOrFeedDataset(datasetName, indexName);
-        } catch (Exception e) {
-            throw new AlgebricksException(e);
-        }
-
-        // TODO: Here we assume there is only one search key field.
-        int queryField = keyFields[0];
+        RecordDescriptor invListRecDesc = new RecordDescriptor(invListsRecFields);
         
+        IAsterixApplicationContextInfo appContext = (IAsterixApplicationContextInfo) context.getAppContext();        
+		Pair<IFileSplitProvider, AlgebricksPartitionConstraint> secondarySplitsAndConstraint;
+		try {
+			secondarySplitsAndConstraint = metadata
+					.splitProviderAndPartitionConstraintsForInternalOrFeedDataset(
+							datasetName, indexName);
+		} catch (MetadataException e) {
+			throw new AlgebricksException(e);
+		}
+        
+		IFileSplitProvider btreeFileSplitProvider = null;
+		IFileSplitProvider invListsFileSplitProvider = null;
+		
+        // TODO: Here we assume there is only one search key field.
+        // We also hardcode a ConjunctiveSearchModifierFactory(). We need a way to figure out which search modifier to use.
+        int queryField = keyFields[0];        
 		InvertedIndexSearchOperatorDescriptor invIndexSearchOp = new InvertedIndexSearchOperatorDescriptor(
 				jobSpec, queryField, appContext.getStorageManagerInterface(),
 				btreeFileSplitProvider, invListsFileSplitProvider,
 				appContext.getIndexRegistryProvider(), tokenTypeTraits,
 				tokenComparatorFactories, invListsTypeTraits,
-				invListComparatorFactories, new BTreeDataflowHelperFactory(),
-				queryTokenizerFactory, new ConjunctiveSearchModifierFactory(), recDesc);
-        
-        return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(invIndexSearchOp, spPc.second);
+				invListsComparatorFactories, new BTreeDataflowHelperFactory(),
+				queryTokenizerFactory, new ConjunctiveSearchModifierFactory(), invListRecDesc);
+        return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(invIndexSearchOp, secondarySplitsAndConstraint.second);
     }
 
     @Override

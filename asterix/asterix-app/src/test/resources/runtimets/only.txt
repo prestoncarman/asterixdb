@@ -1,1 +1,1 @@
-index/rtree-secondary-index.aql
+word-inverted-index-contains.aql

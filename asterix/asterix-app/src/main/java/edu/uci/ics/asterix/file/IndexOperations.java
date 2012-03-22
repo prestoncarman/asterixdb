@@ -30,7 +30,6 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCal
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder.OrderKind;
 import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluatorFactory;
 import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IPushRuntimeFactory;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.jobgen.impl.JobGenHelper;
 import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.operators.meta.AlgebricksMetaOperatorDescriptor;
 import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.operators.std.AssignRuntimeFactory;
 import edu.uci.ics.hyracks.algebricks.core.api.constraints.AlgebricksPartitionConstraint;
@@ -48,6 +47,8 @@ import edu.uci.ics.hyracks.api.job.JobSpecification;
 import edu.uci.ics.hyracks.dataflow.common.comm.io.ArrayTupleBuilder;
 import edu.uci.ics.hyracks.dataflow.common.data.marshalling.IntegerSerializerDeserializer;
 import edu.uci.ics.hyracks.dataflow.std.connectors.OneToOneConnectorDescriptor;
+import edu.uci.ics.hyracks.dataflow.std.file.ConstantFileSplitProvider;
+import edu.uci.ics.hyracks.dataflow.std.file.FileSplit;
 import edu.uci.ics.hyracks.dataflow.std.file.IFileSplitProvider;
 import edu.uci.ics.hyracks.dataflow.std.misc.ConstantTupleSourceOperatorDescriptor;
 import edu.uci.ics.hyracks.dataflow.std.sort.ExternalSortOperatorDescriptor;
@@ -60,6 +61,7 @@ import edu.uci.ics.hyracks.storage.am.common.dataflow.IIndexRegistryProvider;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.TreeIndexBulkLoadOperatorDescriptor;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.TreeIndexDropOperatorDescriptor;
 import edu.uci.ics.hyracks.storage.am.invertedindex.dataflow.BinaryTokenizerOperatorDescriptor;
+import edu.uci.ics.hyracks.storage.am.invertedindex.dataflow.InvertedIndexBulkLoadOperatorDescriptor;
 import edu.uci.ics.hyracks.storage.am.invertedindex.tokenizers.IBinaryTokenizerFactory;
 import edu.uci.ics.hyracks.storage.am.rtree.dataflow.RTreeDataflowHelperFactory;
 import edu.uci.ics.hyracks.storage.am.rtree.frames.RTreeNSMInteriorFrameFactory;
@@ -595,7 +597,7 @@ public class IndexOperations {
 
         // ---------- START GENERAL BTREE STUFF
 
-        IIndexRegistryProvider<IIndex> treeRegistryProvider = AsterixTreeRegistryProvider.INSTANCE;
+        IIndexRegistryProvider<IIndex> indexRegistryProvider = AsterixTreeRegistryProvider.INSTANCE;
         IStorageManagerInterface storageManager = AsterixStorageManagerInterface.INSTANCE;
 
         // ---------- END GENERAL BTREE STUFF
@@ -634,6 +636,8 @@ public class IndexOperations {
         ISerializerDeserializer[] primaryRecFields = new ISerializerDeserializer[numPrimaryKeys + 1];
         IBinaryComparatorFactory[] primaryComparatorFactories = new IBinaryComparatorFactory[numPrimaryKeys];
         ITypeTraits[] primaryTypeTraits = new ITypeTraits[numPrimaryKeys + 1];
+        ITypeTraits[] invListsTypeTraits = new ITypeTraits[numPrimaryKeys];
+        IBinaryComparatorFactory[] invListsComparatorFactories = new IBinaryComparatorFactory[numPrimaryKeys];
         int i = 0;
         for (Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType> evalFactoryAndType : DatasetUtils
                 .getPartitioningFunctions(compiledDatasetDecl)) {
@@ -643,6 +647,9 @@ public class IndexOperations {
             primaryComparatorFactories[i] = AqlBinaryComparatorFactoryProvider.INSTANCE.getBinaryComparatorFactory(
                     keyType, OrderKind.ASC);
             primaryTypeTraits[i] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(keyType);
+            invListsComparatorFactories[i] = AqlBinaryComparatorFactoryProvider.INSTANCE.getBinaryComparatorFactory(
+                    keyType, OrderKind.ASC);
+            invListsTypeTraits[i] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(keyType);
             ++i;
         }
         primaryRecFields[numPrimaryKeys] = payloadSerde;
@@ -661,7 +668,7 @@ public class IndexOperations {
                 .splitProviderAndPartitionConstraintsForInternalOrFeedDataset(primaryIndexName, primaryIndexName);
 
         BTreeSearchOperatorDescriptor primarySearchOp = new BTreeSearchOperatorDescriptor(spec, primaryRecDesc,
-                storageManager, treeRegistryProvider, primarySplitsAndConstraint.first, primaryInteriorFrameFactory,
+                storageManager, indexRegistryProvider, primarySplitsAndConstraint.first, primaryInteriorFrameFactory,
                 primaryLeafFrameFactory, primaryTypeTraits, primaryComparatorFactories, true, lowKeyFields,
                 highKeyFields, true, true, new BTreeDataflowHelperFactory());
         AlgebricksPartitionConstraintHelper.setPartitionConstraintInJobSpec(spec, primarySearchOp,
@@ -674,6 +681,8 @@ public class IndexOperations {
         List<String> secondaryKeyFields = createIndexStmt.getKeyFields();
         int numSecondaryKeys = secondaryKeyFields.size();
         ISerializerDeserializer[] secondaryRecFields = new ISerializerDeserializer[numPrimaryKeys + numSecondaryKeys];
+        ITypeTraits[] tokenTypeTraits = new ITypeTraits[numSecondaryKeys];
+        IBinaryComparatorFactory[] tokenComparatorFactories = new IBinaryComparatorFactory[numSecondaryKeys];
         IEvaluatorFactory[] evalFactories = new IEvaluatorFactory[numSecondaryKeys];
         for (i = 0; i < numSecondaryKeys; i++) {
             evalFactories[i] = datasetDecls.getFormat().getFieldAccessEvaluatorFactory(itemType,
@@ -681,6 +690,9 @@ public class IndexOperations {
             IAType keyType = AqlCompiledIndexDecl.keyFieldType(secondaryKeyFields.get(i), itemType);
             ISerializerDeserializer keySerde = serdeProvider.getSerializerDeserializer(keyType);
             secondaryRecFields[i] = keySerde;
+            tokenComparatorFactories[i] = AqlBinaryComparatorFactoryProvider.INSTANCE.getBinaryComparatorFactory(
+                    keyType, OrderKind.ASC);
+            tokenTypeTraits[i] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(keyType);
         }
         // fill in serializers and comparators for primary index fields
         for (i = 0; i < numPrimaryKeys; i++) {
@@ -718,20 +730,24 @@ public class IndexOperations {
 
         ISerializerDeserializer[] tokenKeyPairFields = new ISerializerDeserializer[numTokenKeyPairFields];
         tokenKeyPairFields[0] = serdeProvider.getSerializerDeserializer(fieldsToTokenizeType);
-        for (i = 0; i < numPrimaryKeys; i++)
+        for (i = 0; i < numPrimaryKeys; i++) {
             tokenKeyPairFields[i + 1] = secondaryRecFields[numSecondaryKeys + i];
+        }
         RecordDescriptor tokenKeyPairRecDesc = new RecordDescriptor(tokenKeyPairFields);
 
         int[] fieldsToTokenize = new int[numSecondaryKeys];
-        for (i = 0; i < numSecondaryKeys; i++)
+        for (i = 0; i < numSecondaryKeys; i++) {
             fieldsToTokenize[i] = i;
+        }
 
         int[] primaryKeyFields = new int[numPrimaryKeys];
-        for (i = 0; i < numPrimaryKeys; i++)
+        for (i = 0; i < numPrimaryKeys; i++) {
             primaryKeyFields[i] = numSecondaryKeys + i;
+        }
 
+        // TODO: We might want to expose the hashing option at the AQL level, and add the choice to the index metadata.
         IBinaryTokenizerFactory tokenizerFactory = AqlBinaryTokenizerFactoryProvider.INSTANCE
-                .getTokenizerFactory(fieldsToTokenizeType);
+                .getTokenizerFactory(fieldsToTokenizeType, false);
         BinaryTokenizerOperatorDescriptor tokenizerOp = new BinaryTokenizerOperatorDescriptor(spec,
                 tokenKeyPairRecDesc, tokenizerFactory, fieldsToTokenize, primaryKeyFields);
         Pair<IFileSplitProvider, AlgebricksPartitionConstraint> secondarySplitsAndConstraint = datasetDecls
@@ -746,14 +762,16 @@ public class IndexOperations {
         IBinaryComparatorFactory[] tokenKeyPairComparatorFactories = new IBinaryComparatorFactory[numTokenKeyPairFields];
         tokenKeyPairComparatorFactories[0] = AqlBinaryComparatorFactoryProvider.INSTANCE.getBinaryComparatorFactory(
                 fieldsToTokenizeType, OrderKind.ASC);
-        for (i = 0; i < numPrimaryKeys; i++)
+        for (i = 0; i < numPrimaryKeys; i++) {
             tokenKeyPairComparatorFactories[i + 1] = primaryComparatorFactories[i];
+        }
 
         int[] sortFields = new int[numTokenKeyPairFields]; // <token, primary
         // key a, primary
         // key b, etc.>
-        for (i = 0; i < numTokenKeyPairFields; i++)
+        for (i = 0; i < numTokenKeyPairFields; i++) {
             sortFields[i] = i;
+        }
 
         Pair<IFileSplitProvider, AlgebricksPartitionConstraint> sorterSplitsAndConstraint = datasetDecls
                 .splitProviderAndPartitionConstraintsForInternalOrFeedDataset(primaryIndexName, primaryIndexName);
@@ -766,30 +784,22 @@ public class IndexOperations {
 
         // ---------- END EXTERNAL SORT OP
 
-        // ---------- START SECONDARY INDEX BULK LOAD
-
-        ITypeTraits[] secondaryTypeTraits = new ITypeTraits[numTokenKeyPairFields];
-        secondaryTypeTraits[0] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(fieldsToTokenizeType);
-        for (i = 0; i < numPrimaryKeys; i++)
-            secondaryTypeTraits[i + 1] = primaryTypeTraits[i];
-
-        ITreeIndexFrameFactory secondaryInteriorFrameFactory = AqlMetadataProvider
-                .createBTreeNSMInteriorFrameFactory(secondaryTypeTraits);
-        ITreeIndexFrameFactory secondaryLeafFrameFactory = AqlMetadataProvider
-                .createBTreeNSMLeafFrameFactory(secondaryTypeTraits);
-
+        // ---------- START INVERTED INDEX BULK LOAD
         int[] fieldPermutation = new int[numSecondaryKeys + numPrimaryKeys];
-        for (i = 0; i < numTokenKeyPairFields; i++)
+        for (i = 0; i < numTokenKeyPairFields; i++) {
             fieldPermutation[i] = i;
+        }
 
-        TreeIndexBulkLoadOperatorDescriptor secondaryBulkLoadOp = new TreeIndexBulkLoadOperatorDescriptor(spec,
-                storageManager, treeRegistryProvider, secondarySplitsAndConstraint.first,
-                secondaryInteriorFrameFactory, secondaryLeafFrameFactory, secondaryTypeTraits,
-                tokenKeyPairComparatorFactories, fieldPermutation, 0.7f, new BTreeDataflowHelperFactory());
-        AlgebricksPartitionConstraintHelper.setPartitionConstraintInJobSpec(spec, secondaryBulkLoadOp,
+        Pair<IFileSplitProvider, IFileSplitProvider> fileSplitProviders = getInvertedIndexFileSplitProviders(secondarySplitsAndConstraint.first);
+        
+        InvertedIndexBulkLoadOperatorDescriptor invIndexBulkLoadOp = new InvertedIndexBulkLoadOperatorDescriptor(spec,
+                fieldPermutation, storageManager, fileSplitProviders.first, fileSplitProviders.second,
+                indexRegistryProvider, tokenTypeTraits, tokenComparatorFactories, invListsTypeTraits,
+                invListsComparatorFactories, new BTreeDataflowHelperFactory());
+        AlgebricksPartitionConstraintHelper.setPartitionConstraintInJobSpec(spec, invIndexBulkLoadOp,
                 secondarySplitsAndConstraint.second);
 
-        // ---------- END SECONDARY INDEX BULK LOAD
+        // ---------- END INVERTED INDEX BULK LOAD
 
         // ---------- START CONNECT THE OPERATORS
 
@@ -801,15 +811,31 @@ public class IndexOperations {
 
         spec.connect(new OneToOneConnectorDescriptor(spec), tokenizerOp, 0, sortOp, 0);
 
-        spec.connect(new OneToOneConnectorDescriptor(spec), sortOp, 0, secondaryBulkLoadOp, 0);
+        spec.connect(new OneToOneConnectorDescriptor(spec), sortOp, 0, invIndexBulkLoadOp, 0);
 
-        spec.addRoot(secondaryBulkLoadOp);
+        spec.addRoot(invIndexBulkLoadOp);
 
+        System.out.println("JOBSPEC BUILT!");
+        
         // ---------- END CONNECT THE OPERATORS
 
         return spec;
     }
 
+    private static Pair<IFileSplitProvider, IFileSplitProvider> getInvertedIndexFileSplitProviders(IFileSplitProvider splitProvider) {
+        int numSplits = splitProvider.getFileSplits().length;
+        FileSplit[] btreeSplits = new FileSplit[numSplits];
+        FileSplit[] invListsSplits = new FileSplit[numSplits];
+        for (int i = 0; i < numSplits; i++) {
+            String nodeName = splitProvider.getFileSplits()[i].getNodeName();
+            String path = splitProvider.getFileSplits()[i].getLocalFile().getFile().getPath();
+            btreeSplits[i] = new FileSplit(nodeName, path + "_$btree");
+            invListsSplits[i] = new FileSplit(nodeName, path + "_$invlists");
+        }
+        return new Pair<IFileSplitProvider, IFileSplitProvider>(new ConstantFileSplitProvider(btreeSplits),
+                new ConstantFileSplitProvider(invListsSplits));
+    }
+    
     public static void main(String[] args) throws Exception {
         String host;
         String appName;
