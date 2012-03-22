@@ -160,7 +160,7 @@ public class OptimizerTest {
                             + lineActual);
                 }
                 LOGGER.severe("Test \"" + queryFile.getPath() + "\" PASSED!");
-                actualFile.delete();
+                //actualFile.delete();
             } finally {
                 readerExpected.close();
                 readerActual.close();

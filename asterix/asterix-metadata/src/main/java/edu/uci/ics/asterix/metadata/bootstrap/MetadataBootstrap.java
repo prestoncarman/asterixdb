@@ -130,7 +130,7 @@ public class MetadataBootstrap {
             (new File(outputDir)).mkdirs();
         }
 
-        btreeRegistry = appContext.getTreeRegisterProvider().getRegistry(null);
+        btreeRegistry = appContext.getIndexRegistryProvider().getRegistry(null);
         bufferCache = appContext.getStorageManagerInterface().getBufferCache(null);
         fileMapProvider = appContext.getStorageManagerInterface().getFileMapProvider(null);
 

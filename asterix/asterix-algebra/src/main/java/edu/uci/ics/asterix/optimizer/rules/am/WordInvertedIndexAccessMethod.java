@@ -10,20 +10,16 @@ import edu.uci.ics.asterix.common.functions.FunctionArgumentsConstants;
 import edu.uci.ics.asterix.common.functions.FunctionUtils;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledDatasetDecl;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl;
-import edu.uci.ics.asterix.metadata.utils.DatasetUtils;
 import edu.uci.ics.asterix.om.base.AInt32;
 import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
 import edu.uci.ics.asterix.om.types.ARecordType;
-import edu.uci.ics.asterix.om.types.IAType;
-import edu.uci.ics.asterix.om.util.NonTaggedFormatUtil;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IOptimizationContext;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
-import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.UnnestingFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
@@ -31,22 +27,20 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.functions.IFunctionInfo;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.DataSourceScanOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOperator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluatorFactory;
 import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
-import edu.uci.ics.hyracks.algebricks.core.utils.Triple;
 
-public class RTreeAccessMethod implements IAccessMethod {
+public class WordInvertedIndexAccessMethod implements IAccessMethod {
 
     private static List<FunctionIdentifier> funcIdents = new ArrayList<FunctionIdentifier>();
     static {
-        funcIdents.add(AsterixBuiltinFunctions.SPATIAL_INTERSECT);
+        funcIdents.add(AsterixBuiltinFunctions.CONTAINS);
     }
     
-    public static RTreeAccessMethod INSTANCE = new RTreeAccessMethod();
+    public static WordInvertedIndexAccessMethod INSTANCE = new WordInvertedIndexAccessMethod();
     
     @Override
     public List<FunctionIdentifier> getOptimizableFunctions() {
-        return funcIdents;
+       return funcIdents;
     }
 
     @Override
@@ -69,13 +63,13 @@ public class RTreeAccessMethod implements IAccessMethod {
             Mutable<ILogicalOperator> dataSourceScanRef, AqlCompiledDatasetDecl datasetDecl, ARecordType recordType,
             AqlCompiledIndexDecl chosenIndex, AccessMethodAnalysisContext analysisCtx, IOptimizationContext context)
             throws AlgebricksException {
-        // Get the number of dimensions corresponding to the field indexed by
-        // chosenIndex.
-        IAType spatialType = AqlCompiledIndexDecl.keyFieldType(analysisCtx.matchedFuncExprs.get(0).getFieldName(), recordType);
-        int numDimensions = NonTaggedFormatUtil.getNumDimensions(spatialType.getTypeTag());
-        int numSecondaryKeys = numDimensions * 2;
+        System.out.println("READY FOR REWRITE");
+        // TODO: Think more deeply about where this is used for inverted indexes, and what composite keys should mean.
+        // For now we are assuming a single secondary index key.
+        //int numSecondaryKeys = chosenIndex.getFieldExprs().size();
+        int numSecondaryKeys = 1;
         
-        // TODO: We can probably do something smarter here based on selectivity or MBR area.
+        // TODO: We can probably do something smarter here based on selectivity.
         // Pick the first expr optimizable by this index.
         List<Integer> indexExprs = analysisCtx.getIndexExprs(chosenIndex);
         int firstExprIndex = indexExprs.get(0);
@@ -88,81 +82,44 @@ public class RTreeAccessMethod implements IAccessMethod {
         // the number of secondary-index keys, and the variable references corresponding to the secondary-index search keys.
         ArrayList<Mutable<ILogicalExpression>> secondaryIndexFuncArgs = new ArrayList<Mutable<ILogicalExpression>>();
         secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(chosenIndex.getIndexName())));
-        secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(FunctionArgumentsConstants.RTREE_INDEX)));
+        secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(FunctionArgumentsConstants.WORD_INVERTED_INDEX_INDEX)));
         secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(datasetDecl.getName())));
         secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(
                 new AInt32(numSecondaryKeys)))));
-        // A spatial object is serialized in the constant of the func expr we are optimizing.
-        // The R-Tree expects as input an MBR represented with 1 field per dimension. 
-        // Here we generate vars and funcs for extracting MBR fields from the constant into fields of a tuple (as the R-Tree expects them).
+        // Here we generate vars and funcs for assigning the secondary-index keys to be fed into the secondary-index search.
         // List of variables for the assign.
         ArrayList<LogicalVariable> keyVarList = new ArrayList<LogicalVariable>();
         // List of expressions for the assign.
         ArrayList<Mutable<ILogicalExpression>> keyExprList = new ArrayList<Mutable<ILogicalExpression>>();
-        for (int i = 0; i < numSecondaryKeys; i++) {
-            // The create MBR function "extracts" one field of an MBR around the given spatial object.
-            AbstractFunctionCallExpression createMBR = new ScalarFunctionCallExpression(
-                    FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.CREATE_MBR));
-            // Spatial object is the constant from the func expr we are optimizing.
-            createMBR.getArguments().add(new MutableObject<ILogicalExpression>(new ConstantExpression(analysisCtx.matchedFuncExprs.get(firstExprIndex).getConstVal())));
-            // The number of dimensions.
-            createMBR.getArguments().add(
-                    new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(
-                            new AInt32(numDimensions)))));
-            // Which part of the MBR to extract.
-            createMBR.getArguments().add(
-                    new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(new AInt32(i)))));
-            // Add a variable and its expr to the lists which will be passed into an assign op.
-            LogicalVariable keyVar = context.newVar();
-            keyVarList.add(keyVar);
-            keyExprList.add(new MutableObject<ILogicalExpression>(createMBR));
-            // Add variable reference to list of arguments for the unnest (which is "consumed" by jobgen).
-            Mutable<ILogicalExpression> keyVarRef = new MutableObject<ILogicalExpression>(new VariableReferenceExpression(
-                    keyVar));
-            secondaryIndexFuncArgs.add(keyVarRef);
-        }
+        // For now we are assuming a single secondary index key.
+        // Add a variable and its expr to the lists which will be passed into an assign op.
+        LogicalVariable keyVar = context.newVar();
+        keyVarList.add(keyVar);
+        keyExprList.add(new MutableObject<ILogicalExpression>(new ConstantExpression(analysisCtx.matchedFuncExprs.get(firstExprIndex).getConstVal())));
+        Mutable<ILogicalExpression> keyVarRef = new MutableObject<ILogicalExpression>(
+                new VariableReferenceExpression(keyVar));
+        secondaryIndexFuncArgs.add(keyVarRef);
 
-        // Assign operator that "extracts" the MBR fields from the func-expr constant into a tuple.
+        // Assign operator that sets the secondary-index search-key fields.
         AssignOperator assignSearchKeys = new AssignOperator(keyVarList, keyExprList);
         // Input to this assign is the EmptyTupleSource (which the dataSourceScan also must have had as input).
         assignSearchKeys.getInputs().add(dataSourceScan.getInputs().get(0));
         assignSearchKeys.setExecutionMode(dataSourceScan.getExecutionMode());
 
-        // This is the logical representation of our RTree search.
+        // This is the logical representation of our secondary-index search.
         // An index search is expressed logically as an unnest over an index-search function.
         IFunctionInfo secondaryIndexSearch = FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.INDEX_SEARCH);
-        UnnestingFunctionCallExpression rangeSearchFun = new UnnestingFunctionCallExpression(secondaryIndexSearch, secondaryIndexFuncArgs);
-        rangeSearchFun.setReturnsUniqueValues(true);
+        UnnestingFunctionCallExpression invIndexSearchFun = new UnnestingFunctionCallExpression(secondaryIndexSearch, secondaryIndexFuncArgs);
+        invIndexSearchFun.setReturnsUniqueValues(true);
 
         // Generate the rest of the upstream plan which feeds the search results into the primary index.
         List<LogicalVariable> primaryIndexVars = dataSourceScan.getVariables();
-        List<Object> secondaryIndexTypes = getSecondaryIndexTypes(datasetDecl, chosenIndex, recordType);
+        List<Object> secondaryIndexTypes = AccessMethodUtils.getSecondaryIndexTypes(datasetDecl, chosenIndex, recordType);
         UnnestMapOperator primaryIndexUnnestMap = AccessMethodUtils.createPrimaryIndexUnnestMap(datasetDecl, recordType,
-                primaryIndexVars, chosenIndex, numSecondaryKeys, secondaryIndexTypes, rangeSearchFun, assignSearchKeys,
+                primaryIndexVars, chosenIndex, numSecondaryKeys, secondaryIndexTypes, invIndexSearchFun, assignSearchKeys,
                 context, true);
         // Replace the datasource scan with the new plan rooted at primaryIndexUnnestMap.
         dataSourceScanRef.setValue(primaryIndexUnnestMap);
-        return true;
-    }
-    
-    /**
-     * @return A list of types corresponding to fields produced by the given
-     *         index when searched.
-     */
-    private static List<Object> getSecondaryIndexTypes(AqlCompiledDatasetDecl datasetDecl, AqlCompiledIndexDecl index,
-            ARecordType itemType) throws AlgebricksException {
-        List<Object> types = new ArrayList<Object>();
-        IAType keyType = AqlCompiledIndexDecl.keyFieldType(index.getFieldExprs().get(0), itemType);
-        int numDimensions = NonTaggedFormatUtil.getNumDimensions(keyType.getTypeTag());
-        int numKeys = numDimensions * 2;
-        IAType nestedKeyType = NonTaggedFormatUtil.getNestedSpatialType(keyType.getTypeTag());
-        for (int i = 0; i < numKeys; i++) {
-            types.add(nestedKeyType);
-        }
-        for (Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType> t : DatasetUtils
-                .getPartitioningFunctions(datasetDecl)) {
-            types.add(t.third);
-        }
-        return types;
+        return false;
     }
 }

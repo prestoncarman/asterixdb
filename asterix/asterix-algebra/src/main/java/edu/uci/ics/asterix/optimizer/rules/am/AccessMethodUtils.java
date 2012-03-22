@@ -82,6 +82,23 @@ public class AccessMethodUtils {
         return true;
     }
 
+    /**
+     * @return A list of types corresponding to fields produced by the given
+     *         index when searched.
+     */
+    public static List<Object> getSecondaryIndexTypes(AqlCompiledDatasetDecl datasetDecl, AqlCompiledIndexDecl index,
+            ARecordType recordType) throws AlgebricksException {
+        List<Object> types = new ArrayList<Object>();
+        for (String sk : index.getFieldExprs()) {
+            types.add(AqlCompiledIndexDecl.keyFieldType(sk, recordType));
+        }
+        for (Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType> t : DatasetUtils
+                .getPartitioningFunctions(datasetDecl)) {
+            types.add(t.third);
+        }
+        return types;
+    }
+    
     public static UnnestMapOperator createPrimaryIndexUnnestMap(AqlCompiledDatasetDecl datasetDecl, ARecordType recordType,
             List<LogicalVariable> primaryIndexVars, AqlCompiledIndexDecl secondaryIndex, int numSecondaryKeys,
             List<Object> secondaryIndexTypes, UnnestingFunctionCallExpression rangeSearchFun,

@@ -94,6 +94,7 @@ public class IntroduceAccessMethodSearchRule implements IAlgebraicRewriteRule {
 	static {
 	    registerAccessMethod(BTreeAccessMethod.INSTANCE);
 	    registerAccessMethod(RTreeAccessMethod.INSTANCE);
+	    registerAccessMethod(WordInvertedIndexAccessMethod.INSTANCE);
 	}
 	
 	public static void registerAccessMethod(IAccessMethod accessMethod) {

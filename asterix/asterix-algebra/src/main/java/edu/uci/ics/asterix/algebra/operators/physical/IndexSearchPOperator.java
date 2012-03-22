@@ -25,11 +25,11 @@ import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.api.exceptions.NotImplementedException;
 import edu.uci.ics.hyracks.algebricks.core.utils.Pair;
 
-public abstract class TreeSearchPOperator extends AbstractScanPOperator {
+public abstract class IndexSearchPOperator extends AbstractScanPOperator {
 
     private IDataSourceIndex<String, AqlSourceId> idx;
 
-    public TreeSearchPOperator(IDataSourceIndex<String, AqlSourceId> idx) {
+    public IndexSearchPOperator(IDataSourceIndex<String, AqlSourceId> idx) {
         this.idx = idx;
     }
 

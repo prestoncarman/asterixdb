@@ -29,7 +29,7 @@ import edu.uci.ics.hyracks.algebricks.core.api.exceptions.NotImplementedExceptio
 import edu.uci.ics.hyracks.algebricks.core.utils.Pair;
 import edu.uci.ics.hyracks.api.dataflow.IOperatorDescriptor;
 
-public class BTreeSearchPOperator extends TreeSearchPOperator {
+public class BTreeSearchPOperator extends IndexSearchPOperator {
 
     public BTreeSearchPOperator(IDataSourceIndex<String, AqlSourceId> idx) {
         super(idx);
@@ -43,23 +43,18 @@ public class BTreeSearchPOperator extends TreeSearchPOperator {
     @Override
     public void contributeRuntimeOperator(IHyracksJobBuilder builder, JobGenContext context, ILogicalOperator op,
             IOperatorSchema opSchema, IOperatorSchema[] inputSchemas, IOperatorSchema outerPlanSchema)
-            throws AlgebricksException {
+                    throws AlgebricksException {
         UnnestMapOperator unnestMap = (UnnestMapOperator) op;
         ILogicalExpression unnestExpr = unnestMap.getExpressionRef().getValue();
-
-        if (unnestExpr.getExpressionTag() == LogicalExpressionTag.FUNCTION_CALL) {
-            AbstractFunctionCallExpression f = (AbstractFunctionCallExpression) unnestExpr;
-            FunctionIdentifier fid = f.getFunctionIdentifier();
-            if (fid.equals(AsterixBuiltinFunctions.INDEX_SEARCH)) {
-                try {
-                    contributeBtreeSearch(builder, context, unnestMap, opSchema, inputSchemas);
-                } catch (AlgebricksException e) {
-                    throw new AlgebricksException(e);
-                }
-                return;
-            }
+        if (unnestExpr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
+            throw new IllegalStateException();
         }
-        throw new IllegalStateException();
+        AbstractFunctionCallExpression f = (AbstractFunctionCallExpression) unnestExpr;
+        FunctionIdentifier fid = f.getFunctionIdentifier();
+        if (fid.equals(AsterixBuiltinFunctions.INDEX_SEARCH)) {
+            contributeBtreeSearch(builder, context, unnestMap, opSchema, inputSchemas);
+            return;
+        }
     }
 
     private void contributeBtreeSearch(IHyracksJobBuilder builder, JobGenContext context, UnnestMapOperator unnestMap,

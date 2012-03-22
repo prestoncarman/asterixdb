@@ -18,7 +18,6 @@ import edu.uci.ics.asterix.om.base.AInt32;
 import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
 import edu.uci.ics.asterix.om.types.ARecordType;
-import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IOptimizationContext;
@@ -40,9 +39,7 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AssignOpera
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.DataSourceScanOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOperator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluatorFactory;
 import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
-import edu.uci.ics.hyracks.algebricks.core.utils.Triple;
 
 public class BTreeAccessMethod implements IAccessMethod {
 
@@ -240,7 +237,7 @@ public class BTreeAccessMethod implements IAccessMethod {
         ILogicalExpression highKeyExpr = highKeyInclusive[0] ? ConstantExpression.TRUE : ConstantExpression.FALSE;
         secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(highKeyExpr));
 
-        // Assign operator that sets the sedoncary-index search-key fields.
+        // Assign operator that sets the secondary-index search-key fields.
         AssignOperator assignSearchKeys = new AssignOperator(keyVarList, keyExprList);
         // Input to this assign is the EmptyTupleSource (which the dataSourceScan also must have had as input).
         assignSearchKeys.getInputs().add(dataSourceScan.getInputs().get(0));
@@ -257,7 +254,7 @@ public class BTreeAccessMethod implements IAccessMethod {
         UnnestMapOperator primaryIndexUnnestMap;
         boolean isPrimaryIndex = chosenIndex == DatasetUtils.getPrimaryIndex(datasetDecl);
         if (!isPrimaryIndex) {
-            List<Object> secondaryIndexTypes = getSecondaryIndexTypes(datasetDecl, chosenIndex, recordType);
+            List<Object> secondaryIndexTypes = AccessMethodUtils.getSecondaryIndexTypes(datasetDecl, chosenIndex, recordType);
             primaryIndexUnnestMap = AccessMethodUtils.createPrimaryIndexUnnestMap(datasetDecl, recordType,
                     primaryIndexVars, chosenIndex, numSecondaryKeys, secondaryIndexTypes, rangeSearchFun,
                     assignSearchKeys, context, true);
@@ -302,12 +299,12 @@ public class BTreeAccessMethod implements IAccessMethod {
                     new AsterixConstantValue(new AInt32(numKeys))));
             secondaryIndexFuncArgs.add(numKeysRef);
             for (int i = 0; i < numKeys; i++) {
-                LogicalVariable lowKeyVar = context.newVar();
-                keyVarList.add(lowKeyVar);
+                LogicalVariable keyVar = context.newVar();
+                keyVarList.add(keyVar);
                 keyExprList.add(new MutableObject<ILogicalExpression>(new ConstantExpression(keyConstants[i])));
-                Mutable<ILogicalExpression> lowKeyVarRef = new MutableObject<ILogicalExpression>(
-                        new VariableReferenceExpression(lowKeyVar));
-                secondaryIndexFuncArgs.add(lowKeyVarRef);
+                Mutable<ILogicalExpression> keyVarRef = new MutableObject<ILogicalExpression>(
+                        new VariableReferenceExpression(keyVar));
+                secondaryIndexFuncArgs.add(keyVarRef);
             }
         } else {
             Mutable<ILogicalExpression> zeroRef = new MutableObject<ILogicalExpression>(new ConstantExpression(
@@ -394,23 +391,6 @@ public class BTreeAccessMethod implements IAccessMethod {
             }
         }
         return limit;
-    }
-    
-    /**
-     * @return A list of types corresponding to fields produced by the given
-     *         index when searched.
-     */
-    private static List<Object> getSecondaryIndexTypes(AqlCompiledDatasetDecl datasetDecl, AqlCompiledIndexDecl index,
-            ARecordType recordType) throws AlgebricksException {
-        List<Object> types = new ArrayList<Object>();
-        for (String sk : index.getFieldExprs()) {
-            types.add(AqlCompiledIndexDecl.keyFieldType(sk, recordType));
-        }
-        for (Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType> t : DatasetUtils
-                .getPartitioningFunctions(datasetDecl)) {
-            types.add(t.third);
-        }
-        return types;
     }
     
     private ILogicalExpression createSelectCondition(List<Mutable<ILogicalExpression>> predList) {

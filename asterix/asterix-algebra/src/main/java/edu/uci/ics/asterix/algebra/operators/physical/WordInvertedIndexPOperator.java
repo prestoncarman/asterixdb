@@ -1,6 +1,5 @@
 package edu.uci.ics.asterix.algebra.operators.physical;
 
-
 import org.apache.commons.lang3.mutable.Mutable;
 
 import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
@@ -28,74 +27,65 @@ import edu.uci.ics.hyracks.algebricks.core.api.exceptions.NotImplementedExceptio
 import edu.uci.ics.hyracks.algebricks.core.utils.Pair;
 import edu.uci.ics.hyracks.api.dataflow.IOperatorDescriptor;
 
-public class RTreeSearchPOperator extends IndexSearchPOperator {
-
-    public RTreeSearchPOperator(IDataSourceIndex<String, AqlSourceId> idx) {
+public class WordInvertedIndexPOperator extends IndexSearchPOperator {
+    public WordInvertedIndexPOperator(IDataSourceIndex<String, AqlSourceId> idx) {
         super(idx);
     }
 
     @Override
     public PhysicalOperatorTag getOperatorTag() {
-        return PhysicalOperatorTag.RTREE_SEARCH;
+        // TODO: Need to add another tag in Algebricks.
+        return PhysicalOperatorTag.BTREE_SEARCH;
     }
 
     @Override
     public void contributeRuntimeOperator(IHyracksJobBuilder builder, JobGenContext context, ILogicalOperator op,
             IOperatorSchema opSchema, IOperatorSchema[] inputSchemas, IOperatorSchema outerPlanSchema)
-            throws AlgebricksException {
-        UnnestMapOperator unnestMap = (UnnestMapOperator) op;
-        ILogicalExpression unnestExpr = unnestMap.getExpressionRef().getValue();
-
-        if (unnestExpr.getExpressionTag() == LogicalExpressionTag.FUNCTION_CALL) {
-            AbstractFunctionCallExpression f = (AbstractFunctionCallExpression) unnestExpr;
-            FunctionIdentifier fid = f.getFunctionIdentifier();
-            if (fid.equals(AsterixBuiltinFunctions.INDEX_SEARCH)) {
-                try {
-                    contributeRtreeSearch(builder, context, unnestMap, opSchema, inputSchemas);
-                } catch (AlgebricksException e) {
-                    throw new AlgebricksException(e);
-                }
-                return;
-            }
+                    throws AlgebricksException {
+        UnnestMapOperator unnestMapOp = (UnnestMapOperator) op;
+        ILogicalExpression unnestExpr = unnestMapOp.getExpressionRef().getValue();
+        if (unnestExpr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
+            throw new IllegalStateException();
         }
-        throw new IllegalStateException();
+        AbstractFunctionCallExpression unnestFuncExpr = (AbstractFunctionCallExpression) unnestExpr;
+        FunctionIdentifier funcIdent = unnestFuncExpr.getFunctionIdentifier();
+        if (funcIdent.equals(AsterixBuiltinFunctions.INDEX_SEARCH)) {
+            contributeInvertedIndexSearch(builder, context, unnestMapOp, opSchema, inputSchemas);
+            return;
+        }
     }
 
-    private void contributeRtreeSearch(IHyracksJobBuilder builder, JobGenContext context, UnnestMapOperator unnestMap,
+    private void contributeInvertedIndexSearch(IHyracksJobBuilder builder, JobGenContext context, UnnestMapOperator unnestMap,
             IOperatorSchema opSchema, IOperatorSchema[] inputSchemas) throws AlgebricksException, AlgebricksException {
         Mutable<ILogicalExpression> unnestExpr = unnestMap.getExpressionRef();
-        AbstractFunctionCallExpression f = (AbstractFunctionCallExpression) unnestExpr.getValue();
-
-        String idxType = getStringArgument(f, 1);
-        if (idxType != FunctionArgumentsConstants.RTREE_INDEX) {
-            throw new NotImplementedException(idxType + " indexes are not implemented.");
+        AbstractFunctionCallExpression unnestFuncExpr = (AbstractFunctionCallExpression) unnestExpr.getValue();
+        String indexType = getStringArgument(unnestFuncExpr, 1);
+        if (indexType != FunctionArgumentsConstants.WORD_INVERTED_INDEX_INDEX) {
+            throw new NotImplementedException(indexType + " indexes are not implemented.");
         }
-        String idxName = getStringArgument(f, 0);
-        String datasetName = getStringArgument(f, 2);
-
-        Pair<int[], Integer> keys = getKeys(f, 3, inputSchemas);
-        buildRtreeSearch(builder, context, unnestMap, opSchema, datasetName, idxName, keys.first);
+        String indexName = getStringArgument(unnestFuncExpr, 0);
+        String datasetName = getStringArgument(unnestFuncExpr, 2);
+        Pair<int[], Integer> keys = getKeys(unnestFuncExpr, 3, inputSchemas);
+        buildInvertedIndexSearch(builder, context, unnestMap, opSchema, datasetName, indexName, keys.first);
     }
 
-    private static void buildRtreeSearch(IHyracksJobBuilder builder, JobGenContext context, AbstractScanOperator scan,
+    private static void buildInvertedIndexSearch(IHyracksJobBuilder builder, JobGenContext context, AbstractScanOperator scan,
             IOperatorSchema opSchema, String datasetName, String indexName, int[] keyFields)
             throws AlgebricksException, AlgebricksException {
-        AqlMetadataProvider mp = (AqlMetadataProvider) context.getMetadataProvider();
-        AqlCompiledMetadataDeclarations metadata = mp.getMetadataDeclarations();
-        AqlCompiledDatasetDecl adecl = metadata.findDataset(datasetName);
-        if (adecl == null) {
+        AqlMetadataProvider metadataProvider = (AqlMetadataProvider) context.getMetadataProvider();
+        AqlCompiledMetadataDeclarations metadata = metadataProvider.getMetadataDeclarations();
+        AqlCompiledDatasetDecl datasetDecl = metadata.findDataset(datasetName);
+        if (datasetDecl == null) {
             throw new AlgebricksException("Unknown dataset " + datasetName);
         }
-        if (adecl.getDatasetType() == DatasetType.EXTERNAL) {
-            throw new AlgebricksException("Trying to run rtree search over external dataset (" + datasetName + ").");
+        if (datasetDecl.getDatasetType() == DatasetType.EXTERNAL) {
+            throw new AlgebricksException("Trying to run inverted index search over external dataset (" + datasetName + ").");
         }
-        Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> rtreeSearch = AqlMetadataProvider.buildRtreeRuntime(
-                metadata, context, builder.getJobSpec(), datasetName, adecl, indexName, keyFields);
-        builder.contributeHyracksOperator(scan, rtreeSearch.first);
-        builder.contributeAlgebricksPartitionConstraint(rtreeSearch.first, rtreeSearch.second);
-
+        Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> invIndexSearch = AqlMetadataProvider.buildInvertedIndexRuntime(
+                metadata, context, builder.getJobSpec(), datasetName, datasetDecl, indexName, keyFields);
+        builder.contributeHyracksOperator(scan, invIndexSearch.first);
+        builder.contributeAlgebricksPartitionConstraint(invIndexSearch.first, invIndexSearch.second);
         ILogicalOperator srcExchange = scan.getInputs().get(0).getValue();
         builder.contributeGraphEdge(srcExchange, 0, scan, 0);
     }
-
 }

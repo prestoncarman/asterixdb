@@ -96,7 +96,7 @@ public class MetadataNode implements IMetadataNode {
             TransactionProvider transactionProvider) {
         super();
         this.transactionProvider = transactionProvider;
-        btreeRegistryProvider = appContext.getTreeRegisterProvider();
+        btreeRegistryProvider = appContext.getIndexRegistryProvider();
     }
 
     @Override

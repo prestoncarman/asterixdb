@@ -78,6 +78,8 @@ import edu.uci.ics.hyracks.storage.am.common.api.ITreeIndexFrameFactory;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.TreeIndexBulkLoadOperatorDescriptor;
 import edu.uci.ics.hyracks.storage.am.common.ophelpers.IndexOp;
 import edu.uci.ics.hyracks.storage.am.common.tuples.TypeAwareTupleWriterFactory;
+import edu.uci.ics.hyracks.storage.am.invertedindex.dataflow.InvertedIndexSearchOperatorDescriptor;
+import edu.uci.ics.hyracks.storage.am.invertedindex.searchmodifiers.ConjunctiveSearchModifierFactory;
 import edu.uci.ics.hyracks.storage.am.rtree.dataflow.RTreeDataflowHelperFactory;
 import edu.uci.ics.hyracks.storage.am.rtree.dataflow.RTreeSearchOperatorDescriptor;
 import edu.uci.ics.hyracks.storage.am.rtree.frames.RTreeNSMInteriorFrameFactory;
@@ -378,7 +380,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         }
 
         BTreeSearchOperatorDescriptor btreeSearchOp = new BTreeSearchOperatorDescriptor(jobSpec, recDesc,
-                appContext.getStorageManagerInterface(), appContext.getTreeRegisterProvider(), spPc.first,
+                appContext.getStorageManagerInterface(), appContext.getIndexRegistryProvider(), spPc.first,
                 interiorFrameFactory, leafFrameFactory, typeTraits, comparatorFactories, true, lowKeyFields,
                 highKeyFields, lowKeyInclusive, highKeyInclusive, new BTreeDataflowHelperFactory());
 
@@ -492,11 +494,112 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         }
 
         RTreeSearchOperatorDescriptor rtreeSearchOp = new RTreeSearchOperatorDescriptor(jobSpec, recDesc,
-                appContext.getStorageManagerInterface(), appContext.getTreeRegisterProvider(), spPc.first,
+                appContext.getStorageManagerInterface(), appContext.getIndexRegistryProvider(), spPc.first,
                 interiorFrameFactory, leafFrameFactory, typeTraits, comparatorFactories, keyFields,
                 new RTreeDataflowHelperFactory());
 
         return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(rtreeSearchOp, spPc.second);
+    }
+    
+    @SuppressWarnings("rawtypes")
+    public static Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> buildInvertedIndexRuntime(
+            AqlCompiledMetadataDeclarations metadata, JobGenContext context, JobSpecification jobSpec,
+            String datasetName, AqlCompiledDatasetDecl datasetDecl, String indexName, int[] keyFields)
+            throws AlgebricksException {
+        String itemTypeName = datasetDecl.getItemTypeName();
+        IAType itemType;
+        try {
+            itemType = metadata.findType(itemTypeName);
+        } catch (Exception e) {
+            throw new AlgebricksException(e);
+        }
+
+        int numPrimaryKeys = DatasetUtils.getPartitioningFunctions(datasetDecl).size();
+        ISerializerDeserializer[] recordFields;
+        IBinaryComparatorFactory[] comparatorFactories;
+        ITypeTraits[] typeTraits;
+        IPrimitiveValueProviderFactory[] valueProviderFactories;
+        int numSecondaryKeys = 0;
+        int numNestedSecondaryKeyFields = 0;
+        int i = 0;
+
+        AqlCompiledIndexDecl index = DatasetUtils.findSecondaryIndexByName(datasetDecl, indexName);
+        if (index == null) {
+        	throw new AlgebricksException("Code generation error: no index " + indexName + " for dataset "
+        			+ datasetName);
+        }
+        List<String> secondaryKeyFields = index.getFieldExprs();
+        numSecondaryKeys = secondaryKeyFields.size();
+
+        if (numSecondaryKeys != 1) {
+        	throw new AlgebricksException(
+        			"Cannot use "
+        					+ numSecondaryKeys
+        					+ " fields as a key for the R-tree index. There can be only one field as a key for the R-tree index.");
+        }
+
+        if (itemType.getTypeTag() != ATypeTag.RECORD) {
+        	throw new AlgebricksException("Only record types can be indexed.");
+        }
+        ARecordType recType = (ARecordType) itemType;
+
+        IAType keyType = AqlCompiledIndexDecl.keyFieldType(secondaryKeyFields.get(0), recType);
+        if (keyType == null) {
+        	throw new AlgebricksException("Could not find field " + secondaryKeyFields.get(0) + " in the schema.");
+        }
+
+        int dimension = NonTaggedFormatUtil.getNumDimensions(keyType.getTypeTag());
+        numNestedSecondaryKeyFields = dimension * 2;
+
+        int numFields = numNestedSecondaryKeyFields + numPrimaryKeys;
+        recordFields = new ISerializerDeserializer[numFields];
+        typeTraits = new ITypeTraits[numFields];
+        comparatorFactories = new IBinaryComparatorFactory[numNestedSecondaryKeyFields];
+        valueProviderFactories = new IPrimitiveValueProviderFactory[numNestedSecondaryKeyFields];
+
+        IAType nestedKeyType = NonTaggedFormatUtil.getNestedSpatialType(keyType.getTypeTag());
+        for (i = 0; i < numNestedSecondaryKeyFields; i++) {
+        	ISerializerDeserializer keySerde = AqlSerializerDeserializerProvider.INSTANCE
+        			.getSerializerDeserializer(nestedKeyType);
+        	recordFields[i] = keySerde;
+        	comparatorFactories[i] = AqlBinaryComparatorFactoryProvider.INSTANCE.getBinaryComparatorFactory(
+        			nestedKeyType, OrderKind.ASC);
+        	typeTraits[i] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(nestedKeyType);
+        	valueProviderFactories[i] = AqlPrimitiveValueProviderFactory.INSTANCE;
+        }
+        
+        for (Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType> evalFactoryAndType : DatasetUtils
+                .getPartitioningFunctions(datasetDecl)) {
+            IAType keyType = evalFactoryAndType.third;
+            ISerializerDeserializer keySerde = AqlSerializerDeserializerProvider.INSTANCE
+                    .getSerializerDeserializer(keyType);
+            recordFields[i] = keySerde;
+            typeTraits[i] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(keyType);
+            ++i;
+        }
+
+        IAsterixApplicationContextInfo appContext = (IAsterixApplicationContextInfo) context.getAppContext();
+        RecordDescriptor recDesc = new RecordDescriptor(recordFields);
+
+        Pair<IFileSplitProvider, AlgebricksPartitionConstraint> spPc;
+        try {
+            spPc = metadata.splitProviderAndPartitionConstraintsForInternalOrFeedDataset(datasetName, indexName);
+        } catch (Exception e) {
+            throw new AlgebricksException(e);
+        }
+
+        // TODO: Here we assume there is only one search key field.
+        int queryField = keyFields[0];
+        
+		InvertedIndexSearchOperatorDescriptor invIndexSearchOp = new InvertedIndexSearchOperatorDescriptor(
+				jobSpec, queryField, appContext.getStorageManagerInterface(),
+				btreeFileSplitProvider, invListsFileSplitProvider,
+				appContext.getIndexRegistryProvider(), tokenTypeTraits,
+				tokenComparatorFactories, invListsTypeTraits,
+				invListComparatorFactories, new BTreeDataflowHelperFactory(),
+				queryTokenizerFactory, new ConjunctiveSearchModifierFactory(), recDesc);
+        
+        return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(invIndexSearchOp, spPc.second);
     }
 
     @Override
@@ -609,7 +712,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         }
 
         TreeIndexBulkLoadOperatorDescriptor btreeBulkLoad = new TreeIndexBulkLoadOperatorDescriptor(spec,
-                appContext.getStorageManagerInterface(), appContext.getTreeRegisterProvider(),
+                appContext.getStorageManagerInterface(), appContext.getIndexRegistryProvider(),
                 splitsAndConstraint.first, interiorFrameFactory, leafFrameFactory, typeTraits, comparatorFactories,
                 fieldPermutation, GlobalConfig.DEFAULT_BTREE_FILL_FACTOR, new BTreeDataflowHelperFactory());
         return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(btreeBulkLoad, splitsAndConstraint.second);
@@ -657,7 +760,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         }
 
         TreeIndexInsertUpdateDeleteOperatorDescriptor btreeBulkLoad = new TreeIndexInsertUpdateDeleteOperatorDescriptor(
-                spec, recordDesc, appContext.getStorageManagerInterface(), appContext.getTreeRegisterProvider(),
+                spec, recordDesc, appContext.getStorageManagerInterface(), appContext.getIndexRegistryProvider(),
                 splitsAndConstraint.first, interiorFrameFactory, leafFrameFactory, typeTraits, comparatorFactories,
                 new BTreeDataflowHelperFactory(), fieldPermutation, IndexOp.INSERT, txnId);
         return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(btreeBulkLoad, splitsAndConstraint.second);
@@ -705,7 +808,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         }
 
         TreeIndexInsertUpdateDeleteOperatorDescriptor btreeBulkLoad = new TreeIndexInsertUpdateDeleteOperatorDescriptor(
-                spec, recordDesc, appContext.getStorageManagerInterface(), appContext.getTreeRegisterProvider(),
+                spec, recordDesc, appContext.getStorageManagerInterface(), appContext.getIndexRegistryProvider(),
                 splitsAndConstraint.first, interiorFrameFactory, leafFrameFactory, typeTraits, comparatorFactories,
                 new BTreeDataflowHelperFactory(), fieldPermutation, IndexOp.DELETE, txnId);
         return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(btreeBulkLoad, splitsAndConstraint.second);
@@ -819,7 +922,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
             throw new AlgebricksException(e);
         }
         TreeIndexInsertUpdateDeleteOperatorDescriptor btreeBulkLoad = new TreeIndexInsertUpdateDeleteOperatorDescriptor(
-                spec, recordDesc, appContext.getStorageManagerInterface(), appContext.getTreeRegisterProvider(),
+                spec, recordDesc, appContext.getStorageManagerInterface(), appContext.getIndexRegistryProvider(),
                 splitsAndConstraint.first, interiorFrameFactory, leafFrameFactory, typeTraits, comparatorFactories,
                 new BTreeDataflowHelperFactory(), fieldPermutation, indexOp, txnId);
         return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(btreeBulkLoad, splitsAndConstraint.second);
@@ -903,7 +1006,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
             throw new AlgebricksException(e);
         }
         TreeIndexInsertUpdateDeleteOperatorDescriptor rtreeUpdate = new TreeIndexInsertUpdateDeleteOperatorDescriptor(
-                spec, recordDesc, appContext.getStorageManagerInterface(), appContext.getTreeRegisterProvider(),
+                spec, recordDesc, appContext.getStorageManagerInterface(), appContext.getIndexRegistryProvider(),
                 splitsAndConstraint.first, interiorFrameFactory, leafFrameFactory, typeTraits, comparatorFactories,
                 new RTreeDataflowHelperFactory(), fieldPermutation, indexOp, txnId);
         return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(rtreeUpdate, splitsAndConstraint.second);
