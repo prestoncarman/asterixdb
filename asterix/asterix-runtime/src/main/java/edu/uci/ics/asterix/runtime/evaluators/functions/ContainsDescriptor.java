@@ -10,7 +10,6 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluatorFactor
 import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.data.std.primitive.UTF8StringPointable;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.IDataOutputProvider;
-import edu.uci.ics.hyracks.dataflow.common.data.util.StringUtils;
 
 public class ContainsDescriptor extends AbstractScalarFunctionDynamicDescriptor {
     private static final long serialVersionUID = 1L;
@@ -38,7 +37,7 @@ public class ContainsDescriptor extends AbstractScalarFunctionDynamicDescriptor 
 
                         int s1Start = 3;
                         int s2Start = 3;
-
+                        
                         boolean matches = false;
                         int maxStart = utflen1 - utflen2;
                         int startMatch = 0;

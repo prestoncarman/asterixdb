@@ -139,7 +139,7 @@ public class RTreeAccessMethod implements IAccessMethod {
         List<Object> secondaryIndexTypes = getSecondaryIndexTypes(datasetDecl, chosenIndex, recordType);
         UnnestMapOperator primaryIndexUnnestMap = AccessMethodUtils.createPrimaryIndexUnnestMap(datasetDecl, recordType,
                 primaryIndexVars, chosenIndex, numSecondaryKeys, secondaryIndexTypes, rangeSearchFun, assignSearchKeys,
-                context, true);
+                context, false, true);
         // Replace the datasource scan with the new plan rooted at primaryIndexUnnestMap.
         dataSourceScanRef.setValue(primaryIndexUnnestMap);
         return true;

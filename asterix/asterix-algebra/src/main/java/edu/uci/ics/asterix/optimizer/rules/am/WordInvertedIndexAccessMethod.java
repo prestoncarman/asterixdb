@@ -63,7 +63,6 @@ public class WordInvertedIndexAccessMethod implements IAccessMethod {
             Mutable<ILogicalOperator> dataSourceScanRef, AqlCompiledDatasetDecl datasetDecl, ARecordType recordType,
             AqlCompiledIndexDecl chosenIndex, AccessMethodAnalysisContext analysisCtx, IOptimizationContext context)
             throws AlgebricksException {
-        System.out.println("READY FOR REWRITE");
         // TODO: Think more deeply about where this is used for inverted indexes, and what composite keys should mean.
         // For now we are assuming a single secondary index key.
         //int numSecondaryKeys = chosenIndex.getFieldExprs().size();
@@ -104,8 +103,8 @@ public class WordInvertedIndexAccessMethod implements IAccessMethod {
         AssignOperator assignSearchKeys = new AssignOperator(keyVarList, keyExprList);
         // Input to this assign is the EmptyTupleSource (which the dataSourceScan also must have had as input).
         assignSearchKeys.getInputs().add(dataSourceScan.getInputs().get(0));
-        assignSearchKeys.setExecutionMode(dataSourceScan.getExecutionMode());
-
+        assignSearchKeys.setExecutionMode(dataSourceScan.getExecutionMode());        
+        
         // This is the logical representation of our secondary-index search.
         // An index search is expressed logically as an unnest over an index-search function.
         IFunctionInfo secondaryIndexSearch = FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.INDEX_SEARCH);
@@ -113,13 +112,13 @@ public class WordInvertedIndexAccessMethod implements IAccessMethod {
         invIndexSearchFun.setReturnsUniqueValues(true);
 
         // Generate the rest of the upstream plan which feeds the search results into the primary index.
-        List<LogicalVariable> primaryIndexVars = dataSourceScan.getVariables();
-        List<Object> secondaryIndexTypes = AccessMethodUtils.getSecondaryIndexTypes(datasetDecl, chosenIndex, recordType);
+        List<LogicalVariable> primaryIndexVars = dataSourceScan.getVariables();        
+        List<Object> secondaryIndexTypes = AccessMethodUtils.getSecondaryIndexTypes(datasetDecl, chosenIndex, recordType, true);
         UnnestMapOperator primaryIndexUnnestMap = AccessMethodUtils.createPrimaryIndexUnnestMap(datasetDecl, recordType,
                 primaryIndexVars, chosenIndex, numSecondaryKeys, secondaryIndexTypes, invIndexSearchFun, assignSearchKeys,
-                context, true);
+                context, true, true);
         // Replace the datasource scan with the new plan rooted at primaryIndexUnnestMap.
         dataSourceScanRef.setValue(primaryIndexUnnestMap);
-        return false;
+        return true;
     }
 }

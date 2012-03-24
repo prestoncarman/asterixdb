@@ -13,7 +13,7 @@ create type MyRecord as closed {
   rec: rectangle
 }
 
-create nodegroup group1  if not exists on nc1, nc2;
+create nodegroup group1  if not exists on nc1;
 
 create dataset MyData(MyRecord)
   partitioned by key id on group1;
@@ -23,3 +23,9 @@ using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
 (("path"="nc1://data/spatial/spatialData.json"),("format"="adm")) pre-sorted;
 
 create index keyword_index on MyData(kwds) type keyword;
+
+write output to nc1:"rttest/word-inverted-index-contains.adm";
+
+for $o in dataset('MyData')
+where contains($o.kwds, 'factory')
+return $o

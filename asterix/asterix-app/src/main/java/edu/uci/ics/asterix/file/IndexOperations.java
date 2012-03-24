@@ -47,8 +47,6 @@ import edu.uci.ics.hyracks.api.job.JobSpecification;
 import edu.uci.ics.hyracks.dataflow.common.comm.io.ArrayTupleBuilder;
 import edu.uci.ics.hyracks.dataflow.common.data.marshalling.IntegerSerializerDeserializer;
 import edu.uci.ics.hyracks.dataflow.std.connectors.OneToOneConnectorDescriptor;
-import edu.uci.ics.hyracks.dataflow.std.file.ConstantFileSplitProvider;
-import edu.uci.ics.hyracks.dataflow.std.file.FileSplit;
 import edu.uci.ics.hyracks.dataflow.std.file.IFileSplitProvider;
 import edu.uci.ics.hyracks.dataflow.std.misc.ConstantTupleSourceOperatorDescriptor;
 import edu.uci.ics.hyracks.dataflow.std.sort.ExternalSortOperatorDescriptor;
@@ -790,7 +788,8 @@ public class IndexOperations {
             fieldPermutation[i] = i;
         }
 
-        Pair<IFileSplitProvider, IFileSplitProvider> fileSplitProviders = getInvertedIndexFileSplitProviders(secondarySplitsAndConstraint.first);
+        Pair<IFileSplitProvider, IFileSplitProvider> fileSplitProviders = datasetDecls
+                .getInvertedIndexFileSplitProviders(secondarySplitsAndConstraint.first);
         
         InvertedIndexBulkLoadOperatorDescriptor invIndexBulkLoadOp = new InvertedIndexBulkLoadOperatorDescriptor(spec,
                 fieldPermutation, storageManager, fileSplitProviders.first, fileSplitProviders.second,
@@ -815,27 +814,11 @@ public class IndexOperations {
 
         spec.addRoot(invIndexBulkLoadOp);
 
-        System.out.println("JOBSPEC BUILT!");
-        
         // ---------- END CONNECT THE OPERATORS
 
         return spec;
     }
 
-    private static Pair<IFileSplitProvider, IFileSplitProvider> getInvertedIndexFileSplitProviders(IFileSplitProvider splitProvider) {
-        int numSplits = splitProvider.getFileSplits().length;
-        FileSplit[] btreeSplits = new FileSplit[numSplits];
-        FileSplit[] invListsSplits = new FileSplit[numSplits];
-        for (int i = 0; i < numSplits; i++) {
-            String nodeName = splitProvider.getFileSplits()[i].getNodeName();
-            String path = splitProvider.getFileSplits()[i].getLocalFile().getFile().getPath();
-            btreeSplits[i] = new FileSplit(nodeName, path + "_$btree");
-            invListsSplits[i] = new FileSplit(nodeName, path + "_$invlists");
-        }
-        return new Pair<IFileSplitProvider, IFileSplitProvider>(new ConstantFileSplitProvider(btreeSplits),
-                new ConstantFileSplitProvider(invListsSplits));
-    }
-    
     public static void main(String[] args) throws Exception {
         String host;
         String appName;

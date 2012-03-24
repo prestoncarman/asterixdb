@@ -26,7 +26,8 @@ public class AqlCompiledIndexDecl {
 
     public enum IndexKind {
         BTREE,
-        RTREE
+        RTREE,
+        WORD_INVIX
     }
 
     private String indexName;

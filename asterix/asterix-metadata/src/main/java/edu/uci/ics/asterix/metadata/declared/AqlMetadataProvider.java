@@ -545,8 +545,6 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         ITypeTraits[] tokenTypeTraits = new ITypeTraits[numSecondaryKeys];
         IBinaryComparatorFactory[] tokenComparatorFactories = new IBinaryComparatorFactory[numSecondaryKeys];
         for (int i = 0; i < numSecondaryKeys; i++) {
-        	ISerializerDeserializer keySerde = metadata.getFormat().getSerdeProvider()
-        			.getSerializerDeserializer(secondaryKeyType);
             tokenComparatorFactories[i] = AqlBinaryComparatorFactoryProvider.INSTANCE.getBinaryComparatorFactory(
             		secondaryKeyType, OrderKind.ASC);
             tokenTypeTraits[i] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(secondaryKeyType);
@@ -571,7 +569,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
                     keyType, OrderKind.ASC);
             invListsTypeTraits[i] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(keyType);
             ++i;
-        }
+        }        
         RecordDescriptor invListRecDesc = new RecordDescriptor(invListsRecFields);
         
         IAsterixApplicationContextInfo appContext = (IAsterixApplicationContextInfo) context.getAppContext();        
@@ -584,15 +582,15 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
 			throw new AlgebricksException(e);
 		}
         
-		IFileSplitProvider btreeFileSplitProvider = null;
-		IFileSplitProvider invListsFileSplitProvider = null;
+		Pair<IFileSplitProvider, IFileSplitProvider> fileSplitProviders = metadata
+                .getInvertedIndexFileSplitProviders(secondarySplitsAndConstraint.first);
 		
         // TODO: Here we assume there is only one search key field.
         // We also hardcode a ConjunctiveSearchModifierFactory(). We need a way to figure out which search modifier to use.
         int queryField = keyFields[0];        
 		InvertedIndexSearchOperatorDescriptor invIndexSearchOp = new InvertedIndexSearchOperatorDescriptor(
 				jobSpec, queryField, appContext.getStorageManagerInterface(),
-				btreeFileSplitProvider, invListsFileSplitProvider,
+				fileSplitProviders.first, fileSplitProviders.second,
 				appContext.getIndexRegistryProvider(), tokenTypeTraits,
 				tokenComparatorFactories, invListsTypeTraits,
 				invListsComparatorFactories, new BTreeDataflowHelperFactory(),

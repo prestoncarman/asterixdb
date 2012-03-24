@@ -87,10 +87,12 @@ public class AccessMethodUtils {
      *         index when searched.
      */
     public static List<Object> getSecondaryIndexTypes(AqlCompiledDatasetDecl datasetDecl, AqlCompiledIndexDecl index,
-            ARecordType recordType) throws AlgebricksException {
+            ARecordType recordType, boolean primaryKeysOnly) throws AlgebricksException {
         List<Object> types = new ArrayList<Object>();
-        for (String sk : index.getFieldExprs()) {
-            types.add(AqlCompiledIndexDecl.keyFieldType(sk, recordType));
+        if (!primaryKeysOnly) {
+            for (String sk : index.getFieldExprs()) {
+                types.add(AqlCompiledIndexDecl.keyFieldType(sk, recordType));
+            }
         }
         for (Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType> t : DatasetUtils
                 .getPartitioningFunctions(datasetDecl)) {
@@ -99,26 +101,28 @@ public class AccessMethodUtils {
         return types;
     }
     
-    public static UnnestMapOperator createPrimaryIndexUnnestMap(AqlCompiledDatasetDecl datasetDecl, ARecordType recordType,
-            List<LogicalVariable> primaryIndexVars, AqlCompiledIndexDecl secondaryIndex, int numSecondaryKeys,
-            List<Object> secondaryIndexTypes, UnnestingFunctionCallExpression rangeSearchFun,
-            AssignOperator assignSearchKeys, IOptimizationContext context, boolean sortPrimaryKeys) throws AlgebricksException {
-        int numPrimaryKeys = DatasetUtils.getPartitioningFunctions(datasetDecl).size();
+    public static UnnestMapOperator createPrimaryIndexUnnestMap(AqlCompiledDatasetDecl datasetDecl,
+            ARecordType recordType, List<LogicalVariable> primaryIndexVars, AqlCompiledIndexDecl secondaryIndex,
+            int numSecondaryKeys, List<Object> secondaryIndexTypes, UnnestingFunctionCallExpression rangeSearchFun,
+            AssignOperator assignSearchKeys, IOptimizationContext context, boolean outputPrimaryKeysOnly,
+            boolean sortPrimaryKeys) throws AlgebricksException {
         // List of variables for the primary keys coming out of a secondary-index search.
+        int numPrimaryKeys = DatasetUtils.getPartitioningFunctions(datasetDecl).size();
         ArrayList<LogicalVariable> secondaryIndexPrimaryKeys = new ArrayList<LogicalVariable>(numPrimaryKeys);
         for (int i = 0; i < numPrimaryKeys; i++) {
             secondaryIndexPrimaryKeys.add(context.newVar());
-        }
-        // List of variables coming out of the secondary-index search. It contains the secondary keys, and the primary keys.
-        ArrayList<LogicalVariable> secondaryIndexUnnestVars = new ArrayList<LogicalVariable>(numSecondaryKeys
-                + secondaryIndexPrimaryKeys.size());
-        // Add one variable per secondary-index key.
-        for (int i = 0; i < numSecondaryKeys; i++) {
-            secondaryIndexUnnestVars.add(context.newVar());
+        }        
+        // List of variables coming out of the secondary-index search. It contains the primary keys, and optionally the secondary keys.
+        ArrayList<LogicalVariable> secondaryIndexUnnestVars = new ArrayList<LogicalVariable>();
+        if (!outputPrimaryKeysOnly) {
+            // Add one variable per secondary-index key.
+            for (int i = 0; i < numSecondaryKeys; i++) {
+                secondaryIndexUnnestVars.add(context.newVar());
+            }
         }
         // Add the primary keys after the secondary keys.
         secondaryIndexUnnestVars.addAll(secondaryIndexPrimaryKeys);
-        // This is the operator that the physical rewrite will be looking for. It contains an unnest function that has all necessary arguments to determine
+        // This is the operator that jobgen will be looking for. It contains an unnest function that has all necessary arguments to determine
         // which index to use, which variables contain the index-search keys, what is the original dataset, etc.
         UnnestMapOperator secondaryIndexUnnestOp = new UnnestMapOperator(secondaryIndexUnnestVars, new MutableObject<ILogicalExpression>(
                 rangeSearchFun), secondaryIndexTypes);
