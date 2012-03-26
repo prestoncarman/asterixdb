@@ -98,7 +98,7 @@ public class BinaryHashMap {
 	}
 	
 	private BinaryEntry getPutInternal(BinaryEntry key, BinaryEntry value, boolean put) {
-		int bucket = hashFunc.hash(key.buf, key.off, key.len) % listHeads.length;
+		int bucket = Math.abs(hashFunc.hash(key.buf, key.off, key.len) % listHeads.length);
 		long headPtr = listHeads[bucket];
 		if (headPtr == NULL_PTR) {
 			// Key definitely doesn't exist yet.
