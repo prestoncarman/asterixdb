@@ -117,6 +117,7 @@ import edu.uci.ics.asterix.runtime.evaluators.functions.SimilarityJaccardCheckDe
 import edu.uci.ics.asterix.runtime.evaluators.functions.SimilarityJaccardDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.SimilarityJaccardPrefixCheckDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.SimilarityJaccardPrefixDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.SimilarityJaccardSortedDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.SpatialAreaDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.SpatialCellDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.SpatialDistanceDescriptor;
@@ -305,6 +306,7 @@ public class NonTaggedDataFormat implements IDataFormat {
         temp.add(new EditDistanceCheckDescriptor());
 
         temp.add(new SimilarityJaccardDescriptor());
+        temp.add(new SimilarityJaccardSortedDescriptor());
         temp.add(new SimilarityJaccardCheckDescriptor());
         temp.add(new SimilarityJaccardPrefixDescriptor());
         temp.add(new SimilarityJaccardPrefixCheckDescriptor());

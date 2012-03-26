@@ -12,7 +12,7 @@ import edu.uci.ics.asterix.om.types.AOrderedListType;
 import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.asterix.om.types.BuiltinType;
 import edu.uci.ics.asterix.runtime.evaluators.base.AbstractScalarFunctionDynamicDescriptor;
-import edu.uci.ics.asterix.runtime.evaluators.common.SimilarityJaccardEvaluator;
+import edu.uci.ics.asterix.runtime.evaluators.common.SimilarityJaccardSortedEvaluator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluatorFactory;
@@ -22,8 +22,7 @@ import edu.uci.ics.hyracks.dataflow.common.data.accessors.ArrayBackedValueStorag
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.IDataOutputProvider;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.IFrameTupleReference;
 
-//assumes that both arguments are sorted by the same ordering
-
+// Assumes that both arguments are sorted by the same ordering.
 public class SimilarityJaccardCheckDescriptor extends AbstractScalarFunctionDynamicDescriptor {
 
     private static final long serialVersionUID = 1L;
@@ -47,7 +46,7 @@ public class SimilarityJaccardCheckDescriptor extends AbstractScalarFunctionDyna
         return FID;
     }
 
-    private static class SimilarityJaccardCheckEvaluator extends SimilarityJaccardEvaluator {
+    private static class SimilarityJaccardCheckEvaluator extends SimilarityJaccardSortedEvaluator {
 
         private final IEvaluator jaccThreshEval;
         private float jaccThresh = -1f;

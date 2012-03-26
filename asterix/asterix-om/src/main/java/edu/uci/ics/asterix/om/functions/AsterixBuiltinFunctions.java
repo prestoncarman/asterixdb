@@ -245,9 +245,11 @@ public class AsterixBuiltinFunctions {
 
 	public final static FunctionIdentifier PREFIX_LEN_JACCARD = new FunctionIdentifier(
 			FunctionConstants.ASTERIX_NS, "prefix-len-jaccard", 2, true);
-
+	
 	public final static FunctionIdentifier SIMILARITY_JACCARD = new FunctionIdentifier(
 			FunctionConstants.ASTERIX_NS, "similarity-jaccard", 2, true);
+	public final static FunctionIdentifier SIMILARITY_JACCARD_SORTED = new FunctionIdentifier(
+			FunctionConstants.ASTERIX_NS, "similarity-jaccard-sorted", 2, true);
 	public final static FunctionIdentifier SIMILARITY_JACCARD_CHECK = new FunctionIdentifier(
 			FunctionConstants.ASTERIX_NS, "similarity-jaccard-check", 3, true);
 	public final static FunctionIdentifier SIMILARITY_JACCARD_PREFIX = new FunctionIdentifier(
@@ -497,6 +499,7 @@ public class AsterixBuiltinFunctions {
 		add(SERIAL_LOCAL_AVG, NonTaggedLocalAvgTypeComputer.INSTANCE);
 		add(SERIAL_SUM, NonTaggedSumTypeComputer.INSTANCE);
 		add(SIMILARITY_JACCARD, AFloatTypeComputer.INSTANCE);
+		add(SIMILARITY_JACCARD_SORTED, AFloatTypeComputer.INSTANCE);
 		add(SIMILARITY_JACCARD_CHECK, OrderedListOfAnyTypeComputer.INSTANCE);
 		add(SIMILARITY_JACCARD_PREFIX, AFloatTypeComputer.INSTANCE);
 		add(SIMILARITY_JACCARD_PREFIX_CHECK,

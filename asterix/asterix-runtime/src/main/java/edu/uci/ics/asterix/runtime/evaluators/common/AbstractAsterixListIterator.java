@@ -83,11 +83,15 @@ public abstract class AbstractAsterixListIterator implements IListIterator {
                 cmp = AqlBinaryComparatorFactoryProvider.UTF8STRING_POINTABLE_INSTANCE.createBinaryComparator();
                 break;
             }
+            default: {
+            	cmp = null;
+            	break;
+            }
         }
         reset();
     }
 
     protected abstract int getItemOffset(byte[] serOrderedList, int offset, int itemIndex) throws AsterixException;
-
+    
     protected abstract int getNumberOfItems(byte[] serOrderedList, int offset);
 }

@@ -17,12 +17,13 @@ create dataset DBLP(DBLPType)
 
 load dataset DBLP 
 using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
-(("path"="nc1:///asterix/asterix-app/data/dblp-small/dblp-small-id.txt"),("format"="delimited-text"),("delimiter=":")) pre-sorted;
+(("path"="nc1://data/dblp-small/dblp-small-id.txt"),("format"="delimited-text"),("delimiter"=":")) pre-sorted;
 
 create index keyword_index on DBLP(title) type keyword;
 
-write output to nc1:"rttest/index_word-inverted-index-contains.adm";
+write output to nc1:"rttest/keyword_inverted-index-contains.adm";
 
 for $o in dataset('DBLP')
-where contains($o.title, "multimedia")
+where contains($o.title, "Multimedia")
+order by $o.id
 return $o
