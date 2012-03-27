@@ -1,0 +1,10 @@
+drop dataverse test if exists;
+create dataverse test;
+use dataverse test;
+
+write output to nc1:"rttest/similarity_similarity-jaccard-sorted-check_02.adm";
+
+let $a := [ ]
+let $b := [1, 2, 3, 4, 5]
+let $jacc := similarity-jaccard-sorted-check($a, $b, 0.1f)
+return $jacc

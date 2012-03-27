@@ -251,7 +251,7 @@ public class AsterixBuiltinFunctions {
 	public final static FunctionIdentifier SIMILARITY_JACCARD_SORTED = new FunctionIdentifier(
 			FunctionConstants.ASTERIX_NS, "similarity-jaccard-sorted", 2, true);
 	public final static FunctionIdentifier SIMILARITY_JACCARD_CHECK = new FunctionIdentifier(
-			FunctionConstants.ASTERIX_NS, "similarity-jaccard-check", 3, true);
+			FunctionConstants.ASTERIX_NS, "similarity-jaccard-sorted-check", 3, true);
 	public final static FunctionIdentifier SIMILARITY_JACCARD_PREFIX = new FunctionIdentifier(
 			FunctionConstants.ASTERIX_NS, "similarity-jaccard-prefix", 6, true);
 	public final static FunctionIdentifier SIMILARITY_JACCARD_PREFIX_CHECK = new FunctionIdentifier(

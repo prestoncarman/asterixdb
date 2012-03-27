@@ -6,18 +6,18 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluatorFactor
 import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.IDataOutputProvider;
 
-// Assumes that both arguments are sorted by the same ordering.
-public class SimilarityJaccardSortedEvaluator extends SimilarityJaccardEvaluator {
+public class SimilarityJaccardSortedCheckEvaluator extends SimilarityJaccardCheckEvaluator {
 
     protected final SimilarityMetricJaccard jaccard = new SimilarityMetricJaccard();
     
-	public SimilarityJaccardSortedEvaluator(IEvaluatorFactory[] args,
-			IDataOutputProvider output) throws AlgebricksException {
-		super(args, output);
-	}
+    public SimilarityJaccardSortedCheckEvaluator(IEvaluatorFactory[] args, IDataOutputProvider output)
+            throws AlgebricksException {
+        super(args, output);
+    }
 
+    @Override
     protected float computeResult(byte[] bytes, int firstStart, int secondStart, ATypeTag argType)
             throws AlgebricksException {
-        return jaccard.getSimilarity(firstListIter, secondListIter);
+        return jaccard.getSimilarity(firstListIter, secondListIter, jaccThresh);
     }
 }

@@ -1,14 +1,1 @@
-similarity/similarity-jaccard_01.aql
-similarity/similarity-jaccard_02.aql
-similarity/similarity-jaccard_03.aql
-similarity/similarity-jaccard_04.aql
-similarity/similarity-jaccard_05.aql
-similarity/similarity-jaccard_06.aql
-similarity/similarity-jaccard_07.aql
-similarity/similarity-jaccard_08.aql
-similarity/similarity-jaccard-sorted_01.aql
-similarity/similarity-jaccard-sorted_02.aql
-similarity/similarity-jaccard-sorted_03.aql
-similarity/similarity-jaccard-sorted_04.aql
-similarity/similarity-jaccard-sorted_05.aql
-similarity/similarity-jaccard-sorted_06.aql
+similarity/similarity-jaccard-sorted-check_09.aql

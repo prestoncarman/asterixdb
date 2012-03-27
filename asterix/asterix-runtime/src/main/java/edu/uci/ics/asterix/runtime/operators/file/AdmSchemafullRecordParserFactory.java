@@ -25,8 +25,8 @@ import edu.uci.ics.asterix.dataflow.data.nontagged.serde.ADateSerializerDeserial
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.ADateTimeSerializerDeserializer;
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.ADurationSerializerDeserializer;
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.ALineSerializerDeserializer;
-import edu.uci.ics.asterix.dataflow.data.nontagged.serde.APointSerializerDeserializer;
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.APoint3DSerializerDeserializer;
+import edu.uci.ics.asterix.dataflow.data.nontagged.serde.APointSerializerDeserializer;
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.APolygonSerializerDeserializer;
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.ARectangleSerializerDeserializer;
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.ATimeSerializerDeserializer;
