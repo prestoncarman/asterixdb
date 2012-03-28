@@ -17,18 +17,21 @@ package edu.uci.ics.asterix.common.config;
 public class DatasetConfig {
 
     /*
-     * We have three kinds of datasets. INTERNAL: A dataset with data persisted
-     * in ASTERIX storage. The dataset is populated either using a load
-     * statement or using insert statement. EXTERNAL: A dataset with data
-     * residing outside ASTERIX. As such ASTERIX does not maintain any indexes
-     * on the data. The data for the dataset is fetched as and when required
-     * from an external data source using an adapter. FEED : A dataset that can
-     * be considered as a hybrid of INTERNAL and EXTERNAL dataset. A FEED
-     * dataset is INTERNAL in the sense that the data is persisted within
-     * ASTERIX storage and has associated indexes that are maintained by
-     * ASTERIX. However the dataset is initially populated with data fetched
-     * from an external datasource using an adapter, in a manner similar to an
-     * EXTERNAL dataset. A FEED dataset continuously receives data from the
+     * There are three types of datasets: 
+     * 
+     * INTERNAL: A dataset with data persisted in ASTERIX storage. The dataset is 
+     * populated either using a load statement or using insert statement. 
+     * 
+     * EXTERNAL: A dataset with data residing outside ASTERIX. As such ASTERIX 
+     * does not maintain any indexes on the data. The data for the dataset is 
+     * fetched as and when required from an external data source using an adapter. 
+     * 
+     * FEED : A dataset that can be considered as a hybrid of INTERNAL and 
+     * EXTERNAL dataset. A FEED dataset is INTERNAL in the sense that the data is 
+     * persisted within ASTERIX storage and has associated indexes that are 
+     * maintained by ASTERIX. However the dataset is initially populated with data 
+     * fetched from an external datasource using an adapter, in a manner similar 
+     * to an EXTERNAL dataset. A FEED dataset continuously receives data from the
      * associated adapter.
      */
     public enum DatasetType {
@@ -39,9 +42,9 @@ public class DatasetConfig {
 
     public enum IndexType {
         BTREE,
+        LSM_BTREE,
+        RTREE,
         KEYWORD,
         QGRAM,
-        RTREE
     }
-
 }

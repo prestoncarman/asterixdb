@@ -1,7 +1,7 @@
 package edu.uci.ics.asterix.api.common;
 
 import edu.uci.ics.asterix.common.context.AsterixStorageManagerInterface;
-import edu.uci.ics.asterix.common.context.AsterixTreeRegistryProvider;
+import edu.uci.ics.asterix.common.context.AsterixIndexRegistryProvider;
 import edu.uci.ics.asterix.dataflow.base.IAsterixApplicationContextInfo;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.IIndex;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.IIndexRegistryProvider;
@@ -16,7 +16,7 @@ public class AsterixAppContextInfoImpl implements IAsterixApplicationContextInfo
 
     @Override
     public IIndexRegistryProvider<IIndex> getTreeRegisterProvider() {
-        return AsterixTreeRegistryProvider.INSTANCE;
+        return AsterixIndexRegistryProvider.INSTANCE;
     }
 
     @Override

@@ -19,8 +19,8 @@ import java.util.List;
 import java.util.logging.Logger;
 
 import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
+import edu.uci.ics.asterix.common.context.AsterixIndexRegistryProvider;
 import edu.uci.ics.asterix.common.context.AsterixStorageManagerInterface;
-import edu.uci.ics.asterix.common.context.AsterixTreeRegistryProvider;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
 import edu.uci.ics.asterix.feed.comm.AlterFeedMessage;
 import edu.uci.ics.asterix.feed.comm.FeedMessage;
@@ -40,7 +40,6 @@ import edu.uci.ics.asterix.translator.DmlTranslator.CompiledControlFeedStatement
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluatorFactory;
 import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IPushRuntimeFactory;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.jobgen.impl.JobGenHelper;
 import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.operators.meta.AlgebricksMetaOperatorDescriptor;
 import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.operators.std.AssignRuntimeFactory;
 import edu.uci.ics.hyracks.algebricks.core.api.constraints.AlgebricksPartitionConstraint;
@@ -100,7 +99,7 @@ public class FeedOperations {
 
         LOGGER.info(" DATASETPATH: " + datasetPath);
 
-        IIndexRegistryProvider<IIndex> btreeRegistryProvider = AsterixTreeRegistryProvider.INSTANCE;
+        IIndexRegistryProvider<IIndex> indexRegistryProvider = AsterixIndexRegistryProvider.INSTANCE;
         IStorageManagerInterface storageManager = AsterixStorageManagerInterface.INSTANCE;
 
         AqlCompiledDatasetDecl adecl = metadata.findDataset(datasetName);
@@ -195,7 +194,7 @@ public class FeedOperations {
         long txnId = TransactionIDFactory.generateTransactionId();
 
         TreeIndexInsertUpdateDeleteOperatorDescriptor btreeInsert = new TreeIndexInsertUpdateDeleteOperatorDescriptor(
-                spec, recDesc, storageManager, btreeRegistryProvider, splitsAndConstraint.first, interiorFrameFactory,
+                spec, recDesc, storageManager, indexRegistryProvider, splitsAndConstraint.first, interiorFrameFactory,
                 leafFrameFactory, typeTraits, comparatorFactories, new BTreeDataflowHelperFactory(), fieldPermutation,
                 IndexOp.INSERT, txnId);
 

@@ -24,8 +24,8 @@ import edu.uci.ics.asterix.aql.translator.DdlTranslator.CompiledDatasetDropState
 import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
 import edu.uci.ics.asterix.common.config.GlobalConfig;
 import edu.uci.ics.asterix.common.config.OptimizationConfUtil;
+import edu.uci.ics.asterix.common.context.AsterixIndexRegistryProvider;
 import edu.uci.ics.asterix.common.context.AsterixStorageManagerInterface;
-import edu.uci.ics.asterix.common.context.AsterixTreeRegistryProvider;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
 import edu.uci.ics.asterix.formats.base.IDataFormat;
 import edu.uci.ics.asterix.metadata.MetadataException;
@@ -43,7 +43,6 @@ import edu.uci.ics.asterix.translator.DmlTranslator.CompiledLoadFromFileStatemen
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluatorFactory;
 import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IPushRuntimeFactory;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.jobgen.impl.JobGenHelper;
 import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.operators.meta.AlgebricksMetaOperatorDescriptor;
 import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.operators.std.AssignRuntimeFactory;
 import edu.uci.ics.hyracks.algebricks.core.api.constraints.AlgebricksPartitionConstraint;
@@ -69,7 +68,6 @@ import edu.uci.ics.hyracks.dataflow.std.file.FileSplit;
 import edu.uci.ics.hyracks.dataflow.std.file.IFileSplitProvider;
 import edu.uci.ics.hyracks.dataflow.std.sort.ExternalSortOperatorDescriptor;
 import edu.uci.ics.hyracks.storage.am.btree.dataflow.BTreeDataflowHelperFactory;
-import edu.uci.ics.hyracks.storage.am.common.api.ITreeIndexFrameFactory;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.IIndex;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.IIndexRegistryProvider;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.TreeIndexBulkLoadOperatorDescriptor;
@@ -92,7 +90,7 @@ public class DatasetOperations {
 
         LOGGER.info("DROP DATASETPATH: " + datasetPath);
 
-        IIndexRegistryProvider<IIndex> btreeRegistryProvider = AsterixTreeRegistryProvider.INSTANCE;
+        IIndexRegistryProvider<IIndex> indexRegistryProvider = AsterixIndexRegistryProvider.INSTANCE;
         IStorageManagerInterface storageManager = AsterixStorageManagerInterface.INSTANCE;
 
         AqlCompiledDatasetDecl adecl = metadata.findDataset(datasetName);
@@ -117,7 +115,7 @@ public class DatasetOperations {
                 Pair<IFileSplitProvider, AlgebricksPartitionConstraint> idxSplitsAndConstraint = metadata
                         .splitProviderAndPartitionConstraintsForInternalOrFeedDataset(datasetName, acid.getIndexName());
                 TreeIndexDropOperatorDescriptor secondaryBtreeDrop = new TreeIndexDropOperatorDescriptor(specs[i],
-                        storageManager, btreeRegistryProvider, idxSplitsAndConstraint.first);
+                        storageManager, indexRegistryProvider, idxSplitsAndConstraint.first);
                 AlgebricksPartitionConstraintHelper.setPartitionConstraintInJobSpec(specs[i], secondaryBtreeDrop,
                         idxSplitsAndConstraint.second);
                 i++;
@@ -131,7 +129,7 @@ public class DatasetOperations {
         Pair<IFileSplitProvider, AlgebricksPartitionConstraint> splitsAndConstraint = metadata
                 .splitProviderAndPartitionConstraintsForInternalOrFeedDataset(datasetName, datasetName);
         TreeIndexDropOperatorDescriptor primaryBtreeDrop = new TreeIndexDropOperatorDescriptor(specPrimary,
-                storageManager, btreeRegistryProvider, splitsAndConstraint.first);
+                storageManager, indexRegistryProvider, splitsAndConstraint.first);
         AlgebricksPartitionConstraintHelper.setPartitionConstraintInJobSpec(specPrimary, primaryBtreeDrop,
                 splitsAndConstraint.second);
 
@@ -173,7 +171,7 @@ public class DatasetOperations {
             throw new AsterixException(e1);
         }
 
-        IIndexRegistryProvider<IIndex> btreeRegistryProvider = AsterixTreeRegistryProvider.INSTANCE;
+        IIndexRegistryProvider<IIndex> indexRegistryProvider = AsterixIndexRegistryProvider.INSTANCE;
         IStorageManagerInterface storageManager = AsterixStorageManagerInterface.INSTANCE;
 
         JobSpecification spec = new JobSpecification();
@@ -198,7 +196,7 @@ public class DatasetOperations {
             fieldPermutation[numKeys] = 0;
 
             TreeIndexBulkLoadOperatorDescriptor bulkLoad = new TreeIndexBulkLoadOperatorDescriptor(spec,
-                    storageManager, btreeRegistryProvider, splitsAndConstraint.first, typeTraits, comparatorFactories,
+                    storageManager, indexRegistryProvider, splitsAndConstraint.first, typeTraits, comparatorFactories,
                     fieldPermutation, GlobalConfig.DEFAULT_BTREE_FILL_FACTOR, new BTreeDataflowHelperFactory());
 
             AlgebricksPartitionConstraintHelper.setPartitionConstraintInJobSpec(spec, asterixOp,
@@ -298,7 +296,7 @@ public class DatasetOperations {
         }
         int framesLimit = physicalOptimizationConfig.getMaxFramesExternalSort();
 
-        IIndexRegistryProvider<IIndex> btreeRegistryProvider = AsterixTreeRegistryProvider.INSTANCE;
+        IIndexRegistryProvider<IIndex> indexRegistryProvider = AsterixIndexRegistryProvider.INSTANCE;
         IStorageManagerInterface storageManager = AsterixStorageManagerInterface.INSTANCE;
 
         // move key fields to front
@@ -322,7 +320,7 @@ public class DatasetOperations {
         LOGGER.info("LOAD into File Splits: " + sb.toString());
 
         TreeIndexBulkLoadOperatorDescriptor btreeBulkLoad = new TreeIndexBulkLoadOperatorDescriptor(spec,
-                storageManager, btreeRegistryProvider, splitsAndConstraint.first, typeTraits, comparatorFactories,
+                storageManager, indexRegistryProvider, splitsAndConstraint.first, typeTraits, comparatorFactories,
                 fieldPermutation, GlobalConfig.DEFAULT_BTREE_FILL_FACTOR, new BTreeDataflowHelperFactory());
         AlgebricksPartitionConstraintHelper.setPartitionConstraintInJobSpec(spec, btreeBulkLoad,
                 splitsAndConstraint.second);
@@ -364,7 +362,7 @@ public class DatasetOperations {
         indexes.add(DatasetUtils.getPrimaryIndex(adecl));
 
         List<Job> specs = new ArrayList<Job>();
-        IIndexRegistryProvider<IIndex> btreeRegistryProvider = AsterixTreeRegistryProvider.INSTANCE;
+        IIndexRegistryProvider<IIndex> indexRegistryProvider = AsterixIndexRegistryProvider.INSTANCE;
         IStorageManagerInterface storageManager = AsterixStorageManagerInterface.INSTANCE;
 
         if (indexes != null && !indexes.isEmpty()) {
@@ -374,7 +372,7 @@ public class DatasetOperations {
                 Pair<IFileSplitProvider, AlgebricksPartitionConstraint> idxSplitsAndConstraint = metadata
                         .splitProviderAndPartitionConstraintsForInternalOrFeedDataset(datasetName, acid.getIndexName());
                 TreeIndexDropOperatorDescriptor secondaryBtreeDrop = new TreeIndexDropOperatorDescriptor(spec,
-                        storageManager, btreeRegistryProvider, idxSplitsAndConstraint.first);
+                        storageManager, indexRegistryProvider, idxSplitsAndConstraint.first);
                 AlgebricksPartitionConstraintHelper.setPartitionConstraintInJobSpec(spec, secondaryBtreeDrop,
                         idxSplitsAndConstraint.second);
                 specs.add(new Job(spec));
