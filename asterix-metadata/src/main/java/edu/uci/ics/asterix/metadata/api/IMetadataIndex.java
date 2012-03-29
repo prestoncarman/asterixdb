@@ -62,7 +62,7 @@ public interface IMetadataIndex {
     public void initTreeLogger() throws ACIDException;
 
     public int getFileId();
-
+    
     public byte[] getResourceId();
 
     public TreeLogger getTreeLogger();

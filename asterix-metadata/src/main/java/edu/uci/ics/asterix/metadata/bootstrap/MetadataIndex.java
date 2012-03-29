@@ -64,12 +64,12 @@ public final class MetadataIndex implements IMetadataIndex {
     // Identifier of file BufferCache backing this metadata btree index.
     protected int fileId;
     // Resource id of this index for use in transactions.
-    protected byte[] indexResourceId;
+    protected final byte[] resourceId;
     // Logger for tree indexes.
     private TreeLogger treeLogger;
 
     public MetadataIndex(String datasetName, String indexName, int numFields, IAType[] keyTypes, String[] keyNames,
-            ARecordType payloadType) throws AsterixRuntimeException {
+            ARecordType payloadType, int resourceId) throws AsterixRuntimeException {
         // Sanity checks.
         if (keyTypes.length != keyNames.length) {
             throw new AsterixRuntimeException("Unequal number of key types and names given.");
@@ -123,6 +123,8 @@ public final class MetadataIndex implements IMetadataIndex {
         for (int i = 0; i < keyTypes.length; i++) {
             bhffs[i] = AqlBinaryHashFunctionFactoryProvider.INSTANCE.getBinaryHashFunctionFactory(keyTypes[i]);
         }
+        
+        this.resourceId = DataUtil.intToByteArray(resourceId);
     }
 
     @Override
@@ -197,12 +199,11 @@ public final class MetadataIndex implements IMetadataIndex {
     @Override
     public void setFileId(int fileId) {
         this.fileId = fileId;
-        this.indexResourceId = DataUtil.intToByteArray(fileId);
     }
 
     @Override
     public void initTreeLogger() throws ACIDException {
-        this.treeLogger = new TreeLogger(indexResourceId);
+        this.treeLogger = new TreeLogger(resourceId);
     }
 
     @Override
@@ -217,7 +218,7 @@ public final class MetadataIndex implements IMetadataIndex {
 
     @Override
     public byte[] getResourceId() {
-        return indexResourceId;
+        return resourceId;
     }
 
     public TreeLogger getTreeLogger() {

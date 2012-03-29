@@ -121,8 +121,8 @@ public class TreeLogger implements ILogger, ICloseable {
         public static final byte DELETE = 1;
     }
 
-    public TreeLogger(byte[] resourceIdBytes) {
-        this.resourceIdBytes = resourceIdBytes;
+    public TreeLogger(byte[] resourceId) {
+        this.resourceIdBytes = resourceId;
         treeIndex = (ITreeIndex) TransactionalResourceRepository.getTransactionalResource(resourceIdBytes);
         treeIndexTupleWriter = treeIndex.getLeafFrameFactory().getTupleWriterFactory().createTupleWriter();
         this.resourceIdLengthBytes = DataUtil.intToByteArray(resourceIdBytes.length);

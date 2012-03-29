@@ -17,6 +17,7 @@ package edu.uci.ics.asterix.metadata;
 
 import java.rmi.RemoteException;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import edu.uci.ics.asterix.metadata.MetadataCache.MetadataLogicalOperation;
 import edu.uci.ics.asterix.metadata.api.IAsterixStateProxy;
@@ -491,4 +492,12 @@ public class MetadataManager implements IMetadataManager {
 		return function;
 
 	}
+	
+    public void createResourceIdSeed(int initialValue) {
+        this.metadataNode.createResourceIdSeed(initialValue);
+    }
+    
+    public int generateResourceId() {
+        return this.metadataNode.generateResourceId();
+    }
 }

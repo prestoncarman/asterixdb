@@ -31,6 +31,7 @@ import edu.uci.ics.asterix.metadata.IDatasetDetails;
 import edu.uci.ics.asterix.metadata.MetadataManager;
 import edu.uci.ics.asterix.metadata.MetadataTransactionContext;
 import edu.uci.ics.asterix.metadata.api.IMetadataIndex;
+import edu.uci.ics.asterix.metadata.api.IMetadataNode;
 import edu.uci.ics.asterix.metadata.entities.AsterixBuiltinTypeMap;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
 import edu.uci.ics.asterix.metadata.entities.Datatype;
@@ -113,7 +114,8 @@ public class MetadataBootstrap {
         // index descriptors.
         // The order of these calls is important because the index descriptors
         // rely on the type type descriptors.
-        MetadataRecordTypes.init();
+        
+        MetadataRecordTypes.init();  
         MetadataPrimaryIndexes.init();
         MetadataSecondaryIndexes.init();
         initLocalIndexArrays();
@@ -134,7 +136,8 @@ public class MetadataBootstrap {
             (new File(outputDir)).mkdirs();
         }
 
-        btreeRegistry = runtimeContext.getTreeRegistry();
+        //btreeRegistry = runtimeContext.getTreeRegistry(); //modified by kisskys
+        btreeRegistry = runtimeContext.getIndexRegistry();
         bufferCache = runtimeContext.getBufferCache();
         fileMapProvider = runtimeContext.getFileMapManager();
 
@@ -153,11 +156,18 @@ public class MetadataBootstrap {
 
         try {
             if (isNewUniverse) {
+                
+                //create resourceIdSeed and set to primaryIndexes.length + secondaryIndexes.length + 1
+                //The last 1 came from the another static resourceId of MetadataNode, that is, METADATANODE_RESOURCE_ID.
+                MetadataManager.INSTANCE.createResourceIdSeed(primaryIndexes.length + secondaryIndexes.length + 1);
+                
                 for (int i = 0; i < primaryIndexes.length; i++) {
+                    //generate resourceId for each resource
                     createIndex(primaryIndexes[i]);
                     registerTransactionalResource(primaryIndexes[i]);
                 }
                 for (int i = 0; i < secondaryIndexes.length; i++) {
+                    //generate resourceId for each resource
                     createIndex(secondaryIndexes[i]);
                     registerTransactionalResource(secondaryIndexes[i]);
                 }
@@ -221,11 +231,9 @@ public class MetadataBootstrap {
     }
 
     private static void registerTransactionalResource(IMetadataIndex index) throws ACIDException {
-        int fileId = index.getFileId();
-        ITreeIndex treeIndex = (ITreeIndex) btreeRegistry.get(fileId);
-        byte[] resourceId = DataUtil.intToByteArray(fileId);
+        ITreeIndex treeIndex = (ITreeIndex) btreeRegistry.get(DataUtil.byteArrayToInt(index.getResourceId(), 0));
         applicationState.getTransactionProvider().getResourceRepository()
-                .registerTransactionalResource(resourceId, treeIndex);
+                .registerTransactionalResource(index.getResourceId(), treeIndex);
         index.initTreeLogger();
     }
 
@@ -273,7 +281,7 @@ public class MetadataBootstrap {
         for (int i = 0; i < secondaryIndexes.length; i++) {
             MetadataManager.INSTANCE.addIndex(mdTxnCtx, new Index(secondaryIndexes[i].getDataverseName(),
                     secondaryIndexes[i].getIndexedDatasetName(), secondaryIndexes[i].getIndexName(), IndexType.BTREE,
-                    secondaryIndexes[i].getPartitioningExpr(), false));
+                    secondaryIndexes[i].getPartitioningExpr(), false, MetadataManager.INSTANCE.generateResourceId()));
         }
     }
 
@@ -318,7 +326,7 @@ public class MetadataBootstrap {
         BTree btree = new BTree(bufferCache, NoOpOperationCallback.INSTANCE, typeTraits.length, comparatorFactories,
                 freePageManager, interiorFrameFactory, leafFrameFactory);
         btree.create(fileId);
-        btreeRegistry.register(fileId, btree);
+        btreeRegistry.register(DataUtil.byteArrayToInt(dataset.getResourceId(), 0), btree);
     }
 
     public static void enlistMetadataDataset(IMetadataIndex dataset) throws Exception {
@@ -338,7 +346,7 @@ public class MetadataBootstrap {
         BTree btree = new BTree(bufferCache, NoOpOperationCallback.INSTANCE, typeTraits.length, comparatorFactories,
                 freePageManager, interiorFrameFactory, leafFrameFactory);
 
-        btreeRegistry.register(fileId, btree);
+        btreeRegistry.register(DataUtil.byteArrayToInt(dataset.getResourceId(), 0), btree);
     }
 
     public static String getOutputDir() {

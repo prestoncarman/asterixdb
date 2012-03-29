@@ -397,4 +397,24 @@ public interface IMetadataManager {
 	public void dropFunction(MetadataTransactionContext ctx,
 			String dataverseName, String functionName, int arity)
 			throws MetadataException;
+	
+	 /**
+     * Creates resourceIdSeed and
+     * initialize the value with the given initialValue.
+     * (Simply calls the interface of the IMetadataNode)
+     * 
+     * @param initialValue
+     *         resourceIdSeed is set to this initialValue.
+     */
+    public void createResourceIdSeed(int initialValue);
+    
+    /**
+     * Increments atomically the resourceIdSeed value by one and 
+     * returns the previous value.
+     * (Simply calls the interface of the IMetadataNode)
+     * 
+     * @return 
+     *          returns an unique resourceId.
+     */
+    public int generateResourceId();
 }

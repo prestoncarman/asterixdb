@@ -282,15 +282,16 @@ public final class MetadataRecordTypes {
 	public static final int INDEX_ARECORD_SEARCHKEY_FIELD_INDEX = 4;
 	public static final int INDEX_ARECORD_ISPRIMARY_FIELD_INDEX = 5;
 	public static final int INDEX_ARECORD_TIMESTAMP_FIELD_INDEX = 6;
+	public static final int INDEX_ARECORD_RESOURCEID_FIELD_INDEX = 7;
 
 	private static final ARecordType createIndexRecordType() {
 		AOrderedListType olType = new AOrderedListType(BuiltinType.ASTRING,
 				null);
 		String[] fieldNames = { "DataverseName", "DatasetName", "IndexName",
-				"IndexStructure", "SearchKey", "IsPrimary", "Timestamp" };
+				"IndexStructure", "SearchKey", "IsPrimary", "Timestamp", "IndexId" };
 		IAType[] fieldTypes = { BuiltinType.ASTRING, BuiltinType.ASTRING,
 				BuiltinType.ASTRING, BuiltinType.ASTRING, olType,
-				BuiltinType.ABOOLEAN, BuiltinType.ASTRING };
+				BuiltinType.ABOOLEAN, BuiltinType.ASTRING, BuiltinType.AINT64 };
 		return new ARecordType("IndexRecordType", fieldNames, fieldTypes, true);
 	};
 

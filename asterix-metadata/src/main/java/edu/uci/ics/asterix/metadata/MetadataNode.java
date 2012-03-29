@@ -18,6 +18,8 @@ package edu.uci.ics.asterix.metadata;
 import java.rmi.RemoteException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
 import edu.uci.ics.asterix.common.config.DatasetConfig.IndexType;
@@ -54,6 +56,7 @@ import edu.uci.ics.asterix.om.base.AMutableString;
 import edu.uci.ics.asterix.om.base.AString;
 import edu.uci.ics.asterix.om.types.BuiltinType;
 import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
+import edu.uci.ics.asterix.transaction.management.service.logging.DataUtil;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionContext;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionManagementConstants.LockManagerConstants.LockMode;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionProvider;
@@ -84,7 +87,8 @@ public class MetadataNode implements IMetadataNode {
     private static IIndexRegistryProvider<IIndex> btreeRegistryProvider;
     public static MetadataNode INSTANCE;
     // TODO: Temporary transactional resource id for metadata.
-    private static byte[] metadataResourceId = MetadataNode.class.toString().getBytes();
+    public static final int METADATANODE_RESOURCE_ID = 0;
+    private static byte[] metadataResourceId;
 
     @SuppressWarnings("unchecked")
     private ISerializerDeserializer<AString> stringSerde = AqlSerializerDeserializerProvider.INSTANCE
@@ -92,11 +96,14 @@ public class MetadataNode implements IMetadataNode {
 
     private TransactionProvider transactionProvider;
 
+    private AtomicInteger resourceIdSeed;
+
     public MetadataNode(AsterixProperties asterixProperity, IAsterixApplicationContextInfo appContext,
             TransactionProvider transactionProvider) {
         super();
         this.transactionProvider = transactionProvider;
         btreeRegistryProvider = appContext.getTreeRegisterProvider();
+        metadataResourceId = DataUtil.intToByteArray(METADATANODE_RESOURCE_ID);
     }
 
     @Override
@@ -158,7 +165,8 @@ public class MetadataNode implements IMetadataNode {
                 // Add the primary index for the dataset.
                 InternalDatasetDetails id = (InternalDatasetDetails) dataset.getDatasetDetails();
                 Index primaryIndex = new Index(dataset.getDataverseName(), dataset.getDatasetName(),
-                        dataset.getDatasetName(), IndexType.BTREE, id.getPrimaryKey(), true);
+                        dataset.getDatasetName(), IndexType.BTREE, id.getPrimaryKey(), true,
+                        MetadataManager.INSTANCE.generateResourceId());
                 addIndex(txnId, primaryIndex);
                 ITupleReference nodeGroupTuple = createTuple(id.getNodeGroupName(), dataset.getDataverseName(),
                         dataset.getDatasetName());
@@ -254,7 +262,8 @@ public class MetadataNode implements IMetadataNode {
 
     private void insertTupleIntoIndex(long txnId, IMetadataIndex index, ITupleReference tuple) throws Exception {
         int fileId = index.getFileId();
-        BTree btree = (BTree) btreeRegistryProvider.getRegistry(null).get(fileId);
+        BTree btree = (BTree) btreeRegistryProvider.getRegistry(null).get(
+                DataUtil.byteArrayToInt(index.getResourceId(), 0));
         btree.open(fileId);
         ITreeIndexAccessor indexAccessor = btree.createAccessor();
         TransactionContext txnCtx = transactionProvider.getTransactionManager().getTransactionContext(txnId);
@@ -811,5 +820,35 @@ public class MetadataNode implements IMetadataNode {
         ArrayTupleReference tuple = new ArrayTupleReference();
         tuple.reset(tupleBuilder.getFieldEndOffsets(), tupleBuilder.getByteArray());
         return tuple;
+    }
+
+    /*
+     * Creates resourceIdSeed(which is an AtomicInteger instance) and
+     * initialize the value with the given initialValue.
+     * 
+     * @param initialValue
+     *         resourceIdSeed is set to this initialValue.
+     */
+    @Override
+    public void createResourceIdSeed(int initialValue) {
+        resourceIdSeed = new AtomicInteger(initialValue);
+    }
+
+    /*
+     * increments the resourceIdSeed(AtomicInteger instance) value by one and 
+     * returns the previous value.
+     * 
+     * @return 
+     *          returns an unique resourceId.
+     */
+    @Override
+    public int generateResourceId() {
+        return resourceIdSeed.getAndIncrement();
+    }
+
+    @Override
+    public int getResourceId(long txnId, String dataverseName, String datasetName, String indexName)
+            throws MetadataException, RemoteException {
+        return getIndex(txnId, dataverseName, datasetName, indexName).getResourceId();
     }
 }

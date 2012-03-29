@@ -19,6 +19,7 @@ import java.io.Serializable;
 import java.util.List;
 
 import edu.uci.ics.asterix.common.config.DatasetConfig.IndexType;
+import edu.uci.ics.asterix.transaction.management.service.logging.DataUtil;
 
 /**
  * Metadata describing an index.
@@ -35,15 +36,17 @@ public class Index implements Serializable {
     private final IndexType indexType;
     private final List<String> keyFieldNames;
     private final boolean isPrimaryIndex;
+    private final int resourceId;
 
     public Index(String dataverseName, String datasetName, String indexName, IndexType indexType,
-            List<String> keyFieldNames, boolean isPrimaryIndex) {
+            List<String> keyFieldNames, boolean isPrimaryIndex, int resourceId) {
         this.dataverseName = dataverseName;
         this.datasetName = datasetName;
         this.indexName = indexName;
         this.indexType = indexType;
         this.keyFieldNames = keyFieldNames;
         this.isPrimaryIndex = isPrimaryIndex;
+        this.resourceId = resourceId;
     }
 
     public String getDataverseName() {
@@ -72,5 +75,9 @@ public class Index implements Serializable {
 
     public boolean isSecondaryIndex() {
         return !isPrimaryIndex();
+    }
+    
+    public int getResourceId() {
+        return resourceId;
     }
 }

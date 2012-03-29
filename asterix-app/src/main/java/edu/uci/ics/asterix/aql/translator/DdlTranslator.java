@@ -250,7 +250,7 @@ public class DdlTranslator extends AbstractAqlTranslator {
                     } else {
                         MetadataManager.INSTANCE.addIndex(mdTxnCtx, new Index(compiledDeclarations.getDataverseName(),
                                 datasetName, indexName, stmtCreateIndex.getIndexType(),
-                                stmtCreateIndex.getFieldExprs(), false));
+                                stmtCreateIndex.getFieldExprs(), false, MetadataManager.INSTANCE.generateResourceId()));
                     }
                     break;
                 }
