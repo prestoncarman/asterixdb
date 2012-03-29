@@ -133,7 +133,7 @@ public class SimilarityJaccardEvaluator implements IEvaluator {
         int probeListSize = (probeList == firstListIter) ? firstListSize : secondListSize;
         
         buildHashMap(buildList);
-        int intersectionSize = probeHashMap(probeList, buildListSize, probeListSize, unionSize);
+        int intersectionSize = probeHashMap(probeList, buildListSize, probeListSize);
         // Special indicator for the "check" version of jaccard.
         if (intersectionSize < 0) {
             return -1;
@@ -161,7 +161,7 @@ public class SimilarityJaccardEvaluator implements IEvaluator {
         }
     }
     
-    protected int probeHashMap(AbstractAsterixListIterator probeIter, int probeListSize, int buildListSize, int maxUnionSize) {
+    protected int probeHashMap(AbstractAsterixListIterator probeIter, int probeListSize, int buildListSize) {
         // Probe phase: Probe items from second list, and compute intersection size.
         int intersectionSize = 0;
         while (probeIter.hasNext()) {          

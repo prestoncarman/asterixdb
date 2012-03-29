@@ -113,6 +113,7 @@ import edu.uci.ics.asterix.runtime.evaluators.functions.OrDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.OrderedListConstructorDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.PrefixLenJaccardDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.RegExpDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.SimilarityJaccardCheckDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.SimilarityJaccardDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.SimilarityJaccardPrefixCheckDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.SimilarityJaccardPrefixDescriptor;
@@ -306,6 +307,7 @@ public class NonTaggedDataFormat implements IDataFormat {
         temp.add(new EditDistanceCheckDescriptor());
 
         temp.add(new SimilarityJaccardDescriptor());
+        temp.add(new SimilarityJaccardCheckDescriptor());
         temp.add(new SimilarityJaccardSortedDescriptor());
         temp.add(new SimilarityJaccardSortedCheckDescriptor());
         temp.add(new SimilarityJaccardPrefixDescriptor());

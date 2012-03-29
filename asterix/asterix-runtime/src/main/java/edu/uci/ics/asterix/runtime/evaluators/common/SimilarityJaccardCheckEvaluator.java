@@ -49,16 +49,16 @@ public class SimilarityJaccardCheckEvaluator extends SimilarityJaccardEvaluator 
     }
 
     @Override
-    protected int probeHashMap(AbstractAsterixListIterator probeIter, int probeListSize, int buildListSize, int maxUnionSize) {
+    protected int probeHashMap(AbstractAsterixListIterator probeIter, int buildListSize, int probeListSize) {
         // Apply length filter.
         int lengthLowerBound = (int) Math.ceil(jaccThresh * probeListSize);
         if ((lengthLowerBound > buildListSize) || (buildListSize > (int) Math.floor(1.0f / jaccThresh * probeListSize))) {
-            System.out.println("LENGTH FILTERED: " + probeListSize + " " + buildListSize);
             return -1;
         }
         // Probe phase: Probe items from second list, and compute intersection size.
         int intersectionSize = 0;
         int probeListCount = 0;
+        int minUnionSize = probeListSize;
         while (probeIter.hasNext()) {
             probeListCount++;
             byte[] buf = probeIter.getData();
@@ -79,12 +79,14 @@ public class SimilarityJaccardCheckEvaluator extends SimilarityJaccardEvaluator 
                 secondValInt++;
                 // Add new min value.
                 intersectionSize += (firstValInt < secondValInt) ? firstValInt : secondValInt;
-                IntegerPointable.setInteger(entry.buf, 0, secondValInt);                
+                IntegerPointable.setInteger(entry.buf, 0, secondValInt);            
             } else {
+                // Could not find element in other set. Increase min union size by 1.
+                minUnionSize++;
                 // Check whether jaccThresh can still be satisfied if there was a mismatch.
                 int maxIntersectionSize = intersectionSize + (probeListSize - probeListCount);
-                if (maxIntersectionSize < (int) Math.ceil(jaccThresh * (float) (maxUnionSize - maxIntersectionSize))) {
-                    System.out.println("TERMINATED: " + probeListCount + " " + probeListSize);
+                int lowerBound = (int) Math.floor(jaccThresh * minUnionSize);
+                if (maxIntersectionSize < lowerBound) {
                     // Cannot satisfy jaccThresh.
                     return -1;
                 }
