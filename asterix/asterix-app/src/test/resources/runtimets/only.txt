@@ -1,1 +1,9 @@
-similarity/similarity-jaccard-sorted-check_09.aql
+similarity/similarity-jaccard_ints.aql
+similarity/similarity-jaccard_query.aql
+similarity/similarity-jaccard_strings.aql
+similarity/similarity-jaccard-sorted_ints.aql
+similarity/similarity-jaccard-sorted_query.aql
+similarity/similarity-jaccard-sorted_strings.aql
+similarity/similarity-jaccard-sorted-check_ints.aql
+similarity/similarity-jaccard-sorted-check_query.aql
+similarity/similarity-jaccard-sorted-check_strings.aql
