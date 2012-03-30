@@ -132,7 +132,7 @@ public class IntroduceSecondaryIndexInsertDeleteRule implements IAlgebraicRewrit
 
             AssignOperator assign = new AssignOperator(secondaryKeyVars, expressions);
             ProjectOperator project = new ProjectOperator(projectVars);
-            if (index.getKind() == IndexKind.BTREE) {
+            if (index.getKind() == IndexKind.LSM_BTREE) {
                 for (LogicalVariable secondaryKeyVar : secondaryKeyVars)
                     secondaryExpressions.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(
                             secondaryKeyVar)));

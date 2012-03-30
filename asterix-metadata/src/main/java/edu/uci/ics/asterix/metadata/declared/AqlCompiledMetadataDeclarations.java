@@ -193,15 +193,14 @@ public class AqlCompiledMetadataDeclarations {
                             datasetName);
                     AqlCompiledIndexDecl primaryIndex = null;
                     List<AqlCompiledIndexDecl> secondaryIndexes = new ArrayList<AqlCompiledIndexDecl>();
-                    for (int i = 0; i < indexRecord.size(); i++) {
-                        Index rec = indexRecord.get(i);
+                    for(Index rec : indexRecord) {
                         if (rec.isPrimaryIndex()) {
-                            primaryIndex = new AqlCompiledIndexDecl(rec.getIndexName(), IndexKind.BTREE,
+                            primaryIndex = new AqlCompiledIndexDecl(rec.getIndexName(), IndexKind.LSM_BTREE,
                                     rec.getKeyFieldNames());
                         } else {
                             secondaryIndexes.add(new AqlCompiledIndexDecl(rec.getIndexName(),
-                                    rec.getIndexType() == IndexType.BTREE ? IndexKind.BTREE : IndexKind.RTREE, rec
-                                            .getKeyFieldNames()));
+                                    rec.getIndexType() == IndexType.LSM_BTREE ? IndexKind.LSM_BTREE : IndexKind.RTREE,
+                                    rec.getKeyFieldNames()));
                         }
                     }
 

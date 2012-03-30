@@ -19,7 +19,6 @@ import java.io.Serializable;
 import java.rmi.Remote;
 import java.rmi.RemoteException;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import edu.uci.ics.asterix.metadata.MetadataException;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
@@ -427,8 +426,9 @@ public interface IMetadataNode extends Remote, Serializable {
 	 * 
 	 * @param initialValue
 	 *         resourceIdSeed is set to this initialValue.
+	 * @throws RemoteException 
 	 */
-    public void createResourceIdSeed(int initialValue);
+    public void createResourceIdSeed(int initialValue) throws RemoteException;
     
     /**
      * Increments atomically the resourceIdSeed value by one and 
@@ -436,8 +436,9 @@ public interface IMetadataNode extends Remote, Serializable {
      * 
      * @return 
      *          returns an unique resourceId.
+     * @throws RemoteException 
      */
-    public int generateResourceId();
+    public int generateResourceId() throws RemoteException;
 
     /**
      * Returns resourceId

@@ -25,7 +25,7 @@ import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
 public class AqlCompiledIndexDecl {
 
     public enum IndexKind {
-        BTREE,
+        LSM_BTREE,
         RTREE
     }
 

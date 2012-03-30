@@ -15,7 +15,7 @@ public class CreateIndexStatement implements Statement {
     private boolean needToCreate = true;
     private Identifier datasetName;
     private List<String> fieldExprs = new ArrayList<String>();
-    private IndexType indexType = IndexType.BTREE;
+    private IndexType indexType = IndexType.LSM_BTREE;
     private boolean ifNotExists;
 
     public CreateIndexStatement() {

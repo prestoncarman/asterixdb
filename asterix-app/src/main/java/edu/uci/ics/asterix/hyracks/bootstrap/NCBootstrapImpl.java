@@ -20,7 +20,6 @@ import java.util.logging.Logger;
 
 import edu.uci.ics.asterix.api.aqlj.server.NodeDataClientThreadFactory;
 import edu.uci.ics.asterix.api.aqlj.server.ThreadedServer;
-import edu.uci.ics.asterix.api.common.AsterixAppContextInfoImpl;
 import edu.uci.ics.asterix.common.context.AsterixAppRuntimeContext;
 import edu.uci.ics.asterix.common.context.INodeApplicationState;
 import edu.uci.ics.asterix.common.context.NodeApplicationState;
@@ -125,9 +124,7 @@ public class NCBootstrapImpl implements INCBootstrap {
     public void registerRemoteMetadataNode(IAsterixStateProxy proxy) throws Exception {
         IMetadataNode stub = null;
         try {
-            TransactionProvider provider = applicationState.getTransactionProvider();
-            MetadataNode.INSTANCE = new MetadataNode(proxy.getAsterixProperties(), AsterixAppContextInfoImpl.INSTANCE,
-                    provider);
+            MetadataNode.INSTANCE = new MetadataNode(applicationState);
             stub = (IMetadataNode) UnicastRemoteObject.exportObject(MetadataNode.INSTANCE, 0);
         } catch (Exception e) {
             throw new AsterixException(e);

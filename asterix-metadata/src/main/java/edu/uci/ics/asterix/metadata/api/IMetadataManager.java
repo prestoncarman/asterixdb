@@ -405,8 +405,9 @@ public interface IMetadataManager {
      * 
      * @param initialValue
      *         resourceIdSeed is set to this initialValue.
+	 * @throws RemoteException 
      */
-    public void createResourceIdSeed(int initialValue);
+    public void createResourceIdSeed(int initialValue) throws RemoteException;
     
     /**
      * Increments atomically the resourceIdSeed value by one and 
@@ -415,6 +416,7 @@ public interface IMetadataManager {
      * 
      * @return 
      *          returns an unique resourceId.
+     * @throws RemoteException 
      */
-    public int generateResourceId();
+    public int generateResourceId() throws RemoteException;
 }

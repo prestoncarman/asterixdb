@@ -25,13 +25,13 @@ import java.util.logging.Logger;
 
 import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
 import edu.uci.ics.asterix.common.config.DatasetConfig.IndexType;
+import edu.uci.ics.asterix.common.config.GlobalConfig;
 import edu.uci.ics.asterix.common.context.AsterixAppRuntimeContext;
 import edu.uci.ics.asterix.common.context.INodeApplicationState;
 import edu.uci.ics.asterix.metadata.IDatasetDetails;
 import edu.uci.ics.asterix.metadata.MetadataManager;
 import edu.uci.ics.asterix.metadata.MetadataTransactionContext;
 import edu.uci.ics.asterix.metadata.api.IMetadataIndex;
-import edu.uci.ics.asterix.metadata.api.IMetadataNode;
 import edu.uci.ics.asterix.metadata.entities.AsterixBuiltinTypeMap;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
 import edu.uci.ics.asterix.metadata.entities.Datatype;
@@ -52,21 +52,20 @@ import edu.uci.ics.hyracks.api.application.INCApplicationContext;
 import edu.uci.ics.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.ITypeTraits;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
-import edu.uci.ics.hyracks.api.io.FileReference;
-import edu.uci.ics.hyracks.storage.am.btree.frames.BTreeNSMInteriorFrameFactory;
-import edu.uci.ics.hyracks.storage.am.btree.frames.BTreeNSMLeafFrameFactory;
-import edu.uci.ics.hyracks.storage.am.btree.impls.BTree;
-import edu.uci.ics.hyracks.storage.am.common.api.IFreePageManager;
+import edu.uci.ics.hyracks.api.io.IIOManager;
+import edu.uci.ics.hyracks.control.nc.io.IOManager;
 import edu.uci.ics.hyracks.storage.am.common.api.ITreeIndex;
-import edu.uci.ics.hyracks.storage.am.common.api.ITreeIndexFrameFactory;
 import edu.uci.ics.hyracks.storage.am.common.api.ITreeIndexMetaDataFrameFactory;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.IIndex;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.IndexRegistry;
 import edu.uci.ics.hyracks.storage.am.common.frames.LIFOMetaDataFrameFactory;
-import edu.uci.ics.hyracks.storage.am.common.freepage.LinkedListFreePageManager;
 import edu.uci.ics.hyracks.storage.am.common.impls.NoOpOperationCallback;
-import edu.uci.ics.hyracks.storage.am.common.tuples.TypeAwareTupleWriterFactory;
+import edu.uci.ics.hyracks.storage.am.lsm.btree.util.LSMBTreeUtils;
+import edu.uci.ics.hyracks.storage.am.lsm.common.freepage.InMemoryBufferCache;
+import edu.uci.ics.hyracks.storage.am.lsm.common.freepage.InMemoryFreePageManager;
+import edu.uci.ics.hyracks.storage.common.buffercache.HeapBufferAllocator;
 import edu.uci.ics.hyracks.storage.common.buffercache.IBufferCache;
+import edu.uci.ics.hyracks.storage.common.buffercache.ICacheMemoryAllocator;
 import edu.uci.ics.hyracks.storage.common.file.IFileMapProvider;
 
 /**
@@ -79,18 +78,16 @@ import edu.uci.ics.hyracks.storage.common.file.IFileMapProvider;
  * stopUniverse() should be called upon application undeployment.
  */
 public class MetadataBootstrap {
+    private static final Logger LOGGER = Logger.getLogger(MetadataBootstrap.class.getName());
+
     private static INodeApplicationState applicationState;
 
-    private static IBufferCache bufferCache;
-    private static IFileMapProvider fileMapProvider;
-    private static IndexRegistry<IIndex> btreeRegistry;
+    private static IndexRegistry<IIndex> indexRegistry;
 
+    private static HashSet<String> nodeNames;
     private static String metadataNodeName;
     private static String metadataStore;
-    private static HashSet<String> nodeNames;
     private static String outputDir;
-
-    private static final Logger LOGGER = Logger.getLogger(MetadataBootstrap.class.getName());
 
     private static IMetadataIndex[] primaryIndexes;
     private static IMetadataIndex[] secondaryIndexes;
@@ -110,65 +107,45 @@ public class MetadataBootstrap {
         applicationState = (INodeApplicationState) ncApplicationContext.getApplicationObject();
         AsterixAppRuntimeContext runtimeContext = applicationState.getApplicationRuntimeContext();
 
-        // Initialize static metadata objects, such as record types and metadata
-        // index descriptors.
-        // The order of these calls is important because the index descriptors
-        // rely on the type type descriptors.
-        
-        MetadataRecordTypes.init();  
+        // Initialize static metadata objects, such as record types and metadata index descriptors.
+        // The order of these calls is important because the index descriptors rely on the type type descriptors.
+        MetadataRecordTypes.init();
         MetadataPrimaryIndexes.init();
         MetadataSecondaryIndexes.init();
         initLocalIndexArrays();
 
-        boolean isNewUniverse = true;
-
         applicationState.getTransactionProvider().getResourceRepository()
                 .registerTransactionalResourceManager(TreeResourceManager.ID, TreeResourceManager.getInstance());
-
         metadataNodeName = asterixProperities.getMetadataNodeName();
-        isNewUniverse = asterixProperities.isNewUniverse();
         metadataStore = asterixProperities.getMetadataStore();
         nodeNames = asterixProperities.getNodeNames();
-        // nodeStores = asterixProperity.getStores();
-
         outputDir = asterixProperities.getOutputDir();
         if (outputDir != null) {
             (new File(outputDir)).mkdirs();
         }
 
-        //btreeRegistry = runtimeContext.getTreeRegistry(); //modified by kisskys
-        btreeRegistry = runtimeContext.getIndexRegistry();
-        bufferCache = runtimeContext.getBufferCache();
-        fileMapProvider = runtimeContext.getFileMapManager();
-
-        // Create fileRefs to all BTree files and open them in BufferCache.
-        for (int i = 0; i < primaryIndexes.length; i++) {
-            openIndexFile(primaryIndexes[i]);
-        }
-        for (int i = 0; i < secondaryIndexes.length; i++) {
-            openIndexFile(secondaryIndexes[i]);
-        }
+        indexRegistry = runtimeContext.getIndexRegistry();
 
         // Begin a transaction against the metadata.
         // Lock the metadata in X mode.
         MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
         MetadataManager.INSTANCE.lock(mdTxnCtx, LockMode.EXCLUSIVE);
-
+        boolean isNewUniverse = asterixProperities.isNewUniverse();
         try {
             if (isNewUniverse) {
-                
+
                 //create resourceIdSeed and set to primaryIndexes.length + secondaryIndexes.length + 1
                 //The last 1 came from the another static resourceId of MetadataNode, that is, METADATANODE_RESOURCE_ID.
                 MetadataManager.INSTANCE.createResourceIdSeed(primaryIndexes.length + secondaryIndexes.length + 1);
-                
+
                 for (int i = 0; i < primaryIndexes.length; i++) {
                     //generate resourceId for each resource
-                    createIndex(primaryIndexes[i]);
+                    enlistMetadataDataset(primaryIndexes[i], true);
                     registerTransactionalResource(primaryIndexes[i]);
                 }
                 for (int i = 0; i < secondaryIndexes.length; i++) {
                     //generate resourceId for each resource
-                    createIndex(secondaryIndexes[i]);
+                    enlistMetadataDataset(secondaryIndexes[i], true);
                     registerTransactionalResource(secondaryIndexes[i]);
                 }
                 insertInitialDataverses(mdTxnCtx);
@@ -180,18 +157,18 @@ public class MetadataBootstrap {
                 LOGGER.info("FINISHED CREATING METADATA B-TREES.");
             } else {
                 for (int i = 0; i < primaryIndexes.length; i++) {
-                    enlistMetadataDataset(primaryIndexes[i]);
+                    enlistMetadataDataset(primaryIndexes[i], false);
                     registerTransactionalResource(primaryIndexes[i]);
                 }
                 for (int i = 0; i < secondaryIndexes.length; i++) {
-                    enlistMetadataDataset(secondaryIndexes[i]);
+                    enlistMetadataDataset(secondaryIndexes[i], false);
                     registerTransactionalResource(secondaryIndexes[i]);
                 }
-                
+
                 //Check the last value which was generated from the resourceIdSeed.
                 //Then, create resourceIdSeed with setting to the last value + 1.
                 MetadataManager.INSTANCE.createResourceIdSeed(MetadataManager.INSTANCE.getGeneratedMaxResourceId() + 1);
-                
+
                 LOGGER.info("FINISHED ENLISTMENT OF METADATA B-TREES.");
             }
             MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
@@ -202,41 +179,19 @@ public class MetadataBootstrap {
     }
 
     public static void stopUniverse() throws HyracksDataException {
-        try {
-            // Close all BTree files in BufferCache.
-            for (int i = 0; i < primaryIndexes.length; i++) {
-                bufferCache.closeFile(primaryIndexes[i].getFileId());
-            }
-            for (int i = 0; i < secondaryIndexes.length; i++) {
-                bufferCache.closeFile(secondaryIndexes[i].getFileId());
-            }
-        } catch (HyracksDataException e) {
-            // Ignore for now.
-            // TODO: If multiple NCs are running in the same VM, then we could
-            // have multiple NCs undeploying asterix concurrently.
-            // It would also mean that there is only one BufferCache. A
-            // pathological sequence of events would be that NC2
-            // closes the BufferCache and then NC1 enters this portion of the
-            // code and tries to close unopened files.
-            // What we really want is to check whether the BufferCache is open
-            // in a synchronized block.
-            // The BufferCache api currently does not allow us to check for
-            // openness.
-            // Swallowing the exceptions is a simple fix for now.
+        IIndex index;
+        for (int i = 0; i < primaryIndexes.length; i++) {
+            index = indexRegistry.get(DataUtil.byteArrayToInt(primaryIndexes[i].getResourceId(), 0));
+            index.close();
+        }
+        for (int i = 0; i < secondaryIndexes.length; i++) {
+            index = indexRegistry.get(DataUtil.byteArrayToInt(secondaryIndexes[i].getResourceId(), 0));
+            index.close();
         }
     }
 
-    private static void openIndexFile(IMetadataIndex index) throws HyracksDataException, ACIDException {
-        String filePath = metadataStore + index.getFileNameRelativePath();
-        FileReference file = new FileReference(new File(filePath));
-        bufferCache.createFile(file);
-        int fileId = fileMapProvider.lookupFileId(file);
-        bufferCache.openFile(fileId);
-        index.setFileId(fileId);
-    }
-
     private static void registerTransactionalResource(IMetadataIndex index) throws ACIDException {
-        ITreeIndex treeIndex = (ITreeIndex) btreeRegistry.get(DataUtil.byteArrayToInt(index.getResourceId(), 0));
+        ITreeIndex treeIndex = (ITreeIndex) indexRegistry.get(DataUtil.byteArrayToInt(index.getResourceId(), 0));
         applicationState.getTransactionProvider().getResourceRepository()
                 .registerTransactionalResource(index.getResourceId(), treeIndex);
         index.initTreeLogger();
@@ -250,7 +205,7 @@ public class MetadataBootstrap {
 
     public static void insertInitialDatasets(MetadataTransactionContext mdTxnCtx) throws Exception {
         for (int i = 0; i < primaryIndexes.length; i++) {
-            IDatasetDetails id = new InternalDatasetDetails(FileStructure.BTREE, PartitioningStrategy.HASH,
+            IDatasetDetails id = new InternalDatasetDetails(FileStructure.LSM_BTREE, PartitioningStrategy.HASH,
                     primaryIndexes[i].getPartitioningExpr(), primaryIndexes[i].getPartitioningExpr(),
                     primaryIndexes[i].getNodeGroupName());
             MetadataManager.INSTANCE.addDataset(mdTxnCtx, new Dataset(primaryIndexes[i].getDataverseName(),
@@ -284,23 +239,18 @@ public class MetadataBootstrap {
 
     public static void insertInitialIndexes(MetadataTransactionContext mdTxnCtx) throws Exception {
         for (int i = 0; i < secondaryIndexes.length; i++) {
-            MetadataManager.INSTANCE.addIndex(mdTxnCtx, new Index(secondaryIndexes[i].getDataverseName(),
-                    secondaryIndexes[i].getIndexedDatasetName(), secondaryIndexes[i].getIndexName(), IndexType.BTREE,
-                    secondaryIndexes[i].getPartitioningExpr(), false, MetadataManager.INSTANCE.generateResourceId()));
+            MetadataManager.INSTANCE.addIndex(
+                    mdTxnCtx,
+                    new Index(secondaryIndexes[i].getDataverseName(), secondaryIndexes[i].getIndexedDatasetName(),
+                            secondaryIndexes[i].getIndexName(), IndexType.LSM_BTREE, secondaryIndexes[i]
+                                    .getPartitioningExpr(), false, MetadataManager.INSTANCE.generateResourceId()));
         }
     }
 
     public static void insertNodes(MetadataTransactionContext mdTxnCtx) throws Exception {
         Iterator<String> iter = nodeNames.iterator();
-        // Set<Entry<String, String[]>> set = nodeStores.entrySet();
-        // Iterator<Entry<String, String[]>> im = set.iterator();
-
         while (iter.hasNext()) {
-            // Map.Entry<String, String[]> me = (Map.Entry<String,
-            // String[]>)im.next();
-            MetadataManager.INSTANCE.addNode(mdTxnCtx, new Node(iter.next(), 0, 0/*
-                                                                                 * , me . getValue ( )
-                                                                                 */));
+            MetadataManager.INSTANCE.addNode(mdTxnCtx, new Node(iter.next(), 0, 0));
         }
     }
 
@@ -318,40 +268,31 @@ public class MetadataBootstrap {
 
     }
 
-    public static void createIndex(IMetadataIndex dataset) throws Exception {
-        int fileId = dataset.getFileId();
-        ITypeTraits[] typeTraits = dataset.getTypeTraits();
-        IBinaryComparatorFactory[] comparatorFactories = dataset.getKeyBinaryComparatorFactory();
-        TypeAwareTupleWriterFactory tupleWriterFactory = new TypeAwareTupleWriterFactory(typeTraits);
-        ITreeIndexFrameFactory leafFrameFactory = new BTreeNSMLeafFrameFactory(tupleWriterFactory);
-        ITreeIndexFrameFactory interiorFrameFactory = new BTreeNSMInteriorFrameFactory(tupleWriterFactory);
+    public static void enlistMetadataDataset(IMetadataIndex index, boolean clearIndex) throws Exception {
+        IBufferCache bufferCache = applicationState.getApplicationRuntimeContext().getBufferCache();
+        IFileMapProvider fileMapProvider = applicationState.getApplicationRuntimeContext().getFileMapManager();
+
+        String onDiskDir = metadataStore + index.getFileRelativePath();
+        // TODO: Use a dummy file ID for now, but the notion of fileIDs should be removed.
+        int fileId = 0;
+        index.setFileId(fileId);
+
+        ITypeTraits[] typeTraits = index.getTypeTraits();
+        IBinaryComparatorFactory[] comparatorFactories = index.getKeyBinaryComparatorFactory();
         ITreeIndexMetaDataFrameFactory metaDataFrameFactory = new LIFOMetaDataFrameFactory();
-        IFreePageManager freePageManager = new LinkedListFreePageManager(bufferCache, 0, metaDataFrameFactory);
-        freePageManager.open(fileId);
-        BTree btree = new BTree(bufferCache, NoOpOperationCallback.INSTANCE, typeTraits.length, comparatorFactories,
-                freePageManager, interiorFrameFactory, leafFrameFactory);
-        btree.create(fileId);
-        btreeRegistry.register(DataUtil.byteArrayToInt(dataset.getResourceId(), 0), btree);
-    }
-
-    public static void enlistMetadataDataset(IMetadataIndex dataset) throws Exception {
-        int fileId = dataset.getFileId();
-        ITypeTraits[] typeTraits = dataset.getTypeTraits();
-        IBinaryComparatorFactory[] comparatorFactories = dataset.getKeyBinaryComparatorFactory();
-
-        TypeAwareTupleWriterFactory tupleWriterFactory = new TypeAwareTupleWriterFactory(typeTraits);
-
-        ITreeIndexFrameFactory leafFrameFactory = new BTreeNSMLeafFrameFactory(tupleWriterFactory);
-        ITreeIndexFrameFactory interiorFrameFactory = new BTreeNSMInteriorFrameFactory(tupleWriterFactory);
-
-        ITreeIndexMetaDataFrameFactory metaDataFrameFactory = new LIFOMetaDataFrameFactory();
-        IFreePageManager freePageManager = new LinkedListFreePageManager(bufferCache, 0, metaDataFrameFactory);
-        freePageManager.open(fileId);
-
-        BTree btree = new BTree(bufferCache, NoOpOperationCallback.INSTANCE, typeTraits.length, comparatorFactories,
-                freePageManager, interiorFrameFactory, leafFrameFactory);
-
-        btreeRegistry.register(DataUtil.byteArrayToInt(dataset.getResourceId(), 0), btree);
+        ICacheMemoryAllocator allocator = new HeapBufferAllocator();
+        InMemoryBufferCache memBufferCache = new InMemoryBufferCache(allocator, GlobalConfig.DEFAULT_MEM_PAGE_SIZE,
+                GlobalConfig.DEFAULT_MEM_NUM_PAGES);
+        InMemoryFreePageManager memFreePageManager = new InMemoryFreePageManager(GlobalConfig.DEFAULT_MEM_NUM_PAGES,
+                metaDataFrameFactory);
+        IIOManager ioManager = applicationState.getApplicationRuntimeContext().getIOManager();
+        IIndex physicalIndex = (IIndex) LSMBTreeUtils.createLSMTree(memBufferCache, NoOpOperationCallback.INSTANCE,
+                memFreePageManager, (IOManager) ioManager, onDiskDir, bufferCache, fileMapProvider, typeTraits,
+                comparatorFactories);
+        if (clearIndex) {
+            physicalIndex.create(fileId);
+        }
+        indexRegistry.register(DataUtil.byteArrayToInt(index.getResourceId(), 0), physicalIndex);
     }
 
     public static String getOutputDir() {

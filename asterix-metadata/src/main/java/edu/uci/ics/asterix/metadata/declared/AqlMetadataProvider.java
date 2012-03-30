@@ -702,7 +702,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         }
         AqlCompiledIndexDecl cid = DatasetUtils.findSecondaryIndexByName(compiledDatasetDecl, indexName);
 
-        if (cid.getKind() == IndexKind.BTREE)
+        if (cid.getKind() == IndexKind.LSM_BTREE)
             return getBTreeDmlRuntime(datasetName, indexName, propagatedSchema, primaryKeys, secondaryKeys, recordDesc,
                     context, spec, IndexOp.INSERT);
         else

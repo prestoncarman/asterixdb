@@ -180,7 +180,7 @@ public class DdlTranslator extends AbstractAqlTranslator {
                                         .getPartitioningExprs();
                                 String ngName = ((InternalDetailsDecl) dd.getDatasetDetailsDecl()).getNodegroupName()
                                         .getValue();
-                                datasetDetails = new InternalDatasetDetails(InternalDatasetDetails.FileStructure.BTREE,
+                                datasetDetails = new InternalDatasetDetails(InternalDatasetDetails.FileStructure.LSM_BTREE,
                                         InternalDatasetDetails.PartitioningStrategy.HASH, partitioningExprs,
                                         partitioningExprs, ngName);
                             }
@@ -206,7 +206,7 @@ public class DdlTranslator extends AbstractAqlTranslator {
                                         .getProperties();
                                 String functionIdentifier = ((FeedDetailsDecl) dd.getDatasetDetailsDecl())
                                         .getFunctionIdentifier();
-                                datasetDetails = new FeedDatasetDetails(InternalDatasetDetails.FileStructure.BTREE,
+                                datasetDetails = new FeedDatasetDetails(InternalDatasetDetails.FileStructure.LSM_BTREE,
                                         InternalDatasetDetails.PartitioningStrategy.HASH, partitioningExprs,
                                         partitioningExprs, ngName, adapter, properties, functionIdentifier,
                                         FeedDatasetDetails.FeedState.INACTIVE.toString());

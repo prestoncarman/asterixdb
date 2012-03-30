@@ -53,7 +53,7 @@ public interface IMetadataIndex {
 
     public int[] getFieldPermutation();
 
-    public String getFileNameRelativePath();
+    public String getFileRelativePath();
 
     public ARecordType getPayloadRecordType();
 

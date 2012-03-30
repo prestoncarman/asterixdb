@@ -41,7 +41,6 @@ public class DatasetConfig {
     }
 
     public enum IndexType {
-        BTREE,
         LSM_BTREE,
         RTREE,
         KEYWORD,

@@ -192,7 +192,7 @@ public final class MetadataIndex implements IMetadataIndex {
     }
 
     @Override
-    public String getFileNameRelativePath() {
+    public String getFileRelativePath() {
         return getDataverseName() + File.separator + getIndexedDatasetName() + "_idx_" + getIndexName();
     }
 
