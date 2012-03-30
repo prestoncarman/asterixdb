@@ -69,7 +69,7 @@ public class IndexOperations {
             AqlCompiledMetadataDeclarations datasetDecls) throws AsterixException, AlgebricksException {
 
         switch (createIndexStmt.getIndexType()) {
-            case BTREE: {
+            case LSM_BTREE: {
                 return createBtreeIndexJobSpec(createIndexStmt, datasetDecls);
             }
 
