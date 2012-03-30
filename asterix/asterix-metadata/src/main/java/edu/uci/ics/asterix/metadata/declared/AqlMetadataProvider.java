@@ -80,6 +80,7 @@ import edu.uci.ics.hyracks.storage.am.common.api.ITreeIndexFrameFactory;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.TreeIndexBulkLoadOperatorDescriptor;
 import edu.uci.ics.hyracks.storage.am.common.ophelpers.IndexOp;
 import edu.uci.ics.hyracks.storage.am.common.tuples.TypeAwareTupleWriterFactory;
+import edu.uci.ics.hyracks.storage.am.invertedindex.api.IInvertedIndexSearchModifierFactory;
 import edu.uci.ics.hyracks.storage.am.invertedindex.dataflow.InvertedIndexSearchOperatorDescriptor;
 import edu.uci.ics.hyracks.storage.am.invertedindex.searchmodifiers.ConjunctiveSearchModifierFactory;
 import edu.uci.ics.hyracks.storage.am.invertedindex.tokenizers.IBinaryTokenizerFactory;
@@ -507,7 +508,8 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
     @SuppressWarnings("rawtypes")
     public static Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> buildInvertedIndexRuntime(
             AqlCompiledMetadataDeclarations metadata, JobGenContext context, JobSpecification jobSpec,
-            String datasetName, AqlCompiledDatasetDecl datasetDecl, String indexName, int[] keyFields)
+            String datasetName, AqlCompiledDatasetDecl datasetDecl, String indexName, int[] keyFields,
+            IInvertedIndexSearchModifierFactory searchModifierFactory)
             throws AlgebricksException {
         String itemTypeName = datasetDecl.getItemTypeName();
         IAType itemType;
@@ -594,7 +596,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
 				appContext.getIndexRegistryProvider(), tokenTypeTraits,
 				tokenComparatorFactories, invListsTypeTraits,
 				invListsComparatorFactories, new BTreeDataflowHelperFactory(),
-				queryTokenizerFactory, new ConjunctiveSearchModifierFactory(), invListRecDesc);
+				queryTokenizerFactory, searchModifierFactory, invListRecDesc);
         return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(invIndexSearchOp, secondarySplitsAndConstraint.second);
     }
 

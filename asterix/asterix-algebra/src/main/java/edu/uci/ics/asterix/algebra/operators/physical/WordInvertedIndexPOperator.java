@@ -8,6 +8,9 @@ import edu.uci.ics.asterix.metadata.declared.AqlCompiledDatasetDecl;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
 import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
 import edu.uci.ics.asterix.metadata.declared.AqlSourceId;
+import edu.uci.ics.asterix.om.base.AFloat;
+import edu.uci.ics.asterix.om.base.IAObject;
+import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IHyracksJobBuilder;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
@@ -15,6 +18,7 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalExpressionTag;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.PhysicalOperatorTag;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
+import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import edu.uci.ics.hyracks.algebricks.core.algebra.metadata.IDataSourceIndex;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractScanOperator;
@@ -26,6 +30,9 @@ import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.api.exceptions.NotImplementedException;
 import edu.uci.ics.hyracks.algebricks.core.utils.Pair;
 import edu.uci.ics.hyracks.api.dataflow.IOperatorDescriptor;
+import edu.uci.ics.hyracks.storage.am.invertedindex.api.IInvertedIndexSearchModifierFactory;
+import edu.uci.ics.hyracks.storage.am.invertedindex.searchmodifiers.ConjunctiveSearchModifierFactory;
+import edu.uci.ics.hyracks.storage.am.invertedindex.searchmodifiers.JaccardSearchModifierFactory;
 
 public class WordInvertedIndexPOperator extends IndexSearchPOperator {
     public WordInvertedIndexPOperator(IDataSourceIndex<String, AqlSourceId> idx) {
@@ -66,12 +73,13 @@ public class WordInvertedIndexPOperator extends IndexSearchPOperator {
         }
         String indexName = getStringArgument(unnestFuncExpr, 0);
         String datasetName = getStringArgument(unnestFuncExpr, 2);
-        Pair<int[], Integer> keys = getKeys(unnestFuncExpr, 3, inputSchemas);
-        buildInvertedIndexSearch(builder, context, unnestMap, opSchema, datasetName, indexName, keys.first);
+        IInvertedIndexSearchModifierFactory searchModifierFactory = getSearchModifierFactory(unnestFuncExpr, 3);
+        Pair<int[], Integer> keys = getKeys(unnestFuncExpr, 5, inputSchemas);
+        buildInvertedIndexSearch(builder, context, unnestMap, opSchema, datasetName, indexName, keys.first, searchModifierFactory);
     }
 
     private static void buildInvertedIndexSearch(IHyracksJobBuilder builder, JobGenContext context, AbstractScanOperator scan,
-            IOperatorSchema opSchema, String datasetName, String indexName, int[] keyFields)
+            IOperatorSchema opSchema, String datasetName, String indexName, int[] keyFields, IInvertedIndexSearchModifierFactory searchModifierFactory)
             throws AlgebricksException, AlgebricksException {
         AqlMetadataProvider metadataProvider = (AqlMetadataProvider) context.getMetadataProvider();
         AqlCompiledMetadataDeclarations metadata = metadataProvider.getMetadataDeclarations();
@@ -83,10 +91,24 @@ public class WordInvertedIndexPOperator extends IndexSearchPOperator {
             throw new AlgebricksException("Trying to run inverted index search over external dataset (" + datasetName + ").");
         }
         Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> invIndexSearch = AqlMetadataProvider.buildInvertedIndexRuntime(
-                metadata, context, builder.getJobSpec(), datasetName, datasetDecl, indexName, keyFields);
+                metadata, context, builder.getJobSpec(), datasetName, datasetDecl, indexName, keyFields, searchModifierFactory);
         builder.contributeHyracksOperator(scan, invIndexSearch.first);
         builder.contributeAlgebricksPartitionConstraint(invIndexSearch.first, invIndexSearch.second);
         ILogicalOperator srcExchange = scan.getInputs().get(0).getValue();
         builder.contributeGraphEdge(srcExchange, 0, scan, 0);
+    }
+    
+    private IInvertedIndexSearchModifierFactory getSearchModifierFactory(AbstractFunctionCallExpression unnestFuncExpr, int k) throws AlgebricksException {
+        String searchModifierName = getStringArgument(unnestFuncExpr,  k);
+        if (searchModifierName.equals("CONJUNCTIVE")) {
+            return new ConjunctiveSearchModifierFactory();
+        }
+        if (searchModifierName.equals("JACCARD")) {
+            IAObject obj = ((AsterixConstantValue) ((ConstantExpression) unnestFuncExpr.getArguments().get(k + 1).getValue())
+                    .getValue()).getObject();
+            float jaccThresh = ((AFloat) obj).getFloatValue();
+            return new JaccardSearchModifierFactory(jaccThresh);
+        }
+        return null;
     }
 }

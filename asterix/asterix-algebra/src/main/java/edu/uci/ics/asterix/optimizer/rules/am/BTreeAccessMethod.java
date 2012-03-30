@@ -104,7 +104,7 @@ public class BTreeAccessMethod implements IAccessMethod {
         boolean[] highKeyInclusive = new boolean[numSecondaryKeys];
         
         List<Integer> exprList = analysisCtx.indexExprs.get(chosenIndex);
-        List<OptimizableFuncExpr> matchedFuncExprs = analysisCtx.matchedFuncExprs;        
+        List<OptimizableBinaryFuncExpr> matchedFuncExprs = analysisCtx.matchedFuncExprs;        
         // List of function expressions that will be replaced by the secondary-index search.
         // These func exprs will be removed from the select condition at the very end of this method.
         Set<ILogicalExpression> replacedFuncExprs = new HashSet<ILogicalExpression>();
@@ -358,7 +358,7 @@ public class BTreeAccessMethod implements IAccessMethod {
         return -1;
     }
     
-    private LimitType getLimitType(OptimizableFuncExpr optFuncExpr) {
+    private LimitType getLimitType(OptimizableBinaryFuncExpr optFuncExpr) {
         ComparisonKind ck = AlgebricksBuiltinFunctions.getComparisonType(optFuncExpr.getFuncExpr().getFunctionIdentifier());
         LimitType limit = null;
         switch (ck) {

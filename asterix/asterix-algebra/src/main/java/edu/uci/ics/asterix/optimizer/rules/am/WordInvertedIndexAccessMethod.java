@@ -12,9 +12,13 @@ import edu.uci.ics.asterix.common.functions.FunctionUtils;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledDatasetDecl;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl;
 import edu.uci.ics.asterix.om.base.AInt32;
+import edu.uci.ics.asterix.om.base.AOrderedList;
+import edu.uci.ics.asterix.om.base.AString;
+import edu.uci.ics.asterix.om.base.IAObject;
 import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
 import edu.uci.ics.asterix.om.types.ARecordType;
+import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IOptimizationContext;
@@ -22,7 +26,6 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalExpressionTag;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
-import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IAlgebricksConstantValue;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.UnnestingFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.AlgebricksBuiltinFunctions;
@@ -64,8 +67,6 @@ public class WordInvertedIndexAccessMethod implements IAccessMethod {
             return AccessMethodUtils.analyzeFuncExprArgsForOneConstAndVar(funcExpr, analysisCtx);
         }
         if (funcExpr.getFunctionIdentifier() == AsterixBuiltinFunctions.GET_ITEM) {
-            IAlgebricksConstantValue constFilterVal = null;
-            LogicalVariable fieldVar = null;
             ILogicalExpression arg1 = funcExpr.getArguments().get(0).getValue();
             ILogicalExpression arg2 = funcExpr.getArguments().get(1).getValue();
             // The second arg is the item index to be accessed. It must be a constant.
@@ -94,9 +95,7 @@ public class WordInvertedIndexAccessMethod implements IAccessMethod {
                     if (!secondLevelFuncIdents.contains(matchedFuncExpr.getFunctionIdentifier())) {
                         return false;
                     }
-                    System.out.println("WOW, GETTING CLOSE!");
-                    boolean huhu = AccessMethodUtils.analyzeSimilarityCheckFuncExprArgs(matchedFuncExpr, analysisCtx);
-                    return huhu;
+                    return AccessMethodUtils.analyzeSimilarityCheckFuncExprArgs(matchedFuncExpr, analysisCtx);
                 }
             }
         }
@@ -127,6 +126,7 @@ public class WordInvertedIndexAccessMethod implements IAccessMethod {
         // Pick the first expr optimizable by this index.
         List<Integer> indexExprs = analysisCtx.getIndexExprs(chosenIndex);
         int firstExprIndex = indexExprs.get(0);
+        OptimizableBinaryFuncExpr optFuncExpr = analysisCtx.matchedFuncExprs.get(firstExprIndex);
         
         DataSourceScanOperator dataSourceScan = (DataSourceScanOperator) dataSourceScanRef.getValue();
         // List of arguments to be passed into an unnest.
@@ -138,6 +138,8 @@ public class WordInvertedIndexAccessMethod implements IAccessMethod {
         secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(chosenIndex.getIndexName())));
         secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(FunctionArgumentsConstants.WORD_INVERTED_INDEX_INDEX)));
         secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(datasetDecl.getName())));
+        // Add function-specific args such as search modifier, and possibly a similarity threshold.
+        addFunctionSpecificArgs(optFuncExpr, secondaryIndexFuncArgs);
         secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(
                 new AInt32(numSecondaryKeys)))));
         // Here we generate vars and funcs for assigning the secondary-index keys to be fed into the secondary-index search.
@@ -145,14 +147,8 @@ public class WordInvertedIndexAccessMethod implements IAccessMethod {
         ArrayList<LogicalVariable> keyVarList = new ArrayList<LogicalVariable>();
         // List of expressions for the assign.
         ArrayList<Mutable<ILogicalExpression>> keyExprList = new ArrayList<Mutable<ILogicalExpression>>();
-        // For now we are assuming a single secondary index key.
-        // Add a variable and its expr to the lists which will be passed into an assign op.
-        LogicalVariable keyVar = context.newVar();
-        keyVarList.add(keyVar);
-        keyExprList.add(new MutableObject<ILogicalExpression>(new ConstantExpression(analysisCtx.matchedFuncExprs.get(firstExprIndex).getConstVal())));
-        Mutable<ILogicalExpression> keyVarRef = new MutableObject<ILogicalExpression>(
-                new VariableReferenceExpression(keyVar));
-        secondaryIndexFuncArgs.add(keyVarRef);
+        // Add key vars and exprs to argument list.
+        addKeyVarsAndExprs(optFuncExpr, keyVarList, keyExprList, secondaryIndexFuncArgs, context);
 
         // Assign operator that sets the secondary-index search-key fields.
         AssignOperator assignSearchKeys = new AssignOperator(keyVarList, keyExprList);
@@ -175,5 +171,64 @@ public class WordInvertedIndexAccessMethod implements IAccessMethod {
         // Replace the datasource scan with the new plan rooted at primaryIndexUnnestMap.
         dataSourceScanRef.setValue(primaryIndexUnnestMap);
         return true;
+    }
+    
+    private void addFunctionSpecificArgs(OptimizableBinaryFuncExpr optFuncExpr, ArrayList<Mutable<ILogicalExpression>> secondaryIndexFuncArgs) {
+        if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.CONTAINS) {
+            // Value 0 represents a conjunctive search modifier.
+            secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(
+                    new AString("CONJUNCTIVE")))));
+            // We add this dummy value, so that we can get the the key arguments starting from a fixed index.
+            secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(
+                    new AString("")))));
+        }
+        if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.SIMILARITY_JACCARD_CHECK) {
+            // Value 1 represents a jaccard search modifier.
+            secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(
+                    new AString("JACCARD")))));
+            // Add the similarity threshold.
+            OptimizableTernaryFuncExpr ternOptFuncExpr = (OptimizableTernaryFuncExpr) optFuncExpr;
+            secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(ternOptFuncExpr.getSecondConstVal())));
+        }
+    }
+
+    private void addKeyVarsAndExprs(OptimizableBinaryFuncExpr optFuncExpr, ArrayList<LogicalVariable> keyVarList, ArrayList<Mutable<ILogicalExpression>> keyExprList, ArrayList<Mutable<ILogicalExpression>> secondaryIndexFuncArgs, IOptimizationContext context) throws AlgebricksException {
+        if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.CONTAINS) {
+            // For now we are assuming a single secondary index key.
+            // Add a variable and its expr to the lists which will be passed into an assign op.
+            LogicalVariable keyVar = context.newVar();
+            keyVarList.add(keyVar);
+            Mutable<ILogicalExpression> keyVarRef = new MutableObject<ILogicalExpression>(
+                    new VariableReferenceExpression(keyVar));
+            secondaryIndexFuncArgs.add(keyVarRef);
+            keyExprList.add(new MutableObject<ILogicalExpression>(new ConstantExpression(optFuncExpr.getConstVal())));
+            return;
+        }
+        if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.SIMILARITY_JACCARD_CHECK) {
+            // TODO: We expect an already constant-folded list of tokens.
+            // However, the Hyracks operator expects an untokenized string, so we reconstruct it here.
+            // We should allow the Hyracks inverted-index operator to accept lists.
+            LogicalVariable keyVar = context.newVar();
+            keyVarList.add(keyVar);
+            Mutable<ILogicalExpression> keyVarRef = new MutableObject<ILogicalExpression>(
+                    new VariableReferenceExpression(keyVar));
+            secondaryIndexFuncArgs.add(keyVarRef);
+            
+            AsterixConstantValue constVal = (AsterixConstantValue) optFuncExpr.getConstVal();
+            IAObject obj = constVal.getObject();
+            if (obj.getType().getTypeTag() != ATypeTag.ORDEREDLIST) {
+                throw new AlgebricksException("Expected type ORDEREDLIST.");
+            }
+            AOrderedList tokenList = (AOrderedList) obj;
+            // TODO: Currently, we only accept strings here.
+            StringBuilder searchString = new StringBuilder();
+            for (int i = 0; i < tokenList.size(); i++) {
+                AString item = (AString) tokenList.getItem(i);
+                searchString.append(item.getStringValue());
+                searchString.append(" ");
+            }
+            searchString.deleteCharAt(searchString.length() - 1);
+            keyExprList.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(new AString(searchString.toString())))));
+        }
     }
 }

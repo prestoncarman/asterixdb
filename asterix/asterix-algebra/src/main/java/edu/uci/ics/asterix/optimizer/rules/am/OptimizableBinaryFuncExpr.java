@@ -4,13 +4,13 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IAlgebricksConstantValue;
 
-public class OptimizableFuncExpr {
-    private final AbstractFunctionCallExpression funcExpr;
-    private final IAlgebricksConstantValue constantVal;
-    private final LogicalVariable logicalVar;
-    private String fieldName;
+public class OptimizableBinaryFuncExpr {
+    protected final AbstractFunctionCallExpression funcExpr;
+    protected final IAlgebricksConstantValue constantVal;
+    protected final LogicalVariable logicalVar;
+    protected String fieldName;
     
-    public OptimizableFuncExpr(AbstractFunctionCallExpression funcExpr, IAlgebricksConstantValue constantVal, LogicalVariable logicalVar) {
+    public OptimizableBinaryFuncExpr(AbstractFunctionCallExpression funcExpr, IAlgebricksConstantValue constantVal, LogicalVariable logicalVar) {
         this.funcExpr = funcExpr;
         this.constantVal = constantVal;
         this.logicalVar = logicalVar;

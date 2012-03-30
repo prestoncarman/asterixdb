@@ -12,7 +12,7 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
 
 public class AccessMethodAnalysisContext {
     
-    public List<OptimizableFuncExpr> matchedFuncExprs = new ArrayList<OptimizableFuncExpr>();
+    public List<OptimizableBinaryFuncExpr> matchedFuncExprs = new ArrayList<OptimizableBinaryFuncExpr>();
     public List<Mutable<ILogicalExpression>> remainingFuncExprs = new ArrayList<Mutable<ILogicalExpression>>();
     // Contains candidate indexes and a list of integers that index into matchedFuncExprs.
     // In effect, we are mapping from candidate indexes to a list of function expressions 

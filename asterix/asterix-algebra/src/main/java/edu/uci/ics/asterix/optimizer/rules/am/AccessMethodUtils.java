@@ -78,18 +78,20 @@ public class AccessMethodUtils {
         } else {
             return false;
         }
-        analysisCtx.matchedFuncExprs.add(new OptimizableFuncExpr(funcExpr, constFilterVal, fieldVar));
+        analysisCtx.matchedFuncExprs.add(new OptimizableBinaryFuncExpr(funcExpr, constFilterVal, fieldVar));
         return true;
     }
     
     public static boolean analyzeSimilarityCheckFuncExprArgs(AbstractFunctionCallExpression funcExpr,
             AccessMethodAnalysisContext analysisCtx) {
         // There should be exactly three arguments.
-        // The last function argument is assumed to be the similarity threshold.        
+        // The last function argument is assumed to be the similarity threshold.
+        IAlgebricksConstantValue constThreshVal = null;
         ILogicalExpression arg3 = funcExpr.getArguments().get(2).getValue();
         if (arg3.getExpressionTag() != LogicalExpressionTag.CONSTANT) {
             return false;
         }
+        constThreshVal = ((ConstantExpression) arg3).getValue();
         ILogicalExpression arg1 = funcExpr.getArguments().get(0).getValue();
         ILogicalExpression arg2 = funcExpr.getArguments().get(1).getValue();
         // Determine whether one arg is constant, and the other is non-constant.
@@ -106,7 +108,7 @@ public class AccessMethodUtils {
         } else {
             return false;
         }
-        IAlgebricksConstantValue constFilterVal = null;
+        IAlgebricksConstantValue constFilterVal = null;        
         LogicalVariable fieldVar = null;
         // Analyze arg1 and arg2, depending on similarity function.
         // TODO: For now, only support Jaccard.
@@ -121,14 +123,14 @@ public class AccessMethodUtils {
                     return false;
                 }
                 // Find the variable that is being tokenized.
-                nonConstArg = funcExpr.getArguments().get(0).getValue();
+                nonConstArg = nonConstfuncExpr.getArguments().get(0).getValue();
             }
             if (nonConstArg.getExpressionTag() == LogicalExpressionTag.VARIABLE) {
                 VariableReferenceExpression varExpr = (VariableReferenceExpression) nonConstArg;
                 fieldVar = varExpr.getVariableReference();
+                analysisCtx.matchedFuncExprs.add(new OptimizableTernaryFuncExpr(funcExpr, constFilterVal, constThreshVal, fieldVar));
+                return true;
             }
-            analysisCtx.matchedFuncExprs.add(new OptimizableFuncExpr(nonConstfuncExpr, constFilterVal, fieldVar));
-            return true;
         }
         return false;
         /*
