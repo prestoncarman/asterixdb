@@ -18,8 +18,8 @@ package edu.uci.ics.asterix.metadata.api;
 import java.util.List;
 
 import edu.uci.ics.asterix.om.types.ARecordType;
-import edu.uci.ics.asterix.runtime.transaction.TreeLogger;
 import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
+import edu.uci.ics.asterix.transaction.management.service.logging.TreeLogger;
 import edu.uci.ics.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.IBinaryHashFunctionFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.ITypeTraits;
@@ -59,7 +59,7 @@ public interface IMetadataIndex {
 
     public void setFileId(int fileId);
 
-    public void initTreeLogger() throws ACIDException;
+    public void setTreeLogger(TreeLogger treeLogger) throws ACIDException;
 
     public int getFileId();
     

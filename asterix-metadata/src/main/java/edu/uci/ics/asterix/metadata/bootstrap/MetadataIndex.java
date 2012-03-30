@@ -27,9 +27,9 @@ import edu.uci.ics.asterix.formats.nontagged.AqlTypeTraitProvider;
 import edu.uci.ics.asterix.metadata.api.IMetadataIndex;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.IAType;
-import edu.uci.ics.asterix.runtime.transaction.TreeLogger;
 import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
 import edu.uci.ics.asterix.transaction.management.service.logging.DataUtil;
+import edu.uci.ics.asterix.transaction.management.service.logging.TreeLogger;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder.OrderKind;
 import edu.uci.ics.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.IBinaryHashFunctionFactory;
@@ -202,8 +202,8 @@ public final class MetadataIndex implements IMetadataIndex {
     }
 
     @Override
-    public void initTreeLogger() throws ACIDException {
-        this.treeLogger = new TreeLogger(resourceId);
+    public void setTreeLogger(TreeLogger treeLogger) throws ACIDException {
+        this.treeLogger = treeLogger;
     }
 
     @Override

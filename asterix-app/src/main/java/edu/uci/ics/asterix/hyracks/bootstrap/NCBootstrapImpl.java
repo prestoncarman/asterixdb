@@ -30,7 +30,6 @@ import edu.uci.ics.asterix.metadata.api.IAsterixStateProxy;
 import edu.uci.ics.asterix.metadata.api.IMetadataNode;
 import edu.uci.ics.asterix.metadata.bootstrap.MetadataBootstrap;
 import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
-import edu.uci.ics.asterix.transaction.management.resource.TransactionalResourceRepository;
 import edu.uci.ics.asterix.transaction.management.service.recovery.IRecoveryManager;
 import edu.uci.ics.asterix.transaction.management.service.recovery.IRecoveryManager.SystemState;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionProvider;
@@ -138,8 +137,8 @@ public class NCBootstrapImpl implements INCBootstrap {
 
     private void initializeResources() {
         // TODO: bring up resources and resourceMgrs; register in resource repository
-        TransactionalResourceRepository resourceRepository = applicationState.getTransactionProvider()
-                .getResourceRepository();
+//        TransactionalResourceRepository resourceRepository = applicationState.getTransactionProvider()
+//                .getResourceRepository();
     }
 
     @Override

@@ -20,6 +20,7 @@ import edu.uci.ics.asterix.transaction.management.service.locking.ILockManager;
 import edu.uci.ics.asterix.transaction.management.service.locking.LockManager;
 import edu.uci.ics.asterix.transaction.management.service.logging.ILogManager;
 import edu.uci.ics.asterix.transaction.management.service.logging.LogManager;
+import edu.uci.ics.asterix.transaction.management.service.logging.TreeLoggerRepository;
 import edu.uci.ics.asterix.transaction.management.service.recovery.IRecoveryManager;
 import edu.uci.ics.asterix.transaction.management.service.recovery.RecoveryManager;
 
@@ -35,6 +36,7 @@ public class TransactionProvider {
     private final IRecoveryManager recoveryManager;
     private final MemoryComponentTable memoryComponentTable;
     private final TransactionalResourceRepository resourceRepository;
+    private final TreeLoggerRepository loggerRepository;
 
     public TransactionProvider(String nodeId) throws ACIDException {
         this.memoryComponentTable = new MemoryComponentTable();
@@ -44,6 +46,7 @@ public class TransactionProvider {
         this.lockManager = new LockManager(this);
         this.recoveryManager = new RecoveryManager(this);
         this.resourceRepository = new TransactionalResourceRepository();
+        this.loggerRepository = new TreeLoggerRepository(resourceRepository);
     }
 
     public ILogManager getLogManager() {
@@ -68,6 +71,10 @@ public class TransactionProvider {
 
     public TransactionalResourceRepository getResourceRepository() {
         return resourceRepository;
+    }
+    
+    public TreeLoggerRepository getTreeLoggerRepository() {
+        return loggerRepository;
     }
 
     public String getId() {

@@ -19,8 +19,10 @@ import java.nio.ByteBuffer;
 import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
 import edu.uci.ics.asterix.transaction.management.resource.ICloseable;
 import edu.uci.ics.asterix.transaction.management.resource.TransactionalResourceRepository;
+import edu.uci.ics.asterix.transaction.management.resource.TreeResourceManager;
 import edu.uci.ics.asterix.transaction.management.service.locking.ILockManager;
 import edu.uci.ics.asterix.transaction.management.service.logging.DataUtil;
+import edu.uci.ics.asterix.transaction.management.service.logging.TreeLogger;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionContext;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionManagementConstants;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionProvider;
@@ -72,7 +74,7 @@ public class TreeIndexInsertUpdateDeleteOperatorNodePushable extends AbstractUna
         byte[] resourceId = DataUtil.intToByteArray(fileId);
         resourceRepository.registerTransactionalResource(resourceId, treeIndexHelper.getIndex());
         lockManager = transactionProvider.getLockManager();
-        bTreeLogger = TreeLoggerRepository.getTreeLogger(resourceId);
+        bTreeLogger = transactionProvider.getTreeLoggerRepository().getTreeLogger(resourceId);
     }
 
     @Override
