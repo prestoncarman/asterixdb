@@ -851,4 +851,47 @@ public class MetadataNode implements IMetadataNode {
             throws MetadataException, RemoteException {
         return getIndex(txnId, dataverseName, datasetName, indexName).getResourceId();
     }
+
+    /*
+     * returns maximum resourceId among resourceIds which has been issued so far.
+     */
+    @Override
+    public int getGeneratedMaxResourceId() throws Exception {
+        
+        int maxResourceId = -1;
+        IMetadataIndex metadataIndex = MetadataPrimaryIndexes.INDEX_DATASET;
+        
+        //Prepare IndexTupleTranslator
+        IndexTupleTranslator tupleReaderWriter = new IndexTupleTranslator(false);
+        IValueExtractor<Index> valueExtractor = new MetadataEntityValueExtractor<Index>(tupleReaderWriter);
+
+        //get the index from indexRegistry using resourceId
+        BTree btree = (BTree) btreeRegistryProvider.getRegistry(null).get(DataUtil.byteArrayToInt(metadataIndex.getResourceId(), 0));
+        int fileId = metadataIndex.getFileId();
+        btree.open(fileId);
+        
+        //create a rangePredicate(which is null predicate) and create a cursor with the predicate
+        ITreeIndexFrame leafFrame = btree.getLeafFrameFactory().createFrame();
+        ITreeIndexAccessor indexAccessor = btree.createAccessor();
+        ITreeIndexCursor rangeCursor = new BTreeRangeSearchCursor((IBTreeLeafFrame) leafFrame, false);
+        RangePredicate rangePred = new RangePredicate(null, null, true, true, null, null);
+        indexAccessor.search(rangeCursor, rangePred);
+
+        //while iterating each record(which includes an index information), keep the maxResourceId.
+        try {
+            while (rangeCursor.hasNext()) {
+                rangeCursor.next();
+                //TODO handle the issue of the transactionId or transactionContext during recovery 
+                Index index = valueExtractor.getValue(0, rangeCursor.getTuple());
+                if (index.getResourceId() > maxResourceId) {
+                    maxResourceId = index.getResourceId();
+                }
+            }
+        } finally {
+            rangeCursor.close();
+        }
+        
+        return maxResourceId;
+        
+    }
 }

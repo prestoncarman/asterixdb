@@ -40,12 +40,13 @@ import edu.uci.ics.asterix.transaction.management.service.logging.PhysicalLogLoc
 import edu.uci.ics.asterix.transaction.management.service.transaction.IResourceManager;
 import edu.uci.ics.asterix.transaction.management.service.transaction.MemoryComponentTable;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionContext;
+import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionIDFactory;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionManagementConstants;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionProvider;
 
 /**
  * This is the Recovery Manager and is responsible for rolling back a
- * transaction as well as doing a system recovery. 
+ * transaction as well as doing a system recovery.
  */
 public class RecoveryManager implements IRecoveryManager {
 
@@ -56,8 +57,15 @@ public class RecoveryManager implements IRecoveryManager {
     /**
      * A file at a known location that contains the LSN of the last log record
      * traversed doing a successful checkpoint.
+     * The system has two checkpoint file, left and right.
+     * Whenever system starts, first it reads both files and consider the file which contains
+     * bigger LSN valid. Then the next checkpoint writes checkpoint information into the other
+     * checkpoint file.
      */
-    private static final String checkpoint_record_file = "last_checkpoint_lsn";
+    private static final String[] checkpoint_record_file = { "left_last_checkpoint_lsn", "right_last_checkpoint_lsn" };
+
+    private int checkpointFileIndicator;
+
     private SystemState state;
 
     public RecoveryManager(TransactionProvider transactionProvider) throws ACIDException {
@@ -67,21 +75,25 @@ public class RecoveryManager implements IRecoveryManager {
 
     /**
      * returns system state which could be one of the three states: HEALTHY, RECOVERING, CORRUPTED.
-     * This state information could be used in a case where more than one thread is running 
+     * This state information could be used in a case where more than one thread is running
      * in the bootstrap process to provide higher availability. In other words, while the system
      * is recovered, another thread may start a new transaction with understanding the side effect
      * of the operation, or the system can be recovered concurrently. This kind of concurrency is
-     * not supported, yet. 
+     * not supported, yet.
      */
     public SystemState getSystemState() throws ACIDException {
         try {
-            if (FileUtil.createFileIfNotExists(checkpoint_record_file)) {
+            if (FileUtil.createFileIfNotExists(checkpoint_record_file[0])) {
+                FileUtil.createFileIfNotExists(checkpoint_record_file[1]);
                 //If checkpoint_record_file doesn't exist, this is the initial system bootstrap. 
                 //The system state is healthy.
-                //Do the first checkpoint. It doesn't have to be done in efficiency perspective, 
+                //Do the first checkpoint. It shouldn't be done in efficiency perspective, 
                 //but it is done to make checking the healthy state simple and this is only one time overhead.
                 state = SystemState.HEALTHY;
-                checkpoint();
+
+                //set the valid checkpoint file indicator to leftCheckpointFile
+                checkpointFileIndicator = 0;
+                checkpoint(true);
             } else {
                 //check if checkponitLogRecord.LSN == lastCheckpointLSN from checkpoint_record_file.
                 //If they are same, state is HEALTHY. Otherwise, it's not healthy.
@@ -89,6 +101,16 @@ public class RecoveryManager implements IRecoveryManager {
                     if (LogUtil.initializeLogAnchor(transactionProvider.getLogManager()).getLsn() == this
                             .getLastCheckpointRecordLSN()) {
                         state = SystemState.HEALTHY;
+                        //read maxTranasactionId from checkpointFile and 
+                        //set the transactionIdSeed to the maxTransactionId.
+                        try {
+                            TransactionIDFactory.resetTransactionIdSeed(getMaxTransactionIdFromCheckpointRecordFile());
+                        } catch (Exception e) {
+                            throw new ACIDException("failed to read maxTransactionId from"
+                                    + checkpoint_record_file[this.checkpointFileIndicator], e);
+                        }
+                        //now move the checkpointFileIndicator to the other checkpointFile.
+                        checkpointFileIndicator = (checkpointFileIndicator + 1) % 2;
                     } else {
                         state = SystemState.CORRUPTED;
                     }
@@ -111,24 +133,31 @@ public class RecoveryManager implements IRecoveryManager {
      * @throws ACIDException
      */
     private PhysicalLogLocator getLowWaterMark() throws ACIDException {
-        long minMCTFirstLSN = this.memoryComponentTable.getMinFirstLSN();
-        long minDiskLastLSN = -1; 
+        long minMCTFirstLSN;
+        try {
+            minMCTFirstLSN = this.getMinMCTFirstLSNFromCheckpointRecordFile();
+        } catch (Exception e) {
+            // TODO Auto-generated catch block
+            throw new ACIDException("failed to read minMCTFristLSN from"
+                    + checkpoint_record_file[this.checkpointFileIndicator], e);
+        }
+        long minDiskLastLSN = -1;
         long lowWaterMarkLSN = -1;
-        
+
         //TODO get minDiskLastLSN from all resources.
         if (minMCTFirstLSN > minDiskLastLSN) {
             lowWaterMarkLSN = minMCTFirstLSN;
         } else {
             lowWaterMarkLSN = minDiskLastLSN;
         }
-        
+
         return new PhysicalLogLocator(lowWaterMarkLSN, this.transactionProvider.getLogManager());
     }
 
     /**
      * Recovers the crashed system by doing following two phases.
      * First, analysis phase starts reading the log file from the low water mark and
-     * construct CTL(Committed Transactions's List) while all log records (from the log water mark) 
+     * construct CTL(Committed Transactions's List) while all log records (from the log water mark)
      * are read up to the end of log file.
      * Second, redo phase starts reading the log file from the low water mark, too and
      * replay committed txns's log records while updating MCT(Memory Component Table) accordingly.
@@ -136,29 +165,47 @@ public class RecoveryManager implements IRecoveryManager {
      * we avoid additional IO overhead caused by the checkpoint.
      */
     public SystemState startRecovery(boolean synchronous) throws IOException, ACIDException {
-        
+
         state = SystemState.RECOVERING;
-        HashMap committedTransactions = new HashMap(); 
+        HashMap committedTransactions = new HashMap();
 
         //get the Low Water Mark from which analysis starts reading log records.
         PhysicalLogLocator lowWaterMarkLSN = getLowWaterMark();
-        
+
         //start analysis
         startAnalysis(lowWaterMarkLSN, committedTransactions);
-        
+
+        //set checkpointFileIndicator to the other file before redo starts
+        //since redo may cause checkpoint.
+        this.checkpointFileIndicator = (this.checkpointFileIndicator + 1) % 2;
+
         //start redo
         startRedo(lowWaterMarkLSN, committedTransactions);
-        
+
         //clean up the recovery 
         committedTransactions.clear();
-        state = SystemState.HEALTHY;    
+        state = SystemState.HEALTHY;
 
         return state;
     }
 
-    private void startAnalysis(PhysicalLogLocator beginLSN, HashMap committedTransactions) throws IOException, ACIDException {
+    private void startAnalysis(PhysicalLogLocator beginLSN, HashMap committedTransactions) throws IOException,
+            ACIDException {
         ILogManager logManager = transactionProvider.getLogManager();
-        
+
+        // #. startAnalysis() figure out the max transactionId which has been generated so far.
+        //    To do this, it first read the maxTransactionId from checkpointFile, then
+        //    while it is reading the log file, the maxTransactionId is updated accordingly.
+        long maxTransactionId = 0;
+        long currentTransactionId = 0;
+
+        try {
+            maxTransactionId = this.getMaxTransactionIdFromCheckpointRecordFile();
+        } catch (Exception e) {
+            throw new ACIDException("failed to read maxTransactionId from"
+                    + checkpoint_record_file[this.checkpointFileIndicator], e);
+        }
+
         // #. set the cursor to the beginLSN
         // LogFilter is not used currently and the accept function always returns true.
         // There is no scenario which requires LogFilter so far. 
@@ -167,11 +214,11 @@ public class RecoveryManager implements IRecoveryManager {
                 return true;
             }
         });
-        
+
         // Notice. 
         // The buffer of the LogicalLogLocator is set to the buffer of the LogCursor when LogCursor.next() is called. 
         LogicalLogLocator currentLogicalLogLocator = new LogicalLogLocator(beginLSN.getLsn(), null, -1, logManager);
-        
+
         //#. read log records up to the end of log file while collecting committed transaction Id.
         boolean logValidity = true;
         byte logType;
@@ -186,22 +233,42 @@ public class RecoveryManager implements IRecoveryManager {
                     }
                     break;
                 }
-                
-                //insert a committed transaction id into HashMap, committedTransactions.
+
                 logType = logParser.getLogType(currentLogicalLogLocator);
-                if (logType == LogType.COMMIT) {
-                    committedTransactions.put(logParser.getLogTransactionId(currentLogicalLogLocator), null);
+                switch (logType) {
+                    case LogType.COMMIT: {
+                        currentTransactionId = logParser.getLogTransactionId(currentLogicalLogLocator);
+                        //insert a committed transaction id into HashMap, committedTransactions.
+                        committedTransactions.put(currentTransactionId, null);
+                        //update maxTransactionId if the bigger transactionId is found.
+                        if (currentTransactionId > maxTransactionId) {
+                            maxTransactionId = currentTransactionId;
+                        }
+                        break;
+                    }
+                    case LogType.UPDATE: {
+                        //update maxTransactionId if the bigger transactionId is found.
+                        currentTransactionId = logParser.getLogTransactionId(currentLogicalLogLocator);
+                        if (currentTransactionId > maxTransactionId) {
+                            maxTransactionId = currentTransactionId;
+                        }
+                        break;
+                    }
                 }
             }
         } catch (Exception e) {
             state = SystemState.CORRUPTED;
             throw new ACIDException("[Analysis Phase] could not recover, corrputed log !", e);
         }
+
+        //reset the transactionIdSeed with maxTransactionId.
+        TransactionIDFactory.resetTransactionIdSeed(maxTransactionId);
     }
-    
-    private void startRedo(PhysicalLogLocator beginLSN, HashMap committedTransactions) throws IOException, ACIDException {
+
+    private void startRedo(PhysicalLogLocator beginLSN, HashMap committedTransactions) throws IOException,
+            ACIDException {
         ILogManager logManager = transactionProvider.getLogManager();
-        
+
         // #. set the cursor to the beginLSN
         // LogFilter is not used currently and the accept function always returns true.
         // There is no scenario which requires LogFilter so far. 
@@ -210,18 +277,18 @@ public class RecoveryManager implements IRecoveryManager {
                 return true;
             }
         });
-        
+
         // Notice. 
         // The buffer of the LogicalLogLocator is set to the buffer of the LogCursor when LogCursor.next() is called. 
         LogicalLogLocator currentLogicalLogLocator = new LogicalLogLocator(beginLSN.getLsn(), null, -1, logManager);
-        
+
         boolean logValidity = true;
         byte resourceMgrId;
         IResourceManager resourceMgr;
         LogRecordHelper logParser = new LogRecordHelper(logManager);
         try {
             while (logValidity) {
-                
+
                 //read the next log record               
                 logValidity = logCursor.next(currentLogicalLogLocator);
                 if (!logValidity) {
@@ -230,17 +297,18 @@ public class RecoveryManager implements IRecoveryManager {
                     }
                     break;
                 }
-                
+
                 //If the log type is UPDATE and the txnId of the log record exists in the HashMap, committedTransactions, 
                 //then make resourceMgr replay the log record.
                 //ResourceMgr is in charge of guaranteeing the idempotent property by checking the diskLSN of the resource. 
-                if (logParser.getLogType(currentLogicalLogLocator) == LogType.UPDATE &&
-                    committedTransactions.containsKey(logParser.getLogTransactionId(currentLogicalLogLocator))) {
+                if (logParser.getLogType(currentLogicalLogLocator) == LogType.UPDATE
+                        && committedTransactions.containsKey(logParser.getLogTransactionId(currentLogicalLogLocator))) {
                     resourceMgrId = logParser.getResourceMgrId(currentLogicalLogLocator);
-                    resourceMgr = transactionProvider.getResourceRepository().getTransactionalResourceMgr(resourceMgrId);
+                    resourceMgr = transactionProvider.getResourceRepository()
+                            .getTransactionalResourceMgr(resourceMgrId);
                     if (resourceMgr == null) {
                         throw new ACIDException("[Redo Phase] unknown resource mgr with id " + resourceMgrId);
-                    } else {      
+                    } else {
                         resourceMgr.redo(logParser, currentLogicalLogLocator);
                     }
                 }
@@ -250,21 +318,25 @@ public class RecoveryManager implements IRecoveryManager {
             throw new ACIDException("[Redo Phase] could not recover , corrputed log !", e);
         }
     }
-    
+
     @Override
     /*
      * Checkpoint executes the following tasks: 
-     * write <chkpt, minMCTFirstLSN> log record, 
-     * flush logs up to the checkpoint log record, 
-     * save the LSN of the checkpoint log record into checkpoint_log_record file.
-     * However, dirty data in memory is not flushed.
+     * write checkpoint log record, 
+     * (flush logs up to the checkpoint log record. This is done by LogManager) 
+     * save the minMCTFirstLSN, maxTransactionId, and checkpointLSN into checkpoint_log_record file.
+     * However, dirty data in the memory is not flushed.
      */
-    public void checkpoint() throws ACIDException {
-        // write <chkpt, minMCTFirstLSN> log record, 
-        // flush logs upto the checkpoint log record, 
-        // save the LSN of the checkpoint log record into checkpoint_log_record file.
+    public void checkpoint(boolean writeToBothFile) throws ACIDException {
         ILogManager logMgr = transactionProvider.getLogManager();
         LogicalLogLocator logLocator = LogUtil.getDummyLogicalLogLocator(logMgr);
+
+        int numberOfWrite;
+        if (writeToBothFile) {
+            numberOfWrite = 2;
+        } else {
+            numberOfWrite = 1;
+        }
 
         //write checkpoint log record
         try {
@@ -276,70 +348,157 @@ public class RecoveryManager implements IRecoveryManager {
             throw ae;
         }
 
-        //update checkpoint_log_record file. 
+        //get minMCTFirstLSN
         long minMCTFirstLSN = this.memoryComponentTable.getMinFirstLSN();
+        long maxTransactionId = TransactionIDFactory.getGeneratedMaxTransactionId();
 
-        try {
-            //write checkpoint log record LSN as well as minMCTFirstLSN twice
-            //to check whether they are corrupted or not.
-            byte[] buffer = new byte[Long.SIZE * 4];
-            BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(checkpoint_record_file));
-            bufferedWriter.write("" + logLocator.getLsn());
-            bufferedWriter.newLine();
-            bufferedWriter.write("" + logLocator.getLsn());
-            bufferedWriter.newLine();
-            bufferedWriter.write("" + minMCTFirstLSN);
-            bufferedWriter.newLine();
-            bufferedWriter.write("" + minMCTFirstLSN);
-            bufferedWriter.newLine();
-            bufferedWriter.flush();
-        } catch (IOException ioe) {
-            throw new ACIDException(" unable to create check point record", ioe);
+        //write checkpoint log record LSN as well as minMCTFirstLSN twice
+        //in order to check whether they are corrupted or not when the recovery starts.
+        BufferedWriter bufferedWriter;
+
+        for (int i = 0; i < numberOfWrite; i++) {
+            try {
+
+                if (writeToBothFile) {
+                    bufferedWriter = new BufferedWriter(new FileWriter(checkpoint_record_file[i]));
+                } else {
+                    bufferedWriter = new BufferedWriter(new FileWriter(
+                            checkpoint_record_file[this.checkpointFileIndicator]));
+                }
+
+                bufferedWriter.write("" + minMCTFirstLSN);
+                bufferedWriter.newLine();
+                bufferedWriter.write("" + minMCTFirstLSN);
+                bufferedWriter.newLine();
+                bufferedWriter.write("" + maxTransactionId);
+                bufferedWriter.newLine();
+                bufferedWriter.write("" + maxTransactionId);
+                bufferedWriter.newLine();
+                bufferedWriter.write("" + logLocator.getLsn());
+                bufferedWriter.newLine();
+                bufferedWriter.write("" + logLocator.getLsn());
+                bufferedWriter.newLine();
+                bufferedWriter.flush();
+            } catch (IOException ioe) {
+                throw new ACIDException(" unable to create check point record", ioe);
+            }
         }
+
+        //move the checkpoint file indicator to the other file
+        this.checkpointFileIndicator = (this.checkpointFileIndicator + 1) % 2;
     }
 
     /**
-     * read the last checkpoint LSN from checkpoint_record_file
+     * Read the checkpoint LSN from both of the checkpoint_record_files.
+     * Consider the file which stores bigger LSN a valid checkpoint LSN.
      * 
      * @throws
      * @throws Exception
      */
     private long getLastCheckpointRecordLSN() throws ACIDException {
         String content = null;
-        long lastCheckpointLSN;
+        long[] lastCheckpointLSN = { 0, 0 };
         BufferedReader bufferedReader;
-        try {
-            bufferedReader = new BufferedReader(new FileReader(checkpoint_record_file));
-        } catch (FileNotFoundException e) {
-            throw new ACIDException("checkpoint_record_file is corrupted", e);
-        }
+        boolean existValidCheckpointLSN = false;
+        boolean isCheckpointFileCorrupted = false;
 
-        //read the last checkpoint LSN
-        try {
-            content = bufferedReader.readLine();
-        } catch (IOException e) {
-            throw new ACIDException("checkpoint_record_file is corrupted", e);
-        }
-        if (content == null) {
-            throw new ACIDException("checkpoint_record_file is corrupted");
-        } else {
-            lastCheckpointLSN = Long.parseLong(content);
-        }
+        for (int i = 0; i < 2; i++) {
 
-        try {
-            content = bufferedReader.readLine();
-        } catch (IOException e) {
-            throw new ACIDException("checkpoint_record_file is corrupted", e);
-        }
-        if (content == null) {
-            throw new ACIDException("checkpoint_record_file is corrupted");
-        } else {
-            if (lastCheckpointLSN == Long.parseLong(content)) {
-                return lastCheckpointLSN;
-            } else {
-                throw new ACIDException("checkpoint_record_file is corrupted");
+            try {
+                bufferedReader = new BufferedReader(new FileReader(checkpoint_record_file[i]));
+            } catch (FileNotFoundException e) {
+                if (i == 1 && !existValidCheckpointLSN) {
+                    throw new ACIDException("Both checkpoint files are corrupted", e);
+                } else {
+                    continue;
+                }
             }
+
+            //read the minMCTFirstLSN twice and the maxTransactionId twice.
+            for (int j = 0; j < 4; j++) {
+                try {
+                    content = bufferedReader.readLine();
+                } catch (IOException e) {
+                    if (i == 1 && !existValidCheckpointLSN) {
+                        throw new ACIDException("Both checkpoint files are corrupted", e);
+                    } else {
+                        isCheckpointFileCorrupted = true;
+                        break;
+                    }
+                }
+                if (content == null) {
+                    if (i == 1 && !existValidCheckpointLSN) {
+                        throw new ACIDException("Both checkpoint files are corrupted");
+                    } else {
+                        isCheckpointFileCorrupted = true;
+                        break;
+                    }
+                }
+            }
+            if (isCheckpointFileCorrupted) {
+                isCheckpointFileCorrupted = false;
+                continue;
+            }
+
+            //read the first checkpointLSN
+            try {
+                content = bufferedReader.readLine();
+            } catch (IOException e) {
+                if (i == 1 && !existValidCheckpointLSN) {
+                    throw new ACIDException("Both checkpoint files are corrupted", e);
+                } else {
+                    continue;
+                }
+            }
+            if (content == null) {
+                if (i == 1 && !existValidCheckpointLSN) {
+                    throw new ACIDException("Both checkpoint files are corrupted");
+                } else {
+                    continue;
+                }
+            } else {
+                lastCheckpointLSN[i] = Long.parseLong(content);
+            }
+
+            //read the second checkpointLSN
+            try {
+                content = bufferedReader.readLine();
+            } catch (IOException e) {
+                if (i == 1 && !existValidCheckpointLSN) {
+                    throw new ACIDException("Both checkpoint files are corrupted", e);
+                } else {
+                    continue;
+                }
+            }
+            if (content == null) {
+                if (i == 1 && !existValidCheckpointLSN) {
+                    throw new ACIDException("Both checkpoint files are corrupted");
+                } else {
+                    continue;
+                }
+            } else {
+                if (lastCheckpointLSN[i] == Long.parseLong(content)) {
+                    //do nothing!!
+                } else {
+                    if (i == 1 && !existValidCheckpointLSN) {
+                        throw new ACIDException("Both checkpoint files are corrupted");
+                    } else {
+                        continue;
+                    }
+                }
+            }
+
+            existValidCheckpointLSN = true;
         }
+
+        if (lastCheckpointLSN[0] > lastCheckpointLSN[1]) {
+            //set checkpointFileIndicator to left
+            this.checkpointFileIndicator = 0;
+        } else {
+            this.checkpointFileIndicator = 1;
+        }
+
+        return lastCheckpointLSN[this.checkpointFileIndicator];
     }
 
     /**
@@ -350,33 +509,74 @@ public class RecoveryManager implements IRecoveryManager {
     private long getMinMCTFirstLSNFromCheckpointRecordFile() throws Exception {
         String content = null;
         long minMCTFirstLSN;
-        BufferedReader bufferedReader = new BufferedReader(new FileReader(checkpoint_record_file));
+        BufferedReader bufferedReader = new BufferedReader(new FileReader(
+                checkpoint_record_file[this.checkpointFileIndicator]));
 
-        //read the checkpoint LSN twice. Then, read the minMCTFirstLSN twice.
-        //read the lastCheckpointLSN
-        for (int i = 0; i < 2; i++) {
-            content = bufferedReader.readLine();
-            if (content == null) {
-                throw new ACIDException("checkpoint_record_file is corrupted");
-            }
-        }
+        // [Flow]
+        // #. read the minMCTFirstLSN twice.
+        // #. compare the two minMCTFirstLSN and return the value if they are equal. Otherwise, throw exception
 
         //read the minMCTFirstLSN
         content = bufferedReader.readLine();
         if (content == null) {
-            throw new ACIDException("checkpoint_record_file is corrupted");
+            throw new ACIDException(checkpoint_record_file[this.checkpointFileIndicator] + " is corrupted");
         } else {
             minMCTFirstLSN = Long.parseLong(content);
         }
 
         content = bufferedReader.readLine();
         if (content == null) {
-            throw new ACIDException("checkpoint_record_file is corrupted");
+            throw new ACIDException(checkpoint_record_file[this.checkpointFileIndicator] + " is corrupted");
         } else {
             if (minMCTFirstLSN == Long.parseLong(content)) {
                 return minMCTFirstLSN;
             } else {
-                throw new ACIDException("checkpoint_record_file is corrupted");
+                throw new ACIDException(checkpoint_record_file[this.checkpointFileIndicator] + " is corrupted");
+            }
+        }
+    }
+
+    /**
+     * read the maxTransactionId from checkpoint_record_file.
+     * 
+     * @throws Exception
+     */
+    private long getMaxTransactionIdFromCheckpointRecordFile() throws Exception {
+        String content = null;
+        long minMCTFirstLSN;
+        BufferedReader bufferedReader = new BufferedReader(new FileReader(
+                checkpoint_record_file[this.checkpointFileIndicator]));
+
+        // [Flow]
+        // #. read the minMCTFirstLSN twice.
+        // #. read the maxTransactionId twice.
+        // #. compare the two maxTransactionId and return the value if they are equal. Otherwise, throw exception.
+
+        //read the minMCTFirstLSN
+        for (int i = 0; i < 2; i++) {
+            content = bufferedReader.readLine();
+            if (content == null) {
+                throw new ACIDException(checkpoint_record_file[this.checkpointFileIndicator] + " is corrupted");
+            }
+        }
+
+        //read the first maxTransactionId
+        content = bufferedReader.readLine();
+        if (content == null) {
+            throw new ACIDException(checkpoint_record_file[this.checkpointFileIndicator] + " is corrupted");
+        } else {
+            minMCTFirstLSN = Long.parseLong(content);
+        }
+
+        //read the second maxTransactionId and compare the values
+        content = bufferedReader.readLine();
+        if (content == null) {
+            throw new ACIDException(checkpoint_record_file[this.checkpointFileIndicator] + " is corrupted");
+        } else {
+            if (minMCTFirstLSN == Long.parseLong(content)) {
+                return minMCTFirstLSN;
+            } else {
+                throw new ACIDException(checkpoint_record_file[this.checkpointFileIndicator] + " is corrupted");
             }
         }
     }
@@ -437,17 +637,18 @@ public class RecoveryManager implements IRecoveryManager {
                     }
 
                     // look up the repository to get the resource manager
-                    resourceMgr = transactionProvider.getResourceRepository().getTransactionalResourceMgr(resourceMgrId);
+                    resourceMgr = transactionProvider.getResourceRepository()
+                            .getTransactionalResourceMgr(resourceMgrId);
                     if (resourceMgr == null) {
                         throw new ACIDException(txnContext, " unknown resource manager " + resourceMgrId);
                     } else {
                         resourceMgr.undo(logParser, logLocator);
                     }
                     break;
-                    
+
                 case LogType.COMMIT:
                     throw new ACIDException(txnContext, " cannot rollback commmitted transaction");
-                    
+
                 default:
                     throw new ACIDException(txnContext, " unexpected log type: " + logType);
             }

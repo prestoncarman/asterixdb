@@ -148,6 +148,6 @@ public class TransactionManager implements ITransactionManager {
      * However, dirty data in memory is not flushed.
      */
     public void checkpoint() throws ACIDException {
-        transactionProvider.getRecoveryManager().checkpoint();
+        transactionProvider.getRecoveryManager().checkpoint(false);
     }
 }

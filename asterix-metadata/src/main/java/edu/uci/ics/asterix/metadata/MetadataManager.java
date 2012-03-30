@@ -500,4 +500,8 @@ public class MetadataManager implements IMetadataManager {
     public int generateResourceId() {
         return this.metadataNode.generateResourceId();
     }
+
+    public int getGeneratedMaxResourceId() throws Exception {
+        return this.metadataNode.getGeneratedMaxResourceId();
+    }
 }

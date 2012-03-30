@@ -622,12 +622,12 @@ public class LogManager implements ILogManager {
             }
 
             /*
-             * If the log type is commit, a flush request is registered, if the
+             * If the log type is commit or END_CHKPT, a flush request is registered, if the
              * log record has not reached the disk. It may be possible that this
              * thread does not get CPU cycles and in-between the log record has
              * been flushed to disk because the containing log page filled up.
              */
-            if (logType == LogType.COMMIT) {
+            if (logType == LogType.COMMIT || logType == LogType.END_CHKPT) {
                 if (getLastFlushedLsn().get() < myLogLocator) {
                     if (!addedFlushRequest) {
                         addFlushRequest(pageIndex);

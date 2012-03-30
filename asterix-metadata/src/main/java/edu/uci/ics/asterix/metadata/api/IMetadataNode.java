@@ -452,4 +452,12 @@ public interface IMetadataNode extends Remote, Serializable {
      */
     public int getResourceId(long txnId, String dataverseName, String datasetName, String indexName) throws MetadataException,
             RemoteException;
+    
+    /**
+     * Returns the max resourceId which was issued so far.
+     * @param txnId
+     * @return
+     * @throws Exception
+     */
+    public int getGeneratedMaxResourceId() throws Exception; 
 }

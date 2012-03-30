@@ -73,5 +73,5 @@ public interface IRecoveryManager {
      * 
      * @throws ACIDException 
      */
-    public void checkpoint() throws ACIDException;
+    public void checkpoint(boolean writeToBothFile) throws ACIDException;
 }

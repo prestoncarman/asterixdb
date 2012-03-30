@@ -20,9 +20,17 @@ import java.util.concurrent.atomic.AtomicLong;
  * Represents a factory to generate unique transaction IDs.
  */
 public class TransactionIDFactory {
-    private static final AtomicLong ID = new AtomicLong();
+    private static AtomicLong transactionIdSeed = new AtomicLong();
+    
+    public static void resetTransactionIdSeed(long value) {
+        transactionIdSeed.set(value);
+    }
 
     public static long generateTransactionId() {
-        return ID.incrementAndGet();
+        return transactionIdSeed.incrementAndGet();
+    }
+    
+    public static long getGeneratedMaxTransactionId() {
+        return transactionIdSeed.get();
     }
 }

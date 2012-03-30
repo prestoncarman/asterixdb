@@ -187,6 +187,11 @@ public class MetadataBootstrap {
                     enlistMetadataDataset(secondaryIndexes[i]);
                     registerTransactionalResource(secondaryIndexes[i]);
                 }
+                
+                //Check the last value which was generated from the resourceIdSeed.
+                //Then, create resourceIdSeed with setting to the last value + 1.
+                MetadataManager.INSTANCE.createResourceIdSeed(MetadataManager.INSTANCE.getGeneratedMaxResourceId() + 1);
+                
                 LOGGER.info("FINISHED ENLISTMENT OF METADATA B-TREES.");
             }
             MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
