@@ -1,3 +1,1 @@
-similarity/similarity-jaccard-check_ints.aql
-similarity/similarity-jaccard-check_query.aql
-similarity/similarity-jaccard-check_strings.aql
+keyword/word-inverted-index-jaccard.aql

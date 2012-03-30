@@ -11,6 +11,7 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IOptimizationContext;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
+import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
 import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
 
 /**
@@ -43,10 +44,11 @@ public interface IAccessMethod {
      * analysisCtx.matchedFuncExprs for further analysis.
      * 
      * @param funcExpr
+     * @param assigns
      * @param analysisCtx
      * @return true if funcExpr is optimizable by this access method, false otherwise 
      */
-    public boolean analyzeFuncExprArgs(AbstractFunctionCallExpression funcExpr, AccessMethodAnalysisContext analysisCtx);
+    public boolean analyzeFuncExprArgs(AbstractFunctionCallExpression funcExpr, List<AssignOperator> assigns, AccessMethodAnalysisContext analysisCtx);
  
     /**
      * Indicates whether all index expressions must be matched in order for this

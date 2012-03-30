@@ -1,6 +1,7 @@
 package edu.uci.ics.asterix.optimizer.rules.am;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 
 import org.apache.commons.lang3.mutable.Mutable;
@@ -17,11 +18,14 @@ import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IOptimizationContext;
+import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalExpressionTag;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
+import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IAlgebricksConstantValue;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.UnnestingFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
+import edu.uci.ics.hyracks.algebricks.core.algebra.functions.AlgebricksBuiltinFunctions;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.IFunctionInfo;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
@@ -34,6 +38,17 @@ public class WordInvertedIndexAccessMethod implements IAccessMethod {
     private static List<FunctionIdentifier> funcIdents = new ArrayList<FunctionIdentifier>();
     static {
         funcIdents.add(AsterixBuiltinFunctions.CONTAINS);
+        // For matching similarity-check functions. For example similarity-jaccard-check returns a list of two items,
+        // and the where condition will get the first list-item and check whether it evaluates to true. 
+        // There may or may not be an explicit check on list[0] == true. If there is we match the EQ function, otherwise GET_ITEM.
+        funcIdents.add(AlgebricksBuiltinFunctions.EQ);
+        funcIdents.add(AsterixBuiltinFunctions.GET_ITEM);        
+    }
+    
+    // These function identifiers are matched in this AM's analyzeFuncExprArgs(), and are not visible to the outside driver (IntroduceAccessMethodSearchRule).
+    private static HashSet<FunctionIdentifier> secondLevelFuncIdents = new HashSet<FunctionIdentifier>();
+    static {
+        secondLevelFuncIdents.add(AsterixBuiltinFunctions.SIMILARITY_JACCARD_CHECK);
     }
     
     public static WordInvertedIndexAccessMethod INSTANCE = new WordInvertedIndexAccessMethod();
@@ -44,8 +59,48 @@ public class WordInvertedIndexAccessMethod implements IAccessMethod {
     }
 
     @Override
-    public boolean analyzeFuncExprArgs(AbstractFunctionCallExpression funcExpr, AccessMethodAnalysisContext analysisCtx) {
-        return AccessMethodUtils.analyzeFuncExprArgsForOneConstAndVar(funcExpr, analysisCtx);
+    public boolean analyzeFuncExprArgs(AbstractFunctionCallExpression funcExpr, List<AssignOperator> assigns, AccessMethodAnalysisContext analysisCtx) {
+        if (funcExpr.getFunctionIdentifier() == AsterixBuiltinFunctions.CONTAINS) {
+            return AccessMethodUtils.analyzeFuncExprArgsForOneConstAndVar(funcExpr, analysisCtx);
+        }
+        if (funcExpr.getFunctionIdentifier() == AsterixBuiltinFunctions.GET_ITEM) {
+            IAlgebricksConstantValue constFilterVal = null;
+            LogicalVariable fieldVar = null;
+            ILogicalExpression arg1 = funcExpr.getArguments().get(0).getValue();
+            ILogicalExpression arg2 = funcExpr.getArguments().get(1).getValue();
+            // The second arg is the item index to be accessed. It must be a constant.
+            if (arg2.getExpressionTag() != LogicalExpressionTag.CONSTANT) {
+                return false;
+            }
+            // The first arg is the referenced variable, whose origination function we must track in the assign.
+            if (arg1.getExpressionTag() != LogicalExpressionTag.VARIABLE) {
+                return false;
+            }
+            VariableReferenceExpression varRefExpr = (VariableReferenceExpression) arg1;
+            // Try to find variable ref expr in assign.
+            AssignOperator firstAssign = assigns.get(0);
+            List<LogicalVariable> assignVars = firstAssign.getVariables();
+            List<Mutable<ILogicalExpression>> assignExprs = firstAssign.getExpressions();
+            for (int i = 0; i < assignVars.size(); i++) {
+                LogicalVariable var = assignVars.get(i);
+                if (var == varRefExpr.getVariableReference()) {
+                    // We've matched the variable in the first assign. Now analyze the originating function.
+                    ILogicalExpression matchedExpr = assignExprs.get(i).getValue();
+                    if (matchedExpr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
+                        return false;
+                    }
+                    AbstractFunctionCallExpression matchedFuncExpr = (AbstractFunctionCallExpression) matchedExpr;
+                    // Check that this function is optimizable by this access method.
+                    if (!secondLevelFuncIdents.contains(matchedFuncExpr.getFunctionIdentifier())) {
+                        return false;
+                    }
+                    System.out.println("WOW, GETTING CLOSE!");
+                    boolean huhu = AccessMethodUtils.analyzeSimilarityCheckFuncExprArgs(matchedFuncExpr, analysisCtx);
+                    return huhu;
+                }
+            }
+        }
+        return false;
     }
 
     @Override

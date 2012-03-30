@@ -47,14 +47,16 @@ import edu.uci.ics.hyracks.algebricks.core.utils.Pair;
  * index is expressed as an unnest over an index-search function which will be
  * replaced with the appropriate embodiment during codegen.
  * 
- * Matches this operator pattern: (select) <-- (assign) <-- (datasource scan)
- * Replaces it with this pattern: (select) <-- (assign) <-- (btree search) <-- (sort) <-- (unnest(index search)) <-- (assign)
- * The sort is optional, and some access methods may choose not to sort.
+ * Matches the following operator patterns:
+ * Standard secondary index pattern:
+ * There must be at least one assign, but there may be more, e.g., when matching similarity-jaccard-check().
+ * (select) <-- (assign)+ <-- (datasource scan)
+ * Primary index lookup pattern:
+ * Since no assign is necessary to get the primary key fields (they are already stored fields in the BTree tuples).
+ * (select) <-- (datasource scan)
  * 
- * For the special case of only primary index lookups it may also match the
- * following pattern: 
- * (select) <-- (datasource scan) 
- * since no assign is necessary to get the primary key fields (they are already stored fields in the BTree tuples).
+ * Replaces the above patterns with this pattern: (select) <-- (assign) <-- (btree search) <-- (sort) <-- (unnest(index search)) <-- (assign)
+ * The sort is optional, and some access methods may choose not to sort.
  * 
  * Note that for some index-based optimizations do not remove the triggering
  * condition from the select, since the index only acts as a filter, and the
@@ -68,20 +70,16 @@ import edu.uci.ics.hyracks.algebricks.core.utils.Pair;
  * 5. Rewrite plan using index (delegated to IAccessMethods).
  * 
  */
-// TODO: Rename this to IntroduceIndexSearchRule because secondary inverted indexes may also apply.
 public class IntroduceAccessMethodSearchRule implements IAlgebraicRewriteRule {
     
-	// Operators representing the pattern to be matched:
-	// (select) <-- (assign) <-- (datasource scan)
-    // OR
-	// (select) <-- (datasource scan)
+	// Operators representing the patterns to be matched:
     // These ops are set in matchesPattern()
 	protected SelectOperator select = null;
-	protected AssignOperator assign = null;
+	protected List<AssignOperator> assigns = new ArrayList<AssignOperator>();
 	protected DataSourceScanOperator dataSourceScan = null;
 	// Original operator refs corresponding to the ops above.
 	protected Mutable<ILogicalOperator> selectRef = null;
-	protected Mutable<ILogicalOperator> assignRef = null;
+	protected List<Mutable<ILogicalOperator>> assignRefs = new ArrayList<Mutable<ILogicalOperator>>();
 	protected Mutable<ILogicalOperator> dataSourceScanRef = null;
 	// Condition of the select operator.
 	protected AbstractFunctionCallExpression selectCond = null;
@@ -133,7 +131,8 @@ public class IntroduceAccessMethodSearchRule implements IAlgebraicRewriteRule {
         }
         
         // The assign may be null if there is only a filter on the primary index key.
-        List<LogicalVariable> varList = (assign != null) ? assign.getVariables() : dataSourceScan.getVariables();
+        // Match variables from lowest assign which comes directly after the dataset scan.
+        List<LogicalVariable> varList = (!assigns.isEmpty()) ? assigns.get(assigns.size() - 1).getVariables() : dataSourceScan.getVariables();
         Iterator<Map.Entry<IAccessMethod, AccessMethodAnalysisContext>> amIt = analyzedAMs.entrySet().iterator();
         // Check applicability of indexes by access method type.
         while (amIt.hasNext()) {
@@ -157,6 +156,7 @@ public class IntroduceAccessMethodSearchRule implements IAlgebraicRewriteRule {
         
         // Apply plan transformation using chosen index.
         AccessMethodAnalysisContext analysisCtx = analyzedAMs.get(chosenIndex.first);
+        Mutable<ILogicalOperator> assignRef = (assignRefs.isEmpty()) ? null : assignRefs.get(0);
         boolean res = chosenIndex.first.applyPlanTransformation(selectRef, assignRef, dataSourceScanRef,
                 datasetDecl, recordType, chosenIndex.second, analysisCtx, context);
         if (res) {
@@ -287,7 +287,7 @@ public class IntroduceAccessMethodSearchRule implements IAlgebraicRewriteRule {
                 analysisCtx = newAnalysisCtx;
             }
             // Analyzes the funcExpr's arguments to see if the accessMethod is truly applicable.
-            boolean matchFound = accessMethod.analyzeFuncExprArgs(funcExpr, analysisCtx);
+            boolean matchFound = accessMethod.analyzeFuncExprArgs(funcExpr, assigns, analysisCtx);
             if (matchFound) {
                 // If we've used the current new context placeholder, replace it with a new one.
                 if (analysisCtx == newAnalysisCtx) {
@@ -324,14 +324,10 @@ public class IntroduceAccessMethodSearchRule implements IAlgebraicRewriteRule {
         }
         // Check that the select's condition is a function call.
         selectCond = (AbstractFunctionCallExpression) condExpr;
-        // Examine the select's children to match the expected pattern:
-        // (select) <-- (assign) <-- (datasource scan)
-        // OR
-        // (select) <-- (datasource scan)
-        // Match assign.
+        // Examine the select's children to match the expected patterns.
         Mutable<ILogicalOperator> opRef2 = op1.getInputs().get(0);
-        AbstractLogicalOperator op2 = (AbstractLogicalOperator) opRef2.getValue();
-        // Match assign.
+        AbstractLogicalOperator op2 = (AbstractLogicalOperator) opRef2.getValue();   
+        // First check primary-index pattern.
         if (op2.getOperatorTag() != LogicalOperatorTag.ASSIGN) {
             // Pattern may still match if we are looking for primary index matches as well.
             if (includePrimaryIndex && op2.getOperatorTag() == LogicalOperatorTag.DATASOURCESCAN) {
@@ -341,8 +337,16 @@ public class IntroduceAccessMethodSearchRule implements IAlgebraicRewriteRule {
             }
             return false;
         }
-        assignRef = opRef2;
-        assign = (AssignOperator) op2;
+        // Match (assign)+.
+        do {
+            assignRefs.add(opRef2);
+            assigns.add((AssignOperator) op2);
+            opRef2 = op2.getInputs().get(0);
+            op2 = (AbstractLogicalOperator) opRef2.getValue();   
+        } while (op2.getOperatorTag() == LogicalOperatorTag.ASSIGN);
+        // Set to last valid assigns.
+        opRef2 = assignRefs.get(assignRefs.size() - 1);
+        op2 = assigns.get(assigns.size() - 1);
         // Match datasource scan.
         Mutable<ILogicalOperator> opRef3 = op2.getInputs().get(0);
         AbstractLogicalOperator op3 = (AbstractLogicalOperator) opRef3.getValue();
@@ -418,10 +422,11 @@ public class IntroduceAccessMethodSearchRule implements IAlgebraicRewriteRule {
                 continue;
             }            
             String fieldName = null;
-            if (assign != null) {
-                // Get the fieldName corresponding to the assigned variable at varIndex.
+            if (!assigns.isEmpty()) {
+                // Get the fieldName corresponding to the assigned variable at varIndex
+                // from the assign operator right above the datasource scan.
                 // If the expr at varIndex is not a fieldAccess we get back null.
-                fieldName = getFieldNameOfFieldAccess(assign, recordType, varIndex);
+                fieldName = getFieldNameOfFieldAccess(assigns.get(assigns.size() - 1), recordType, varIndex);
                 if (fieldName == null) {
                     continue;
                 }
