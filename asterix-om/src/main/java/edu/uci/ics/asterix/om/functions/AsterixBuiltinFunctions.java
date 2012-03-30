@@ -22,6 +22,8 @@ import edu.uci.ics.asterix.om.typecomputer.impl.APolygonTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.ARectangleTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.AStringTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.BinaryBooleanOrNullFunctionTypeComputer;
+import edu.uci.ics.asterix.om.typecomputer.impl.BinaryStringBoolOrNullTypeComputer;
+import edu.uci.ics.asterix.om.typecomputer.impl.BinaryStringStringOrNullTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.ClosedRecordConstructorResultType;
 import edu.uci.ics.asterix.om.typecomputer.impl.FieldAccessByIndexResultType;
 import edu.uci.ics.asterix.om.typecomputer.impl.InjectFailureTypeComputer;
@@ -30,6 +32,8 @@ import edu.uci.ics.asterix.om.typecomputer.impl.NonTaggedFieldAccessByNameResult
 import edu.uci.ics.asterix.om.typecomputer.impl.NonTaggedGetItemResultType;
 import edu.uci.ics.asterix.om.typecomputer.impl.NonTaggedLocalAvgTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.NonTaggedNumericAddSubMulDivTypeComputer;
+import edu.uci.ics.asterix.om.typecomputer.impl.NonTaggedNumericRoundHalfToEven2TypeComputer;
+import edu.uci.ics.asterix.om.typecomputer.impl.NonTaggedNumericUnaryFunctionTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.NonTaggedSumTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.NonTaggedSwitchCaseComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.NonTaggedUnaryMinusTypeComputer;
@@ -55,8 +59,13 @@ import edu.uci.ics.asterix.om.typecomputer.impl.OrderedListConstructorResultType
 import edu.uci.ics.asterix.om.typecomputer.impl.OrderedListOfAInt32TypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.OrderedListOfAStringTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.OrderedListOfAnyTypeComputer;
+import edu.uci.ics.asterix.om.typecomputer.impl.QuadStringStringOrNullTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.ScalarVersionOfAggregateResultType;
+import edu.uci.ics.asterix.om.typecomputer.impl.TripleStringBoolOrNullTypeComputer;
+import edu.uci.ics.asterix.om.typecomputer.impl.TripleStringStringOrNullTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.UnaryBooleanOrNullFunctionTypeComputer;
+import edu.uci.ics.asterix.om.typecomputer.impl.UnaryStringInt32OrNullTypeComputer;
+import edu.uci.ics.asterix.om.typecomputer.impl.UnaryStringOrNullTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.UnorderedListConstructorResultType;
 import edu.uci.ics.asterix.om.types.AOrderedListType;
 import edu.uci.ics.asterix.om.types.ATypeTag;
@@ -154,6 +163,52 @@ public class AsterixBuiltinFunctions {
             "numeric-idiv", 2, true);
     public final static FunctionIdentifier CARET = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "caret", 2,
             true);
+
+public final static FunctionIdentifier NUMERIC_ABS = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "numeric-abs", 1, true);      
+    public final static FunctionIdentifier NUMERIC_CEILING = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "numeric-ceiling", 1, true);  
+    public final static FunctionIdentifier NUMERIC_FLOOR = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "numeric-floor", 1, true); 
+    public final static FunctionIdentifier NUMERIC_ROUND = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "numeric-round", 1, true);     
+    public final static FunctionIdentifier NUMERIC_ROUND_HALF_TO_EVEN = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "numeric-round-half-to-even", 1, true);     
+    public final static FunctionIdentifier NUMERIC_ROUND_HALF_TO_EVEN2 = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "numeric-round-half-to-even2", 2, true);   
+    // String funcitons
+    public final static FunctionIdentifier STRING_EQUAL = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "string-equal", 2, true);  
+    public final static FunctionIdentifier STRING_START_WITH = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "start-with", 2, true);  
+    public final static FunctionIdentifier STRING_END_WITH = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "end-with", 2, true);       
+    public final static FunctionIdentifier STRING_MATCHES = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "matches", 2, true);    
+    public final static FunctionIdentifier STRING_MATCHES_WITH_FLAG = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "matches2", 3, true);      
+    public final static FunctionIdentifier STRING_LOWERCASE = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "lowercase", 1, true);    
+    public final static FunctionIdentifier STRING_REPLACE = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "replace", 3, true);      
+     public final static FunctionIdentifier STRING_REPLACE_WITH_FLAG = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "replace2", 4, true);   
+     public final static FunctionIdentifier STRING_LENGTH = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "string-length", 1, true);        
+     public final static FunctionIdentifier SUBSTRING2 = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "substring2", 2, true);   
+     public final static FunctionIdentifier SUBSTRING_BEFORE = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "substring-before", 2, true);   
+     public final static FunctionIdentifier SUBSTRING_AFTER = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "substring-after", 2, true);   
+     public final static FunctionIdentifier STRING_TO_CODEPOINT = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "string-to-codepoint", 1, true);        
+     public final static FunctionIdentifier CODEPOINT_TO_STRING = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "codepoint-to-string", 1, true);      
+     public final static FunctionIdentifier STRING_CONCAT = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "string-concat", 1, true);        
+     public final static FunctionIdentifier STRING_JOIN = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "string-join", 2, true);   
 
     public final static FunctionIdentifier DATASET = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "dataset", 1,
             true);
@@ -468,6 +523,32 @@ public class AsterixBuiltinFunctions {
         add(NUMERIC_DIVIDE, NonTaggedNumericAddSubMulDivTypeComputer.INSTANCE);
         add(NUMERIC_MOD, NonTaggedNumericAddSubMulDivTypeComputer.INSTANCE);
         add(NUMERIC_IDIV, AInt32TypeComputer.INSTANCE);
+        
+        // Xiaoyu Ma Add for new functions
+        add(NUMERIC_ABS, NonTaggedNumericUnaryFunctionTypeComputer.INSTANCE);
+        add(NUMERIC_CEILING, NonTaggedNumericUnaryFunctionTypeComputer.INSTANCE);
+        add(NUMERIC_FLOOR, NonTaggedNumericUnaryFunctionTypeComputer.INSTANCE);
+        add(NUMERIC_ROUND, NonTaggedNumericUnaryFunctionTypeComputer.INSTANCE);
+        add(NUMERIC_ROUND_HALF_TO_EVEN, NonTaggedNumericUnaryFunctionTypeComputer.INSTANCE);
+        add(NUMERIC_ROUND_HALF_TO_EVEN2, NonTaggedNumericRoundHalfToEven2TypeComputer.INSTANCE);
+        
+        add(STRING_TO_CODEPOINT, OrderedListOfAInt32TypeComputer.INSTANCE);
+        add(CODEPOINT_TO_STRING, OptionalAStringTypeComputer.INSTANCE);
+        add(STRING_CONCAT, OptionalAStringTypeComputer.INSTANCE);
+        add(SUBSTRING2, OptionalAStringTypeComputer.INSTANCE);
+        add(STRING_LENGTH, UnaryStringInt32OrNullTypeComputer.INSTANCE);
+        add(STRING_LOWERCASE, UnaryStringOrNullTypeComputer.INSTANCE);
+        add(STRING_START_WITH, BinaryStringBoolOrNullTypeComputer.INSTANCE);
+        add(STRING_END_WITH, BinaryStringBoolOrNullTypeComputer.INSTANCE);
+        add(STRING_MATCHES, BinaryStringBoolOrNullTypeComputer.INSTANCE);
+        add(STRING_MATCHES_WITH_FLAG, TripleStringBoolOrNullTypeComputer.INSTANCE);
+        add(STRING_REPLACE, TripleStringStringOrNullTypeComputer.INSTANCE);
+        add(STRING_REPLACE_WITH_FLAG, QuadStringStringOrNullTypeComputer.INSTANCE);
+        add(SUBSTRING_BEFORE, BinaryStringStringOrNullTypeComputer.INSTANCE);
+        add(SUBSTRING_AFTER, BinaryStringStringOrNullTypeComputer.INSTANCE);
+        add(STRING_EQUAL, BinaryStringBoolOrNullTypeComputer.INSTANCE);
+        add(STRING_JOIN, OptionalAStringTypeComputer.INSTANCE);
+        
         add(OPEN_RECORD_CONSTRUCTOR, OpenRecordConstructorResultType.INSTANCE);
         add(ORDERED_LIST_CONSTRUCTOR, OrderedListConstructorResultType.INSTANCE);
         add(POINT_CONSTRUCTOR, OptionalAPointTypeComputer.INSTANCE);

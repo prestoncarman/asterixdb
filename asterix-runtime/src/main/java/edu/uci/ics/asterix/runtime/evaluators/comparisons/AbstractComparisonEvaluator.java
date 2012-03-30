@@ -16,6 +16,7 @@ import edu.uci.ics.asterix.om.base.ANull;
 import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.asterix.om.types.BuiltinType;
 import edu.uci.ics.asterix.om.types.EnumDeserializer;
+import edu.uci.ics.asterix.runtime.evaluators.functions.CodepointIterator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluatorFactory;
 import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
@@ -150,11 +151,17 @@ public abstract class AbstractComparisonEvaluator implements IEvaluator {
         }
         throw new AlgebricksException("Comparison is undefined between types ABoolean and " + typeTag2 + " .");
     }
+        
+    private static final CodepointIterator s1 = new CodepointIterator();
+    private static final CodepointIterator s2 = new CodepointIterator();
 
     private ComparisonResult compareStringWithArg(ATypeTag typeTag2) throws AlgebricksException {
         if (typeTag2 == ATypeTag.STRING) {
-            int result = strBinaryComp.compare(outLeft.getBytes(), 1, outLeft.getLength() - 1, outRight.getBytes(), 1,
-                    outRight.getLength() - 1);
+//            int result = strBinaryComp.compare(outLeft.getBytes(), 1, outLeft.getLength() - 1, outRight.getBytes(), 1,
+//                    outRight.getLength() - 1);
+            s1.reset(outLeft.getBytes(), 1);
+            s2.reset(outRight.getBytes(), 1);
+            int result = CodepointIterator.compare(s1, s2);
             if (result == 0)
                 return ComparisonResult.EQUAL;
             else if (result < 0)
