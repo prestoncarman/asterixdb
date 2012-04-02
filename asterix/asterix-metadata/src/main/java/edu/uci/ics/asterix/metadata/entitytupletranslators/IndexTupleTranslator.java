@@ -37,6 +37,7 @@ import edu.uci.ics.asterix.om.base.ARecord;
 import edu.uci.ics.asterix.om.base.AString;
 import edu.uci.ics.asterix.om.base.IACursor;
 import edu.uci.ics.asterix.om.types.AOrderedListType;
+import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.asterix.om.types.BuiltinType;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.ArrayBackedValueStorage;
@@ -56,7 +57,7 @@ public class IndexTupleTranslator extends AbstractTupleTranslator<Index> {
     // Payload field containing serialized Index.
     public static final int INDEX_PAYLOAD_TUPLE_FIELD_INDEX = 3;
     // Field name of open field.
-    public static final String GRAM_LENGTH_FIELD_NAME = "Gram Length";
+    public static final String GRAM_LENGTH_FIELD_NAME = "GramLength";
     
     private IAOrderedListBuilder listBuilder = new OrderedListBuilder();
     private ArrayBackedValueStorage nameValue = new ArrayBackedValueStorage();
@@ -99,8 +100,8 @@ public class IndexTupleTranslator extends AbstractTupleTranslator<Index> {
                 .getBoolean();
         // Check if there is a gram length as well.
         int gramLength = -1;
-        int gramLenPos = rec.getType().findFieldPosition(GRAM_LENGTH_FIELD_NAME);
-        if (gramLenPos > 0) {
+        int gramLenPos = rec.getType().findFieldPosition(GRAM_LENGTH_FIELD_NAME);        
+        if (gramLenPos >= 0) {        	
         	gramLength = ((AInt32) rec.getValueByPos(gramLenPos)).getIntegerValue();
         }
         return new Index(dvName, dsName, indexName, indexStructure, searchKey, gramLength, isPrimaryIndex);
@@ -175,9 +176,9 @@ public class IndexTupleTranslator extends AbstractTupleTranslator<Index> {
         stringSerde.serialize(aString, fieldValue.getDataOutput());
         recordBuilder.addField(MetadataRecordTypes.INDEX_ARECORD_TIMESTAMP_FIELD_INDEX, fieldValue);
         
-        // write optional field 7
-        fieldValue.reset();
+        // write optional field 7        
         if (instance.getGramLength() > 0) {
+        	fieldValue.reset();
         	nameValue.reset();
         	aString.setValue(GRAM_LENGTH_FIELD_NAME);
         	stringSerde.serialize(aString, nameValue.getDataOutput());

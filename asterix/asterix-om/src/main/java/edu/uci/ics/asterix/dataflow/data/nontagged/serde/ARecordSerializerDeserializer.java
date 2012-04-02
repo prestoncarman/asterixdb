@@ -24,7 +24,6 @@ import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 import edu.uci.ics.hyracks.data.std.primitive.UTF8StringPointable;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.ArrayBackedValueStorage;
-import edu.uci.ics.hyracks.dataflow.common.data.util.StringUtils;
 
 public class ARecordSerializerDeserializer implements ISerializerDeserializer<ARecord> {
     private static final long serialVersionUID = 1L;
@@ -124,10 +123,11 @@ public class ARecordSerializerDeserializer implements ISerializerDeserializer<AR
                     openFields[i] = AObjectSerializerDeserializer.INSTANCE.deserialize(in);
                     fieldTypes[i] = openFields[i].getType();
                 }
-                this.recordType = new ARecordType(null, fieldNames, fieldTypes, true);
+                ARecordType openPartRecType = new ARecordType(null, fieldNames, fieldTypes, true);
                 if (numberOfSchemaFields > 0) {
-                    ARecordType mergedRecordType = mergeRecordTypes(this.recordType, recordType);
-                    return new ARecord(mergedRecordType, mergeFields(closedFields, openFields));
+                    ARecordType mergedRecordType = mergeRecordTypes(this.recordType, openPartRecType);
+                    IAObject[] mergedFields = mergeFields(closedFields, openFields);
+                    return new ARecord(mergedRecordType, mergedFields);
                 } else {
                     return new ARecord(this.recordType, openFields);
                 }
@@ -140,16 +140,14 @@ public class ARecordSerializerDeserializer implements ISerializerDeserializer<AR
     }
 
     private IAObject[] mergeFields(IAObject[] closedFields, IAObject[] openFields) {
-
         IAObject[] fields = new IAObject[closedFields.length + openFields.length];
-
         int i = 0;
-        for (; i < closedFields.length; i++)
+        for (; i < closedFields.length; i++) {
             fields[i] = closedFields[i];
-
-        for (int j = 0; j < openFields.length; j++)
-            fields[i] = closedFields[j];
-
+        }
+        for (int j = 0; j < openFields.length; j++) {
+            fields[closedFields.length + j] = openFields[j];
+        }
         return fields;
     }
 
