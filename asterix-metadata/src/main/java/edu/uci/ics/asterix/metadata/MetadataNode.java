@@ -77,7 +77,7 @@ public class MetadataNode implements IMetadataNode {
 
     private final IndexRegistry<IIndex> indexRegistry;
     private final TransactionProvider transactionProvider;
-    private final AtomicInteger resourceIdSeed;
+    private final AtomicInteger resourceIdGenerator;
 
     public static MetadataNode INSTANCE;
 
@@ -85,7 +85,7 @@ public class MetadataNode implements IMetadataNode {
         super();
         this.transactionProvider = applicationState.getTransactionProvider();
         this.indexRegistry = applicationState.getApplicationRuntimeContext().getIndexRegistry();
-        this.resourceIdSeed = new AtomicInteger();
+        this.resourceIdGenerator = new AtomicInteger();
     }
 
     @Override
@@ -843,8 +843,8 @@ public class MetadataNode implements IMetadataNode {
      *            resourceIdSeed is set to this initialValue.
      */
     @Override
-    public void createResourceIdSeed(int initialValue) throws RemoteException{
-        resourceIdSeed.set(initialValue);
+    public void createResourceIdGenerator(int initialValue) throws RemoteException{
+        resourceIdGenerator.set(initialValue);
     }
 
     /**
@@ -852,7 +852,7 @@ public class MetadataNode implements IMetadataNode {
      */
     @Override
     public int generateResourceId() throws RemoteException{
-        return resourceIdSeed.getAndIncrement();
+        return resourceIdGenerator.getAndIncrement();
     }
 
     @Override

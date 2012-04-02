@@ -421,14 +421,14 @@ public interface IMetadataNode extends Remote, Serializable {
 	
 	
 	/**
-	 * Creates resourceIdSeed and
+	 * Creates resourceIdGenerator and
 	 * initialize the value with the given initialValue.
 	 * 
 	 * @param initialValue
 	 *         resourceIdSeed is set to this initialValue.
 	 * @throws RemoteException 
 	 */
-    public void createResourceIdSeed(int initialValue) throws RemoteException;
+    public void createResourceIdGenerator(int initialValue) throws RemoteException;
     
     /**
      * Increments atomically the resourceIdSeed value by one and 

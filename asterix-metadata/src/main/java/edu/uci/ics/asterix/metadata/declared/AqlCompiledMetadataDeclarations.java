@@ -16,6 +16,7 @@
 package edu.uci.ics.asterix.metadata.declared;
 
 import java.io.File;
+import java.rmi.RemoteException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -322,5 +323,10 @@ public class AqlCompiledMetadataDeclarations {
 
     public MetadataTransactionContext getMetadataTransactionContext() {
         return mdTxnCtx;
+    }
+    
+    //TODO change the remote call to cache access.
+    public int findResourceId(String dataverseName, String datasetName, String indexName) throws MetadataException, RemoteException {
+        return this.metadataManager.getResourceId(this.mdTxnCtx, dataverseName, datasetName, indexName);
     }
 }

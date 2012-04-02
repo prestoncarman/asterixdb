@@ -33,6 +33,9 @@ import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 import edu.uci.ics.hyracks.dataflow.common.comm.io.FrameTupleAccessor;
 import edu.uci.ics.hyracks.dataflow.common.comm.util.FrameUtils;
 import edu.uci.ics.hyracks.dataflow.std.base.AbstractUnaryInputUnaryOutputOperatorNodePushable;
+import edu.uci.ics.hyracks.storage.am.common.api.IIndexIdProvider;
+import edu.uci.ics.hyracks.storage.am.common.api.IOperationCallback;
+import edu.uci.ics.hyracks.storage.am.common.api.IOperationCallbackProvider;
 import edu.uci.ics.hyracks.storage.am.common.api.ITreeIndexAccessor;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.AbstractTreeIndexOperatorDescriptor;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.IIndex;
@@ -52,29 +55,30 @@ public class TreeIndexInsertUpdateDeleteOperatorNodePushable extends AbstractUna
     private TreeLogger bTreeLogger;
     private final TransactionProvider transactionProvider;
     private ITreeIndexAccessor treeIndexAccessor;
+    private final IIndexIdProvider indexIdProvider;
 
     public TreeIndexInsertUpdateDeleteOperatorNodePushable(TransactionContext txnContext,
-            AbstractTreeIndexOperatorDescriptor opDesc, IHyracksTaskContext ctx, int partition, int[] fieldPermutation,
+            AbstractTreeIndexOperatorDescriptor opDesc, IHyracksTaskContext ctx, IOperationCallbackProvider opCallbackProvider, IIndexIdProvider indexIdProvider, int partition, int[] fieldPermutation,
             IRecordDescriptorProvider recordDescProvider, IndexOp op) {
         treeIndexHelper = (TreeIndexDataflowHelper) opDesc.getIndexDataflowHelperFactory().createIndexDataflowHelper(
-                opDesc, ctx, partition, false);
+                opDesc, ctx, opCallbackProvider, indexIdProvider, partition, false);
         this.recordDescProvider = recordDescProvider;
         this.op = op;
         tuple.setFieldPermutation(fieldPermutation);
         this.txnContext = txnContext;
         transactionProvider = (TransactionProvider) ctx.getJobletContext().getApplicationContext()
                 .getApplicationObject();
+        this.indexIdProvider = indexIdProvider;
     }
 
     public void initializeTransactionSupport() {
         TransactionalResourceRepository resourceRepository = transactionProvider.getResourceRepository();
         resourceRepository.registerTransactionalResourceManager(TreeResourceManager.ID,
                 TreeResourceManager.getInstance());
-        int fileId = treeIndexHelper.getIndexFileId();
-        byte[] resourceId = DataUtil.intToByteArray(fileId);
-        resourceRepository.registerTransactionalResource(resourceId, treeIndexHelper.getIndex());
+        byte[] indexId = indexIdProvider.getIndexId();
+        resourceRepository.registerTransactionalResource(indexId, treeIndexHelper.getIndex());
         lockManager = transactionProvider.getLockManager();
-        bTreeLogger = transactionProvider.getTreeLoggerRepository().getTreeLogger(resourceId);
+        bTreeLogger = transactionProvider.getTreeLoggerRepository().getTreeLogger(indexId);
     }
 
     @Override
@@ -99,15 +103,14 @@ public class TreeIndexInsertUpdateDeleteOperatorNodePushable extends AbstractUna
     public void nextFrame(ByteBuffer buffer) throws HyracksDataException {
         final IIndex treeIndex = treeIndexHelper.getIndex();
         accessor.reset(buffer);
-        int fileId = treeIndexHelper.getIndexFileId();
-        byte[] resourceId = DataUtil.intToByteArray(fileId);
+        byte[] indexId = indexIdProvider.getIndexId();
         int tupleCount = accessor.getTupleCount();
         try {
             for (int i = 0; i < tupleCount; i++) {
                 tuple.reset(accessor, i);
                 switch (op) {
                     case INSERT: {
-                        lockManager.lock(txnContext, resourceId,
+                        lockManager.lock(txnContext, indexId,
                                 TransactionManagementConstants.LockManagerConstants.LockMode.EXCLUSIVE);
                         treeIndexAccessor.insert(tuple);
                         bTreeLogger.generateLogRecord(transactionProvider, txnContext, op, tuple);
@@ -115,7 +118,7 @@ public class TreeIndexInsertUpdateDeleteOperatorNodePushable extends AbstractUna
                         break;
 
                     case DELETE: {
-                        lockManager.lock(txnContext, resourceId,
+                        lockManager.lock(txnContext, indexId,
                                 TransactionManagementConstants.LockManagerConstants.LockMode.EXCLUSIVE);
                         treeIndexAccessor.delete(tuple);
                         bTreeLogger.generateLogRecord(transactionProvider, txnContext, op, tuple);

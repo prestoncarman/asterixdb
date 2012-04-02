@@ -479,8 +479,8 @@ public class MetadataManager implements IMetadataManager {
 
     }
 
-    public void createResourceIdSeed(int initialValue) throws RemoteException {
-        metadataNode.createResourceIdSeed(initialValue);
+    public void createResourceIdGenerator(int initialValue) throws RemoteException {
+        metadataNode.createResourceIdGenerator(initialValue);
     }
 
     public int generateResourceId() throws RemoteException {
@@ -489,5 +489,11 @@ public class MetadataManager implements IMetadataManager {
 
     public int getGeneratedMaxResourceId() throws Exception {
         return this.metadataNode.getGeneratedMaxResourceId();
+    }
+    
+    @Override
+    public int getResourceId(MetadataTransactionContext ctx, String dataverseName, String datasetName, String indexName)
+            throws MetadataException, RemoteException {
+        return this.metadataNode.getResourceId(ctx.getTxnId(), dataverseName, datasetName, indexName);
     }
 }

@@ -68,10 +68,13 @@ import edu.uci.ics.hyracks.dataflow.std.file.FileSplit;
 import edu.uci.ics.hyracks.dataflow.std.file.IFileSplitProvider;
 import edu.uci.ics.hyracks.dataflow.std.sort.ExternalSortOperatorDescriptor;
 import edu.uci.ics.hyracks.storage.am.btree.dataflow.BTreeDataflowHelperFactory;
+import edu.uci.ics.hyracks.storage.am.common.api.IIndexIdProvider;
+import edu.uci.ics.hyracks.storage.am.common.api.IOperationCallbackProvider;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.IIndex;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.IIndexRegistryProvider;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.TreeIndexBulkLoadOperatorDescriptor;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.TreeIndexDropOperatorDescriptor;
+import edu.uci.ics.hyracks.storage.am.common.impls.IndexIdProvider;
 import edu.uci.ics.hyracks.storage.common.IStorageManagerInterface;
 
 public class DatasetOperations {
@@ -195,9 +198,23 @@ public class DatasetOperations {
             System.arraycopy(keys, 0, fieldPermutation, 0, numKeys);
             fieldPermutation[numKeys] = 0;
 
+            //create OperationCallbackProvider 
+            //TODO modify appropriately
+            IOperationCallbackProvider opCallbackProvider = null;
+
+            //create IndexIdProvider
+            IIndexIdProvider indexIdProvider;
+            try {
+                indexIdProvider = new IndexIdProvider(metadata.findResourceId(metadata.getDataverseName(), datasetName,
+                        datasetName));
+            } catch (RemoteException e) {
+                throw new AsterixException(e);
+            }
+
             TreeIndexBulkLoadOperatorDescriptor bulkLoad = new TreeIndexBulkLoadOperatorDescriptor(spec,
                     storageManager, indexRegistryProvider, splitsAndConstraint.first, typeTraits, comparatorFactories,
-                    fieldPermutation, GlobalConfig.DEFAULT_BTREE_FILL_FACTOR, new BTreeDataflowHelperFactory());
+                    fieldPermutation, GlobalConfig.DEFAULT_BTREE_FILL_FACTOR, new BTreeDataflowHelperFactory(),
+                    opCallbackProvider, indexIdProvider);
 
             AlgebricksPartitionConstraintHelper.setPartitionConstraintInJobSpec(spec, asterixOp,
                     splitsAndConstraint.second);
@@ -319,9 +336,23 @@ public class DatasetOperations {
         }
         LOGGER.info("LOAD into File Splits: " + sb.toString());
 
+        //create OperationCallbackProvider 
+        //TODO modify appropriately
+        IOperationCallbackProvider opCallbackProvider = null;
+
+        //create IndexIdProvider
+        IIndexIdProvider indexIdProvider;
+        try {
+            indexIdProvider = new IndexIdProvider(metadata.findResourceId(metadata.getDataverseName(), datasetName,
+                    datasetName));
+        } catch (RemoteException e) {
+            throw new AsterixException(e);
+        }
+
         TreeIndexBulkLoadOperatorDescriptor btreeBulkLoad = new TreeIndexBulkLoadOperatorDescriptor(spec,
                 storageManager, indexRegistryProvider, splitsAndConstraint.first, typeTraits, comparatorFactories,
-                fieldPermutation, GlobalConfig.DEFAULT_BTREE_FILL_FACTOR, new BTreeDataflowHelperFactory());
+                fieldPermutation, GlobalConfig.DEFAULT_BTREE_FILL_FACTOR, new BTreeDataflowHelperFactory(),
+                opCallbackProvider, indexIdProvider);
         AlgebricksPartitionConstraintHelper.setPartitionConstraintInJobSpec(spec, btreeBulkLoad,
                 splitsAndConstraint.second);
 

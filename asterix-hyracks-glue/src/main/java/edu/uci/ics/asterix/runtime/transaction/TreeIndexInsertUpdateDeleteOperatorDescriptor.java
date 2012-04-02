@@ -27,6 +27,8 @@ import edu.uci.ics.hyracks.api.dataflow.value.ITypeTraits;
 import edu.uci.ics.hyracks.api.dataflow.value.RecordDescriptor;
 import edu.uci.ics.hyracks.api.job.JobSpecification;
 import edu.uci.ics.hyracks.dataflow.std.file.IFileSplitProvider;
+import edu.uci.ics.hyracks.storage.am.common.api.IIndexIdProvider;
+import edu.uci.ics.hyracks.storage.am.common.api.IOperationCallbackProvider;
 import edu.uci.ics.hyracks.storage.am.common.api.ITreeIndexFrameFactory;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.AbstractTreeIndexOperatorDescriptor;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.IIndex;
@@ -45,19 +47,19 @@ public class TreeIndexInsertUpdateDeleteOperatorDescriptor extends AbstractTreeI
 
     private final long transactionId;
 
-    public TreeIndexInsertUpdateDeleteOperatorDescriptor(IOperationCallbackProvider opCallbackProvider, JobSpecification spec, RecordDescriptor recDesc,
-            IStorageManagerInterface storageManager, IIndexRegistryProvider<IIndex> treeIndexRegistryProvider,
-            IFileSplitProvider fileSplitProvider, ITreeIndexFrameFactory interiorFrameFactory,
-            ITreeIndexFrameFactory leafFrameFactory, ITypeTraits[] typeTraits,
-            IBinaryComparatorFactory[] comparatorFactories, IIndexDataflowHelperFactory dataflowHelperFactory,
-            int[] fieldPermutation, IndexOp op, long transactionId) {
+    public TreeIndexInsertUpdateDeleteOperatorDescriptor(IOperationCallbackProvider opCallbackProvider,
+            JobSpecification spec, RecordDescriptor recDesc, IStorageManagerInterface storageManager,
+            IIndexRegistryProvider<IIndex> treeIndexRegistryProvider, IFileSplitProvider fileSplitProvider,
+            ITreeIndexFrameFactory interiorFrameFactory, ITreeIndexFrameFactory leafFrameFactory,
+            ITypeTraits[] typeTraits, IBinaryComparatorFactory[] comparatorFactories,
+            IIndexDataflowHelperFactory dataflowHelperFactory, int[] fieldPermutation, IndexOp op, long transactionId,
+            IIndexIdProvider indexIdProvider) {
         super(spec, 1, 1, recDesc, storageManager, treeIndexRegistryProvider, fileSplitProvider, typeTraits,
-                comparatorFactories, dataflowHelperFactory);
+                comparatorFactories, dataflowHelperFactory, opCallbackProvider, indexIdProvider);
 
         this.fieldPermutation = fieldPermutation;
         this.op = op;
-        this.transactionId = transactionId; // would obtain it from query
-        // context
+        this.transactionId = transactionId; // would obtain it from query context
     }
 
     @Override
@@ -71,8 +73,8 @@ public class TreeIndexInsertUpdateDeleteOperatorDescriptor extends AbstractTreeI
         } catch (ACIDException ae) {
             throw new RuntimeException(" could not obtain context for invalid transaction id " + transactionId);
         }
-        return new TreeIndexInsertUpdateDeleteOperatorNodePushable(txnContext, this, ctx, partition, fieldPermutation,
-                recordDescProvider, op);
+        return new TreeIndexInsertUpdateDeleteOperatorNodePushable(txnContext, this, ctx, opCallbackProvider,
+                indexIdProvider, partition, fieldPermutation, recordDescProvider, op);
     }
 
 }

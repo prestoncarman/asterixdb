@@ -14,6 +14,7 @@
  */
 package edu.uci.ics.asterix.file;
 
+import java.rmi.RemoteException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
@@ -62,9 +63,12 @@ import edu.uci.ics.hyracks.dataflow.std.file.FileSplit;
 import edu.uci.ics.hyracks.dataflow.std.file.IFileSplitProvider;
 import edu.uci.ics.hyracks.dataflow.std.misc.NullSinkOperatorDescriptor;
 import edu.uci.ics.hyracks.storage.am.btree.dataflow.BTreeDataflowHelperFactory;
+import edu.uci.ics.hyracks.storage.am.common.api.IIndexIdProvider;
+import edu.uci.ics.hyracks.storage.am.common.api.IOperationCallbackProvider;
 import edu.uci.ics.hyracks.storage.am.common.api.ITreeIndexFrameFactory;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.IIndex;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.IIndexRegistryProvider;
+import edu.uci.ics.hyracks.storage.am.common.impls.IndexIdProvider;
 import edu.uci.ics.hyracks.storage.am.common.ophelpers.IndexOp;
 import edu.uci.ics.hyracks.storage.common.IStorageManagerInterface;
 
@@ -143,8 +147,8 @@ public class FeedOperations {
         RecordDescriptor recDesc;
         try {
             Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> p = AqlMetadataProvider.buildFeedIntakeRuntime(
-                    spec, metadata.getDataverseName(), datasetName, itemType, (AqlCompiledFeedDatasetDetails) adecl
-                            .getAqlCompiledDatasetDetails(), format);
+                    spec, metadata.getDataverseName(), datasetName, itemType,
+                    (AqlCompiledFeedDatasetDetails) adecl.getAqlCompiledDatasetDetails(), format);
 
             feedIngestor = p.first;
             ingestorPc = p.second;
@@ -193,10 +197,23 @@ public class FeedOperations {
 
         long txnId = TransactionIDFactory.generateTransactionId();
 
+        //create OperationCallbackProvider 
+        //TODO modify appropriately
+        IOperationCallbackProvider opCallbackProvider = null;
+
+        //create IndexIdProvider --> The primaryIndex name is identical to the corresponding datasetName.
+        IIndexIdProvider indexIdProvider;
+        try {
+            indexIdProvider = new IndexIdProvider(metadata.findResourceId(metadata.getDataverseName(),
+                    datasetName, datasetName));
+        } catch (RemoteException e) {
+            throw new AsterixException(e);
+        }
+
         TreeIndexInsertUpdateDeleteOperatorDescriptor btreeInsert = new TreeIndexInsertUpdateDeleteOperatorDescriptor(
-                spec, recDesc, storageManager, indexRegistryProvider, splitsAndConstraint.first, interiorFrameFactory,
-                leafFrameFactory, typeTraits, comparatorFactories, new BTreeDataflowHelperFactory(), fieldPermutation,
-                IndexOp.INSERT, txnId);
+                opCallbackProvider, spec, recDesc, storageManager, indexRegistryProvider, splitsAndConstraint.first,
+                interiorFrameFactory, leafFrameFactory, typeTraits, comparatorFactories,
+                new BTreeDataflowHelperFactory(), fieldPermutation, IndexOp.INSERT, txnId, indexIdProvider);
 
         AlgebricksPartitionConstraintHelper.setPartitionConstraintInJobSpec(spec, btreeInsert,
                 splitsAndConstraint.second);
@@ -254,8 +271,8 @@ public class FeedOperations {
 
         try {
             Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> p = AqlMetadataProvider.buildFeedMessengerRuntime(
-                    spec, metadata, (AqlCompiledFeedDatasetDetails) adecl.getAqlCompiledDatasetDetails(), metadata
-                            .getDataverseName(), datasetName, feedMessages);
+                    spec, metadata, (AqlCompiledFeedDatasetDetails) adecl.getAqlCompiledDatasetDetails(),
+                    metadata.getDataverseName(), datasetName, feedMessages);
             feedMessenger = p.first;
             messengerPc = p.second;
         } catch (AlgebricksException e) {

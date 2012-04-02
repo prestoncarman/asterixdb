@@ -138,7 +138,7 @@ public class MetadataBootstrap {
 
                 //create resourceIdSeed and set to primaryIndexes.length + secondaryIndexes.length + 1
                 //The last 1 came from the another static resourceId of MetadataNode, that is, METADATANODE_RESOURCE_ID.
-                MetadataManager.INSTANCE.createResourceIdSeed(primaryIndexes.length + secondaryIndexes.length + 1);
+                MetadataManager.INSTANCE.createResourceIdGenerator(primaryIndexes.length + secondaryIndexes.length + 1);
 
                 for (int i = 0; i < primaryIndexes.length; i++) {
                     //generate resourceId for each resource
@@ -169,7 +169,7 @@ public class MetadataBootstrap {
 
                 //Check the last value which was generated from the resourceIdSeed.
                 //Then, create resourceIdSeed with setting to the last value + 1.
-                MetadataManager.INSTANCE.createResourceIdSeed(MetadataManager.INSTANCE.getGeneratedMaxResourceId() + 1);
+                MetadataManager.INSTANCE.createResourceIdGenerator(MetadataManager.INSTANCE.getGeneratedMaxResourceId() + 1);
 
                 LOGGER.info("FINISHED ENLISTMENT OF METADATA B-TREES.");
             }
