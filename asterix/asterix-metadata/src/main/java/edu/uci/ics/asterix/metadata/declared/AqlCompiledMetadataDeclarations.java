@@ -200,8 +200,7 @@ public class AqlCompiledMetadataDeclarations {
                                     rec.getKeyFieldNames());
                         } else {
                             secondaryIndexes.add(new AqlCompiledIndexDecl(rec.getIndexName(),
-                                    rec.getIndexType() == IndexType.BTREE ? IndexKind.BTREE : IndexKind.RTREE, rec
-                                            .getKeyFieldNames()));
+                            		getIndexKindFromType(rec.getIndexType()), rec.getKeyFieldNames(), rec.getGramLength()));
                         }
                     }
 
@@ -235,6 +234,16 @@ public class AqlCompiledMetadataDeclarations {
         }
     }
 
+    private IndexKind getIndexKindFromType(IndexType type) {
+    	switch(type) {
+    	case BTREE: return IndexKind.BTREE;
+    	case RTREE: return IndexKind.RTREE;
+    	case KEYWORD: return IndexKind.WORD_INVIX;
+    	case NGRAM: return IndexKind.NGRAM_INVIX;
+    	}
+    	return null;
+    }
+    
     public void setOutputFile(FileSplit outputFile) {
         this.outputFile = outputFile;
     }

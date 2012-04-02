@@ -9,6 +9,7 @@ import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
 import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
 import edu.uci.ics.asterix.metadata.declared.AqlSourceId;
 import edu.uci.ics.asterix.om.base.AFloat;
+import edu.uci.ics.asterix.om.base.AInt32;
 import edu.uci.ics.asterix.om.base.IAObject;
 import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
@@ -32,6 +33,7 @@ import edu.uci.ics.hyracks.algebricks.core.utils.Pair;
 import edu.uci.ics.hyracks.api.dataflow.IOperatorDescriptor;
 import edu.uci.ics.hyracks.storage.am.invertedindex.api.IInvertedIndexSearchModifierFactory;
 import edu.uci.ics.hyracks.storage.am.invertedindex.searchmodifiers.ConjunctiveSearchModifierFactory;
+import edu.uci.ics.hyracks.storage.am.invertedindex.searchmodifiers.EditDistanceSearchModifierFactory;
 import edu.uci.ics.hyracks.storage.am.invertedindex.searchmodifiers.JaccardSearchModifierFactory;
 
 public class WordInvertedIndexPOperator extends IndexSearchPOperator {
@@ -68,7 +70,7 @@ public class WordInvertedIndexPOperator extends IndexSearchPOperator {
         Mutable<ILogicalExpression> unnestExpr = unnestMap.getExpressionRef();
         AbstractFunctionCallExpression unnestFuncExpr = (AbstractFunctionCallExpression) unnestExpr.getValue();
         String indexType = getStringArgument(unnestFuncExpr, 1);
-        if (indexType != FunctionArgumentsConstants.WORD_INVERTED_INDEX_INDEX) {
+        if (!indexType.equals(FunctionArgumentsConstants.WORD_INVERTED_INDEX) && !indexType.equals(FunctionArgumentsConstants.NGRAM_INVERTED_INDEX)) {
             throw new NotImplementedException(indexType + " indexes are not implemented.");
         }
         String indexName = getStringArgument(unnestFuncExpr, 0);
@@ -108,6 +110,14 @@ public class WordInvertedIndexPOperator extends IndexSearchPOperator {
                     .getValue()).getObject();
             float jaccThresh = ((AFloat) obj).getFloatValue();
             return new JaccardSearchModifierFactory(jaccThresh);
+        }
+        if (searchModifierName.equals("EDIT_DISTANCE")) {
+            IAObject obj = ((AsterixConstantValue) ((ConstantExpression) unnestFuncExpr.getArguments().get(k + 1).getValue())
+                    .getValue()).getObject();
+            int edThresh = ((AInt32) obj).getIntegerValue();
+            // TODO: Pass gram length as parameter as well.
+            int gramLength = 3;
+            return new EditDistanceSearchModifierFactory(gramLength, edThresh);
         }
         return null;
     }

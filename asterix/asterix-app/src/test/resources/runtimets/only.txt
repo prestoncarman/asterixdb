@@ -1,1 +1,1 @@
-keyword/word-inverted-index-jaccard.aql
+ngram/inverted-index-edit-distance.aql

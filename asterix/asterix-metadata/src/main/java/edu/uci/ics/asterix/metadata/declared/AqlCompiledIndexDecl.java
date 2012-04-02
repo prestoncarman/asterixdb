@@ -27,17 +27,28 @@ public class AqlCompiledIndexDecl {
     public enum IndexKind {
         BTREE,
         RTREE,
-        WORD_INVIX
+        WORD_INVIX,
+        NGRAM_INVIX
     }
 
     private String indexName;
     private IndexKind kind;
-    private List<String> fieldExprs = new ArrayList<String>();
+    private List<String> fieldExprs = new ArrayList<String>();    
+    // Only for NGRAM indexes.
+    private int gramLength;
 
+    public AqlCompiledIndexDecl(String indexName, IndexKind kind, List<String> fieldExprs, int gramLength) {
+        this.indexName = indexName;
+        this.kind = kind;
+        this.fieldExprs = fieldExprs;
+        this.gramLength = gramLength;
+    }
+    
     public AqlCompiledIndexDecl(String indexName, IndexKind kind, List<String> fieldExprs) {
         this.indexName = indexName;
         this.kind = kind;
         this.fieldExprs = fieldExprs;
+        this.gramLength = -1;
     }
 
     @Override
@@ -55,6 +66,10 @@ public class AqlCompiledIndexDecl {
 
     public List<String> getFieldExprs() {
         return fieldExprs;
+    }
+    
+    public int getGramLength() {
+    	return gramLength;
     }
 
     public static IAType keyFieldType(String expr, ARecordType recType) throws AlgebricksException {

@@ -86,13 +86,9 @@ public class IndexOperations {
                 return createRtreeIndexJobSpec(createIndexStmt, datasetDecls);
             }
 
-            case KEYWORD: {
-                return createKeywordIndexJobSpec(createIndexStmt, datasetDecls);
-            }
-
+            case KEYWORD:
             case NGRAM: {
-                // return createQgramIndexJobSpec(createIndexStmt,
-                // datasetDecls);
+                return createInvertedIndexJobSpec(createIndexStmt, datasetDecls);
             }
 
             default: {
@@ -555,8 +551,8 @@ public class IndexOperations {
 
     }
 
-    @SuppressWarnings("unchecked")
-    public static JobSpecification createKeywordIndexJobSpec(CompiledCreateIndexStatement createIndexStmt,
+    @SuppressWarnings("rawtypes")
+    public static JobSpecification createInvertedIndexJobSpec(CompiledCreateIndexStatement createIndexStmt,
             AqlCompiledMetadataDeclarations datasetDecls) throws AsterixException, AlgebricksException {
 
         JobSpecification spec = new JobSpecification();
@@ -573,16 +569,15 @@ public class IndexOperations {
             throw new AsterixException("Cannot index an external dataset (" + primaryIndexName + ").");
         }
         ARecordType itemType = (ARecordType) datasetDecls.findType(compiledDatasetDecl.getItemTypeName());
-        ISerializerDeserializerProvider serdeProvider = datasetDecls.getFormat().getSerdeProvider();
-        ISerializerDeserializer payloadSerde = serdeProvider.getSerializerDeserializer(itemType);
+        ISerializerDeserializerProvider serdeProvider = datasetDecls.getFormat().getSerdeProvider();        
+		ISerializerDeserializer payloadSerde = serdeProvider.getSerializerDeserializer(itemType);
 
         int numPrimaryKeys = DatasetUtils.getPartitioningFunctions(compiledDatasetDecl).size();
 
-        // sanity
-        if (numPrimaryKeys > 1)
+        // Sanity checks.
+        if (numPrimaryKeys > 1) {
             throw new AsterixException("Cannot create inverted keyword index on dataset with composite primary key.");
-
-        // sanity
+        }
         IAType fieldsToTokenizeType = AqlCompiledIndexDecl
                 .keyFieldType(createIndexStmt.getKeyFields().get(0), itemType);
         for (String fieldName : createIndexStmt.getKeyFields()) {
@@ -692,7 +687,7 @@ public class IndexOperations {
                     keyType, OrderKind.ASC);
             tokenTypeTraits[i] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(keyType);
         }
-        // fill in serializers and comparators for primary index fields
+        // Fill in serializers and comparators for primary index fields.
         for (i = 0; i < numPrimaryKeys; i++) {
             secondaryRecFields[numSecondaryKeys + i] = primaryRecFields[i];
         }
@@ -710,7 +705,6 @@ public class IndexOperations {
         for (i = 0; i < numPrimaryKeys; i++) {
             projectionList[projCount++] = i;
         }
-
         Pair<IFileSplitProvider, AlgebricksPartitionConstraint> assignSplitsAndConstraint = datasetDecls
                 .splitProviderAndPartitionConstraintsForInternalOrFeedDataset(primaryIndexName, primaryIndexName);
 
@@ -743,9 +737,28 @@ public class IndexOperations {
             primaryKeyFields[i] = numSecondaryKeys + i;
         }
 
-        // TODO: We might want to expose the hashing option at the AQL level, and add the choice to the index metadata.
-        IBinaryTokenizerFactory tokenizerFactory = AqlBinaryTokenizerFactoryProvider.INSTANCE
-                .getTokenizerFactory(fieldsToTokenizeType, false);
+        // TODO: We might want to expose the hashing option at the AQL level, 
+        // and add the choice to the index metadata.
+        IBinaryTokenizerFactory tokenizerFactory = null;
+        switch (createIndexStmt.getIndexType()) {
+        case KEYWORD: {
+        	tokenizerFactory = AqlBinaryTokenizerFactoryProvider.INSTANCE
+        			.getWordTokenizerFactory(fieldsToTokenizeType, false);
+        	break;
+        }
+		case NGRAM: {
+			tokenizerFactory = AqlBinaryTokenizerFactoryProvider.INSTANCE
+					.getNGramTokenizerFactory(fieldsToTokenizeType,
+							createIndexStmt.getGramLength(), true, false);
+			break;
+		}
+        default: {
+			throw new AsterixException(
+					"Cannot create inverted index job for index type '"
+							+ createIndexStmt.getIndexType() + "'");
+        }
+        }
+        
         BinaryTokenizerOperatorDescriptor tokenizerOp = new BinaryTokenizerOperatorDescriptor(spec,
                 tokenKeyPairRecDesc, tokenizerFactory, fieldsToTokenize, primaryKeyFields);
         Pair<IFileSplitProvider, AlgebricksPartitionConstraint> secondarySplitsAndConstraint = datasetDecls

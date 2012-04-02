@@ -97,7 +97,8 @@ public class DmlTranslator extends AbstractAqlTranslator {
                     CreateIndexStatement cis = (CreateIndexStatement) stmt;
                     if (cis.getNeedToCreate()) {
                         CompiledCreateIndexStatement ccis = new CompiledCreateIndexStatement(cis.getIndexName()
-                                .getValue(), cis.getDatasetName().getValue(), cis.getFieldExprs(), cis.getIndexType());
+                                .getValue(), cis.getDatasetName().getValue(), cis.getFieldExprs(), cis.getGramLength(),
+                                cis.getIndexType());
                         dmlStatements.add(ccis);
                     }
                     break;
@@ -159,16 +160,20 @@ public class DmlTranslator extends AbstractAqlTranslator {
     }
 
     public static class CompiledCreateIndexStatement implements ICompiledDmlStatement {
-        private String indexName;
-        private String datasetName;
-        private List<String> keyFields;
-        private IndexType indexType;
+        private final String indexName;
+        private final String datasetName;
+        private final List<String> keyFields;
+        private final IndexType indexType;
+
+        // Specific to NGram index.
+        private final int gramLength;
 
         public CompiledCreateIndexStatement(String indexName, String datasetName, List<String> keyFields,
-                IndexType indexType) {
+                int gramLength, IndexType indexType) {
             this.indexName = indexName;
             this.datasetName = datasetName;
             this.keyFields = keyFields;
+            this.gramLength = gramLength;
             this.indexType = indexType;
         }
 
@@ -186,6 +191,10 @@ public class DmlTranslator extends AbstractAqlTranslator {
 
         public IndexType getIndexType() {
             return indexType;
+        }
+
+        public int getGramLength() {
+            return gramLength;
         }
 
         @Override

@@ -11,6 +11,7 @@ import edu.uci.ics.asterix.common.functions.FunctionArgumentsConstants;
 import edu.uci.ics.asterix.common.functions.FunctionUtils;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledDatasetDecl;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl;
+import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl.IndexKind;
 import edu.uci.ics.asterix.om.base.AInt32;
 import edu.uci.ics.asterix.om.base.AOrderedList;
 import edu.uci.ics.asterix.om.base.AString;
@@ -28,7 +29,6 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionC
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.UnnestingFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
-import edu.uci.ics.hyracks.algebricks.core.algebra.functions.AlgebricksBuiltinFunctions;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.IFunctionInfo;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
@@ -40,18 +40,21 @@ public class WordInvertedIndexAccessMethod implements IAccessMethod {
 
     private static List<FunctionIdentifier> funcIdents = new ArrayList<FunctionIdentifier>();
     static {
-        funcIdents.add(AsterixBuiltinFunctions.CONTAINS);
+        funcIdents.add(AsterixBuiltinFunctions.CONTAINS);        
         // For matching similarity-check functions. For example similarity-jaccard-check returns a list of two items,
         // and the where condition will get the first list-item and check whether it evaluates to true. 
         // There may or may not be an explicit check on list[0] == true. If there is we match the EQ function, otherwise GET_ITEM.
-        funcIdents.add(AlgebricksBuiltinFunctions.EQ);
-        funcIdents.add(AsterixBuiltinFunctions.GET_ITEM);        
+        // TODO: Make RE work as well.
+        //funcIdents.add(AlgebricksBuiltinFunctions.EQ);
+        funcIdents.add(AsterixBuiltinFunctions.GET_ITEM);
     }
     
-    // These function identifiers are matched in this AM's analyzeFuncExprArgs(), and are not visible to the outside driver (IntroduceAccessMethodSearchRule).
+    // These function identifiers are matched in this AM's analyzeFuncExprArgs(), 
+    // and are not visible to the outside driver (IntroduceAccessMethodSearchRule).
     private static HashSet<FunctionIdentifier> secondLevelFuncIdents = new HashSet<FunctionIdentifier>();
     static {
         secondLevelFuncIdents.add(AsterixBuiltinFunctions.SIMILARITY_JACCARD_CHECK);
+        secondLevelFuncIdents.add(AsterixBuiltinFunctions.EDIT_DISTANCE_CHECK);
     }
     
     public static WordInvertedIndexAccessMethod INSTANCE = new WordInvertedIndexAccessMethod();
@@ -136,7 +139,11 @@ public class WordInvertedIndexAccessMethod implements IAccessMethod {
         // the number of secondary-index keys, and the variable references corresponding to the secondary-index search keys.
         ArrayList<Mutable<ILogicalExpression>> secondaryIndexFuncArgs = new ArrayList<Mutable<ILogicalExpression>>();
         secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(chosenIndex.getIndexName())));
-        secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(FunctionArgumentsConstants.WORD_INVERTED_INDEX_INDEX)));
+        if (chosenIndex.getKind() == IndexKind.WORD_INVIX) {
+            secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(FunctionArgumentsConstants.WORD_INVERTED_INDEX)));
+        } else if (chosenIndex.getKind() == IndexKind.NGRAM_INVIX) {
+            secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(FunctionArgumentsConstants.NGRAM_INVERTED_INDEX)));
+        }
         secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(datasetDecl.getName())));
         // Add function-specific args such as search modifier, and possibly a similarity threshold.
         addFunctionSpecificArgs(optFuncExpr, secondaryIndexFuncArgs);
@@ -190,10 +197,19 @@ public class WordInvertedIndexAccessMethod implements IAccessMethod {
             OptimizableTernaryFuncExpr ternOptFuncExpr = (OptimizableTernaryFuncExpr) optFuncExpr;
             secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(ternOptFuncExpr.getSecondConstVal())));
         }
+        if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.EDIT_DISTANCE_CHECK) {
+            // Value 1 represents an edit distance search modifier.
+            secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(
+                    new AString("EDIT_DISTANCE")))));
+            // Add the similarity threshold.
+            OptimizableTernaryFuncExpr ternOptFuncExpr = (OptimizableTernaryFuncExpr) optFuncExpr;
+            secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(ternOptFuncExpr.getSecondConstVal())));
+        }
     }
 
     private void addKeyVarsAndExprs(OptimizableBinaryFuncExpr optFuncExpr, ArrayList<LogicalVariable> keyVarList, ArrayList<Mutable<ILogicalExpression>> keyExprList, ArrayList<Mutable<ILogicalExpression>> secondaryIndexFuncArgs, IOptimizationContext context) throws AlgebricksException {
-        if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.CONTAINS) {
+        if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.CONTAINS
+                || optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.EDIT_DISTANCE_CHECK) {
             // For now we are assuming a single secondary index key.
             // Add a variable and its expr to the lists which will be passed into an assign op.
             LogicalVariable keyVar = context.newVar();

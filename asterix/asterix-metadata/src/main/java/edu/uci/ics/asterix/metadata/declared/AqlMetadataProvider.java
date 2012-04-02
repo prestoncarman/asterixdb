@@ -82,7 +82,6 @@ import edu.uci.ics.hyracks.storage.am.common.ophelpers.IndexOp;
 import edu.uci.ics.hyracks.storage.am.common.tuples.TypeAwareTupleWriterFactory;
 import edu.uci.ics.hyracks.storage.am.invertedindex.api.IInvertedIndexSearchModifierFactory;
 import edu.uci.ics.hyracks.storage.am.invertedindex.dataflow.InvertedIndexSearchOperatorDescriptor;
-import edu.uci.ics.hyracks.storage.am.invertedindex.searchmodifiers.ConjunctiveSearchModifierFactory;
 import edu.uci.ics.hyracks.storage.am.invertedindex.tokenizers.IBinaryTokenizerFactory;
 import edu.uci.ics.hyracks.storage.am.rtree.dataflow.RTreeDataflowHelperFactory;
 import edu.uci.ics.hyracks.storage.am.rtree.dataflow.RTreeSearchOperatorDescriptor;
@@ -551,11 +550,21 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
             		secondaryKeyType, OrderKind.ASC);
             tokenTypeTraits[i] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(secondaryKeyType);
         }
-        // Get tokenizer factory.
-        IBinaryTokenizerFactory queryTokenizerFactory = AqlBinaryTokenizerFactoryProvider.INSTANCE
-        		.getTokenizerFactory(secondaryKeyType, false);
         
-        // Serdes, typetraits and comparator factories describing the output of an inverted-index search.
+        // Get tokenizer factory.
+        IBinaryTokenizerFactory queryTokenizerFactory = null;
+        switch (index.getKind()) {
+        case WORD_INVIX: {
+        	queryTokenizerFactory = AqlBinaryTokenizerFactoryProvider.INSTANCE
+        			.getWordTokenizerFactory(secondaryKeyType, false);
+        }
+        case NGRAM_INVIX: {
+        	// TODO: Get proper gram length.
+        	queryTokenizerFactory = AqlBinaryTokenizerFactoryProvider.INSTANCE
+        			.getNGramTokenizerFactory(secondaryKeyType, 3, true, false);
+        }
+        }
+        
         // The inverted lists contain primary keys.
         ISerializerDeserializer[] invListsRecFields = new ISerializerDeserializer[numPrimaryKeys];
         ITypeTraits[] invListsTypeTraits = new ITypeTraits[numPrimaryKeys];

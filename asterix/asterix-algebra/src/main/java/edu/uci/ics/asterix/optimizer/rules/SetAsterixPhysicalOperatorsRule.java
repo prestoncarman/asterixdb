@@ -168,7 +168,9 @@ public class SetAsterixPhysicalOperatorsRule implements IAlgebraicRewriteRule {
                                 op.setPhysicalOperator(new BTreeSearchPOperator(dsi));
                             } else if (indexType == FunctionArgumentsConstants.RTREE_INDEX) {
                                 op.setPhysicalOperator(new RTreeSearchPOperator(dsi));
-                            } else if (indexType == FunctionArgumentsConstants.WORD_INVERTED_INDEX_INDEX ) {
+                            } else if (indexType == FunctionArgumentsConstants.WORD_INVERTED_INDEX ) {
+                                op.setPhysicalOperator(new WordInvertedIndexPOperator(dsi));
+                            } else if (indexType == FunctionArgumentsConstants.NGRAM_INVERTED_INDEX ) {
                                 op.setPhysicalOperator(new WordInvertedIndexPOperator(dsi));
                             } else {
                                 throw new NotImplementedException(indexType + " indexes are not implemented.");

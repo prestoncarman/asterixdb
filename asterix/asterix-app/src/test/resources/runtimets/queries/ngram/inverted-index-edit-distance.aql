@@ -10,7 +10,7 @@ create type DBLPType as closed {
   misc: string
 }
 
-create nodegroup group1 on nc1, nc2;
+create nodegroup group1 on nc1;
 
 create dataset DBLP(DBLPType) 
   partitioned by key id on group1;
@@ -19,12 +19,11 @@ load dataset DBLP
 using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
 (("path"="nc1://data/dblp-small/dblp-small-id.txt"),("format"="delimited-text"),("delimiter"=":")) pre-sorted;
 
-create index keyword_index on DBLP(title) type keyword;
+create index ngram_index on DBLP(authors) type ngram(3);
 
-write output to nc1:"rttest/keyword_inverted-index-jaccard.adm";
+write output to nc1:"rttest/ngram_inverted-index-edit-distance.adm";
 
 for $o in dataset('DBLP')
-let $jacc := similarity-jaccard-check(word-tokens($o.title), word-tokens("Transactions for Cooperative Environments"), 0.5f)
-where $jacc[0]
+let $ed := edit-distance-check($o.authors, "Amihay Motro", 1)
+where $ed[0]
 return $o
-

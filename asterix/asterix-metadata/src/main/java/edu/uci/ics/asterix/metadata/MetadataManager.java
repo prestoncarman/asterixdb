@@ -18,7 +18,6 @@ package edu.uci.ics.asterix.metadata;
 import java.rmi.RemoteException;
 import java.util.List;
 
-import edu.uci.ics.asterix.metadata.MetadataCache.MetadataLogicalOperation;
 import edu.uci.ics.asterix.metadata.api.IAsterixStateProxy;
 import edu.uci.ics.asterix.metadata.api.IMetadataManager;
 import edu.uci.ics.asterix.metadata.api.IMetadataNode;

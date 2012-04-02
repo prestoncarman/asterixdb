@@ -6,6 +6,7 @@ import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.hyracks.storage.am.invertedindex.tokenizers.DelimitedUTF8StringBinaryTokenizerFactory;
 import edu.uci.ics.hyracks.storage.am.invertedindex.tokenizers.HashedUTF8WordTokenFactory;
 import edu.uci.ics.hyracks.storage.am.invertedindex.tokenizers.IBinaryTokenizerFactory;
+import edu.uci.ics.hyracks.storage.am.invertedindex.tokenizers.UTF8NGramTokenFactory;
 import edu.uci.ics.hyracks.storage.am.invertedindex.tokenizers.UTF8WordTokenFactory;
 
 public class AqlBinaryTokenizerFactoryProvider implements IBinaryTokenizerFactoryProvider {
@@ -19,14 +20,14 @@ public class AqlBinaryTokenizerFactoryProvider implements IBinaryTokenizerFactor
             true, true, new HashedUTF8WordTokenFactory(ATypeTag.INT32.serialize(), ATypeTag.INT32.serialize()));
 
     @Override
-    public IBinaryTokenizerFactory getTokenizerFactory(Object type, boolean hashedTokens) {
+    public IBinaryTokenizerFactory getWordTokenizerFactory(Object type, boolean hashedTokens) {
         IAType aqlType = (IAType) type;
         switch (aqlType.getTypeTag()) {
             case STRING: {
                 if (hashedTokens) {
-                	return aqlHashingStringTokenizer;
+                    return aqlHashingStringTokenizer;
                 } else {
-                	return aqlStringTokenizer;
+                    return aqlStringTokenizer;
                 }
             }
 
@@ -36,4 +37,23 @@ public class AqlBinaryTokenizerFactoryProvider implements IBinaryTokenizerFactor
         }
     }
 
+    @Override
+    public IBinaryTokenizerFactory getNGramTokenizerFactory(Object type, int gramLength, boolean usePrePost,
+            boolean hashedTokens) {
+        IAType aqlType = (IAType) type;
+        switch (aqlType.getTypeTag()) {
+            case STRING: {
+                if (hashedTokens) {
+                    return null;
+                } else {
+                    return new NGramUTF8StringBinaryTokenizerFactory(gramLength, usePrePost, true, true,
+                            new UTF8NGramTokenFactory(ATypeTag.STRING.serialize(), ATypeTag.INT32.serialize()));
+                }
+            }
+
+            default: {
+                return null;
+            }
+        }
+    }
 }

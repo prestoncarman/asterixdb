@@ -108,13 +108,13 @@ public class AccessMethodUtils {
         } else {
             return false;
         }
-        IAlgebricksConstantValue constFilterVal = null;        
+        ConstantExpression constExpr = (ConstantExpression) constArg;
+        IAlgebricksConstantValue constFilterVal = constExpr.getValue();
         LogicalVariable fieldVar = null;
         // Analyze arg1 and arg2, depending on similarity function.
         // TODO: For now, only support Jaccard.
+        // TODO: Clean up this code.
         if (funcExpr.getFunctionIdentifier() == AsterixBuiltinFunctions.SIMILARITY_JACCARD_CHECK) {            
-            ConstantExpression constExpr = (ConstantExpression) constArg;
-            constFilterVal = constExpr.getValue();
             AbstractFunctionCallExpression nonConstfuncExpr = funcExpr;
             if (nonConstArg.getExpressionTag() == LogicalExpressionTag.FUNCTION_CALL) {
                 nonConstfuncExpr = (AbstractFunctionCallExpression) nonConstArg;
@@ -128,6 +128,14 @@ public class AccessMethodUtils {
             if (nonConstArg.getExpressionTag() == LogicalExpressionTag.VARIABLE) {
                 VariableReferenceExpression varExpr = (VariableReferenceExpression) nonConstArg;
                 fieldVar = varExpr.getVariableReference();
+                analysisCtx.matchedFuncExprs.add(new OptimizableTernaryFuncExpr(funcExpr, constFilterVal, constThreshVal, fieldVar));
+                return true;
+            }
+        }
+        if (funcExpr.getFunctionIdentifier() == AsterixBuiltinFunctions.EDIT_DISTANCE_CHECK) {
+            if (nonConstArg.getExpressionTag() == LogicalExpressionTag.VARIABLE) {
+                fieldVar = ((VariableReferenceExpression) nonConstArg).getVariableReference();
+                // TODO: Analyze string constant to see whether we are in a panic case and cannot use the index.
                 analysisCtx.matchedFuncExprs.add(new OptimizableTernaryFuncExpr(funcExpr, constFilterVal, constThreshVal, fieldVar));
                 return true;
             }
