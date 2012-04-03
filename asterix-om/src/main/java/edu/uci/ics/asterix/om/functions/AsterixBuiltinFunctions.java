@@ -533,9 +533,9 @@ public final static FunctionIdentifier NUMERIC_ABS = new FunctionIdentifier(Func
         add(NUMERIC_ROUND_HALF_TO_EVEN2, NonTaggedNumericRoundHalfToEven2TypeComputer.INSTANCE);
         
         add(STRING_TO_CODEPOINT, OrderedListOfAInt32TypeComputer.INSTANCE);
-        add(CODEPOINT_TO_STRING, OptionalAStringTypeComputer.INSTANCE);
-        add(STRING_CONCAT, OptionalAStringTypeComputer.INSTANCE);
-        add(SUBSTRING2, OptionalAStringTypeComputer.INSTANCE);
+        add(CODEPOINT_TO_STRING, AStringTypeComputer.INSTANCE);
+        add(STRING_CONCAT, AStringTypeComputer.INSTANCE);
+        add(SUBSTRING2, AStringTypeComputer.INSTANCE);
         add(STRING_LENGTH, UnaryStringInt32OrNullTypeComputer.INSTANCE);
         add(STRING_LOWERCASE, UnaryStringOrNullTypeComputer.INSTANCE);
         add(STRING_START_WITH, BinaryStringBoolOrNullTypeComputer.INSTANCE);
@@ -547,7 +547,7 @@ public final static FunctionIdentifier NUMERIC_ABS = new FunctionIdentifier(Func
         add(SUBSTRING_BEFORE, BinaryStringStringOrNullTypeComputer.INSTANCE);
         add(SUBSTRING_AFTER, BinaryStringStringOrNullTypeComputer.INSTANCE);
         add(STRING_EQUAL, BinaryStringBoolOrNullTypeComputer.INSTANCE);
-        add(STRING_JOIN, OptionalAStringTypeComputer.INSTANCE);
+        add(STRING_JOIN, AStringTypeComputer.INSTANCE);
         
         add(OPEN_RECORD_CONSTRUCTOR, OpenRecordConstructorResultType.INSTANCE);
         add(ORDERED_LIST_CONSTRUCTOR, OrderedListConstructorResultType.INSTANCE);
