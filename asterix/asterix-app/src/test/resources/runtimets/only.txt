@@ -1,1 +1,1 @@
-ngram/inverted-index-edit-distance.aql
+index/inverted-index-ngram-jaccard.aql

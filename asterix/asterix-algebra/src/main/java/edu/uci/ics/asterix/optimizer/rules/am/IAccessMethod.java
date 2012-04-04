@@ -82,4 +82,13 @@ public interface IAccessMethod {
             Mutable<ILogicalOperator> dataSourceScanRef, AqlCompiledDatasetDecl datasetDecl, ARecordType recordType,
             AqlCompiledIndexDecl chosenIndex, AccessMethodAnalysisContext analysisCtx, IOptimizationContext context)
             throws AlgebricksException;
+    
+    /**
+     * Analyzes expr to see whether it is optimizable by the given concrete index. 
+     * 
+     * @param index
+     * @param expr
+     * @return
+     */
+    public boolean exprIsOptimizable(AqlCompiledIndexDecl index, OptimizableBinaryFuncExpr expr);
 }

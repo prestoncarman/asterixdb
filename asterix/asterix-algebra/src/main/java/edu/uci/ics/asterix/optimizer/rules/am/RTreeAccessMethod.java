@@ -165,4 +165,10 @@ public class RTreeAccessMethod implements IAccessMethod {
         }
         return types;
     }
+
+    @Override
+    public boolean exprIsOptimizable(AqlCompiledIndexDecl index, OptimizableBinaryFuncExpr expr) {
+        // No additional analysis required.
+        return true;
+    }
 }

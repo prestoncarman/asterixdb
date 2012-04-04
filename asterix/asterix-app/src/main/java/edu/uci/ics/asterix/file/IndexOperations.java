@@ -739,25 +739,25 @@ public class IndexOperations {
 
         // TODO: We might want to expose the hashing option at the AQL level, 
         // and add the choice to the index metadata.
-        IBinaryTokenizerFactory tokenizerFactory = null;
-        switch (createIndexStmt.getIndexType()) {
-        case KEYWORD: {
-        	tokenizerFactory = AqlBinaryTokenizerFactoryProvider.INSTANCE
-        			.getWordTokenizerFactory(fieldsToTokenizeType, false);
-        	break;
-        }
+		IBinaryTokenizerFactory tokenizerFactory = null;
+		switch (createIndexStmt.getIndexType()) {
+		case KEYWORD: {
+			tokenizerFactory = AqlBinaryTokenizerFactoryProvider.INSTANCE
+					.getWordTokenizerFactory(fieldsToTokenizeType.getTypeTag(), false);
+			break;
+		}
 		case NGRAM: {
 			tokenizerFactory = AqlBinaryTokenizerFactoryProvider.INSTANCE
-					.getNGramTokenizerFactory(fieldsToTokenizeType,
+					.getNGramTokenizerFactory(fieldsToTokenizeType.getTypeTag(),
 							createIndexStmt.getGramLength(), true, false);
 			break;
 		}
-        default: {
+		default: {
 			throw new AsterixException(
 					"Cannot create inverted index job for index type '"
 							+ createIndexStmt.getIndexType() + "'");
-        }
-        }
+		}
+		}
         
         BinaryTokenizerOperatorDescriptor tokenizerOp = new BinaryTokenizerOperatorDescriptor(spec,
                 tokenKeyPairRecDesc, tokenizerFactory, fieldsToTokenize, primaryKeyFields);

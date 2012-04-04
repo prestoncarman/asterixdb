@@ -511,11 +511,12 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
     }
     
     @SuppressWarnings("rawtypes")
-    public static Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> buildInvertedIndexRuntime(
-            AqlCompiledMetadataDeclarations metadata, JobGenContext context, JobSpecification jobSpec,
-            String datasetName, AqlCompiledDatasetDecl datasetDecl, String indexName, int[] keyFields,
-            String searchModifierName, IAObject simThresh)
-            throws AlgebricksException {
+	public static Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> buildInvertedIndexRuntime(
+			AqlCompiledMetadataDeclarations metadata, JobGenContext context,
+			JobSpecification jobSpec, String datasetName,
+			AqlCompiledDatasetDecl datasetDecl, String indexName,
+			ATypeTag searchKeyType, int[] keyFields, String searchModifierName,
+			IAObject simThresh) throws AlgebricksException {
         String itemTypeName = datasetDecl.getItemTypeName();
         IAType itemType;
         try {
@@ -592,7 +593,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         int queryField = keyFields[0];
         // Get tokenizer and search modifier factories.
         IInvertedIndexSearchModifierFactory searchModifierFactory = getSearchModifierFactory(searchModifierName, simThresh, index);
-        IBinaryTokenizerFactory queryTokenizerFactory = getBinaryTokenizerFactory(secondaryKeyType, index);
+        IBinaryTokenizerFactory queryTokenizerFactory = getBinaryTokenizerFactory(searchKeyType, index);
 		InvertedIndexSearchOperatorDescriptor invIndexSearchOp = new InvertedIndexSearchOperatorDescriptor(
 				jobSpec, queryField, appContext.getStorageManagerInterface(),
 				fileSplitProviders.first, fileSplitProviders.second,
@@ -603,14 +604,14 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(invIndexSearchOp, secondarySplitsAndConstraint.second);
     }
 
-    private static IBinaryTokenizerFactory getBinaryTokenizerFactory(Object secondaryKeyType, AqlCompiledIndexDecl index)
+    private static IBinaryTokenizerFactory getBinaryTokenizerFactory(ATypeTag searchKeyType, AqlCompiledIndexDecl index)
             throws AlgebricksException {
         switch (index.getKind()) {
             case WORD_INVIX: {
-                return AqlBinaryTokenizerFactoryProvider.INSTANCE.getWordTokenizerFactory(secondaryKeyType, false);
+                return AqlBinaryTokenizerFactoryProvider.INSTANCE.getWordTokenizerFactory(searchKeyType, false);
             }
             case NGRAM_INVIX: {
-                return AqlBinaryTokenizerFactoryProvider.INSTANCE.getNGramTokenizerFactory(secondaryKeyType,
+                return AqlBinaryTokenizerFactoryProvider.INSTANCE.getNGramTokenizerFactory(searchKeyType,
                         index.getGramLength(), true, false);
             }
             default: {

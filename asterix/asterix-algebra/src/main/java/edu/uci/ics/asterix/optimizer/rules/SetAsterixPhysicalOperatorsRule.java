@@ -9,7 +9,7 @@ import org.apache.commons.lang3.mutable.MutableObject;
 import edu.uci.ics.hyracks.algebricks.rewriter.util.JoinUtils;
 import edu.uci.ics.asterix.algebra.operators.physical.BTreeSearchPOperator;
 import edu.uci.ics.asterix.algebra.operators.physical.RTreeSearchPOperator;
-import edu.uci.ics.asterix.algebra.operators.physical.WordInvertedIndexPOperator;
+import edu.uci.ics.asterix.algebra.operators.physical.InvertedIndexPOperator;
 import edu.uci.ics.asterix.common.functions.FunctionArgumentsConstants;
 import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
 import edu.uci.ics.asterix.metadata.declared.AqlSourceId;
@@ -169,9 +169,9 @@ public class SetAsterixPhysicalOperatorsRule implements IAlgebraicRewriteRule {
                             } else if (indexType == FunctionArgumentsConstants.RTREE_INDEX) {
                                 op.setPhysicalOperator(new RTreeSearchPOperator(dsi));
                             } else if (indexType == FunctionArgumentsConstants.WORD_INVERTED_INDEX ) {
-                                op.setPhysicalOperator(new WordInvertedIndexPOperator(dsi));
+                                op.setPhysicalOperator(new InvertedIndexPOperator(dsi));
                             } else if (indexType == FunctionArgumentsConstants.NGRAM_INVERTED_INDEX ) {
-                                op.setPhysicalOperator(new WordInvertedIndexPOperator(dsi));
+                                op.setPhysicalOperator(new InvertedIndexPOperator(dsi));
                             } else {
                                 throw new NotImplementedException(indexType + " indexes are not implemented.");
                             }

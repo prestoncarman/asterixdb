@@ -5,16 +5,14 @@ import org.apache.commons.lang3.mutable.Mutable;
 import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
 import edu.uci.ics.asterix.common.functions.FunctionArgumentsConstants;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledDatasetDecl;
-import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
 import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
 import edu.uci.ics.asterix.metadata.declared.AqlSourceId;
-import edu.uci.ics.asterix.metadata.utils.DatasetUtils;
-import edu.uci.ics.asterix.om.base.AFloat;
 import edu.uci.ics.asterix.om.base.AInt32;
 import edu.uci.ics.asterix.om.base.IAObject;
 import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
+import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IHyracksJobBuilder;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
@@ -33,13 +31,9 @@ import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.api.exceptions.NotImplementedException;
 import edu.uci.ics.hyracks.algebricks.core.utils.Pair;
 import edu.uci.ics.hyracks.api.dataflow.IOperatorDescriptor;
-import edu.uci.ics.hyracks.storage.am.invertedindex.api.IInvertedIndexSearchModifierFactory;
-import edu.uci.ics.hyracks.storage.am.invertedindex.searchmodifiers.ConjunctiveSearchModifierFactory;
-import edu.uci.ics.hyracks.storage.am.invertedindex.searchmodifiers.EditDistanceSearchModifierFactory;
-import edu.uci.ics.hyracks.storage.am.invertedindex.searchmodifiers.JaccardSearchModifierFactory;
 
-public class WordInvertedIndexPOperator extends IndexSearchPOperator {
-    public WordInvertedIndexPOperator(IDataSourceIndex<String, AqlSourceId> idx) {
+public class InvertedIndexPOperator extends IndexSearchPOperator {
+    public InvertedIndexPOperator(IDataSourceIndex<String, AqlSourceId> idx) {
         super(idx);
     }
 
@@ -81,12 +75,16 @@ public class WordInvertedIndexPOperator extends IndexSearchPOperator {
         // Similarity threshold. Concrete type depends on search modifier.
         IAObject simThresh = ((AsterixConstantValue) ((ConstantExpression) unnestFuncExpr.getArguments().get(4).getValue())
                 .getValue()).getObject();
-        Pair<int[], Integer> keys = getKeys(unnestFuncExpr, 5, inputSchemas);
-        buildInvertedIndexSearch(builder, context, unnestMap, opSchema, datasetName, indexName, keys.first, searchModifierName, simThresh);
+        // Get type of search key.
+        IAObject typeTagObj = ((AsterixConstantValue) ((ConstantExpression) unnestFuncExpr.getArguments().get(5).getValue())
+                .getValue()).getObject();
+        ATypeTag searchKeyType = ATypeTag.values()[((AInt32)typeTagObj).getIntegerValue()];
+        Pair<int[], Integer> keys = getKeys(unnestFuncExpr, 6, inputSchemas);
+        buildInvertedIndexSearch(builder, context, unnestMap, opSchema, datasetName, indexName, searchKeyType, keys.first, searchModifierName, simThresh);
     }
 
     private static void buildInvertedIndexSearch(IHyracksJobBuilder builder, JobGenContext context, AbstractScanOperator scan,
-            IOperatorSchema opSchema, String datasetName, String indexName, int[] keyFields, String searchModifierName, IAObject simThresh)
+            IOperatorSchema opSchema, String datasetName, String indexName, ATypeTag searchKeyType, int[] keyFields, String searchModifierName, IAObject simThresh)
             throws AlgebricksException, AlgebricksException {
         AqlMetadataProvider metadataProvider = (AqlMetadataProvider) context.getMetadataProvider();
         AqlCompiledMetadataDeclarations metadata = metadataProvider.getMetadataDeclarations();
@@ -98,7 +96,7 @@ public class WordInvertedIndexPOperator extends IndexSearchPOperator {
             throw new AlgebricksException("Trying to run inverted index search over external dataset (" + datasetName + ").");
         }
         Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> invIndexSearch = AqlMetadataProvider.buildInvertedIndexRuntime(
-                metadata, context, builder.getJobSpec(), datasetName, datasetDecl, indexName, keyFields, searchModifierName, simThresh);
+                metadata, context, builder.getJobSpec(), datasetName, datasetDecl, indexName, searchKeyType, keyFields, searchModifierName, simThresh);
         builder.contributeHyracksOperator(scan, invIndexSearch.first);
         builder.contributeAlgebricksPartitionConstraint(invIndexSearch.first, invIndexSearch.second);
         ILogicalOperator srcExchange = scan.getInputs().get(0).getValue();

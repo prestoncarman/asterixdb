@@ -92,7 +92,7 @@ public class IntroduceAccessMethodSearchRule implements IAlgebraicRewriteRule {
 	static {
 	    registerAccessMethod(BTreeAccessMethod.INSTANCE);
 	    registerAccessMethod(RTreeAccessMethod.INSTANCE);
-	    registerAccessMethod(WordInvertedIndexAccessMethod.INSTANCE);
+	    registerAccessMethod(InvertedIndexAccessMethod.INSTANCE);
 	}
 	
 	public static void registerAccessMethod(IAccessMethod accessMethod) {
@@ -203,13 +203,19 @@ public class IntroduceAccessMethodSearchRule implements IAlgebraicRewriteRule {
         while (it.hasNext()) {
             Map.Entry<AqlCompiledIndexDecl, List<Integer>> entry = it.next();
             AqlCompiledIndexDecl index = entry.getKey();
-            List<Integer> exprs = entry.getValue();
+            Iterator<Integer> exprsIter = entry.getValue().iterator();
             boolean allUsed = true;
             int lastFieldMatched = -1;
             for (int i = 0; i < index.getFieldExprs().size(); i++) {
                 String keyField = index.getFieldExprs().get(i);
                 boolean foundKeyField = false;
-                for (Integer ix : exprs) {
+                while (exprsIter.hasNext()) {
+                    Integer ix = exprsIter.next();
+                    // If expr is not optimizable by concrete index then remove expr and continue.
+                    if (!accessMethod.exprIsOptimizable(index, analysisCtx.matchedFuncExprs.get(ix))) {
+                        exprsIter.remove();
+                        continue;
+                    }
                     if (analysisCtx.matchedFuncExprs.get(ix).getFieldName().equals(keyField)) {
                         foundKeyField = true;
                         if (lastFieldMatched == i - 1) {

@@ -13,7 +13,6 @@ import edu.uci.ics.asterix.metadata.declared.AqlCompiledDatasetDecl;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl.IndexKind;
 import edu.uci.ics.asterix.om.base.AInt32;
-import edu.uci.ics.asterix.om.base.AOrderedList;
 import edu.uci.ics.asterix.om.base.AString;
 import edu.uci.ics.asterix.om.base.IAObject;
 import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
@@ -36,7 +35,7 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.DataSourceS
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOperator;
 import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
 
-public class WordInvertedIndexAccessMethod implements IAccessMethod {
+public class InvertedIndexAccessMethod implements IAccessMethod {
 
     private static List<FunctionIdentifier> funcIdents = new ArrayList<FunctionIdentifier>();
     static {
@@ -57,7 +56,7 @@ public class WordInvertedIndexAccessMethod implements IAccessMethod {
         secondLevelFuncIdents.add(AsterixBuiltinFunctions.EDIT_DISTANCE_CHECK);
     }
     
-    public static WordInvertedIndexAccessMethod INSTANCE = new WordInvertedIndexAccessMethod();
+    public static InvertedIndexAccessMethod INSTANCE = new InvertedIndexAccessMethod();
     
     @Override
     public List<FunctionIdentifier> getOptimizableFunctions() {
@@ -147,6 +146,8 @@ public class WordInvertedIndexAccessMethod implements IAccessMethod {
         secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(datasetDecl.getName())));
         // Add function-specific args such as search modifier, and possibly a similarity threshold.
         addFunctionSpecificArgs(optFuncExpr, secondaryIndexFuncArgs);
+        // Add the type of the constant in the optFuncExpr.
+        addKeyConstantType(optFuncExpr, secondaryIndexFuncArgs);
         secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(
                 new AInt32(numSecondaryKeys)))));
         // Here we generate vars and funcs for assigning the secondary-index keys to be fed into the secondary-index search.
@@ -180,6 +181,17 @@ public class WordInvertedIndexAccessMethod implements IAccessMethod {
         return true;
     }
     
+    private void addKeyConstantType(OptimizableBinaryFuncExpr optFuncExpr, ArrayList<Mutable<ILogicalExpression>> secondaryIndexFuncArgs) throws AlgebricksException {
+        // Pass on type of constant value to pick the right tokenizer in jobgen.
+        AsterixConstantValue constVal = (AsterixConstantValue) optFuncExpr.getConstVal();
+        IAObject obj = constVal.getObject();
+        ATypeTag typeTag = obj.getType().getTypeTag();
+        if (typeTag != ATypeTag.ORDEREDLIST && typeTag != ATypeTag.STRING) {
+            throw new AlgebricksException("Only ordered lists and string types supported.");
+        }
+        secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(new AInt32(typeTag.ordinal())))));
+    }
+    
     private void addFunctionSpecificArgs(OptimizableBinaryFuncExpr optFuncExpr, ArrayList<Mutable<ILogicalExpression>> secondaryIndexFuncArgs) {
         if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.CONTAINS) {
             // Value 0 represents a conjunctive search modifier.
@@ -208,43 +220,75 @@ public class WordInvertedIndexAccessMethod implements IAccessMethod {
     }
 
     private void addKeyVarsAndExprs(OptimizableBinaryFuncExpr optFuncExpr, ArrayList<LogicalVariable> keyVarList, ArrayList<Mutable<ILogicalExpression>> keyExprList, ArrayList<Mutable<ILogicalExpression>> secondaryIndexFuncArgs, IOptimizationContext context) throws AlgebricksException {
-        if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.CONTAINS
-                || optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.EDIT_DISTANCE_CHECK) {
-            // For now we are assuming a single secondary index key.
-            // Add a variable and its expr to the lists which will be passed into an assign op.
-            LogicalVariable keyVar = context.newVar();
-            keyVarList.add(keyVar);
-            Mutable<ILogicalExpression> keyVarRef = new MutableObject<ILogicalExpression>(
-                    new VariableReferenceExpression(keyVar));
-            secondaryIndexFuncArgs.add(keyVarRef);
-            keyExprList.add(new MutableObject<ILogicalExpression>(new ConstantExpression(optFuncExpr.getConstVal())));
-            return;
-        }
-        if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.SIMILARITY_JACCARD_CHECK) {
-            // TODO: We expect an already constant-folded list of tokens.
-            // However, the Hyracks operator expects an untokenized string, so we reconstruct it here.
-            // We should allow the Hyracks inverted-index operator to accept lists.
-            LogicalVariable keyVar = context.newVar();
-            keyVarList.add(keyVar);
-            Mutable<ILogicalExpression> keyVarRef = new MutableObject<ILogicalExpression>(
-                    new VariableReferenceExpression(keyVar));
-            secondaryIndexFuncArgs.add(keyVarRef);
-            
-            AsterixConstantValue constVal = (AsterixConstantValue) optFuncExpr.getConstVal();
-            IAObject obj = constVal.getObject();
-            if (obj.getType().getTypeTag() != ATypeTag.ORDEREDLIST) {
-                throw new AlgebricksException("Expected type ORDEREDLIST.");
+        // For now we are assuming a single secondary index key.
+        // Add a variable and its expr to the lists which will be passed into an assign op.
+        LogicalVariable keyVar = context.newVar();
+        keyVarList.add(keyVar);
+        Mutable<ILogicalExpression> keyVarRef = new MutableObject<ILogicalExpression>(
+                new VariableReferenceExpression(keyVar));
+        secondaryIndexFuncArgs.add(keyVarRef);
+        keyExprList.add(new MutableObject<ILogicalExpression>(new ConstantExpression(optFuncExpr.getConstVal())));        
+        return;
+    }
+
+    @Override
+    public boolean exprIsOptimizable(AqlCompiledIndexDecl index, OptimizableBinaryFuncExpr expr) {
+        // TODO: Think about how to support edit distance queries on lists.
+        if (index.getKind() == IndexKind.NGRAM_INVIX
+                &&  expr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.EDIT_DISTANCE_CHECK) {
+            // Check for panic.
+            // TODO: Panic also depends on prePost which is currently hardcoded to be true.
+            OptimizableTernaryFuncExpr ternaryExpr = (OptimizableTernaryFuncExpr) expr;            
+            AsterixConstantValue strConstVal = (AsterixConstantValue) expr.getConstVal();
+            AsterixConstantValue intConstVal = (AsterixConstantValue) ternaryExpr.getSecondConstVal();
+            IAObject strObj = strConstVal.getObject();
+            IAObject intObj = intConstVal.getObject();
+            if (strObj.getType().getTypeTag() == ATypeTag.STRING) {
+                AString astr = (AString) strObj;
+                AInt32 edThresh = (AInt32) intObj;
+                // Check merge threshold for panic.
+                int mergeThreshold = (astr.getStringValue().length() + index.getGramLength() - 1) - edThresh.getIntegerValue() * index.getGramLength();
+                if (mergeThreshold <= 0) {
+                    // We cannot use index to optimize expr.
+                    return false;
+                }
+                return true;
             }
-            AOrderedList tokenList = (AOrderedList) obj;
-            // TODO: Currently, we only accept strings here.
-            StringBuilder searchString = new StringBuilder();
-            for (int i = 0; i < tokenList.size(); i++) {
-                AString item = (AString) tokenList.getItem(i);
-                searchString.append(item.getStringValue());
-                searchString.append(" ");
-            }
-            searchString.deleteCharAt(searchString.length() - 1);
-            keyExprList.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(new AString(searchString.toString())))));
+            // TODO: Currently only string constants are supported.
+            // We might want to support edit distance on lists as well.
+            return false;
         }
+        // TODO: We need more checking. Also need to check the gram length, prePost, etc.
+        if (expr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.SIMILARITY_JACCARD_CHECK) {
+            // Check the tokenization function of the non-constant func arg to see if it fits the concrete index type.
+            ILogicalExpression arg1 = expr.getFuncExpr().getArguments().get(0).getValue();
+            ILogicalExpression arg2 = expr.getFuncExpr().getArguments().get(1).getValue();
+            ILogicalExpression nonConstArg = null;
+            if (arg1.getExpressionTag() != LogicalExpressionTag.CONSTANT) {
+                nonConstArg = arg1;
+            } else {
+                nonConstArg = arg2;
+            }
+            if (nonConstArg.getExpressionTag() == LogicalExpressionTag.FUNCTION_CALL) {
+                AbstractFunctionCallExpression nonConstfuncExpr = (AbstractFunctionCallExpression) nonConstArg;
+                // We can use this index if the tokenization function matches the index type.
+                if (nonConstfuncExpr.getFunctionIdentifier() == AsterixBuiltinFunctions.WORD_TOKENS &&
+                        index.getKind() == IndexKind.WORD_INVIX) {
+                    return true;
+                }
+                if (nonConstfuncExpr.getFunctionIdentifier() == AsterixBuiltinFunctions.GRAM_TOKENS &&
+                        index.getKind() == IndexKind.NGRAM_INVIX) {
+                    return true;
+                }
+            }
+            // The non-constant arg is not a function call. Perhaps a variable?
+            if (nonConstArg.getExpressionTag() == LogicalExpressionTag.VARIABLE) {
+                // In this case we only allow word inverted indexes, since they are used to index list types.
+                if (index.getKind() == IndexKind.WORD_INVIX) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 }

@@ -400,4 +400,10 @@ public class BTreeAccessMethod implements IAccessMethod {
         }
         return predList.get(0).getValue();
     }
+
+    @Override
+    public boolean exprIsOptimizable(AqlCompiledIndexDecl index, OptimizableBinaryFuncExpr expr) {
+        // No additional analysis required.
+        return true;
+    }
 }
