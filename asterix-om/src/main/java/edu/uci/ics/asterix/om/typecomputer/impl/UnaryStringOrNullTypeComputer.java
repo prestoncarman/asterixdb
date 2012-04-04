@@ -27,6 +27,8 @@ public class UnaryStringOrNullTypeComputer implements IResultTypeComputer  {
     public IAType computeType(ILogicalExpression expression, IVariableTypeEnvironment env,
             IMetadataProvider<?, ?> metadataProvider) throws AlgebricksException {
         AbstractFunctionCallExpression fce = (AbstractFunctionCallExpression) expression;
+        if(fce.getArguments().isEmpty())
+            throw new AlgebricksException("Wrong Argument Number.");        
         ILogicalExpression arg0 = fce.getArguments().get(0).getValue();
         IAType t0;
         try {

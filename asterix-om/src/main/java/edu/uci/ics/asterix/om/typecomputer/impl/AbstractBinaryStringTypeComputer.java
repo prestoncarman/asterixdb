@@ -23,6 +23,8 @@ abstract public class AbstractBinaryStringTypeComputer implements IResultTypeCom
     public IAType computeType(ILogicalExpression expression, IVariableTypeEnvironment env,
             IMetadataProvider<?, ?> metadataProvider) throws AlgebricksException {
         AbstractFunctionCallExpression fce = (AbstractFunctionCallExpression) expression;
+        if(fce.getArguments().size() < 2)
+            throw new AlgebricksException("Wrong Argument Number.");        
         ILogicalExpression arg0 = fce.getArguments().get(0).getValue();
         ILogicalExpression arg1 = fce.getArguments().get(1).getValue();
         IAType t0, t1;

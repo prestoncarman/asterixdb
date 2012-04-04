@@ -20,6 +20,8 @@ public abstract class AbstractQuadStringTypeComputer implements IResultTypeCompu
     public IAType computeType(ILogicalExpression expression, IVariableTypeEnvironment env,
             IMetadataProvider<?, ?> metadataProvider) throws AlgebricksException {
         AbstractFunctionCallExpression fce = (AbstractFunctionCallExpression) expression;
+        if(fce.getArguments().size() < 4)
+            throw new AlgebricksException("Wrong Argument Number.");        
         ILogicalExpression arg0 = fce.getArguments().get(0).getValue();
         ILogicalExpression arg1 = fce.getArguments().get(1).getValue();
         ILogicalExpression arg2 = fce.getArguments().get(2).getValue();  
