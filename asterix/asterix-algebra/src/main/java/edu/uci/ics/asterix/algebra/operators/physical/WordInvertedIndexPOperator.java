@@ -5,9 +5,11 @@ import org.apache.commons.lang3.mutable.Mutable;
 import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
 import edu.uci.ics.asterix.common.functions.FunctionArgumentsConstants;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledDatasetDecl;
+import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
 import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
 import edu.uci.ics.asterix.metadata.declared.AqlSourceId;
+import edu.uci.ics.asterix.metadata.utils.DatasetUtils;
 import edu.uci.ics.asterix.om.base.AFloat;
 import edu.uci.ics.asterix.om.base.AInt32;
 import edu.uci.ics.asterix.om.base.IAObject;
@@ -75,13 +77,16 @@ public class WordInvertedIndexPOperator extends IndexSearchPOperator {
         }
         String indexName = getStringArgument(unnestFuncExpr, 0);
         String datasetName = getStringArgument(unnestFuncExpr, 2);
-        IInvertedIndexSearchModifierFactory searchModifierFactory = getSearchModifierFactory(unnestFuncExpr, 3);
+        String searchModifierName = getStringArgument(unnestFuncExpr, 3);
+        // Similarity threshold. Concrete type depends on search modifier.
+        IAObject simThresh = ((AsterixConstantValue) ((ConstantExpression) unnestFuncExpr.getArguments().get(4).getValue())
+                .getValue()).getObject();
         Pair<int[], Integer> keys = getKeys(unnestFuncExpr, 5, inputSchemas);
-        buildInvertedIndexSearch(builder, context, unnestMap, opSchema, datasetName, indexName, keys.first, searchModifierFactory);
+        buildInvertedIndexSearch(builder, context, unnestMap, opSchema, datasetName, indexName, keys.first, searchModifierName, simThresh);
     }
 
     private static void buildInvertedIndexSearch(IHyracksJobBuilder builder, JobGenContext context, AbstractScanOperator scan,
-            IOperatorSchema opSchema, String datasetName, String indexName, int[] keyFields, IInvertedIndexSearchModifierFactory searchModifierFactory)
+            IOperatorSchema opSchema, String datasetName, String indexName, int[] keyFields, String searchModifierName, IAObject simThresh)
             throws AlgebricksException, AlgebricksException {
         AqlMetadataProvider metadataProvider = (AqlMetadataProvider) context.getMetadataProvider();
         AqlCompiledMetadataDeclarations metadata = metadataProvider.getMetadataDeclarations();
@@ -93,32 +98,10 @@ public class WordInvertedIndexPOperator extends IndexSearchPOperator {
             throw new AlgebricksException("Trying to run inverted index search over external dataset (" + datasetName + ").");
         }
         Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> invIndexSearch = AqlMetadataProvider.buildInvertedIndexRuntime(
-                metadata, context, builder.getJobSpec(), datasetName, datasetDecl, indexName, keyFields, searchModifierFactory);
+                metadata, context, builder.getJobSpec(), datasetName, datasetDecl, indexName, keyFields, searchModifierName, simThresh);
         builder.contributeHyracksOperator(scan, invIndexSearch.first);
         builder.contributeAlgebricksPartitionConstraint(invIndexSearch.first, invIndexSearch.second);
         ILogicalOperator srcExchange = scan.getInputs().get(0).getValue();
         builder.contributeGraphEdge(srcExchange, 0, scan, 0);
-    }
-    
-    private IInvertedIndexSearchModifierFactory getSearchModifierFactory(AbstractFunctionCallExpression unnestFuncExpr, int k) throws AlgebricksException {
-        String searchModifierName = getStringArgument(unnestFuncExpr,  k);
-        if (searchModifierName.equals("CONJUNCTIVE")) {
-            return new ConjunctiveSearchModifierFactory();
-        }
-        if (searchModifierName.equals("JACCARD")) {
-            IAObject obj = ((AsterixConstantValue) ((ConstantExpression) unnestFuncExpr.getArguments().get(k + 1).getValue())
-                    .getValue()).getObject();
-            float jaccThresh = ((AFloat) obj).getFloatValue();
-            return new JaccardSearchModifierFactory(jaccThresh);
-        }
-        if (searchModifierName.equals("EDIT_DISTANCE")) {
-            IAObject obj = ((AsterixConstantValue) ((ConstantExpression) unnestFuncExpr.getArguments().get(k + 1).getValue())
-                    .getValue()).getObject();
-            int edThresh = ((AInt32) obj).getIntegerValue();
-            // TODO: Pass gram length as parameter as well.
-            int gramLength = 3;
-            return new EditDistanceSearchModifierFactory(gramLength, edThresh);
-        }
-        return null;
     }
 }

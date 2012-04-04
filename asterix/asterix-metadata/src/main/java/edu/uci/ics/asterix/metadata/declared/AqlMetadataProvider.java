@@ -37,6 +37,9 @@ import edu.uci.ics.asterix.formats.nontagged.AqlTypeTraitProvider;
 import edu.uci.ics.asterix.metadata.MetadataException;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl.IndexKind;
 import edu.uci.ics.asterix.metadata.utils.DatasetUtils;
+import edu.uci.ics.asterix.om.base.AFloat;
+import edu.uci.ics.asterix.om.base.AInt32;
+import edu.uci.ics.asterix.om.base.IAObject;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.asterix.om.types.IAType;
@@ -82,6 +85,9 @@ import edu.uci.ics.hyracks.storage.am.common.ophelpers.IndexOp;
 import edu.uci.ics.hyracks.storage.am.common.tuples.TypeAwareTupleWriterFactory;
 import edu.uci.ics.hyracks.storage.am.invertedindex.api.IInvertedIndexSearchModifierFactory;
 import edu.uci.ics.hyracks.storage.am.invertedindex.dataflow.InvertedIndexSearchOperatorDescriptor;
+import edu.uci.ics.hyracks.storage.am.invertedindex.searchmodifiers.ConjunctiveSearchModifierFactory;
+import edu.uci.ics.hyracks.storage.am.invertedindex.searchmodifiers.EditDistanceSearchModifierFactory;
+import edu.uci.ics.hyracks.storage.am.invertedindex.searchmodifiers.JaccardSearchModifierFactory;
 import edu.uci.ics.hyracks.storage.am.invertedindex.tokenizers.IBinaryTokenizerFactory;
 import edu.uci.ics.hyracks.storage.am.rtree.dataflow.RTreeDataflowHelperFactory;
 import edu.uci.ics.hyracks.storage.am.rtree.dataflow.RTreeSearchOperatorDescriptor;
@@ -508,7 +514,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
     public static Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> buildInvertedIndexRuntime(
             AqlCompiledMetadataDeclarations metadata, JobGenContext context, JobSpecification jobSpec,
             String datasetName, AqlCompiledDatasetDecl datasetDecl, String indexName, int[] keyFields,
-            IInvertedIndexSearchModifierFactory searchModifierFactory)
+            String searchModifierName, IAObject simThresh)
             throws AlgebricksException {
         String itemTypeName = datasetDecl.getItemTypeName();
         IAType itemType;
@@ -551,20 +557,6 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
             tokenTypeTraits[i] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(secondaryKeyType);
         }
         
-        // Get tokenizer factory.
-        IBinaryTokenizerFactory queryTokenizerFactory = null;
-        switch (index.getKind()) {
-        case WORD_INVIX: {
-        	queryTokenizerFactory = AqlBinaryTokenizerFactoryProvider.INSTANCE
-        			.getWordTokenizerFactory(secondaryKeyType, false);
-        }
-        case NGRAM_INVIX: {
-        	// TODO: Get proper gram length.
-        	queryTokenizerFactory = AqlBinaryTokenizerFactoryProvider.INSTANCE
-        			.getNGramTokenizerFactory(secondaryKeyType, 3, true, false);
-        }
-        }
-        
         // The inverted lists contain primary keys.
         ISerializerDeserializer[] invListsRecFields = new ISerializerDeserializer[numPrimaryKeys];
         ITypeTraits[] invListsTypeTraits = new ITypeTraits[numPrimaryKeys];
@@ -597,8 +589,10 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
                 .getInvertedIndexFileSplitProviders(secondarySplitsAndConstraint.first);
 		
         // TODO: Here we assume there is only one search key field.
-        // We also hardcode a ConjunctiveSearchModifierFactory(). We need a way to figure out which search modifier to use.
-        int queryField = keyFields[0];        
+        int queryField = keyFields[0];
+        // Get tokenizer and search modifier factories.
+        IInvertedIndexSearchModifierFactory searchModifierFactory = getSearchModifierFactory(searchModifierName, simThresh, index);
+        IBinaryTokenizerFactory queryTokenizerFactory = getBinaryTokenizerFactory(secondaryKeyType, index);
 		InvertedIndexSearchOperatorDescriptor invIndexSearchOp = new InvertedIndexSearchOperatorDescriptor(
 				jobSpec, queryField, appContext.getStorageManagerInterface(),
 				fileSplitProviders.first, fileSplitProviders.second,
@@ -609,6 +603,37 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(invIndexSearchOp, secondarySplitsAndConstraint.second);
     }
 
+    private static IBinaryTokenizerFactory getBinaryTokenizerFactory(Object secondaryKeyType, AqlCompiledIndexDecl index)
+            throws AlgebricksException {
+        switch (index.getKind()) {
+            case WORD_INVIX: {
+                return AqlBinaryTokenizerFactoryProvider.INSTANCE.getWordTokenizerFactory(secondaryKeyType, false);
+            }
+            case NGRAM_INVIX: {
+                return AqlBinaryTokenizerFactoryProvider.INSTANCE.getNGramTokenizerFactory(secondaryKeyType,
+                        index.getGramLength(), true, false);
+            }
+            default: {
+                throw new AlgebricksException("Tokenizer not applicable to index kind '" + index.getKind() + "'.");
+            }
+        }
+    }
+    
+    private static IInvertedIndexSearchModifierFactory getSearchModifierFactory(String searchModifierName, IAObject simThresh, AqlCompiledIndexDecl index) throws AlgebricksException {
+        if (searchModifierName.equals("CONJUNCTIVE")) {
+            return new ConjunctiveSearchModifierFactory();
+        }
+        if (searchModifierName.equals("JACCARD")) {
+            float jaccThresh = ((AFloat) simThresh).getFloatValue();
+            return new JaccardSearchModifierFactory(jaccThresh);
+        }
+        if (searchModifierName.equals("EDIT_DISTANCE")) {
+            int edThresh = ((AInt32) simThresh).getIntegerValue();
+            return new EditDistanceSearchModifierFactory(index.getGramLength(), edThresh);
+        }
+        return null;
+    }
+    
     @Override
     public Pair<IPushRuntimeFactory, AlgebricksPartitionConstraint> getWriteFileRuntime(IDataSink sink,
             int[] printColumns, IPrinterFactory[] printerFactories, RecordDescriptor inputDesc) {

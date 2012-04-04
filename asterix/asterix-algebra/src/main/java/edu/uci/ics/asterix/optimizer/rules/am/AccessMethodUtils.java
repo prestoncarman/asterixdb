@@ -141,11 +141,6 @@ public class AccessMethodUtils {
             }
         }
         return false;
-        /*
-        if (funcExpr.getFunctionIdentifier() == AsterixBuiltinFunctions.EDIT_DISTANCE_CHECK) {
-            return analyzeFuncExprArgsForOneConstAndVar(funcExpr, analysisCtx);
-        } 
-        */   
     }
 
     /**
