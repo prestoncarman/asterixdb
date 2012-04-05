@@ -38,10 +38,10 @@ public class DatasetConfig {
     }
 
     public enum IndexType {
-        BTREE,
-        KEYWORD,
-        NGRAM,
-        RTREE
+        BTREE,        
+        RTREE,
+        WORD_INVIX,
+        NGRAM_INVIX
     }
 
 }

@@ -238,8 +238,8 @@ public class AqlCompiledMetadataDeclarations {
     	switch(type) {
     	case BTREE: return IndexKind.BTREE;
     	case RTREE: return IndexKind.RTREE;
-    	case KEYWORD: return IndexKind.WORD_INVIX;
-    	case NGRAM: return IndexKind.NGRAM_INVIX;
+    	case WORD_INVIX: return IndexKind.WORD_INVIX;
+    	case NGRAM_INVIX: return IndexKind.NGRAM_INVIX;
     	}
     	return null;
     }

@@ -90,8 +90,8 @@ public class IndexOperations {
                 return createRtreeIndexJobSpec(createIndexStmt, datasetDecls);
             }
 
-            case KEYWORD:
-            case NGRAM: {
+            case WORD_INVIX:
+            case NGRAM_INVIX: {
                 return createInvertedIndexJobSpec(createIndexStmt, datasetDecls);
             }
 
@@ -855,10 +855,10 @@ public class IndexOperations {
     private static IBinaryTokenizerFactory getBinaryTokenizerFactory(ATypeTag keyType, CompiledCreateIndexStatement createIndexStmt)
             throws AlgebricksException {
         switch (createIndexStmt.getIndexType()) {
-            case KEYWORD: {
+            case WORD_INVIX: {
                 return AqlBinaryTokenizerFactoryProvider.INSTANCE.getWordTokenizerFactory(keyType, false);
             }
-            case NGRAM: {
+            case NGRAM_INVIX: {
                 return AqlBinaryTokenizerFactoryProvider.INSTANCE.getNGramTokenizerFactory(keyType,
                         createIndexStmt.getGramLength(), true, false);
             }

@@ -22,6 +22,7 @@ import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
 import edu.uci.ics.asterix.common.config.GlobalConfig;
 import edu.uci.ics.asterix.common.parse.IParseFileSplitsDecl;
 import edu.uci.ics.asterix.dataflow.base.IAsterixApplicationContextInfo;
+import edu.uci.ics.asterix.dataflow.data.common.ListEditDistanceSearchModifierFactory;
 import edu.uci.ics.asterix.dataflow.data.nontagged.valueproviders.AqlPrimitiveValueProviderFactory;
 import edu.uci.ics.asterix.external.data.adapter.api.IDatasourceAdapter;
 import edu.uci.ics.asterix.external.data.operator.ExternalDataScanOperatorDescriptor;
@@ -676,7 +677,14 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         }
         if (searchModifierName.equals("EDIT_DISTANCE")) {
             int edThresh = ((AInt32) simThresh).getIntegerValue();
-            return new EditDistanceSearchModifierFactory(index.getGramLength(), edThresh);
+            // Edit distance on overlapping grams.
+            if (index.getKind() == IndexKind.NGRAM_INVIX) {                
+                return new EditDistanceSearchModifierFactory(index.getGramLength(), edThresh);
+            }
+            // Edit distance on two lists. The list-elements are non-overlapping.
+            if (index.getKind() == IndexKind.WORD_INVIX) {
+                return new ListEditDistanceSearchModifierFactory(edThresh);
+            }
         }
         return null;
     }

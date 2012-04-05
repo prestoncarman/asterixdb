@@ -14,6 +14,7 @@ import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl.IndexKind;
 import edu.uci.ics.asterix.om.base.AInt32;
 import edu.uci.ics.asterix.om.base.AString;
+import edu.uci.ics.asterix.om.base.IACollection;
 import edu.uci.ics.asterix.om.base.IAObject;
 import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
@@ -233,9 +234,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
 
     @Override
     public boolean exprIsOptimizable(AqlCompiledIndexDecl index, OptimizableBinaryFuncExpr expr) {
-        // TODO: Think about how to support edit distance queries on lists.
-        if (index.getKind() == IndexKind.NGRAM_INVIX
-                &&  expr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.EDIT_DISTANCE_CHECK) {
+        if (expr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.EDIT_DISTANCE_CHECK) {
             // Check for panic.
             // TODO: Panic also depends on prePost which is currently hardcoded to be true.
             OptimizableTernaryFuncExpr ternaryExpr = (OptimizableTernaryFuncExpr) expr;            
@@ -243,20 +242,27 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
             AsterixConstantValue intConstVal = (AsterixConstantValue) ternaryExpr.getSecondConstVal();
             IAObject strObj = strConstVal.getObject();
             IAObject intObj = intConstVal.getObject();
-            if (strObj.getType().getTypeTag() == ATypeTag.STRING) {
-                AString astr = (AString) strObj;
-                AInt32 edThresh = (AInt32) intObj;
-                // Check merge threshold for panic.
-                int mergeThreshold = (astr.getStringValue().length() + index.getGramLength() - 1) - edThresh.getIntegerValue() * index.getGramLength();
-                if (mergeThreshold <= 0) {
-                    // We cannot use index to optimize expr.
-                    return false;
-                }
-                return true;
+            AInt32 edThresh = (AInt32) intObj;
+            int mergeThreshold = 0;
+            // We can only optimize edit distance on strings using an ngram index.
+            if (strObj.getType().getTypeTag() == ATypeTag.STRING && index.getKind() == IndexKind.NGRAM_INVIX) {
+                AString astr = (AString) strObj;                    
+                // Compute merge threshold.
+                mergeThreshold = (astr.getStringValue().length() + index.getGramLength() - 1)
+                        - edThresh.getIntegerValue() * index.getGramLength();
             }
-            // TODO: Currently only string constants are supported.
-            // We might want to support edit distance on lists as well.
-            return false;
+            // We can only optimize edit distance on lists using a word index.
+            if ((strObj.getType().getTypeTag() == ATypeTag.ORDEREDLIST || strObj.getType().getTypeTag() == ATypeTag.UNORDEREDLIST)
+                    && index.getKind() == IndexKind.WORD_INVIX) {
+                IACollection alist = (IACollection) strObj;        
+                // Compute merge threshold.
+                mergeThreshold = alist.size() - edThresh.getIntegerValue();
+            }
+            if (mergeThreshold <= 0) {
+                // We cannot use index to optimize expr.
+                return false;
+            }
+            return true;
         }
         // TODO: We need more checking. Also need to check the gram length, prePost, etc.
         if (expr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.SIMILARITY_JACCARD_CHECK) {
