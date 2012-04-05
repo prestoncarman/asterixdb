@@ -1,8 +1,9 @@
 package edu.uci.ics.asterix.formats.nontagged;
 
 import edu.uci.ics.asterix.dataflow.data.common.IBinaryTokenizerFactoryProvider;
-import edu.uci.ics.asterix.dataflow.data.common.ListElementTokenFactory;
-import edu.uci.ics.asterix.dataflow.data.common.OrderedListBinaryTokenizerFactory;
+import edu.uci.ics.asterix.dataflow.data.common.AListElementTokenFactory;
+import edu.uci.ics.asterix.dataflow.data.common.AOrderedListBinaryTokenizerFactory;
+import edu.uci.ics.asterix.dataflow.data.common.AUnorderedListBinaryTokenizerFactory;
 import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.hyracks.storage.am.invertedindex.tokenizers.DelimitedUTF8StringBinaryTokenizerFactory;
 import edu.uci.ics.hyracks.storage.am.invertedindex.tokenizers.HashedUTF8WordTokenFactory;
@@ -20,7 +21,9 @@ public class AqlBinaryTokenizerFactoryProvider implements IBinaryTokenizerFactor
     private static final IBinaryTokenizerFactory aqlHashingStringTokenizer = new DelimitedUTF8StringBinaryTokenizerFactory(
             true, true, new HashedUTF8WordTokenFactory(ATypeTag.INT32.serialize(), ATypeTag.INT32.serialize()));
 
-    private static final IBinaryTokenizerFactory orderedListTokenizer = new OrderedListBinaryTokenizerFactory(new ListElementTokenFactory());
+    private static final IBinaryTokenizerFactory orderedListTokenizer = new AOrderedListBinaryTokenizerFactory(new AListElementTokenFactory());
+    
+    private static final IBinaryTokenizerFactory unorderedListTokenizer = new AUnorderedListBinaryTokenizerFactory(new AListElementTokenFactory());
     
     @Override
     public IBinaryTokenizerFactory getWordTokenizerFactory(ATypeTag typeTag, boolean hashedTokens) {
@@ -34,6 +37,9 @@ public class AqlBinaryTokenizerFactoryProvider implements IBinaryTokenizerFactor
             }
             case ORDEREDLIST: {
                 return orderedListTokenizer;
+            }
+            case UNORDEREDLIST: {
+                return unorderedListTokenizer;
             }
             default: {
                 return null;
@@ -55,6 +61,9 @@ public class AqlBinaryTokenizerFactoryProvider implements IBinaryTokenizerFactor
             }
             case ORDEREDLIST: {
                 return orderedListTokenizer;
+            }
+            case UNORDEREDLIST: {
+                return unorderedListTokenizer;
             }
             default: {
                 return null;

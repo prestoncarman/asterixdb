@@ -9,7 +9,7 @@ import edu.uci.ics.hyracks.storage.am.invertedindex.tokenizers.IBinaryTokenizer;
 import edu.uci.ics.hyracks.storage.am.invertedindex.tokenizers.IToken;
 import edu.uci.ics.hyracks.storage.am.invertedindex.tokenizers.ITokenFactory;
 
-public class OrderedListBinaryTokenizer implements IBinaryTokenizer {
+public class AOrderedListBinaryTokenizer implements IBinaryTokenizer {
 
     protected byte[] data;
     protected int start;
@@ -19,7 +19,7 @@ public class OrderedListBinaryTokenizer implements IBinaryTokenizer {
     
     protected final IToken token;
     
-    public OrderedListBinaryTokenizer(ITokenFactory tokenFactory) {
+    public AOrderedListBinaryTokenizer(ITokenFactory tokenFactory) {
         token = tokenFactory.createToken();
     }
     
@@ -38,7 +38,7 @@ public class OrderedListBinaryTokenizer implements IBinaryTokenizer {
         int itemOffset = -1;
         int length = -1;
         try {
-            itemOffset = AOrderedListSerializerDeserializer.getItemOffset(data, start, itemIndex);
+            itemOffset = getItemOffset(data, start, itemIndex);
             // Assuming homogeneous list.
             ATypeTag typeTag = EnumDeserializer.ATYPETAGDESERIALIZER.deserialize(data[start + 1]);
             length = NonTaggedFormatUtil.getFieldValueLength(data, itemOffset, typeTag, false);
@@ -55,7 +55,15 @@ public class OrderedListBinaryTokenizer implements IBinaryTokenizer {
         this.data = data;
         this.start = start;
         this.length = length;
-        this.listLength = AOrderedListSerializerDeserializer.getNumberOfItems(data, start);
+        this.listLength = getNumberOfItems(data, start);
         this.itemIndex = 0;
+    }
+    
+    protected int getItemOffset(byte[] data, int start, int itemIndex) throws AsterixException {
+        return AOrderedListSerializerDeserializer.getItemOffset(data, start, itemIndex);
+    }
+    
+    protected int getNumberOfItems(byte[] data, int start) {
+        return AOrderedListSerializerDeserializer.getNumberOfItems(data, start);
     }
 }

@@ -64,6 +64,9 @@ public class SimilarityJaccardEvaluator implements IEvaluator {
     protected BinaryEntry keyEntry = new BinaryEntry();
     protected BinaryEntry valEntry = new BinaryEntry();
     
+    // Ignore case for strings. Defaults to true.
+    protected final boolean ignoreCase = true;
+    
     public SimilarityJaccardEvaluator(IEvaluatorFactory[] args, IDataOutputProvider output) throws AlgebricksException {
         out = output.getDataOutput();
         firstOrdListEval = args[0].createEvaluator(argOut);
@@ -214,8 +217,14 @@ public class SimilarityJaccardEvaluator implements IEvaluator {
     		break;
     	}
     	case STRING: {
-    		hashFunc = AqlBinaryHashFunctionFactoryProvider.UTF8STRING_POINTABLE_INSTANCE.createBinaryHashFunction();
-    		cmp = AqlBinaryComparatorFactoryProvider.UTF8STRING_POINTABLE_INSTANCE.createBinaryComparator();
+    	    if (ignoreCase) {
+    	        // Ignore case in comparisons and hashing.
+    	        hashFunc = AqlBinaryHashFunctionFactoryProvider.UTF8STRING_LOWERCASE_POINTABLE_INSTANCE.createBinaryHashFunction();
+    	        cmp = AqlBinaryComparatorFactoryProvider.UTF8STRING_LOWERCASE_POINTABLE_INSTANCE.createBinaryComparator();
+    	    } else {
+    	        hashFunc = AqlBinaryHashFunctionFactoryProvider.UTF8STRING_POINTABLE_INSTANCE.createBinaryHashFunction();
+                cmp = AqlBinaryComparatorFactoryProvider.UTF8STRING_POINTABLE_INSTANCE.createBinaryComparator();
+    	    }
     		break;
     	}
     	default: {

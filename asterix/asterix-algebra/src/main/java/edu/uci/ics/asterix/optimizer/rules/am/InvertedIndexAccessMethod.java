@@ -289,6 +289,10 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
                 }
             }
         }
+        if (expr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.CONTAINS) {
+            // TODO: No further analysis for now. Think about how to support keyword queries with an ngram index.
+            return true;
+        }
         return false;
     }
 }

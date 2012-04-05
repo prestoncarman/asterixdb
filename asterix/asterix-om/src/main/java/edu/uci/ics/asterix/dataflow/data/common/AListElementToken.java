@@ -5,7 +5,7 @@ import java.io.IOException;
 
 import edu.uci.ics.hyracks.storage.am.invertedindex.tokenizers.IToken;
 
-public class ListElementToken implements IToken {
+public class AListElementToken implements IToken {
 
     protected byte[] data;
     protected int start;
@@ -46,6 +46,7 @@ public class ListElementToken implements IToken {
     @Override
     public void serializeToken(DataOutput dos) throws IOException {
         dos.writeByte(typeTag);
+        System.out.println("LENGTH: " + length);
         dos.write(data, start, length);
     }
 

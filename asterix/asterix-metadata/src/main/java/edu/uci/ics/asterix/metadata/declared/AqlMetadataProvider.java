@@ -40,8 +40,10 @@ import edu.uci.ics.asterix.metadata.utils.DatasetUtils;
 import edu.uci.ics.asterix.om.base.AFloat;
 import edu.uci.ics.asterix.om.base.AInt32;
 import edu.uci.ics.asterix.om.base.IAObject;
+import edu.uci.ics.asterix.om.types.AOrderedListType;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.ATypeTag;
+import edu.uci.ics.asterix.om.types.AUnorderedListType;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.asterix.om.util.NonTaggedFormatUtil;
 import edu.uci.ics.asterix.runtime.transaction.TreeIndexInsertUpdateDeleteOperatorDescriptor;
@@ -552,10 +554,9 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         // We need a better way of expressing this because tokens may be hashed, or an inverted-index may index a list type, etc.
         ITypeTraits[] tokenTypeTraits = new ITypeTraits[numSecondaryKeys];
         IBinaryComparatorFactory[] tokenComparatorFactories = new IBinaryComparatorFactory[numSecondaryKeys];
-        for (int i = 0; i < numSecondaryKeys; i++) {
-            tokenComparatorFactories[i] = AqlBinaryComparatorFactoryProvider.INSTANCE.getBinaryComparatorFactory(
-            		secondaryKeyType, OrderKind.ASC);
-            tokenTypeTraits[i] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(secondaryKeyType);
+        for (int i = 0; i < numSecondaryKeys; i++) {   
+            tokenComparatorFactories[i] = getTokenBinaryComparatorFactory(secondaryKeyType);
+            tokenTypeTraits[i] = getTokenTypeTrait(secondaryKeyType);
         }
         
         // The inverted lists contain primary keys.
@@ -604,6 +605,51 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(invIndexSearchOp, secondarySplitsAndConstraint.second);
     }
 
+    // TODO: The following methods are also duplicated in IndexOperations.java.
+    private static IBinaryComparatorFactory getTokenBinaryComparatorFactory(IAType keyType) throws AlgebricksException {
+        IAType type = keyType;
+        ATypeTag typeTag = keyType.getTypeTag();
+        // Extract item type from list.
+        if (typeTag == ATypeTag.UNORDEREDLIST) {
+            AUnorderedListType ulistType = (AUnorderedListType) keyType;
+            if (!ulistType.isTyped()) {
+                throw new AlgebricksException("Cannot build an inverted index on untyped lists.)");
+            }
+            type = ulistType.getItemType();
+        }
+        if (typeTag == ATypeTag.ORDEREDLIST) {
+            AOrderedListType olistType = (AOrderedListType) keyType;
+            if (!olistType.isTyped()) {
+                throw new AlgebricksException("Cannot build an inverted index on untyped lists.)");
+            }
+            type = olistType.getItemType();
+        }
+        // Ignore case for string types.
+        return AqlBinaryComparatorFactoryProvider.INSTANCE.getBinaryComparatorFactory(
+                type, OrderKind.ASC, true);
+    }
+    
+    private static ITypeTraits getTokenTypeTrait(IAType keyType) throws AlgebricksException {
+        IAType type = keyType;
+        ATypeTag typeTag = keyType.getTypeTag();
+        // Extract item type from list.
+        if (typeTag == ATypeTag.UNORDEREDLIST) {
+            AUnorderedListType ulistType = (AUnorderedListType) keyType;
+            if (!ulistType.isTyped()) {
+                throw new AlgebricksException("Cannot build an inverted index on untyped lists.)");
+            }
+            type = ulistType.getItemType();
+        }
+        if (typeTag == ATypeTag.ORDEREDLIST) {
+            AOrderedListType olistType = (AOrderedListType) keyType;
+            if (!olistType.isTyped()) {
+                throw new AlgebricksException("Cannot build an inverted index on untyped lists.)");
+            }
+            type = olistType.getItemType();
+        }
+        return AqlTypeTraitProvider.INSTANCE.getTypeTrait(type);
+    }
+    
     private static IBinaryTokenizerFactory getBinaryTokenizerFactory(ATypeTag searchKeyType, AqlCompiledIndexDecl index)
             throws AlgebricksException {
         switch (index.getKind()) {

@@ -21,7 +21,11 @@ import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
 import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
 import edu.uci.ics.asterix.metadata.utils.DatasetUtils;
+import edu.uci.ics.asterix.om.types.AOrderedListType;
 import edu.uci.ics.asterix.om.types.ARecordType;
+import edu.uci.ics.asterix.om.types.ATypeTag;
+import edu.uci.ics.asterix.om.types.AUnorderedListType;
+import edu.uci.ics.asterix.om.types.AbstractCollectionType;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.asterix.om.util.NonTaggedFormatUtil;
 import edu.uci.ics.asterix.translator.DmlTranslator.CompiledCreateIndexStatement;
@@ -683,9 +687,8 @@ public class IndexOperations {
             IAType keyType = AqlCompiledIndexDecl.keyFieldType(secondaryKeyFields.get(i), itemType);
             ISerializerDeserializer keySerde = serdeProvider.getSerializerDeserializer(keyType);
             secondaryRecFields[i] = keySerde;
-            tokenComparatorFactories[i] = AqlBinaryComparatorFactoryProvider.INSTANCE.getBinaryComparatorFactory(
-                    keyType, OrderKind.ASC);
-            tokenTypeTraits[i] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(keyType);
+            tokenComparatorFactories[i] = getTokenBinaryComparatorFactory(keyType);
+            tokenTypeTraits[i] = getTokenTypeTrait(keyType);
         }
         // Fill in serializers and comparators for primary index fields.
         for (i = 0; i < numPrimaryKeys; i++) {
@@ -739,26 +742,7 @@ public class IndexOperations {
 
         // TODO: We might want to expose the hashing option at the AQL level, 
         // and add the choice to the index metadata.
-		IBinaryTokenizerFactory tokenizerFactory = null;
-		switch (createIndexStmt.getIndexType()) {
-		case KEYWORD: {
-			tokenizerFactory = AqlBinaryTokenizerFactoryProvider.INSTANCE
-					.getWordTokenizerFactory(fieldsToTokenizeType.getTypeTag(), false);
-			break;
-		}
-		case NGRAM: {
-			tokenizerFactory = AqlBinaryTokenizerFactoryProvider.INSTANCE
-					.getNGramTokenizerFactory(fieldsToTokenizeType.getTypeTag(),
-							createIndexStmt.getGramLength(), true, false);
-			break;
-		}
-		default: {
-			throw new AsterixException(
-					"Cannot create inverted index job for index type '"
-							+ createIndexStmt.getIndexType() + "'");
-		}
-		}
-        
+		IBinaryTokenizerFactory tokenizerFactory = getBinaryTokenizerFactory(fieldsToTokenizeType.getTypeTag(), createIndexStmt);
         BinaryTokenizerOperatorDescriptor tokenizerOp = new BinaryTokenizerOperatorDescriptor(spec,
                 tokenKeyPairRecDesc, tokenizerFactory, fieldsToTokenize, primaryKeyFields);
         Pair<IFileSplitProvider, AlgebricksPartitionConstraint> secondarySplitsAndConstraint = datasetDecls
@@ -771,8 +755,7 @@ public class IndexOperations {
         // ---------- START EXTERNAL SORT OP
 
         IBinaryComparatorFactory[] tokenKeyPairComparatorFactories = new IBinaryComparatorFactory[numTokenKeyPairFields];
-        tokenKeyPairComparatorFactories[0] = AqlBinaryComparatorFactoryProvider.INSTANCE.getBinaryComparatorFactory(
-                fieldsToTokenizeType, OrderKind.ASC);
+        tokenKeyPairComparatorFactories[0] = getTokenBinaryComparatorFactory(fieldsToTokenizeType);
         for (i = 0; i < numPrimaryKeys; i++) {
             tokenKeyPairComparatorFactories[i + 1] = primaryComparatorFactories[i];
         }
@@ -830,6 +813,59 @@ public class IndexOperations {
         // ---------- END CONNECT THE OPERATORS
 
         return spec;
+    }
+    
+    private static IBinaryComparatorFactory getTokenBinaryComparatorFactory(IAType keyType) throws AlgebricksException {
+        IAType type = keyType;
+        ATypeTag typeTag = keyType.getTypeTag();
+        // Extract item type from list.
+        if (typeTag == ATypeTag.UNORDEREDLIST || typeTag == ATypeTag.ORDEREDLIST) {
+            AbstractCollectionType listType = (AbstractCollectionType) keyType;
+            if (!listType.isTyped()) {
+                throw new AlgebricksException("Cannot build an inverted index on untyped lists.)");
+            }
+            type = listType.getItemType();
+        }
+        // Ignore case for string types.
+        return AqlBinaryComparatorFactoryProvider.INSTANCE.getBinaryComparatorFactory(
+                type, OrderKind.ASC, true);
+    }
+    
+    private static ITypeTraits getTokenTypeTrait(IAType keyType) throws AlgebricksException {
+        IAType type = keyType;
+        ATypeTag typeTag = keyType.getTypeTag();
+        // Extract item type from list.
+        if (typeTag == ATypeTag.UNORDEREDLIST) {
+            AUnorderedListType ulistType = (AUnorderedListType) keyType;
+            if (!ulistType.isTyped()) {
+                throw new AlgebricksException("Cannot build an inverted index on untyped lists.)");
+            }
+            type = ulistType.getItemType();
+        }
+        if (typeTag == ATypeTag.ORDEREDLIST) {
+            AOrderedListType olistType = (AOrderedListType) keyType;
+            if (!olistType.isTyped()) {
+                throw new AlgebricksException("Cannot build an inverted index on untyped lists.)");
+            }
+            type = olistType.getItemType();
+        }
+        return AqlTypeTraitProvider.INSTANCE.getTypeTrait(type);
+    }
+    
+    private static IBinaryTokenizerFactory getBinaryTokenizerFactory(ATypeTag keyType, CompiledCreateIndexStatement createIndexStmt)
+            throws AlgebricksException {
+        switch (createIndexStmt.getIndexType()) {
+            case KEYWORD: {
+                return AqlBinaryTokenizerFactoryProvider.INSTANCE.getWordTokenizerFactory(keyType, false);
+            }
+            case NGRAM: {
+                return AqlBinaryTokenizerFactoryProvider.INSTANCE.getNGramTokenizerFactory(keyType,
+                        createIndexStmt.getGramLength(), true, false);
+            }
+            default: {
+                throw new AlgebricksException("Tokenizer not applicable to index type '" + createIndexStmt.getIndexType() + "'.");
+            }
+        }
     }
 
     public static void main(String[] args) throws Exception {
