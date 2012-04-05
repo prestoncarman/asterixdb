@@ -1,1 +1,1 @@
-index/inverted-index-ngram-jaccard.aql
+index/inverted-index-ngram-contains.aql

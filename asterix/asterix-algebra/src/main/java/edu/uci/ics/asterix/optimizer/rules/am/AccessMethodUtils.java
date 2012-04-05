@@ -112,7 +112,6 @@ public class AccessMethodUtils {
         IAlgebricksConstantValue constFilterVal = constExpr.getValue();
         LogicalVariable fieldVar = null;
         // Analyze arg1 and arg2, depending on similarity function.
-        // TODO: Clean up this code.
         if (funcExpr.getFunctionIdentifier() == AsterixBuiltinFunctions.SIMILARITY_JACCARD_CHECK) {            
             AbstractFunctionCallExpression nonConstfuncExpr = funcExpr;
             if (nonConstArg.getExpressionTag() == LogicalExpressionTag.FUNCTION_CALL) {

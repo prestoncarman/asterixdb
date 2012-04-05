@@ -60,7 +60,8 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
     public static enum SearchModifierType {
         CONJUNCTIVE,
         JACCARD,
-        EDIT_DISTANCE
+        EDIT_DISTANCE,
+        INVALID
     }
     
     private static List<FunctionIdentifier> funcIdents = new ArrayList<FunctionIdentifier>();
@@ -320,7 +321,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
                 }
             }
         }
-        if (expr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.CONTAINS && index.getKind() == IndexKind.WORD_INVIX) {
+        if (expr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.CONTAINS) {
             // TODO: No further analysis for now. Think about how to support keyword queries with an ngram index.
             return true;
         }
@@ -364,15 +365,17 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         return AqlTypeTraitProvider.INSTANCE.getTypeTrait(type);
     }
     
-    public static IBinaryTokenizerFactory getBinaryTokenizerFactory(ATypeTag searchKeyType, AqlCompiledIndexDecl index)
+    public static IBinaryTokenizerFactory getBinaryTokenizerFactory(SearchModifierType searchModifierType, ATypeTag searchKeyType, AqlCompiledIndexDecl index)
             throws AlgebricksException {
         switch (index.getKind()) {
             case WORD_INVIX: {
                 return AqlBinaryTokenizerFactoryProvider.INSTANCE.getWordTokenizerFactory(searchKeyType, false);
             }
             case NGRAM_INVIX: {
+                // Make sure not to use pre- and postfixing for conjunctive searches.
+                boolean prePost = (searchModifierType == SearchModifierType.CONJUNCTIVE) ? false : true;
                 return AqlBinaryTokenizerFactoryProvider.INSTANCE.getNGramTokenizerFactory(searchKeyType,
-                        index.getGramLength(), true, false);
+                        index.getGramLength(), prePost, false);
             }
             default: {
                 throw new AlgebricksException("Tokenizer not applicable to index kind '" + index.getKind() + "'.");

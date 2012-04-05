@@ -208,7 +208,7 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
         int queryField = keyFields[0];
         // Get tokenizer and search modifier factories.
         IInvertedIndexSearchModifierFactory searchModifierFactory = InvertedIndexAccessMethod.getSearchModifierFactory(searchModifierType, simThresh, index);
-        IBinaryTokenizerFactory queryTokenizerFactory = InvertedIndexAccessMethod.getBinaryTokenizerFactory(searchKeyType, index);
+        IBinaryTokenizerFactory queryTokenizerFactory = InvertedIndexAccessMethod.getBinaryTokenizerFactory(searchModifierType, searchKeyType, index);
         InvertedIndexSearchOperatorDescriptor invIndexSearchOp = new InvertedIndexSearchOperatorDescriptor(
                 jobSpec, queryField, appContext.getStorageManagerInterface(),
                 fileSplitProviders.first, fileSplitProviders.second,
