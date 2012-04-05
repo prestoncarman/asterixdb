@@ -22,7 +22,6 @@ import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
 import edu.uci.ics.asterix.common.config.GlobalConfig;
 import edu.uci.ics.asterix.common.parse.IParseFileSplitsDecl;
 import edu.uci.ics.asterix.dataflow.base.IAsterixApplicationContextInfo;
-import edu.uci.ics.asterix.dataflow.data.common.ListEditDistanceSearchModifierFactory;
 import edu.uci.ics.asterix.dataflow.data.nontagged.valueproviders.AqlPrimitiveValueProviderFactory;
 import edu.uci.ics.asterix.external.data.adapter.api.IDatasourceAdapter;
 import edu.uci.ics.asterix.external.data.operator.ExternalDataScanOperatorDescriptor;
@@ -32,19 +31,12 @@ import edu.uci.ics.asterix.feed.operator.FeedIntakeOperatorDescriptor;
 import edu.uci.ics.asterix.feed.operator.FeedMessageOperatorDescriptor;
 import edu.uci.ics.asterix.formats.base.IDataFormat;
 import edu.uci.ics.asterix.formats.nontagged.AqlBinaryComparatorFactoryProvider;
-import edu.uci.ics.asterix.formats.nontagged.AqlBinaryTokenizerFactoryProvider;
 import edu.uci.ics.asterix.formats.nontagged.AqlSerializerDeserializerProvider;
 import edu.uci.ics.asterix.formats.nontagged.AqlTypeTraitProvider;
-import edu.uci.ics.asterix.metadata.MetadataException;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl.IndexKind;
 import edu.uci.ics.asterix.metadata.utils.DatasetUtils;
-import edu.uci.ics.asterix.om.base.AFloat;
-import edu.uci.ics.asterix.om.base.AInt32;
-import edu.uci.ics.asterix.om.base.IAObject;
-import edu.uci.ics.asterix.om.types.AOrderedListType;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.ATypeTag;
-import edu.uci.ics.asterix.om.types.AUnorderedListType;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.asterix.om.util.NonTaggedFormatUtil;
 import edu.uci.ics.asterix.runtime.transaction.TreeIndexInsertUpdateDeleteOperatorDescriptor;
@@ -86,12 +78,6 @@ import edu.uci.ics.hyracks.storage.am.common.api.ITreeIndexFrameFactory;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.TreeIndexBulkLoadOperatorDescriptor;
 import edu.uci.ics.hyracks.storage.am.common.ophelpers.IndexOp;
 import edu.uci.ics.hyracks.storage.am.common.tuples.TypeAwareTupleWriterFactory;
-import edu.uci.ics.hyracks.storage.am.invertedindex.api.IInvertedIndexSearchModifierFactory;
-import edu.uci.ics.hyracks.storage.am.invertedindex.dataflow.InvertedIndexSearchOperatorDescriptor;
-import edu.uci.ics.hyracks.storage.am.invertedindex.searchmodifiers.ConjunctiveSearchModifierFactory;
-import edu.uci.ics.hyracks.storage.am.invertedindex.searchmodifiers.EditDistanceSearchModifierFactory;
-import edu.uci.ics.hyracks.storage.am.invertedindex.searchmodifiers.JaccardSearchModifierFactory;
-import edu.uci.ics.hyracks.storage.am.invertedindex.tokenizers.IBinaryTokenizerFactory;
 import edu.uci.ics.hyracks.storage.am.rtree.dataflow.RTreeDataflowHelperFactory;
 import edu.uci.ics.hyracks.storage.am.rtree.dataflow.RTreeSearchOperatorDescriptor;
 import edu.uci.ics.hyracks.storage.am.rtree.frames.RTreeNSMInteriorFrameFactory;
@@ -511,182 +497,6 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
                 new RTreeDataflowHelperFactory());
 
         return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(rtreeSearchOp, spPc.second);
-    }
-    
-    @SuppressWarnings("rawtypes")
-	public static Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> buildInvertedIndexRuntime(
-			AqlCompiledMetadataDeclarations metadata, JobGenContext context,
-			JobSpecification jobSpec, String datasetName,
-			AqlCompiledDatasetDecl datasetDecl, String indexName,
-			ATypeTag searchKeyType, int[] keyFields, String searchModifierName,
-			IAObject simThresh) throws AlgebricksException {
-        String itemTypeName = datasetDecl.getItemTypeName();
-        IAType itemType;
-        try {
-            itemType = metadata.findType(itemTypeName);
-        } catch (Exception e) {
-            throw new AlgebricksException(e);
-        }
-
-        int numPrimaryKeys = DatasetUtils.getPartitioningFunctions(datasetDecl).size();
-        AqlCompiledIndexDecl index = DatasetUtils.findSecondaryIndexByName(datasetDecl, indexName);
-        if (index == null) {
-        	throw new AlgebricksException("Code generation error: no index " + indexName + " for dataset "
-        			+ datasetName);
-        }
-        List<String> secondaryKeyFields = index.getFieldExprs();
-        int numSecondaryKeys = secondaryKeyFields.size();
-        if (numSecondaryKeys != 1) {
-        	throw new AlgebricksException(
-        			"Cannot use "
-        					+ numSecondaryKeys
-        					+ " fields as a key for the R-tree index. There can be only one field as a key for the R-tree index.");
-        }
-        if (itemType.getTypeTag() != ATypeTag.RECORD) {
-        	throw new AlgebricksException("Only record types can be indexed.");
-        }
-        ARecordType recordType = (ARecordType) itemType;
-        IAType secondaryKeyType = AqlCompiledIndexDecl.keyFieldType(secondaryKeyFields.get(0), recordType);
-        if (secondaryKeyType == null) {
-        	throw new AlgebricksException("Could not find field " + secondaryKeyFields.get(0) + " in the schema.");
-        }
-
-        // TODO: For now we assume the type of the generated tokens is the same as the indexed field.
-        // We need a better way of expressing this because tokens may be hashed, or an inverted-index may index a list type, etc.
-        ITypeTraits[] tokenTypeTraits = new ITypeTraits[numSecondaryKeys];
-        IBinaryComparatorFactory[] tokenComparatorFactories = new IBinaryComparatorFactory[numSecondaryKeys];
-        for (int i = 0; i < numSecondaryKeys; i++) {   
-            tokenComparatorFactories[i] = getTokenBinaryComparatorFactory(secondaryKeyType);
-            tokenTypeTraits[i] = getTokenTypeTrait(secondaryKeyType);
-        }
-        
-        // The inverted lists contain primary keys.
-        ISerializerDeserializer[] invListsRecFields = new ISerializerDeserializer[numPrimaryKeys];
-        ITypeTraits[] invListsTypeTraits = new ITypeTraits[numPrimaryKeys];
-        IBinaryComparatorFactory[] invListsComparatorFactories = new IBinaryComparatorFactory[numPrimaryKeys];
-        int i = 0;
-        for (Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType> evalFactoryAndType : DatasetUtils
-                .getPartitioningFunctions(datasetDecl)) {
-        	IAType keyType = evalFactoryAndType.third;
-        	ISerializerDeserializer keySerde = metadata.getFormat().getSerdeProvider()
-        			.getSerializerDeserializer(keyType);
-            invListsRecFields[i] = keySerde;
-            invListsComparatorFactories[i] = AqlBinaryComparatorFactoryProvider.INSTANCE.getBinaryComparatorFactory(
-                    keyType, OrderKind.ASC);
-            invListsTypeTraits[i] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(keyType);
-            ++i;
-        }        
-        RecordDescriptor invListRecDesc = new RecordDescriptor(invListsRecFields);
-        
-        IAsterixApplicationContextInfo appContext = (IAsterixApplicationContextInfo) context.getAppContext();        
-		Pair<IFileSplitProvider, AlgebricksPartitionConstraint> secondarySplitsAndConstraint;
-		try {
-			secondarySplitsAndConstraint = metadata
-					.splitProviderAndPartitionConstraintsForInternalOrFeedDataset(
-							datasetName, indexName);
-		} catch (MetadataException e) {
-			throw new AlgebricksException(e);
-		}
-        
-		Pair<IFileSplitProvider, IFileSplitProvider> fileSplitProviders = metadata
-                .getInvertedIndexFileSplitProviders(secondarySplitsAndConstraint.first);
-		
-        // TODO: Here we assume there is only one search key field.
-        int queryField = keyFields[0];
-        // Get tokenizer and search modifier factories.
-        IInvertedIndexSearchModifierFactory searchModifierFactory = getSearchModifierFactory(searchModifierName, simThresh, index);
-        IBinaryTokenizerFactory queryTokenizerFactory = getBinaryTokenizerFactory(searchKeyType, index);
-		InvertedIndexSearchOperatorDescriptor invIndexSearchOp = new InvertedIndexSearchOperatorDescriptor(
-				jobSpec, queryField, appContext.getStorageManagerInterface(),
-				fileSplitProviders.first, fileSplitProviders.second,
-				appContext.getIndexRegistryProvider(), tokenTypeTraits,
-				tokenComparatorFactories, invListsTypeTraits,
-				invListsComparatorFactories, new BTreeDataflowHelperFactory(),
-				queryTokenizerFactory, searchModifierFactory, invListRecDesc);
-        return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(invIndexSearchOp, secondarySplitsAndConstraint.second);
-    }
-
-    // TODO: The following methods are also duplicated in IndexOperations.java.
-    private static IBinaryComparatorFactory getTokenBinaryComparatorFactory(IAType keyType) throws AlgebricksException {
-        IAType type = keyType;
-        ATypeTag typeTag = keyType.getTypeTag();
-        // Extract item type from list.
-        if (typeTag == ATypeTag.UNORDEREDLIST) {
-            AUnorderedListType ulistType = (AUnorderedListType) keyType;
-            if (!ulistType.isTyped()) {
-                throw new AlgebricksException("Cannot build an inverted index on untyped lists.)");
-            }
-            type = ulistType.getItemType();
-        }
-        if (typeTag == ATypeTag.ORDEREDLIST) {
-            AOrderedListType olistType = (AOrderedListType) keyType;
-            if (!olistType.isTyped()) {
-                throw new AlgebricksException("Cannot build an inverted index on untyped lists.)");
-            }
-            type = olistType.getItemType();
-        }
-        // Ignore case for string types.
-        return AqlBinaryComparatorFactoryProvider.INSTANCE.getBinaryComparatorFactory(
-                type, OrderKind.ASC, true);
-    }
-    
-    private static ITypeTraits getTokenTypeTrait(IAType keyType) throws AlgebricksException {
-        IAType type = keyType;
-        ATypeTag typeTag = keyType.getTypeTag();
-        // Extract item type from list.
-        if (typeTag == ATypeTag.UNORDEREDLIST) {
-            AUnorderedListType ulistType = (AUnorderedListType) keyType;
-            if (!ulistType.isTyped()) {
-                throw new AlgebricksException("Cannot build an inverted index on untyped lists.)");
-            }
-            type = ulistType.getItemType();
-        }
-        if (typeTag == ATypeTag.ORDEREDLIST) {
-            AOrderedListType olistType = (AOrderedListType) keyType;
-            if (!olistType.isTyped()) {
-                throw new AlgebricksException("Cannot build an inverted index on untyped lists.)");
-            }
-            type = olistType.getItemType();
-        }
-        return AqlTypeTraitProvider.INSTANCE.getTypeTrait(type);
-    }
-    
-    private static IBinaryTokenizerFactory getBinaryTokenizerFactory(ATypeTag searchKeyType, AqlCompiledIndexDecl index)
-            throws AlgebricksException {
-        switch (index.getKind()) {
-            case WORD_INVIX: {
-                return AqlBinaryTokenizerFactoryProvider.INSTANCE.getWordTokenizerFactory(searchKeyType, false);
-            }
-            case NGRAM_INVIX: {
-                return AqlBinaryTokenizerFactoryProvider.INSTANCE.getNGramTokenizerFactory(searchKeyType,
-                        index.getGramLength(), true, false);
-            }
-            default: {
-                throw new AlgebricksException("Tokenizer not applicable to index kind '" + index.getKind() + "'.");
-            }
-        }
-    }
-    
-    private static IInvertedIndexSearchModifierFactory getSearchModifierFactory(String searchModifierName, IAObject simThresh, AqlCompiledIndexDecl index) throws AlgebricksException {
-        if (searchModifierName.equals("CONJUNCTIVE")) {
-            return new ConjunctiveSearchModifierFactory();
-        }
-        if (searchModifierName.equals("JACCARD")) {
-            float jaccThresh = ((AFloat) simThresh).getFloatValue();
-            return new JaccardSearchModifierFactory(jaccThresh);
-        }
-        if (searchModifierName.equals("EDIT_DISTANCE")) {
-            int edThresh = ((AInt32) simThresh).getIntegerValue();
-            // Edit distance on overlapping grams.
-            if (index.getKind() == IndexKind.NGRAM_INVIX) {                
-                return new EditDistanceSearchModifierFactory(index.getGramLength(), edThresh);
-            }
-            // Edit distance on two lists. The list-elements are non-overlapping.
-            if (index.getKind() == IndexKind.WORD_INVIX) {
-                return new ListEditDistanceSearchModifierFactory(edThresh);
-            }
-        }
-        return null;
     }
     
     @Override

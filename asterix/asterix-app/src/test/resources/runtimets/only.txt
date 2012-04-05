@@ -1,1 +1,1 @@
-index/inverted-index-olist-edit-distance-panic.aql
+index/inverted-index-ngram-jaccard.aql

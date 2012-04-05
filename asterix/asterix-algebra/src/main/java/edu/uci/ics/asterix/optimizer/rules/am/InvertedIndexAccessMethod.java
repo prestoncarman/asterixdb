@@ -9,17 +9,27 @@ import org.apache.commons.lang3.mutable.MutableObject;
 
 import edu.uci.ics.asterix.common.functions.FunctionArgumentsConstants;
 import edu.uci.ics.asterix.common.functions.FunctionUtils;
+import edu.uci.ics.asterix.dataflow.data.common.ListEditDistanceSearchModifierFactory;
+import edu.uci.ics.asterix.formats.nontagged.AqlBinaryComparatorFactoryProvider;
+import edu.uci.ics.asterix.formats.nontagged.AqlBinaryTokenizerFactoryProvider;
+import edu.uci.ics.asterix.formats.nontagged.AqlTypeTraitProvider;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledDatasetDecl;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl.IndexKind;
+import edu.uci.ics.asterix.om.base.AFloat;
 import edu.uci.ics.asterix.om.base.AInt32;
 import edu.uci.ics.asterix.om.base.AString;
 import edu.uci.ics.asterix.om.base.IACollection;
 import edu.uci.ics.asterix.om.base.IAObject;
 import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
+import edu.uci.ics.asterix.om.types.AOrderedListType;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.ATypeTag;
+import edu.uci.ics.asterix.om.types.AUnorderedListType;
+import edu.uci.ics.asterix.om.types.AbstractCollectionType;
+import edu.uci.ics.asterix.om.types.IAType;
+import edu.uci.ics.asterix.translator.DmlTranslator.CompiledCreateIndexStatement;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IOptimizationContext;
@@ -33,11 +43,26 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.IFunctionInfo;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.DataSourceScanOperator;
+import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder.OrderKind;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOperator;
 import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
+import edu.uci.ics.hyracks.api.dataflow.value.IBinaryComparatorFactory;
+import edu.uci.ics.hyracks.api.dataflow.value.ITypeTraits;
+import edu.uci.ics.hyracks.storage.am.invertedindex.api.IInvertedIndexSearchModifierFactory;
+import edu.uci.ics.hyracks.storage.am.invertedindex.searchmodifiers.ConjunctiveSearchModifierFactory;
+import edu.uci.ics.hyracks.storage.am.invertedindex.searchmodifiers.EditDistanceSearchModifierFactory;
+import edu.uci.ics.hyracks.storage.am.invertedindex.searchmodifiers.JaccardSearchModifierFactory;
+import edu.uci.ics.hyracks.storage.am.invertedindex.tokenizers.IBinaryTokenizerFactory;
 
 public class InvertedIndexAccessMethod implements IAccessMethod {
 
+    // Enum describing the search modifier type. Used for passing info to jobgen.
+    public static enum SearchModifierType {
+        CONJUNCTIVE,
+        JACCARD,
+        EDIT_DISTANCE
+    }
+    
     private static List<FunctionIdentifier> funcIdents = new ArrayList<FunctionIdentifier>();
     static {
         funcIdents.add(AsterixBuiltinFunctions.CONTAINS);        
@@ -197,15 +222,15 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.CONTAINS) {
             // Value 0 represents a conjunctive search modifier.
             secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(
-                    new AString("CONJUNCTIVE")))));
+                    new AInt32(SearchModifierType.CONJUNCTIVE.ordinal())))));
             // We add this dummy value, so that we can get the the key arguments starting from a fixed index.
             secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(
-                    new AString("")))));
+                    new AInt32(-1)))));
         }
         if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.SIMILARITY_JACCARD_CHECK) {
             // Value 1 represents a jaccard search modifier.
             secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(
-                    new AString("JACCARD")))));
+                    new AInt32(SearchModifierType.JACCARD.ordinal())))));
             // Add the similarity threshold.
             OptimizableTernaryFuncExpr ternOptFuncExpr = (OptimizableTernaryFuncExpr) optFuncExpr;
             secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(ternOptFuncExpr.getSecondConstVal())));
@@ -213,7 +238,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.EDIT_DISTANCE_CHECK) {
             // Value 1 represents an edit distance search modifier.
             secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(
-                    new AString("EDIT_DISTANCE")))));
+                    new AInt32(SearchModifierType.EDIT_DISTANCE.ordinal())))));
             // Add the similarity threshold.
             OptimizableTernaryFuncExpr ternOptFuncExpr = (OptimizableTernaryFuncExpr) optFuncExpr;
             secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(ternOptFuncExpr.getSecondConstVal())));
@@ -295,10 +320,110 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
                 }
             }
         }
-        if (expr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.CONTAINS) {
+        if (expr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.CONTAINS && index.getKind() == IndexKind.WORD_INVIX) {
             // TODO: No further analysis for now. Think about how to support keyword queries with an ngram index.
             return true;
         }
         return false;
+    }
+    
+    public static IBinaryComparatorFactory getTokenBinaryComparatorFactory(IAType keyType) throws AlgebricksException {
+        IAType type = keyType;
+        ATypeTag typeTag = keyType.getTypeTag();        
+        // Extract item type from list.
+        if (typeTag == ATypeTag.UNORDEREDLIST || typeTag == ATypeTag.ORDEREDLIST) {
+            AbstractCollectionType listType = (AbstractCollectionType) keyType;
+            if (!listType.isTyped()) {
+                throw new AlgebricksException("Cannot build an inverted index on untyped lists.)");
+            }
+            type = listType.getItemType();
+        }
+        // Ignore case for string types.
+        return AqlBinaryComparatorFactoryProvider.INSTANCE.getBinaryComparatorFactory(
+                type, OrderKind.ASC, true);
+    }
+    
+    public static ITypeTraits getTokenTypeTrait(IAType keyType) throws AlgebricksException {
+        IAType type = keyType;
+        ATypeTag typeTag = keyType.getTypeTag();
+        // Extract item type from list.
+        if (typeTag == ATypeTag.UNORDEREDLIST) {
+            AUnorderedListType ulistType = (AUnorderedListType) keyType;
+            if (!ulistType.isTyped()) {
+                throw new AlgebricksException("Cannot build an inverted index on untyped lists.)");
+            }
+            type = ulistType.getItemType();
+        }
+        if (typeTag == ATypeTag.ORDEREDLIST) {
+            AOrderedListType olistType = (AOrderedListType) keyType;
+            if (!olistType.isTyped()) {
+                throw new AlgebricksException("Cannot build an inverted index on untyped lists.)");
+            }
+            type = olistType.getItemType();
+        }
+        return AqlTypeTraitProvider.INSTANCE.getTypeTrait(type);
+    }
+    
+    public static IBinaryTokenizerFactory getBinaryTokenizerFactory(ATypeTag searchKeyType, AqlCompiledIndexDecl index)
+            throws AlgebricksException {
+        switch (index.getKind()) {
+            case WORD_INVIX: {
+                return AqlBinaryTokenizerFactoryProvider.INSTANCE.getWordTokenizerFactory(searchKeyType, false);
+            }
+            case NGRAM_INVIX: {
+                return AqlBinaryTokenizerFactoryProvider.INSTANCE.getNGramTokenizerFactory(searchKeyType,
+                        index.getGramLength(), true, false);
+            }
+            default: {
+                throw new AlgebricksException("Tokenizer not applicable to index kind '" + index.getKind() + "'.");
+            }
+        }
+    }
+    
+    public static IBinaryTokenizerFactory getBinaryTokenizerFactory(ATypeTag keyType, CompiledCreateIndexStatement createIndexStmt)
+            throws AlgebricksException {
+        switch (createIndexStmt.getIndexType()) {
+            case WORD_INVIX: {
+                return AqlBinaryTokenizerFactoryProvider.INSTANCE.getWordTokenizerFactory(keyType, false);
+            }
+            case NGRAM_INVIX: {
+                return AqlBinaryTokenizerFactoryProvider.INSTANCE.getNGramTokenizerFactory(keyType,
+                        createIndexStmt.getGramLength(), true, false);
+            }
+            default: {
+                throw new AlgebricksException("Tokenizer not applicable to index type '" + createIndexStmt.getIndexType() + "'.");
+            }
+        }
+    }
+    
+    public static IInvertedIndexSearchModifierFactory getSearchModifierFactory(SearchModifierType searchModifierType, IAObject simThresh, AqlCompiledIndexDecl index) throws AlgebricksException {
+        switch(searchModifierType) {
+            case CONJUNCTIVE: {
+                return new ConjunctiveSearchModifierFactory();
+            }
+            case JACCARD: {
+                float jaccThresh = ((AFloat) simThresh).getFloatValue();
+                return new JaccardSearchModifierFactory(jaccThresh);
+            }
+            case EDIT_DISTANCE: {
+                int edThresh = ((AInt32) simThresh).getIntegerValue();
+                switch (index.getKind()) {
+                    case NGRAM_INVIX: {
+                        // Edit distance on overlapping grams.
+                        return new EditDistanceSearchModifierFactory(index.getGramLength(), edThresh);
+                    }
+                    case WORD_INVIX: {
+                        // Edit distance on two lists. The list-elements are non-overlapping.
+                        return new ListEditDistanceSearchModifierFactory(edThresh);
+                    }
+                    default: {
+                        throw new AlgebricksException("Incompatible search modifier '" + searchModifierType + "' for index type '" + index.getKind() + "'");
+                    }
+                }
+            }
+            default: {
+                throw new AlgebricksException("Unknown search modifier type '" + searchModifierType + "'.");
+            }
+        }
     }
 }

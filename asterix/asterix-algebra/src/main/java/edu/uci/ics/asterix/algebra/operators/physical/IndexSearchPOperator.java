@@ -78,5 +78,10 @@ public abstract class IndexSearchPOperator extends AbstractScanPOperator {
         }
         return ((AString) v).getStringValue();
     }
-
+    
+    protected int getInt32Argument(AbstractFunctionCallExpression f, int k) {
+        IAObject typeTagObj = ((AsterixConstantValue)((ConstantExpression)f.getArguments().get(k).getValue())
+                .getValue()).getObject();
+        return ((AInt32)typeTagObj).getIntegerValue();
+    }
 }

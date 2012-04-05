@@ -12,7 +12,6 @@ import edu.uci.ics.asterix.context.AsterixStorageManagerInterface;
 import edu.uci.ics.asterix.context.AsterixTreeRegistryProvider;
 import edu.uci.ics.asterix.dataflow.data.nontagged.valueproviders.AqlPrimitiveValueProviderFactory;
 import edu.uci.ics.asterix.formats.nontagged.AqlBinaryComparatorFactoryProvider;
-import edu.uci.ics.asterix.formats.nontagged.AqlBinaryTokenizerFactoryProvider;
 import edu.uci.ics.asterix.formats.nontagged.AqlSerializerDeserializerProvider;
 import edu.uci.ics.asterix.formats.nontagged.AqlTypeTraitProvider;
 import edu.uci.ics.asterix.metadata.MetadataException;
@@ -21,13 +20,10 @@ import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
 import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
 import edu.uci.ics.asterix.metadata.utils.DatasetUtils;
-import edu.uci.ics.asterix.om.types.AOrderedListType;
 import edu.uci.ics.asterix.om.types.ARecordType;
-import edu.uci.ics.asterix.om.types.ATypeTag;
-import edu.uci.ics.asterix.om.types.AUnorderedListType;
-import edu.uci.ics.asterix.om.types.AbstractCollectionType;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.asterix.om.util.NonTaggedFormatUtil;
+import edu.uci.ics.asterix.optimizer.rules.am.InvertedIndexAccessMethod;
 import edu.uci.ics.asterix.translator.DmlTranslator.CompiledCreateIndexStatement;
 import edu.uci.ics.hyracks.algebricks.core.algebra.data.ISerializerDeserializerProvider;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
@@ -577,7 +573,7 @@ public class IndexOperations {
 		ISerializerDeserializer payloadSerde = serdeProvider.getSerializerDeserializer(itemType);
 
         int numPrimaryKeys = DatasetUtils.getPartitioningFunctions(compiledDatasetDecl).size();
-
+        
         // Sanity checks.
         if (numPrimaryKeys > 1) {
             throw new AsterixException("Cannot create inverted keyword index on dataset with composite primary key.");
@@ -687,8 +683,8 @@ public class IndexOperations {
             IAType keyType = AqlCompiledIndexDecl.keyFieldType(secondaryKeyFields.get(i), itemType);
             ISerializerDeserializer keySerde = serdeProvider.getSerializerDeserializer(keyType);
             secondaryRecFields[i] = keySerde;
-            tokenComparatorFactories[i] = getTokenBinaryComparatorFactory(keyType);
-            tokenTypeTraits[i] = getTokenTypeTrait(keyType);
+            tokenComparatorFactories[i] = InvertedIndexAccessMethod.getTokenBinaryComparatorFactory(keyType);
+            tokenTypeTraits[i] = InvertedIndexAccessMethod.getTokenTypeTrait(keyType);
         }
         // Fill in serializers and comparators for primary index fields.
         for (i = 0; i < numPrimaryKeys; i++) {
@@ -742,7 +738,7 @@ public class IndexOperations {
 
         // TODO: We might want to expose the hashing option at the AQL level, 
         // and add the choice to the index metadata.
-		IBinaryTokenizerFactory tokenizerFactory = getBinaryTokenizerFactory(fieldsToTokenizeType.getTypeTag(), createIndexStmt);
+		IBinaryTokenizerFactory tokenizerFactory = InvertedIndexAccessMethod.getBinaryTokenizerFactory(fieldsToTokenizeType.getTypeTag(), createIndexStmt);
         BinaryTokenizerOperatorDescriptor tokenizerOp = new BinaryTokenizerOperatorDescriptor(spec,
                 tokenKeyPairRecDesc, tokenizerFactory, fieldsToTokenize, primaryKeyFields);
         Pair<IFileSplitProvider, AlgebricksPartitionConstraint> secondarySplitsAndConstraint = datasetDecls
@@ -755,7 +751,7 @@ public class IndexOperations {
         // ---------- START EXTERNAL SORT OP
 
         IBinaryComparatorFactory[] tokenKeyPairComparatorFactories = new IBinaryComparatorFactory[numTokenKeyPairFields];
-        tokenKeyPairComparatorFactories[0] = getTokenBinaryComparatorFactory(fieldsToTokenizeType);
+        tokenKeyPairComparatorFactories[0] = InvertedIndexAccessMethod.getTokenBinaryComparatorFactory(fieldsToTokenizeType);
         for (i = 0; i < numPrimaryKeys; i++) {
             tokenKeyPairComparatorFactories[i + 1] = primaryComparatorFactories[i];
         }
@@ -815,59 +811,6 @@ public class IndexOperations {
         return spec;
     }
     
-    private static IBinaryComparatorFactory getTokenBinaryComparatorFactory(IAType keyType) throws AlgebricksException {
-        IAType type = keyType;
-        ATypeTag typeTag = keyType.getTypeTag();
-        // Extract item type from list.
-        if (typeTag == ATypeTag.UNORDEREDLIST || typeTag == ATypeTag.ORDEREDLIST) {
-            AbstractCollectionType listType = (AbstractCollectionType) keyType;
-            if (!listType.isTyped()) {
-                throw new AlgebricksException("Cannot build an inverted index on untyped lists.)");
-            }
-            type = listType.getItemType();
-        }
-        // Ignore case for string types.
-        return AqlBinaryComparatorFactoryProvider.INSTANCE.getBinaryComparatorFactory(
-                type, OrderKind.ASC, true);
-    }
-    
-    private static ITypeTraits getTokenTypeTrait(IAType keyType) throws AlgebricksException {
-        IAType type = keyType;
-        ATypeTag typeTag = keyType.getTypeTag();
-        // Extract item type from list.
-        if (typeTag == ATypeTag.UNORDEREDLIST) {
-            AUnorderedListType ulistType = (AUnorderedListType) keyType;
-            if (!ulistType.isTyped()) {
-                throw new AlgebricksException("Cannot build an inverted index on untyped lists.)");
-            }
-            type = ulistType.getItemType();
-        }
-        if (typeTag == ATypeTag.ORDEREDLIST) {
-            AOrderedListType olistType = (AOrderedListType) keyType;
-            if (!olistType.isTyped()) {
-                throw new AlgebricksException("Cannot build an inverted index on untyped lists.)");
-            }
-            type = olistType.getItemType();
-        }
-        return AqlTypeTraitProvider.INSTANCE.getTypeTrait(type);
-    }
-    
-    private static IBinaryTokenizerFactory getBinaryTokenizerFactory(ATypeTag keyType, CompiledCreateIndexStatement createIndexStmt)
-            throws AlgebricksException {
-        switch (createIndexStmt.getIndexType()) {
-            case WORD_INVIX: {
-                return AqlBinaryTokenizerFactoryProvider.INSTANCE.getWordTokenizerFactory(keyType, false);
-            }
-            case NGRAM_INVIX: {
-                return AqlBinaryTokenizerFactoryProvider.INSTANCE.getNGramTokenizerFactory(keyType,
-                        createIndexStmt.getGramLength(), true, false);
-            }
-            default: {
-                throw new AlgebricksException("Tokenizer not applicable to index type '" + createIndexStmt.getIndexType() + "'.");
-            }
-        }
-    }
-
     public static void main(String[] args) throws Exception {
         String host;
         String appName;
