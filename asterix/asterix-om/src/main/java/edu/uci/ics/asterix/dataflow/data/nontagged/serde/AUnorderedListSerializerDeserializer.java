@@ -128,7 +128,7 @@ public class AUnorderedListSerializerDeserializer implements ISerializerDeserial
                 case ORDEREDLIST:
                 case UNORDEREDLIST:
                 case ANY:
-                    return AInt32SerializerDeserializer.getInt(serOrderedList, offset + 10 + (4 * itemIndex));
+                    return offset + AInt32SerializerDeserializer.getInt(serOrderedList, offset + 10 + (4 * itemIndex));
                 default:
                     int length = NonTaggedFormatUtil.getFieldValueLength(serOrderedList, offset + 1, typeTag, true);
                     return offset + 10 + (length * itemIndex);

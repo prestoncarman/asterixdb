@@ -1,1 +1,4 @@
-index/inverted-index-ulist-jaccard.aql
+similarity/edit-distance_ints.aql
+similarity/edit-distance_strings.aql
+similarity/edit-distance-check_ints.aql
+similarity/edit-distance-check_strings.aql

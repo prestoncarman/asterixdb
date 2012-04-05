@@ -46,7 +46,6 @@ public class AListElementToken implements IToken {
     @Override
     public void serializeToken(DataOutput dos) throws IOException {
         dos.writeByte(typeTag);
-        System.out.println("LENGTH: " + length);
         dos.write(data, start, length);
     }
 
