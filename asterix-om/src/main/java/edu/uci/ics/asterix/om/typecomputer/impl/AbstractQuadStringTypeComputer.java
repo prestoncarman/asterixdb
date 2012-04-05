@@ -35,14 +35,10 @@ public abstract class AbstractQuadStringTypeComputer implements IResultTypeCompu
         } catch (AlgebricksException e) {
             throw new AlgebricksException(e);
         }
-        if (t0.getTypeTag() != ATypeTag.NULL   
-                && t1.getTypeTag() != ATypeTag.NULL 
-                && t2.getTypeTag() != ATypeTag.NULL 
-                && t3.getTypeTag() != ATypeTag.NULL &&
-            t0.getTypeTag() != ATypeTag.STRING 
-                && t1.getTypeTag() != ATypeTag.STRING
-                && t2.getTypeTag() != ATypeTag.STRING
-                && t3.getTypeTag() != ATypeTag.STRING) {
+        if ((t0.getTypeTag() != ATypeTag.NULL && t0.getTypeTag() != ATypeTag.STRING) || 
+            (t1.getTypeTag() != ATypeTag.NULL && t1.getTypeTag() != ATypeTag.STRING) ||
+            (t2.getTypeTag() != ATypeTag.NULL && t2.getTypeTag() != ATypeTag.STRING) ||
+            (t3.getTypeTag() != ATypeTag.NULL && t3.getTypeTag() != ATypeTag.STRING)) {
             throw new NotImplementedException("Expects String Type.");
         }
 
