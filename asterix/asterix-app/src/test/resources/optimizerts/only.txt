@@ -1,0 +1,2 @@
+index/inverted-index-ngram-edit-distance-panic-nopanic.aql
+index/inverted-index-ngram-edit-distance-panic-panic.aql

@@ -21,9 +21,11 @@ using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
 
 create index ngram_index on DBLP(authors) type ngram(3);
 
-write output to nc1:"rttest/index_ngram-inverted-index-edit-distance-panic.adm";
+write output to nc1:"rttest/index_ngram-inverted-index-edit-distance-panic-nopanic.adm";
 
+// FIXME: We should be able to use the ngram_index, but currently we cannot.
 for $o in dataset('DBLP')
-let $ed := edit-distance-check($o.authors, "Amihay Motro", 5)
-where $ed[0]
+let $eda := edit-distance-check($o.authors, "Amihay Motro", 5)
+let $edb := edit-distance-check($o.authors, "Amihay Motro", 1)
+where $eda[0] and $edb[0]  
 return $o

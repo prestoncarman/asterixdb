@@ -21,7 +21,7 @@ using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
 
 create index ngram_index on DBLP(authors) type ngram(3);
 
-write output to nc1:"rttest/index_ngram-inverted-index-edit-distance.adm";
+write output to nc1:"rttest/index_inverted-index-ngram-edit-distance.adm";
 
 for $o in dataset('DBLP')
 let $ed := edit-distance-check($o.authors, "Amihay Motro", 1)

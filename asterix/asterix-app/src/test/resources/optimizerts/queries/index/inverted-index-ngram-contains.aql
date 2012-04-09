@@ -19,11 +19,11 @@ load dataset DBLP
 using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
 (("path"="nc1://data/dblp-small/dblp-small-id.txt"),("format"="delimited-text"),("delimiter"=":")) pre-sorted;
 
-create index keyword_index on DBLP(title) type keyword;
+create index ngram_index on DBLP(title) type ngram(3);
 
-write output to nc1:"rttest/index_word-inverted-index-jaccard.adm";
+write output to nc1:"rttest/index_inverted-index-ngram-contains.adm";
 
 for $o in dataset('DBLP')
-let $jacc := similarity-jaccard-check(word-tokens($o.title), word-tokens("Transactions for Cooperative Environments"), 0.5f)
-where $jacc[0]
+where contains($o.title, "Multimedia")
+order by $o.id
 return $o

@@ -1,1 +1,1 @@
-index/inverted-index-ngram-contains.aql
+index/inverted-index-word-contains.aql
