@@ -82,7 +82,7 @@ public class TestsUtils {
                             + "\n> ");
                 }
 
-                if (!lineExpected.split("Timestamp")[0].equals(lineActual.split("Timestamp")[0])) {
+                if (!equalStrings(lineExpected.split("Timestamp")[0], lineActual.split("Timestamp")[0])) {
                     fail("Result for " + scriptFile + " changed at line " + num + ":\n< " + lineExpected + "\n> "
                             + lineActual);
                 }
@@ -214,9 +214,6 @@ public class TestsUtils {
     private static boolean equalStrings(String s1, String s2) {
         String[] rowsOne = s1.split("\n");
         String[] rowsTwo = s2.split("\n");
-
-        if (rowsOne.length != rowsTwo.length)
-            return false;
 
         for (int i = 0; i < rowsOne.length; i++) {
             String row1 = rowsOne[i];

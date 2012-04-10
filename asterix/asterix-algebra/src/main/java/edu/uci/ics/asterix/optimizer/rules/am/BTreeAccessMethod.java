@@ -395,7 +395,7 @@ public class BTreeAccessMethod implements IAccessMethod {
     
     private ILogicalExpression createSelectCondition(List<Mutable<ILogicalExpression>> predList) {
         if (predList.size() > 1) {
-            IFunctionInfo finfo = AlgebricksBuiltinFunctions.getBuiltinFunctionInfo(AlgebricksBuiltinFunctions.AND);
+            IFunctionInfo finfo = AsterixBuiltinFunctions.getAsterixFunctionInfo(AlgebricksBuiltinFunctions.AND);
             return new ScalarFunctionCallExpression(finfo, predList);
         }
         return predList.get(0).getValue();
