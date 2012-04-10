@@ -145,15 +145,18 @@ public class MetadataTest {
     @Test
     public void test() throws Exception {
         Reader query = new BufferedReader(new FileReader(queryFile));
-        AsterixJavaClient asterix = new AsterixJavaClient(query, ERR);
+        AsterixJavaClient asterix = new AsterixJavaClient(AsterixHyracksIntegrationUtil.getHyracksClientConnection(),
+                query, ERR);
         try {
             LOGGER.info("Query is: " + queryFile);
             asterix.compile(true, false, false, false, false, true, false);
             asterix.compile();
         } catch (AsterixException e) {
             throw new Exception("Compile ERROR for " + queryFile + ": " + e.getMessage(), e);
+        } finally {
+            query.close();
         }
-        asterix.execute(AsterixHyracksIntegrationUtil.DEFAULT_HYRACKS_CC_CLIENT_PORT);
+        asterix.execute();
         query.close();
 
         if (actualFile.exists()) {

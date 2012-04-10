@@ -7,8 +7,8 @@ import java.util.List;
 import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.commons.lang3.mutable.MutableObject;
 
+import edu.uci.ics.asterix.aql.util.FunctionUtils;
 import edu.uci.ics.asterix.common.functions.FunctionArgumentsConstants;
-import edu.uci.ics.asterix.common.functions.FunctionUtils;
 import edu.uci.ics.asterix.dataflow.data.common.ListEditDistanceSearchModifierFactory;
 import edu.uci.ics.asterix.formats.nontagged.AqlBinaryComparatorFactoryProvider;
 import edu.uci.ics.asterix.formats.nontagged.AqlBinaryTokenizerFactoryProvider;

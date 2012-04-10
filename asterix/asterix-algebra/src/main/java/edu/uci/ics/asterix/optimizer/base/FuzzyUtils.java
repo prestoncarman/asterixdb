@@ -5,7 +5,7 @@ import java.util.ArrayList;
 
 import org.apache.commons.lang3.mutable.Mutable;
 
-import edu.uci.ics.asterix.common.functions.FunctionUtils;
+import edu.uci.ics.asterix.aql.util.FunctionUtils;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
 import edu.uci.ics.asterix.om.base.AFloat;
 import edu.uci.ics.asterix.om.base.AInt32;
