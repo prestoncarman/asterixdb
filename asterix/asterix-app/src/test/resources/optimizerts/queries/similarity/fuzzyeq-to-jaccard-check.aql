@@ -27,4 +27,4 @@ set simthreshold '0.8f';
 // Tests two rules: FuzzyEqRule and SimilarityCheckRule
 for $paper in dataset('DBLP')
 where word-tokens($paper.title) ~= word-tokens("Transactions for Cooperative Environments")
-return $papar
+return $paper
