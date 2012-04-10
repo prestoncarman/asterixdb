@@ -367,13 +367,13 @@ CreateIndexStatement CreateIndexStatement() throws ParseException:
   <RIGHTPAREN>
     ("type"
   		("btree" { cis.setIndexType(IndexType.BTREE); }
-  		| "keyword" { cis.setIndexType(IndexType.KEYWORD); }  		
+  		| "keyword" { cis.setIndexType(IndexType.WORD_INVIX); }  		
   		| "rtree" { cis.setIndexType(IndexType.RTREE); }
   		| "ngram"
   		  <LEFTPAREN>
   		  (<INTEGER_LITERAL>
   		    {
-  		      cis.setIndexType(IndexType.NGRAM);
+  		      cis.setIndexType(IndexType.NGRAM_INVIX);
   		      cis.setGramLength(new Integer(token.image));
   		    }
   		  )

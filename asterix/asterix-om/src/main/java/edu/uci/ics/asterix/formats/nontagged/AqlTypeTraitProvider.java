@@ -20,7 +20,7 @@ public class AqlTypeTraitProvider implements ITypeTraitProvider {
     private static final ITypeTraits VARLENTYPETRAIT = new TypeTrait(false,-1);
 
     public static final AqlTypeTraitProvider INSTANCE = new AqlTypeTraitProvider();
-
+    
     @Override
     public ITypeTraits getTypeTrait(Object type) {
         IAType aqlType = (IAType) type;

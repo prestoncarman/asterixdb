@@ -321,9 +321,18 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
                 }
             }
         }
-        if (expr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.CONTAINS) {
-            // TODO: No further analysis for now. Think about how to support keyword queries with an ngram index.
-            return true;
+        // We can only optimize contains with ngram indexes.
+        if (expr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.CONTAINS
+                && index.getKind() == IndexKind.NGRAM_INVIX) {
+            // Check that the constant search string has at least gramLength characters.
+            AsterixConstantValue strConstVal = (AsterixConstantValue) expr.getConstVal();
+            IAObject strObj = strConstVal.getObject();
+            if (strObj.getType().getTypeTag() == ATypeTag.STRING) {
+                AString astr = (AString) strObj;                    
+                if (astr.getStringValue().length() >= index.getGramLength()) {
+                    return true;
+                }
+            }
         }
         return false;
     }
