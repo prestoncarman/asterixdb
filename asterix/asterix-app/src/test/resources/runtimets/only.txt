@@ -1,1 +1,1 @@
-index/inverted-index-word-contains.aql
+similarity/fuzzyeq-edit-distance.aql

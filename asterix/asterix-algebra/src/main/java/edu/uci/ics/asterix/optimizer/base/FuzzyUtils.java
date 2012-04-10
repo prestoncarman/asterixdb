@@ -5,7 +5,6 @@ import java.util.ArrayList;
 
 import org.apache.commons.lang3.mutable.Mutable;
 
-import edu.uci.ics.asterix.common.functions.FunctionConstants;
 import edu.uci.ics.asterix.common.functions.FunctionUtils;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
 import edu.uci.ics.asterix.om.base.AFloat;
@@ -66,9 +65,9 @@ public class FuzzyUtils {
     
     public static FunctionIdentifier getFunctionIdentifier(String simFuncName) {
         if (simFuncName.equals(JACCARD_FUNCTION_NAME)) {
-            return new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "similarity-jaccard", true);
+            return AsterixBuiltinFunctions.SIMILARITY_JACCARD;
         } else if (simFuncName.equals(EDIT_DISTANCE_FUNCTION_NAME)) {
-            return new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "edit-distance", true);
+            return AsterixBuiltinFunctions.EDIT_DISTANCE;
         }
         return null;
     }

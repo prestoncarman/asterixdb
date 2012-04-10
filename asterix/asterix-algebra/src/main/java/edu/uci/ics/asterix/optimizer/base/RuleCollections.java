@@ -25,6 +25,7 @@ import edu.uci.ics.asterix.optimizer.rules.PushProperJoinThroughProduct;
 import edu.uci.ics.asterix.optimizer.rules.RemoveRedundantListifyRule;
 import edu.uci.ics.asterix.optimizer.rules.SetAsterixPhysicalOperatorsRule;
 import edu.uci.ics.asterix.optimizer.rules.SetClosedRecordConstructorsRule;
+import edu.uci.ics.asterix.optimizer.rules.SimilarityCheckRule;
 import edu.uci.ics.asterix.optimizer.rules.UnnestToDataScanRule;
 import edu.uci.ics.asterix.optimizer.rules.am.IntroduceAccessMethodSearchRule;
 import edu.uci.ics.hyracks.algebricks.core.rewriter.base.HeuristicOptimizer;
@@ -132,6 +133,7 @@ public final class RuleCollections {
         fuzzy.add(new FuzzyJoinRule());
         fuzzy.add(new InferTypesRule());
         fuzzy.add(new FuzzyEqRule());
+        fuzzy.add(new SimilarityCheckRule());
         return fuzzy;
     }
 

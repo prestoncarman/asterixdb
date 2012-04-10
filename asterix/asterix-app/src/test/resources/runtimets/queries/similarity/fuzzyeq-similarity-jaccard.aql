@@ -19,11 +19,11 @@ load dataset DBLP
 using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
 (("path"="nc1://data/dblp-small/dblp-small-id.txt"),("format"="delimited-text"),("delimiter"=":")) pre-sorted;
 
-write output to nc1:"rttest/fuzzyeq-to-jaccard.adm";
+write output to nc1:"rttest/similarity_fuzzyeq-similarity-jaccard.adm";
 
 set simfunction 'jaccard';
-set simthreshold '0.8f';
+set simthreshold '0.5f';
 
-for $o in dataset('DBLP')
-where $o.title ~= word-tokens("Transactions for Cooperative Environments")
-return $o
+for $paper in dataset('DBLP')
+where word-tokens($paper.title) ~= word-tokens("Transactions for Cooperative Environments")
+return $paper
