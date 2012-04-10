@@ -24,5 +24,6 @@ create index ngram_index on DBLP(title) type ngram(3);
 write output to nc1:"rttest/index_inverted-index-ngram-jaccard.adm";
 
 for $o in dataset('DBLP')
-where similarity-jaccard(gram-tokens($o.title, 3, false), gram-tokens("Transactions for Cooperative Environments", 3, false)) >= 0.5f
+let $jacc := similarity-jaccard-check(gram-tokens($o.title, 3, false), gram-tokens("Transactions for Cooperative Environments", 3, false), 0.5f)
+where $jacc[0]
 return $o

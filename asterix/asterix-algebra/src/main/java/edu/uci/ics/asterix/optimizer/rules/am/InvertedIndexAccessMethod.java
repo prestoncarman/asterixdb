@@ -264,23 +264,23 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
             // Check for panic.
             // TODO: Panic also depends on prePost which is currently hardcoded to be true.
             OptimizableTernaryFuncExpr ternaryExpr = (OptimizableTernaryFuncExpr) expr;            
-            AsterixConstantValue strConstVal = (AsterixConstantValue) expr.getConstVal();
+            AsterixConstantValue listOrStrConstVal = (AsterixConstantValue) expr.getConstVal();
             AsterixConstantValue intConstVal = (AsterixConstantValue) ternaryExpr.getSecondConstVal();
-            IAObject strObj = strConstVal.getObject();
+            IAObject listOrStrObj = listOrStrConstVal.getObject();
             IAObject intObj = intConstVal.getObject();
             AInt32 edThresh = (AInt32) intObj;
             int mergeThreshold = 0;
             // We can only optimize edit distance on strings using an ngram index.
-            if (strObj.getType().getTypeTag() == ATypeTag.STRING && index.getKind() == IndexKind.NGRAM_INVIX) {
-                AString astr = (AString) strObj;                    
+            if (listOrStrObj.getType().getTypeTag() == ATypeTag.STRING && index.getKind() == IndexKind.NGRAM_INVIX) {
+                AString astr = (AString) listOrStrObj;                    
                 // Compute merge threshold.
                 mergeThreshold = (astr.getStringValue().length() + index.getGramLength() - 1)
                         - edThresh.getIntegerValue() * index.getGramLength();
             }
             // We can only optimize edit distance on lists using a word index.
-            if ((strObj.getType().getTypeTag() == ATypeTag.ORDEREDLIST || strObj.getType().getTypeTag() == ATypeTag.UNORDEREDLIST)
+            if ((listOrStrObj.getType().getTypeTag() == ATypeTag.ORDEREDLIST || listOrStrObj.getType().getTypeTag() == ATypeTag.UNORDEREDLIST)
                     && index.getKind() == IndexKind.WORD_INVIX) {
-                IACollection alist = (IACollection) strObj;        
+                IACollection alist = (IACollection) listOrStrObj;        
                 // Compute merge threshold.
                 mergeThreshold = alist.size() - edThresh.getIntegerValue();
             }

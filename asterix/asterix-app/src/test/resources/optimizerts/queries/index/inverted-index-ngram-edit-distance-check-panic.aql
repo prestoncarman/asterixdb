@@ -21,10 +21,10 @@ using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
 
 create index ngram_index on DBLP(authors) type ngram(3);
 
-write output to nc1:"rttest/index_ngram-inverted-index-edit-distance-panic-nopanic.adm";
+write output to nc1:"rttest/index_inverted-index-ngram-edit-distance-check-panic.adm";
 
+// This query cannot be optimized with an index, based on the high edit distance.
 for $o in dataset('DBLP')
-let $eda := edit-distance-check($o.authors, "Amihay Motro", 1)
-let $edb := edit-distance-check($o.authors, "Amihay Motro", 5)
-where $eda[0] and $edb[0]  
+let $ed := edit-distance-check($o.authors, "Amihay Motro", 5)
+where $ed[0]
 return $o

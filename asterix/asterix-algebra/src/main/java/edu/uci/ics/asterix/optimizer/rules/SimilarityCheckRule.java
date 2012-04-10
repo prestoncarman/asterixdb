@@ -6,7 +6,6 @@ import java.util.List;
 import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.commons.lang3.mutable.MutableObject;
 
-import edu.uci.ics.asterix.common.functions.FunctionConstants;
 import edu.uci.ics.asterix.common.functions.FunctionUtils;
 import edu.uci.ics.asterix.om.base.AFloat;
 import edu.uci.ics.asterix.om.base.AInt32;
@@ -43,9 +42,6 @@ import edu.uci.ics.hyracks.algebricks.core.rewriter.base.IAlgebraicRewriteRule;
  */
 public class SimilarityCheckRule implements IAlgebraicRewriteRule {
 
-    private static final FunctionIdentifier JACCARD_CHECK_FUNC_IDENT = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "similarity-jaccard-check", true);
-    private static final FunctionIdentifier EDIT_DISTANCE_CHECK_FUNC_IDENT = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "edit-distance-check", true);
-    
     @Override
     public boolean rewritePost(Mutable<ILogicalOperator> opRef, IOptimizationContext context) throws AlgebricksException {
         AbstractLogicalOperator op = (AbstractLogicalOperator) opRef.getValue();
@@ -162,7 +158,7 @@ public class SimilarityCheckRule implements IAlgebraicRewriteRule {
             }
             similarityArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(jaccThresh))));
             simCheckFuncExpr = new ScalarFunctionCallExpression(
-                    FunctionUtils.getFunctionInfo(JACCARD_CHECK_FUNC_IDENT), similarityArgs);
+                    FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.SIMILARITY_JACCARD_CHECK), similarityArgs);
         }
 
         // Look for edit-distance function call, and LE or LT.
@@ -180,7 +176,7 @@ public class SimilarityCheckRule implements IAlgebraicRewriteRule {
             }
             similarityArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(edThresh))));
             simCheckFuncExpr = new ScalarFunctionCallExpression(
-                    FunctionUtils.getFunctionInfo(EDIT_DISTANCE_CHECK_FUNC_IDENT), similarityArgs);
+                    FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.EDIT_DISTANCE_CHECK), similarityArgs);
         }
         
         if (simCheckFuncExpr != null) {
