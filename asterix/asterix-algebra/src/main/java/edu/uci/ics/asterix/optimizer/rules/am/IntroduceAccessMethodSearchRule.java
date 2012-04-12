@@ -259,7 +259,8 @@ public class IntroduceAccessMethodSearchRule implements IAlgebraicRewriteRule {
                 continue;
             }
             AbstractFunctionCallExpression argFuncExpr = (AbstractFunctionCallExpression) argExpr;
-            found = found || analyzeFunctionExpr(argFuncExpr, analyzedAMs);
+            boolean matchFound = analyzeFunctionExpr(argFuncExpr, analyzedAMs); 
+            found = found || matchFound;
         }
         return found;
     }
@@ -420,43 +421,45 @@ public class IntroduceAccessMethodSearchRule implements IAlgebraicRewriteRule {
     }
 
     protected void fillAllIndexExprs(List<LogicalVariable> varList, AccessMethodAnalysisContext analysisCtx) {
-        for (int varIndex = 0; varIndex < varList.size(); varIndex++) {
-            int matchedFuncExprIndex = analysisCtx.findVarInMatchedFuncExprs(varList.get(varIndex));
-            // Current var does not match any vars in outComparedVars, 
-            // so it's irrelevant for our purpose of optimizing with an index.
-            if (matchedFuncExprIndex < 0) {
-                continue;
-            }            
-            String fieldName = null;
-            if (!assigns.isEmpty()) {
-                // Get the fieldName corresponding to the assigned variable at varIndex
-                // from the assign operator right above the datasource scan.
-                // If the expr at varIndex is not a fieldAccess we get back null.
-                fieldName = getFieldNameOfFieldAccess(assigns.get(assigns.size() - 1), recordType, varIndex);
-                if (fieldName == null) {
+    	for (int optFuncExprIndex = 0; optFuncExprIndex < analysisCtx.matchedFuncExprs.size(); optFuncExprIndex++) {
+    		for (int varIndex = 0; varIndex < varList.size(); varIndex++) {
+    			LogicalVariable var = varList.get(varIndex);
+    			// Vars do not match, so just continue.
+    			if (var != analysisCtx.matchedFuncExprs.get(optFuncExprIndex).getLogicalVar()) {
+    				continue;
+    			}
+    			// At this point we have matched the optimizable func expr at optFuncExprIndex to an assigned variable.
+    			String fieldName = null;
+                if (!assigns.isEmpty()) {
+                    // Get the fieldName corresponding to the assigned variable at varIndex
+                    // from the assign operator right above the datasource scan.
+                    // If the expr at varIndex is not a fieldAccess we get back null.
+                    fieldName = getFieldNameOfFieldAccess(assigns.get(assigns.size() - 1), recordType, varIndex);
+                    if (fieldName == null) {
+                        continue;
+                    }
+                } else {
+    				if (!includePrimaryIndex) {
+    					throw new IllegalStateException(
+    							"Assign operator not set but only looking for secondary index optimizations.");
+    				}
+                    // We don't have an assign, only a datasource scan.
+                    // The last var. is the record itself, so skip it.
+                    if (varIndex >= varList.size() - 1) {
+                        break;
+                    }
+                    // The variable value is one of the partitioning fields.
+                    fieldName = DatasetUtils.getPartitioningExpressions(datasetDecl).get(varIndex);
+                }
+                // Set the fieldName in the corresponding matched function expression.
+                analysisCtx.setFuncExprFieldName(optFuncExprIndex, fieldName);
+                // TODO: Don't just ignore open record types.
+                if (recordType.isOpen()) {
                     continue;
                 }
-            } else {
-				if (!includePrimaryIndex) {
-					throw new IllegalStateException(
-							"Assign operator not set but only looking for secondary index optimizations.");
-				}
-                // We don't have an assign, only a datasource scan.
-                // The last var. is the record itself, so skip it.
-                if (varIndex >= varList.size() - 1) {
-                    break;
-                }
-                // The variable value is one of the partitioning fields.
-                fieldName = DatasetUtils.getPartitioningExpressions(datasetDecl).get(varIndex);
-            }
-            // Set the fieldName in the corresponding matched function expression.
-            analysisCtx.setFuncExprFieldName(matchedFuncExprIndex, fieldName);
-            // TODO: Don't just ignore open record types.
-            if (recordType.isOpen()) {
-                continue;
-            }
-            fillIndexExprs(fieldName, matchedFuncExprIndex, analysisCtx);
-        }
+                fillIndexExprs(fieldName, optFuncExprIndex, analysisCtx);
+    		}
+    	}
     }
     
     /**

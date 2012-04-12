@@ -28,9 +28,9 @@ using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
 
 create index interests_index on Customers(interests) type keyword;
 
-write output to nc1:"rttest/index_inverted-index-olist-edit-distance.adm";
+write output to nc1:"rttest/inverted-index-basic_olist-jaccard.adm";
 
 for $c in dataset('Customers')
-where edit-distance($c.interests, ["computers", "wine", "walking"]) <= 1
-order by $c.cid
+let $jacc := similarity-jaccard-check($c.interests, ["databases", "computers", "wine"], 0.7f)
+where $jacc[0]
 return $c

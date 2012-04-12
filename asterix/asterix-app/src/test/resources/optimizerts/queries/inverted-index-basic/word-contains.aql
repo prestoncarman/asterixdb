@@ -21,7 +21,7 @@ using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
 
 create index keyword_index on DBLP(title) type keyword;
 
-write output to nc1:"rttest/index_inverted-index-word-contains.adm";
+write output to nc1:"rttest/inverted-index-basic_word-contains.adm";
 
 // Contains cannot be answered with a word inverted index.
 for $o in dataset('DBLP')

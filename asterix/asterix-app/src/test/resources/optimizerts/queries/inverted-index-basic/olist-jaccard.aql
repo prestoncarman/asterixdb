@@ -13,7 +13,7 @@ create type CustomerType as closed {
   name: string,
   age: int32?,
   address: AddressType?,
-  interests: {{string}},
+  interests: [string],
   children: [ { name: string, age: int32? } ]
 }
 
@@ -24,13 +24,12 @@ create dataset Customers(CustomerType)
 
 load dataset Customers 
 using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
-(("path"="nc1://data/semistructured/co1k/customer.adm"),("format"="adm"));
+(("path"="nc1://data/semistructured/co1k_olist/customer.adm"),("format"="adm"));
 
 create index interests_index on Customers(interests) type keyword;
 
-write output to nc1:"rttest/index_inverted-index-ulist-jaccard.adm";
+write output to nc1:"rttest/inverted-index-basic_olist-jaccard.adm";
 
 for $c in dataset('Customers')
-let $jacc := similarity-jaccard-check($c.interests, ["databases", "computers", "wine"], 0.7f)
-where $jacc[0]
+where similarity-jaccard($c.interests, ["databases", "computers", "wine"]) >= 0.7f
 return $c

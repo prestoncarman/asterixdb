@@ -19,11 +19,13 @@ load dataset DBLP
 using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
 (("path"="nc1://data/dblp-small/dblp-small-id.txt"),("format"="delimited-text"),("delimiter"=":")) pre-sorted;
 
-create index keyword_index on DBLP(title) type keyword;
+create index ngram_index on DBLP(authors) type ngram(3);
 
-write output to nc1:"rttest/index_inverted-index-word-jaccard.adm";
+write output to nc1:"rttest/inverted-index-basic_ngram-edit-distance.adm";
+
+set simfunction 'edit-distance';
+set simthreshold '1';
 
 for $o in dataset('DBLP')
-where similarity-jaccard(word-tokens($o.title), word-tokens("Transactions for Cooperative Environments")) >= 0.5f
+where $o.authors ~= "Amihay Motro"
 return $o
-

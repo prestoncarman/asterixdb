@@ -8,7 +8,6 @@ import org.apache.commons.lang3.mutable.Mutable;
 
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
-import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
 
 public class AccessMethodAnalysisContext {
     
@@ -18,17 +17,6 @@ public class AccessMethodAnalysisContext {
     // In effect, we are mapping from candidate indexes to a list of function expressions 
     // that match one of the index's expressions.
     public HashMap<AqlCompiledIndexDecl, List<Integer>> indexExprs = new HashMap<AqlCompiledIndexDecl, List<Integer>>();
-    
-    public int findVarInMatchedFuncExprs(LogicalVariable var) {
-    	int outVarIndex = 0;
-    	while (outVarIndex < matchedFuncExprs.size()) {
-    		if (var == matchedFuncExprs.get(outVarIndex).getLogicalVar()) {
-    			return outVarIndex;
-    		}
-    		outVarIndex++;
-    	}
-    	return -1;
-    }
     
     public void setFuncExprFieldName(int matchedFuncExprIndex, String fieldName) {
     	matchedFuncExprs.get(matchedFuncExprIndex).setFieldName(fieldName);

@@ -21,9 +21,10 @@ using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
 
 create index ngram_index on DBLP(title) type ngram(3);
 
-write output to nc1:"rttest/index_inverted-index-ngram-jaccard.adm";
+write output to nc1:"rttest/inverted-index-basic_ngram-contains.adm";
 
+// Cannot optimize this query because the string constant is shorter than the gram length.
 for $o in dataset('DBLP')
-let $jacc := similarity-jaccard-check(gram-tokens($o.title, 3, false), gram-tokens("Transactions for Cooperative Environments", 3, false), 0.5f)
-where $jacc[0]
+where contains($o.title, "Mu")
+order by $o.id
 return $o
