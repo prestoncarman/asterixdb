@@ -64,7 +64,7 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
     public PhysicalOperatorTag getOperatorTag() {
         // TODO: Currently, I'm relying on my own version of Algebricks, not the released one.
         // Need to add this tag in Algebricks.
-        return PhysicalOperatorTag.INVERED_INDEX_SEARCH;
+        return PhysicalOperatorTag.INVERTED_INDEX_SEARCH;
     }
 
     @Override

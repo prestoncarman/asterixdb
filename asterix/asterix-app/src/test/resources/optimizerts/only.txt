@@ -1,1 +1,0 @@
-index/inverted-index-word-jaccard.aql
