@@ -19,12 +19,12 @@ load dataset DBLP
 using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
 (("path"="nc1://data/dblp-small/dblp-small-id.txt"),("format"="delimited-text"),("delimiter"=":")) pre-sorted;
 
-create index ngram_index on DBLP(title) type ngram(3);
+create index ngram_index on DBLP(authors) type ngram(3);
 
-write output to nc1:"rttest/inverted-index-basic_ngram-contains-panic.adm";
+write output to nc1:"rttest/inverted-index-complex_ngram-edit-distance-check-let-panic.adm";
 
-// Cannot optimize this query because the string constant is shorter than the gram length.
+// This query cannot be optimized with an index, based on the high edit distance.
 for $o in dataset('DBLP')
-where contains($o.title, "Mu")
-order by $o.id
+let $ed := edit-distance-check($o.authors, "Amihay Motro", 5)
+where $ed[0]
 return $o

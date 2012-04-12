@@ -28,12 +28,10 @@ using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
 
 create index interests_index on Customers(interests) type keyword;
 
-write output to nc1:"rttest/inverted-index-basic_olist-fuzzyeq-edit-distance.adm";
-
-set simfunction 'edit-distance';
-set simthreshold '1';
+write output to nc1:"rttest/inverted-index-complex_olist-edit-distance-check-let-panic.adm";
 
 for $c in dataset('Customers')
-where $c.interests ~= ["computers", "wine", "walking"]
+let $ed := edit-distance-check($c.interests, ["computers", "wine", "walking"], 3)
+where $ed[0]
 order by $c.cid
 return $c

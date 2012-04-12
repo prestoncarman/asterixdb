@@ -21,11 +21,11 @@ using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
 
 create index ngram_index on DBLP(authors) type ngram(3);
 
-write output to nc1:"rttest/inverted-index-complex_ngram-edit-distance-check-panic-nopanic_01.adm";
+write output to nc1:"rttest/inverted-index-complex_ngram-edit-distance-check-let-panic-nopanic_01.adm";
 
 // Only one of the function calls can be optimized with an index.
 for $o in dataset('DBLP')
-let $edb := edit-distance-check($o.authors, "Amihay Motro", 5)
 let $eda := edit-distance-check($o.authors, "Amihay Motro", 3)
-where $edb[0] and $eda[0] 
+let $edb := edit-distance-check($o.authors, "Amihay Motro", 5)
+where $eda[0] and $edb[0] 
 return $o

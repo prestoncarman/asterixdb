@@ -21,7 +21,7 @@ using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
 
 create index ngram_index on DBLP(authors) type ngram(3);
 
-write output to nc1:"rttest/inverted-index-basic_ngram-edit-distance.adm";
+write output to nc1:"rttest/inverted-index-basic_ngram-fuzzyeq-edit-distance.adm";
 
 set simfunction 'edit-distance';
 set simthreshold '1';

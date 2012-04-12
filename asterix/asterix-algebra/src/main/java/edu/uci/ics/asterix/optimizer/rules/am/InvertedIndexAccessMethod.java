@@ -102,31 +102,43 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
             if (arg2.getExpressionTag() != LogicalExpressionTag.CONSTANT) {
                 return false;
             }
-            // The first arg is the referenced variable, whose origination function we must track in the assign.
-            if (arg1.getExpressionTag() != LogicalExpressionTag.VARIABLE) {
+            // The first arg must be a variable or a function expr.
+            // If it is a variable we must track its origin in the assigns to get the original function expr.
+            if (arg1.getExpressionTag() != LogicalExpressionTag.VARIABLE &&
+            		arg1.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
                 return false;
             }
-            VariableReferenceExpression varRefExpr = (VariableReferenceExpression) arg1;
-            // Try to find variable ref expr in assign.
-            AssignOperator firstAssign = assigns.get(0);
-            List<LogicalVariable> assignVars = firstAssign.getVariables();
-            List<Mutable<ILogicalExpression>> assignExprs = firstAssign.getExpressions();
-            for (int i = 0; i < assignVars.size(); i++) {
-                LogicalVariable var = assignVars.get(i);
-                if (var == varRefExpr.getVariableReference()) {
-                    // We've matched the variable in the first assign. Now analyze the originating function.
-                    ILogicalExpression matchedExpr = assignExprs.get(i).getValue();
-                    if (matchedExpr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
-                        return false;
+            AbstractFunctionCallExpression matchedFuncExpr = null;
+        	// The get-item arg is function call, directly check if it's optimizable.
+            if (arg1.getExpressionTag() == LogicalExpressionTag.FUNCTION_CALL) {
+            	matchedFuncExpr = (AbstractFunctionCallExpression) arg1;
+            }
+        	// The get-item arg is a variable. Search the assigns for its origination function.
+            if (arg1.getExpressionTag() == LogicalExpressionTag.VARIABLE) {
+            	// TODO: Do we need to drill through all the assigns?
+            	VariableReferenceExpression varRefExpr = (VariableReferenceExpression) arg1;
+                // Try to find variable ref expr in assign.
+                AssignOperator firstAssign = assigns.get(0);
+                List<LogicalVariable> assignVars = firstAssign.getVariables();
+                List<Mutable<ILogicalExpression>> assignExprs = firstAssign.getExpressions();
+                for (int i = 0; i < assignVars.size(); i++) {
+                    LogicalVariable var = assignVars.get(i);
+                    if (var == varRefExpr.getVariableReference()) {
+                        // We've matched the variable in the first assign. Now analyze the originating function.
+                        ILogicalExpression matchedExpr = assignExprs.get(i).getValue();
+                        if (matchedExpr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
+                            return false;
+                        }
+                        matchedFuncExpr = (AbstractFunctionCallExpression) matchedExpr;
+                        break;
                     }
-                    AbstractFunctionCallExpression matchedFuncExpr = (AbstractFunctionCallExpression) matchedExpr;
-                    // Check that this function is optimizable by this access method.
-                    if (!secondLevelFuncIdents.contains(matchedFuncExpr.getFunctionIdentifier())) {
-                        return false;
-                    }
-                    return AccessMethodUtils.analyzeSimilarityCheckFuncExprArgs(matchedFuncExpr, analysisCtx);
                 }
             }
+            // Check that the matched function is optimizable by this access method.
+            if (!secondLevelFuncIdents.contains(matchedFuncExpr.getFunctionIdentifier())) {
+                return false;
+            }
+            return AccessMethodUtils.analyzeSimilarityCheckFuncExprArgs(matchedFuncExpr, analysisCtx);
         }
         return false;
     }

@@ -31,6 +31,5 @@ create index interests_index on Customers(interests) type keyword;
 write output to nc1:"rttest/inverted-index-basic_ulist-jaccard.adm";
 
 for $c in dataset('Customers')
-let $jacc := similarity-jaccard-check($c.interests, ["databases", "computers", "wine"], 0.7f)
-where $jacc[0]
+where similarity-jaccard-check($c.interests, ["databases", "computers", "wine"], 0.7f)[0]
 return $c
