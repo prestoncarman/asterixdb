@@ -19,7 +19,7 @@ load dataset DBLP
 using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
 (("path"="nc1://data/dblp-small/dblp-small-id.txt"),("format"="delimited-text"),("delimiter"=":")) pre-sorted;
 
-write output to nc1:"rttest/similarity_fuzzyeq-to-jaccard.adm";
+write output to nc1:"rttest/similarity_fuzzyeq-to-jaccard-check.adm";
 
 set simfunction 'jaccard';
 set simthreshold '0.8f';

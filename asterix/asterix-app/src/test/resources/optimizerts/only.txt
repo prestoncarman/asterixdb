@@ -1,1 +1,0 @@
-inverted-index-complex/word-jaccard-check-multi-let.aql

@@ -16,15 +16,12 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IOptimizationContext;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalExpressionTag;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalOperatorTag;
-import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
-import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.AlgebricksBuiltinFunctions;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
 import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.rewriter.base.IAlgebraicRewriteRule;
@@ -34,10 +31,7 @@ import edu.uci.ics.hyracks.algebricks.core.rewriter.base.IAlgebraicRewriteRule;
  * 
  * similarity-function GE/GT/LE/LE constant
  * 
- * Rewrites the plan using the equivalent similarity-check function. This
- * requires adding an assign under the select. It assigns a variable which is
- * the result of the similarity-check function. The select condition is replaced
- * by a get-item on that variable (which evaluates to true/false).
+ * Rewrites the select condition with the equivalent similarity-check function.
  * 
  */
 public class SimilarityCheckRule implements IAlgebraicRewriteRule {
@@ -45,51 +39,18 @@ public class SimilarityCheckRule implements IAlgebraicRewriteRule {
     @Override
     public boolean rewritePost(Mutable<ILogicalOperator> opRef, IOptimizationContext context) throws AlgebricksException {
         AbstractLogicalOperator op = (AbstractLogicalOperator) opRef.getValue();
-        // Look for select.        
+        // Look for select.
         if (op.getOperatorTag() != LogicalOperatorTag.SELECT) {
             return false;
         }
-        // In the first phase, we gather all expression replacements. 
-        // In the second phase, we assign all necessary variables which the new expressions rely on.
         SelectOperator select = (SelectOperator) op;
         Mutable<ILogicalExpression> condExpr = select.getCondition();
         
-        // First is new expression that, second is expression to be replaced by a get-item.
-        // List of new similarity-check expressions.
-        List<Mutable<ILogicalExpression>> similarityCheckExprs = new ArrayList<Mutable<ILogicalExpression>>();
-        // List of old similarity function calls that are going to be replaced by get-item calls.
-        List<Mutable<ILogicalExpression>> oldSimilarityExprs = new ArrayList<Mutable<ILogicalExpression>>();
-        boolean found = assembleReplacementExprs(condExpr, similarityCheckExprs, oldSimilarityExprs, context);
-        if (!found) {
-            return false;
-        }
-        
-        List<LogicalVariable> similarityCheckVars = new ArrayList<LogicalVariable>();
-        for (int i = 0; i < similarityCheckExprs.size(); i++) {
-            LogicalVariable var = context.newVar();
-            similarityCheckVars.add(var);
-            // Get item 0 from var.
-            List<Mutable<ILogicalExpression>> getItemArgs = new ArrayList<Mutable<ILogicalExpression>>();            
-            getItemArgs.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(var)));
-            getItemArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(new AInt32(0)))));
-            ILogicalExpression getItemExpr = new ScalarFunctionCallExpression(FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.GET_ITEM), getItemArgs);
-            // Replace the old similarity function call with the new getItemExpr.
-            oldSimilarityExprs.get(i).setValue(getItemExpr);
-        }
-        
-        // Create new assign operator to assign the results of the similarity-check functions to variables.     
-        AssignOperator assignOp = new AssignOperator(similarityCheckVars, similarityCheckExprs);
-        assignOp.getInputs().add(new MutableObject<ILogicalOperator>(op.getInputs().get(0).getValue()));
-        op.getInputs().get(0).setValue(assignOp);
-        
-        return true;
+        return replaceSelectConditionExprs(condExpr, context);
     }
 
-    private boolean assembleReplacementExprs(Mutable<ILogicalExpression> expRef, List<Mutable<ILogicalExpression>> similarityCheckExprs, List<Mutable<ILogicalExpression>> oldSimilarityExprs , IOptimizationContext context) {
+    private boolean replaceSelectConditionExprs(Mutable<ILogicalExpression> expRef, IOptimizationContext context) {
         ILogicalExpression expr = expRef.getValue();
-        if (expr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
-            return false;
-        }
         if (expr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
             return false;
         }
@@ -99,7 +60,7 @@ public class SimilarityCheckRule implements IAlgebraicRewriteRule {
         if (funcIdent == AlgebricksBuiltinFunctions.AND || funcIdent == AlgebricksBuiltinFunctions.OR) {
             boolean found = true;
             for (int i = 0; i < funcExpr.getArguments().size(); ++i) {
-                found = found && assembleReplacementExprs(funcExpr.getArguments().get(i), similarityCheckExprs, oldSimilarityExprs, context);
+                found = found && replaceSelectConditionExprs(funcExpr.getArguments().get(i), context);
             }
             return found;
         }
@@ -110,7 +71,7 @@ public class SimilarityCheckRule implements IAlgebraicRewriteRule {
             return false;
         }
 
-        // One arg should be a function call, the other a constant.
+        // One arg should be a function call or a variable, the other a constant.
         AsterixConstantValue constVal = null;
         AbstractFunctionCallExpression simFuncExpr = null;
         ILogicalExpression arg1 = funcExpr.getArguments().get(0).getValue();
@@ -179,10 +140,17 @@ public class SimilarityCheckRule implements IAlgebraicRewriteRule {
                     FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.EDIT_DISTANCE_CHECK), similarityArgs);
         }
         
+        // Replace the expr in the select condition.
         if (simCheckFuncExpr != null) {
-            similarityCheckExprs.add(new MutableObject<ILogicalExpression>(simCheckFuncExpr));
-            oldSimilarityExprs.add(expRef);
-            return true;
+            // Get item 0 from var.
+            List<Mutable<ILogicalExpression>> getItemArgs = new ArrayList<Mutable<ILogicalExpression>>();
+            // First arg is the similarity-check function call.
+            getItemArgs.add(new MutableObject<ILogicalExpression>(simCheckFuncExpr));
+            // Second arg is the item index to be accessed.
+            getItemArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(new AInt32(0)))));
+            ILogicalExpression getItemExpr = new ScalarFunctionCallExpression(FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.GET_ITEM), getItemArgs);
+            // Replace the old similarity function call with the new getItemExpr.
+            expRef.setValue(getItemExpr);
         }
 
         return false;
