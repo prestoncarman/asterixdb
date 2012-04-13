@@ -142,7 +142,7 @@ public class IntroduceAccessMethodSearchRule implements IAlgebraicRewriteRule {
             fillAllIndexExprs(varList, amCtx);
             pruneIndexCandidates(entry.getKey(), amCtx);
             // Remove access methods for which there are definitely no applicable indexes.
-            if (entry.getValue().indexExprs.isEmpty()) {
+            if (amCtx.indexExprs.isEmpty()) {
                 amIt.remove();
             }
         }

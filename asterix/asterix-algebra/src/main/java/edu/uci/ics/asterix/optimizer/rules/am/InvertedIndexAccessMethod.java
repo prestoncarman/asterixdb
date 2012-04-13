@@ -122,16 +122,17 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
                     List<Mutable<ILogicalExpression>> assignExprs = assign.getExpressions();
                     for (int j = 0; j < assignVars.size(); j++) {
                         LogicalVariable var = assignVars.get(j);
-                        if (var == varRefExpr.getVariableReference()) {
-                            // We've matched the variable in the first assign. Now analyze the originating function.
-                            ILogicalExpression matchedExpr = assignExprs.get(j).getValue();
-                            if (matchedExpr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
-                                return false;
-                            }
-                            matchedAssignIndex = i;
-                            matchedFuncExpr = (AbstractFunctionCallExpression) matchedExpr;
-                            break;
+                        if (var != varRefExpr.getVariableReference()) {
+                            continue;
                         }
+                        // We've matched the variable in the first assign. Now analyze the originating function.
+                        ILogicalExpression matchedExpr = assignExprs.get(j).getValue();
+                        if (matchedExpr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
+                            return false;
+                        }
+                        matchedAssignIndex = i;
+                        matchedFuncExpr = (AbstractFunctionCallExpression) matchedExpr;
+                        break;
                     }
                     // We've already found a match.
                     if (matchedFuncExpr != null) {
@@ -143,13 +144,13 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
             if (!secondLevelFuncIdents.contains(matchedFuncExpr.getFunctionIdentifier())) {
                 return false;
             }
-            return analyzeSimilarityCheckFuncExprArgs(matchedFuncExpr, analysisCtx);
+            return analyzeSimilarityCheckFuncExprArgs(matchedFuncExpr, assigns, matchedAssignIndex, analysisCtx);
         }
         return false;
     }
 
     private boolean analyzeSimilarityCheckFuncExprArgs(AbstractFunctionCallExpression funcExpr,
-            AccessMethodAnalysisContext analysisCtx) {
+            List<AssignOperator> assigns, int matchedAssignIndex, AccessMethodAnalysisContext analysisCtx) {
         // There should be exactly three arguments.
         // The last function argument is assumed to be the similarity threshold.
         IAlgebricksConstantValue constThreshVal = null;
@@ -193,6 +194,39 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
             if (nonConstArg.getExpressionTag() == LogicalExpressionTag.VARIABLE) {
                 VariableReferenceExpression varExpr = (VariableReferenceExpression) nonConstArg;
                 fieldVar = varExpr.getVariableReference();
+                // Find expr corresponding to var in assigns below.
+                for (int i = matchedAssignIndex + 1; i < assigns.size(); i++) {
+                    AssignOperator assign = assigns.get(i);
+                    boolean found = false;
+                    for (int j = 0; j < assign.getVariables().size(); j++) {
+                        if (fieldVar != assign.getVariables().get(j)) {
+                            continue;
+                        }
+                        ILogicalExpression childExpr = assign.getExpressions().get(j).getValue();
+                        if (childExpr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
+                            break;
+                        }
+                        AbstractFunctionCallExpression childFuncExpr = (AbstractFunctionCallExpression) childExpr;
+                        // If fieldVar references the result of a tokenization, then we should remember the variable being tokenized.
+                        if (childFuncExpr.getFunctionIdentifier() != AsterixBuiltinFunctions.WORD_TOKENS &&
+                                childFuncExpr.getFunctionIdentifier() != AsterixBuiltinFunctions.GRAM_TOKENS) {
+                            break;
+                        }
+                        // We expect the tokenizer's argument to be a variable, otherwise we cannot apply an index.
+                        ILogicalExpression tokArgExpr = childFuncExpr.getArguments().get(0).getValue();
+                        if (tokArgExpr.getExpressionTag() != LogicalExpressionTag.VARIABLE) {
+                            break;
+                        }
+                        // Pass the variable being tokenized to the optimizable func expr.
+                        VariableReferenceExpression tokArgVarExpr = (VariableReferenceExpression) tokArgExpr;
+                        fieldVar = tokArgVarExpr.getVariableReference();
+                        found = true;
+                        break;
+                    }
+                    if (found) {
+                        break;
+                    }
+                }
                 analysisCtx.matchedFuncExprs.add(new OptimizableTernaryFuncExpr(funcExpr, constFilterVal, constThreshVal, fieldVar));
                 return true;
             }
@@ -390,11 +424,10 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
                 }
             }
             // The non-constant arg is not a function call. Perhaps a variable?
+            // We must have already verified during our analysis of the select condition, that this variable
+            // refers to a list, or to a tokenization function.
             if (nonConstArg.getExpressionTag() == LogicalExpressionTag.VARIABLE) {
-                // In this case we only allow word inverted indexes, since they are used to index list types.
-                if (index.getKind() == IndexKind.WORD_INVIX) {
-                    return true;
-                }
+                return true;
             }
         }
         // We can only optimize contains with ngram indexes.
