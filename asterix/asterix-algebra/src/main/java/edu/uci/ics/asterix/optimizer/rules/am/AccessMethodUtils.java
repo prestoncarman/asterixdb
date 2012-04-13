@@ -82,65 +82,6 @@ public class AccessMethodUtils {
         return true;
     }
     
-    public static boolean analyzeSimilarityCheckFuncExprArgs(AbstractFunctionCallExpression funcExpr,
-            AccessMethodAnalysisContext analysisCtx) {
-        // There should be exactly three arguments.
-        // The last function argument is assumed to be the similarity threshold.
-        IAlgebricksConstantValue constThreshVal = null;
-        ILogicalExpression arg3 = funcExpr.getArguments().get(2).getValue();
-        if (arg3.getExpressionTag() != LogicalExpressionTag.CONSTANT) {
-            return false;
-        }
-        constThreshVal = ((ConstantExpression) arg3).getValue();
-        ILogicalExpression arg1 = funcExpr.getArguments().get(0).getValue();
-        ILogicalExpression arg2 = funcExpr.getArguments().get(1).getValue();
-        // Determine whether one arg is constant, and the other is non-constant.
-        ILogicalExpression constArg = null;
-        ILogicalExpression nonConstArg = null;
-        if (arg1.getExpressionTag() == LogicalExpressionTag.CONSTANT 
-                && arg2.getExpressionTag() != LogicalExpressionTag.CONSTANT) { 
-            constArg = arg1;
-            nonConstArg = arg2;
-        } else if(arg2.getExpressionTag() == LogicalExpressionTag.CONSTANT
-                && arg1.getExpressionTag() != LogicalExpressionTag.CONSTANT) {
-            constArg = arg2;
-            nonConstArg = arg1;
-        } else {
-            return false;
-        }
-        ConstantExpression constExpr = (ConstantExpression) constArg;
-        IAlgebricksConstantValue constFilterVal = constExpr.getValue();
-        LogicalVariable fieldVar = null;
-        // Analyze arg1 and arg2, depending on similarity function.
-        if (funcExpr.getFunctionIdentifier() == AsterixBuiltinFunctions.SIMILARITY_JACCARD_CHECK) {            
-            AbstractFunctionCallExpression nonConstfuncExpr = funcExpr;
-            if (nonConstArg.getExpressionTag() == LogicalExpressionTag.FUNCTION_CALL) {
-                nonConstfuncExpr = (AbstractFunctionCallExpression) nonConstArg;
-                // TODO: Currently, we're only looking for word and gram tokens (non hashed).
-                if (nonConstfuncExpr.getFunctionIdentifier() != AsterixBuiltinFunctions.WORD_TOKENS &&
-                        nonConstfuncExpr.getFunctionIdentifier() != AsterixBuiltinFunctions.GRAM_TOKENS) {
-                    return false;
-                }
-                // Find the variable that is being tokenized.
-                nonConstArg = nonConstfuncExpr.getArguments().get(0).getValue();
-            }
-            if (nonConstArg.getExpressionTag() == LogicalExpressionTag.VARIABLE) {
-                VariableReferenceExpression varExpr = (VariableReferenceExpression) nonConstArg;
-                fieldVar = varExpr.getVariableReference();
-                analysisCtx.matchedFuncExprs.add(new OptimizableTernaryFuncExpr(funcExpr, constFilterVal, constThreshVal, fieldVar));
-                return true;
-            }
-        }
-        if (funcExpr.getFunctionIdentifier() == AsterixBuiltinFunctions.EDIT_DISTANCE_CHECK) {
-            if (nonConstArg.getExpressionTag() == LogicalExpressionTag.VARIABLE) {
-                fieldVar = ((VariableReferenceExpression) nonConstArg).getVariableReference();                
-                analysisCtx.matchedFuncExprs.add(new OptimizableTernaryFuncExpr(funcExpr, constFilterVal, constThreshVal, fieldVar));
-                return true;
-            }
-        }
-        return false;
-    }
-    
     /**
      * @return A list of types corresponding to fields produced by the given
      *         index when searched.

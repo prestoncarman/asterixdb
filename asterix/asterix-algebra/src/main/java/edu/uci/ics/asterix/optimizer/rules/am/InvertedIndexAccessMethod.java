@@ -37,6 +37,7 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalExpressionTag;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
+import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IAlgebricksConstantValue;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.UnnestingFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
@@ -69,9 +70,6 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         funcIdents.add(AsterixBuiltinFunctions.CONTAINS);        
         // For matching similarity-check functions. For example similarity-jaccard-check returns a list of two items,
         // and the where condition will get the first list-item and check whether it evaluates to true. 
-        // There may or may not be an explicit check on list[0] == true. If there is we match the EQ function, otherwise GET_ITEM.
-        // TODO: Make RE work as well.
-        //funcIdents.add(AlgebricksBuiltinFunctions.EQ);
         funcIdents.add(AsterixBuiltinFunctions.GET_ITEM);
     }
     
@@ -114,35 +112,101 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
             	matchedFuncExpr = (AbstractFunctionCallExpression) arg1;
             }
         	// The get-item arg is a variable. Search the assigns for its origination function.
-            if (arg1.getExpressionTag() == LogicalExpressionTag.VARIABLE) {
-            	// TODO: Do we need to drill through all the assigns?
+            int matchedAssignIndex = -1;
+            if (arg1.getExpressionTag() == LogicalExpressionTag.VARIABLE) {            	
             	VariableReferenceExpression varRefExpr = (VariableReferenceExpression) arg1;
-                // Try to find variable ref expr in assign.
-                AssignOperator firstAssign = assigns.get(0);
-                List<LogicalVariable> assignVars = firstAssign.getVariables();
-                List<Mutable<ILogicalExpression>> assignExprs = firstAssign.getExpressions();
-                for (int i = 0; i < assignVars.size(); i++) {
-                    LogicalVariable var = assignVars.get(i);
-                    if (var == varRefExpr.getVariableReference()) {
-                        // We've matched the variable in the first assign. Now analyze the originating function.
-                        ILogicalExpression matchedExpr = assignExprs.get(i).getValue();
-                        if (matchedExpr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
-                            return false;
+        		// Try to find variable ref expr in all assigns.
+            	for (int i = 0; i < assigns.size(); i++) {
+            		AssignOperator assign = assigns.get(i);
+                    List<LogicalVariable> assignVars = assign.getVariables();
+                    List<Mutable<ILogicalExpression>> assignExprs = assign.getExpressions();
+                    for (int j = 0; j < assignVars.size(); j++) {
+                        LogicalVariable var = assignVars.get(j);
+                        if (var == varRefExpr.getVariableReference()) {
+                            // We've matched the variable in the first assign. Now analyze the originating function.
+                            ILogicalExpression matchedExpr = assignExprs.get(j).getValue();
+                            if (matchedExpr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
+                                return false;
+                            }
+                            matchedAssignIndex = i;
+                            matchedFuncExpr = (AbstractFunctionCallExpression) matchedExpr;
+                            break;
                         }
-                        matchedFuncExpr = (AbstractFunctionCallExpression) matchedExpr;
-                        break;
                     }
-                }
+                    // We've already found a match.
+                    if (matchedFuncExpr != null) {
+                    	break;
+                    }
+            	}
             }
             // Check that the matched function is optimizable by this access method.
             if (!secondLevelFuncIdents.contains(matchedFuncExpr.getFunctionIdentifier())) {
                 return false;
             }
-            return AccessMethodUtils.analyzeSimilarityCheckFuncExprArgs(matchedFuncExpr, analysisCtx);
+            return analyzeSimilarityCheckFuncExprArgs(matchedFuncExpr, analysisCtx);
         }
         return false;
     }
 
+    private boolean analyzeSimilarityCheckFuncExprArgs(AbstractFunctionCallExpression funcExpr,
+            AccessMethodAnalysisContext analysisCtx) {
+        // There should be exactly three arguments.
+        // The last function argument is assumed to be the similarity threshold.
+        IAlgebricksConstantValue constThreshVal = null;
+        ILogicalExpression arg3 = funcExpr.getArguments().get(2).getValue();
+        if (arg3.getExpressionTag() != LogicalExpressionTag.CONSTANT) {
+            return false;
+        }
+        constThreshVal = ((ConstantExpression) arg3).getValue();
+        ILogicalExpression arg1 = funcExpr.getArguments().get(0).getValue();
+        ILogicalExpression arg2 = funcExpr.getArguments().get(1).getValue();
+        // Determine whether one arg is constant, and the other is non-constant.
+        ILogicalExpression constArg = null;
+        ILogicalExpression nonConstArg = null;
+        if (arg1.getExpressionTag() == LogicalExpressionTag.CONSTANT 
+                && arg2.getExpressionTag() != LogicalExpressionTag.CONSTANT) { 
+            constArg = arg1;
+            nonConstArg = arg2;
+        } else if(arg2.getExpressionTag() == LogicalExpressionTag.CONSTANT
+                && arg1.getExpressionTag() != LogicalExpressionTag.CONSTANT) {
+            constArg = arg2;
+            nonConstArg = arg1;
+        } else {
+            return false;
+        }
+        ConstantExpression constExpr = (ConstantExpression) constArg;
+        IAlgebricksConstantValue constFilterVal = constExpr.getValue();
+        LogicalVariable fieldVar = null;
+        // Analyze arg1 and arg2, depending on similarity function.
+        if (funcExpr.getFunctionIdentifier() == AsterixBuiltinFunctions.SIMILARITY_JACCARD_CHECK) {            
+            AbstractFunctionCallExpression nonConstFuncExpr = funcExpr;
+            if (nonConstArg.getExpressionTag() == LogicalExpressionTag.FUNCTION_CALL) {
+                nonConstFuncExpr = (AbstractFunctionCallExpression) nonConstArg;
+                // TODO: Currently, we're only looking for word and gram tokens (non hashed).
+                if (nonConstFuncExpr.getFunctionIdentifier() != AsterixBuiltinFunctions.WORD_TOKENS &&
+                        nonConstFuncExpr.getFunctionIdentifier() != AsterixBuiltinFunctions.GRAM_TOKENS) {
+                    return false;
+                }
+                // Find the variable that is being tokenized.
+                nonConstArg = nonConstFuncExpr.getArguments().get(0).getValue();
+            }
+            if (nonConstArg.getExpressionTag() == LogicalExpressionTag.VARIABLE) {
+                VariableReferenceExpression varExpr = (VariableReferenceExpression) nonConstArg;
+                fieldVar = varExpr.getVariableReference();
+                analysisCtx.matchedFuncExprs.add(new OptimizableTernaryFuncExpr(funcExpr, constFilterVal, constThreshVal, fieldVar));
+                return true;
+            }
+        }
+        if (funcExpr.getFunctionIdentifier() == AsterixBuiltinFunctions.EDIT_DISTANCE_CHECK) {
+            if (nonConstArg.getExpressionTag() == LogicalExpressionTag.VARIABLE) {
+                fieldVar = ((VariableReferenceExpression) nonConstArg).getVariableReference();                
+                analysisCtx.matchedFuncExprs.add(new OptimizableTernaryFuncExpr(funcExpr, constFilterVal, constThreshVal, fieldVar));
+                return true;
+            }
+        }
+        return false;
+    }
+    
     @Override
     public boolean matchAllIndexExprs() {
         return true;
@@ -160,7 +224,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
             throws AlgebricksException {
         // TODO: Think more deeply about where this is used for inverted indexes, and what composite keys should mean.
         // For now we are assuming a single secondary index key.
-        //int numSecondaryKeys = chosenIndex.getFieldExprs().size();
+        // int numSecondaryKeys = chosenIndex.getFieldExprs().size();
         int numSecondaryKeys = 1;
         
         // TODO: We can probably do something smarter here based on selectivity.
