@@ -114,7 +114,7 @@ public class IntroduceAccessMethodSearchRule implements IAlgebraicRewriteRule {
     
     @Override
     public boolean rewritePost(Mutable<ILogicalOperator> opRef, IOptimizationContext context) throws AlgebricksException {
-        // Match operator pattern and initialize operator members.
+    	// Match operator pattern and initialize operator members.
         if (!matchesOperatorPattern(opRef, context, true)) {
             return false;
         }

@@ -19,8 +19,9 @@ load dataset DBLP
 using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
 (("path"="nc1://data/dblp-small/dblp-small-id.txt"),("format"="delimited-text"),("delimiter"=":")) pre-sorted;
 
-write output to nc1:"rttest/similarity_edit-distance-to-edit-distance-check_01.adm";
+write output to nc1:"rttest/similarity_jaccard-let-to-jaccard-check_01.adm";
 
-for $o in dataset('DBLP')
-where edit-distance($o.authors, "Michael J. Carey") <= 2
-return $o
+for $paper in dataset('DBLP')
+let $jacc := similarity-jaccard(word-tokens($paper.title), word-tokens("Transactions for Cooperative Environments"))
+where 0.8f > $jacc 
+return $jacc

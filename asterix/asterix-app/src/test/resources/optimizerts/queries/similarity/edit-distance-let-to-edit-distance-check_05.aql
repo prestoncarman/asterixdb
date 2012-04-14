@@ -19,8 +19,9 @@ load dataset DBLP
 using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
 (("path"="nc1://data/dblp-small/dblp-small-id.txt"),("format"="delimited-text"),("delimiter"=":")) pre-sorted;
 
-write output to nc1:"rttest/similarity_edit-distance-to-edit-distance-check_01.adm";
+write output to nc1:"rttest/similarity_edit-distance-let-to-edit-distance-check_05.adm";
 
 for $o in dataset('DBLP')
-where edit-distance($o.authors, "Michael J. Carey") <= 2
-return $o
+let $ed := edit-distance($o.authors, "Michael J. Carey")
+where $ed <= 2
+return $ed
