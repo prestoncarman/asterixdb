@@ -1,0 +1,1 @@
+index/inverted-index-ngram-bugfix2.aql
