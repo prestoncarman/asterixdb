@@ -1,16 +1,10 @@
 package edu.uci.ics.asterix.translator;
 
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.InputStream;
 import java.util.ArrayList;
-import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 
 import edu.uci.ics.asterix.aql.expression.OrderedListTypeDefinition;
 import edu.uci.ics.asterix.aql.expression.RecordTypeDefinition;
@@ -22,7 +16,6 @@ import edu.uci.ics.asterix.aql.expression.UnorderedListTypeDefinition;
 import edu.uci.ics.asterix.common.annotations.IRecordFieldDataGen;
 import edu.uci.ics.asterix.common.annotations.RecordDataGenAnnotation;
 import edu.uci.ics.asterix.common.annotations.TypeDataGen;
-import edu.uci.ics.asterix.common.config.GlobalConfig;
 import edu.uci.ics.asterix.metadata.MetadataException;
 import edu.uci.ics.asterix.metadata.MetadataManager;
 import edu.uci.ics.asterix.metadata.MetadataTransactionContext;
@@ -48,15 +41,17 @@ public final class MetadataDeclTranslator {
     private final FileSplit outputFile;
     private final Map<String, String> config;
     private final IAWriterFactory writerFactory;
+    private boolean statsEnabled;
 
     public MetadataDeclTranslator(MetadataTransactionContext mdTxnCtx, String dataverseName, FileSplit outputFile,
-            IAWriterFactory writerFactory, Map<String, String> config, List<TypeDecl> typeDeclarations) {
+            IAWriterFactory writerFactory, Map<String, String> config, List<TypeDecl> typeDeclarations, boolean statsEnabled) {
         this.mdTxnCtx = mdTxnCtx;
         this.dataverseName = dataverseName;
         this.outputFile = outputFile;
         this.writerFactory = writerFactory;
         this.config = config;
         this.typeDeclarations = typeDeclarations;
+        this.statsEnabled = statsEnabled;
     }
 
     // TODO: Should this not throw an AsterixException?
@@ -72,7 +67,7 @@ public final class MetadataDeclTranslator {
         Map<String, IAType> typeMap = computeTypes();
         Map<String, String[]> stores = AsterixProperties.INSTANCE.getStores();
         return new AqlCompiledMetadataDeclarations(mdTxnCtx, dataverseName, outputFile, config, stores, typeMap,
-                typeDataGenMap, writerFactory, online);
+                typeDataGenMap, writerFactory, online, statsEnabled);
     }
 
     private Map<String, IAType> computeTypes() throws AlgebricksException, MetadataException {

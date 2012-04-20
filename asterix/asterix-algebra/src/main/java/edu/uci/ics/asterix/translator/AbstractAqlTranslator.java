@@ -9,6 +9,7 @@ import java.util.Map;
 import edu.uci.ics.asterix.aql.base.Statement;
 import edu.uci.ics.asterix.aql.expression.DataverseDecl;
 import edu.uci.ics.asterix.aql.expression.SetStatement;
+import edu.uci.ics.asterix.aql.expression.StatisticsSwitchDecl;
 import edu.uci.ics.asterix.aql.expression.TypeDecl;
 import edu.uci.ics.asterix.aql.expression.WriteStatement;
 import edu.uci.ics.asterix.metadata.MetadataException;
@@ -31,8 +32,14 @@ public abstract class AbstractAqlTranslator {
         FileSplit outputFile = null;
         IAWriterFactory writerFactory = null;
         String dataverseName = MetadataConstants.METADATA_DATAVERSE_NAME;
+        boolean statsEnabled = false;
         for (Statement stmt : statements) {
             switch (stmt.getKind()) {
+                case STATS_SWITCH: {
+                    StatisticsSwitchDecl statsStmt = (StatisticsSwitchDecl) stmt;
+                    statsEnabled = statsStmt.isStatsEnabled();
+                    break;
+                }
                 case TYPE_DECL: {
                     typeDeclarations.add((TypeDecl) stmt);
                     break;
@@ -72,7 +79,7 @@ public abstract class AbstractAqlTranslator {
         }
 
         MetadataDeclTranslator metadataTranslator = new MetadataDeclTranslator(mdTxnCtx, dataverseName, outputFile,
-                writerFactory, config, typeDeclarations);
+                writerFactory, config, typeDeclarations, statsEnabled);
         return metadataTranslator.computeMetadataDeclarations(online);
     }
 
