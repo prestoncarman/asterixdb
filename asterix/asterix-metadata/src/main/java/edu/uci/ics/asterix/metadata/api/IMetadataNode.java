@@ -28,16 +28,16 @@ import edu.uci.ics.asterix.metadata.entities.Function;
 import edu.uci.ics.asterix.metadata.entities.Index;
 import edu.uci.ics.asterix.metadata.entities.Node;
 import edu.uci.ics.asterix.metadata.entities.NodeGroup;
+import edu.uci.ics.asterix.metadata.statistics.BaseStatistics;
 import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
 
 /**
  * A metadata node stores metadata in its local storage structures (currently
  * BTrees). A metadata node services requests on behalf of the (possibly remote)
  * metadata manager by executing local transactions against its local storage.
- * This interface mirrors the methods in IMetadataManager.
- * Users wanting to lock/access metadata shall always go through the
- * MetadataManager, and should never call methods on the MetadataNode directly
- * for any reason.
+ * This interface mirrors the methods in IMetadataManager. Users wanting to
+ * lock/access metadata shall always go through the MetadataManager, and should
+ * never call methods on the MetadataNode directly for any reason.
  */
 public interface IMetadataNode extends Remote, Serializable {
 
@@ -365,57 +365,57 @@ public interface IMetadataNode extends Remote, Serializable {
      * @throws RemoteException
      */
     public void addNode(long txnId, Node node) throws MetadataException, RemoteException;
-    
+
     /**
-	 * 
-	 * @param txnId
-	 *            A globally unique id for an active metadata transaction.
-	 * @param dataverseName
-	 *            dataverse asociated with the function that is to be deleted.
-	 * @param functionName
-	 *            Name of function to be deleted.
-	 * @param arity
-	 *            Arity of the function to be deleted
-	 * @return
-	 * @throws MetadataException
-	 * @throws RemoteException
-	 */
-	public Function getFunction(long txnId, String dataverseName,
-			String functionName, int arity) throws MetadataException,
-			RemoteException;
+     * 
+     * @param txnId
+     *            A globally unique id for an active metadata transaction.
+     * @param dataverseName
+     *            dataverse asociated with the function that is to be deleted.
+     * @param functionName
+     *            Name of function to be deleted.
+     * @param arity
+     *            Arity of the function to be deleted
+     * @return
+     * @throws MetadataException
+     * @throws RemoteException
+     */
+    public Function getFunction(long txnId, String dataverseName, String functionName, int arity)
+            throws MetadataException, RemoteException;
 
-	/**
-	 * Deletes a function , acquiring local locks on behalf of the given
-	 * transaction id.
-	 * 
-	 * @param txnId
-	 *            A globally unique id for an active metadata transaction.
-	 * @param dataverseName
-	 *            dataverse asociated with the function that is to be deleted.
-	 * @param functionName
-	 *            Name of function to be deleted.
-	 * @param arity
-	 *            Arity of the function to be deleted
-	 * @throws MetadataException
-	 *             For example, there are still datasets partitioned on the node
-	 *             group to be deleted.
-	 * @throws RemoteException
-	 */
-	public void dropFunction(long txnId, String dataverseName,
-			String functionName, int arity) throws MetadataException,
-			RemoteException;
+    /**
+     * Deletes a function , acquiring local locks on behalf of the given
+     * transaction id.
+     * 
+     * @param txnId
+     *            A globally unique id for an active metadata transaction.
+     * @param dataverseName
+     *            dataverse asociated with the function that is to be deleted.
+     * @param functionName
+     *            Name of function to be deleted.
+     * @param arity
+     *            Arity of the function to be deleted
+     * @throws MetadataException
+     *             For example, there are still datasets partitioned on the node
+     *             group to be deleted.
+     * @throws RemoteException
+     */
+    public void dropFunction(long txnId, String dataverseName, String functionName, int arity)
+            throws MetadataException, RemoteException;
 
-	/**
-	 * 
-	 * @param txnId
-	 *            A globally unique id for an active metadata transaction.
-	 * @param function
-	 *            Function to be inserted
-	 * @throws MetadataException
-	 *             for example, if the function already exists or refers to an
-	 *             unknown function
-	 * @throws RemoteException
-	 */
-	public void addFunction(long txnId, Function function)
-			throws MetadataException, RemoteException;
+    /**
+     * 
+     * @param txnId
+     *            A globally unique id for an active metadata transaction.
+     * @param function
+     *            Function to be inserted
+     * @throws MetadataException
+     *             for example, if the function already exists or refers to an
+     *             unknown function
+     * @throws RemoteException
+     */
+    public void addFunction(long txnId, Function function) throws MetadataException, RemoteException;
+
+    void addStatistics(long txnId, BaseStatistics stats, String nodeId) throws MetadataException,
+            RemoteException;
 }

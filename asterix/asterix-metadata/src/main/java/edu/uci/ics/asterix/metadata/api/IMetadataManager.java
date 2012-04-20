@@ -21,6 +21,7 @@ import java.util.List;
 import edu.uci.ics.asterix.metadata.MetadataException;
 import edu.uci.ics.asterix.metadata.MetadataTransactionContext;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
+import edu.uci.ics.asterix.metadata.entities.DatasetStatistics;
 import edu.uci.ics.asterix.metadata.entities.Datatype;
 import edu.uci.ics.asterix.metadata.entities.Dataverse;
 import edu.uci.ics.asterix.metadata.entities.Function;
@@ -397,4 +398,6 @@ public interface IMetadataManager {
 	public void dropFunction(MetadataTransactionContext ctx,
 			String dataverseName, String functionName, int arity)
 			throws MetadataException;
+
+    void addDatasetStatistics(MetadataTransactionContext ctx, DatasetStatistics dataset) throws MetadataException;
 }

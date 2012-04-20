@@ -12,32 +12,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package edu.uci.ics.asterix.metadata.statistics;
 
-package edu.uci.ics.asterix.metadata.declared;
+import edu.uci.ics.hyracks.api.messages.IMessage;
 
-import java.io.File;
-import java.io.Serializable;
+/**
+ * @author rico
+ * 
+ */
+public abstract class AbstractMessageClass implements IMessage {
 
-public class AqlSourceId implements Serializable {
-
-    private String dataverseName;
-    private String datasetName;
-
-    public AqlSourceId(String dataverseName, String datasetName) {
-        this.dataverseName = dataverseName;
-        this.datasetName = datasetName;
+    public enum MessageType {
+        STATISTICS
     }
 
-    @Override
-    public String toString() {
-        return dataverseName + File.pathSeparator + datasetName;
-    }
+    /**
+     * 
+     */
+    private static final long serialVersionUID = 1L;
 
-    public String getDataverseName() {
-        return dataverseName;
-    }
-
-    public String getDatasetName() {
-        return datasetName;
-    }
+    public abstract MessageType getMessageType();
 }

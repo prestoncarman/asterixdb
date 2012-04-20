@@ -12,32 +12,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package edu.uci.ics.asterix.metadata.entities;
 
-package edu.uci.ics.asterix.metadata.declared;
-
-import java.io.File;
 import java.io.Serializable;
 
-public class AqlSourceId implements Serializable {
+import edu.uci.ics.asterix.metadata.api.IMetadataEntity;
 
-    private String dataverseName;
-    private String datasetName;
+/**
+ * @author rico
+ * 
+ */
+public interface IDatasetStatistics extends IMetadataEntity, Serializable {
 
-    public AqlSourceId(String dataverseName, String datasetName) {
-        this.dataverseName = dataverseName;
-        this.datasetName = datasetName;
-    }
-
-    @Override
-    public String toString() {
-        return dataverseName + File.pathSeparator + datasetName;
-    }
-
-    public String getDataverseName() {
-        return dataverseName;
-    }
-
-    public String getDatasetName() {
-        return datasetName;
-    }
 }

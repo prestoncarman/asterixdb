@@ -74,9 +74,11 @@ public class AqlCompiledMetadataDeclarations {
     private IMetadataManager metadataManager = MetadataManager.INSTANCE;
     private boolean isConnected = false;
 
+    private boolean statsEnabled;
+
     public AqlCompiledMetadataDeclarations(MetadataTransactionContext mdTxnCtx, String dataverseName,
             FileSplit outputFile, Map<String, String> config, Map<String, String[]> stores, Map<String, IAType> types,
-            Map<String, TypeDataGen> typeDataGenMap, IAWriterFactory writerFactory, boolean online) {
+            Map<String, TypeDataGen> typeDataGenMap, IAWriterFactory writerFactory, boolean online, boolean statsEnabled) {
         this.mdTxnCtx = mdTxnCtx;
         this.dataverseName = dataverseName;
         this.outputFile = outputFile;
@@ -88,6 +90,7 @@ public class AqlCompiledMetadataDeclarations {
         this.types = types;
         this.typeDataGenMap = typeDataGenMap;
         this.writerFactory = writerFactory;
+        this.statsEnabled = statsEnabled;
     }
 
     public void connectToDataverse(String dvName) throws AlgebricksException, AsterixException {
@@ -323,5 +326,13 @@ public class AqlCompiledMetadataDeclarations {
 
     public MetadataTransactionContext getMetadataTransactionContext() {
         return mdTxnCtx;
+    }
+
+    public Boolean getStatisticsSwitch() {
+        return isStatsEnabled();
+    }
+
+    public boolean isStatsEnabled() {
+        return statsEnabled;
     }
 }

@@ -40,6 +40,7 @@ import edu.uci.ics.asterix.metadata.entities.InternalDatasetDetails.FileStructur
 import edu.uci.ics.asterix.metadata.entities.InternalDatasetDetails.PartitioningStrategy;
 import edu.uci.ics.asterix.metadata.entities.Node;
 import edu.uci.ics.asterix.metadata.entities.NodeGroup;
+import edu.uci.ics.asterix.metadata.statistics.StatisticsManager;
 import edu.uci.ics.asterix.om.types.BuiltinType;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.asterix.runtime.transaction.TreeResourceManager;
@@ -142,6 +143,7 @@ public class MetadataBootstrap {
             openIndexFile(secondaryIndexes[i]);
         }
 
+        StatisticsManager.getInstance().setMetadatastore(metadataStore);
         // Begin a transaction against the metadata.
         // Lock the metadata in X mode.
         MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
@@ -281,8 +283,13 @@ public class MetadataBootstrap {
             // Map.Entry<String, String[]> me = (Map.Entry<String,
             // String[]>)im.next();
             MetadataManager.INSTANCE.addNode(mdTxnCtx, new Node(iter.next(), 0, 0/*
-                                                                                 * , me . getValue ( )
-                                                                                 */));
+                                                                                  * ,
+                                                                                  * me
+                                                                                  * .
+                                                                                  * getValue
+                                                                                  * (
+                                                                                  * )
+                                                                                  */));
         }
     }
 

@@ -12,32 +12,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package edu.uci.ics.asterix.metadata.entities;
 
-package edu.uci.ics.asterix.metadata.declared;
+import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
+import edu.uci.ics.asterix.metadata.IDatasetDetails;
 
-import java.io.File;
-import java.io.Serializable;
+public class DatasetStatistics extends Dataset implements IDatasetStatistics {
 
-public class AqlSourceId implements Serializable {
+    /**
+     * 
+     */
+    private static final long serialVersionUID = 1L;
 
-    private String dataverseName;
-    private String datasetName;
-
-    public AqlSourceId(String dataverseName, String datasetName) {
-        this.dataverseName = dataverseName;
-        this.datasetName = datasetName;
+    public DatasetStatistics(String dataverseName, String datasetName, String datatypeName,
+            IDatasetDetails datasetDetails, DatasetType datasetType) {
+        super(dataverseName, datasetName, datatypeName, datasetDetails, datasetType);
     }
 
-    @Override
-    public String toString() {
-        return dataverseName + File.pathSeparator + datasetName;
-    }
-
-    public String getDataverseName() {
-        return dataverseName;
-    }
-
-    public String getDatasetName() {
-        return datasetName;
-    }
 }
