@@ -115,7 +115,11 @@ Statement Statement() throws ParseException:
             {
               decls.add(DataverseDeclaration());
             }           
-          | "declare" "function" { 
+          | "switch" "statistics" 
+          	{
+          		decls.add(StatisticsSwitchDeclaration());
+          	} 
+          |"declare" "function" { 
                               decls.add(FunctionDeclaration()); 
              }
 	  	   |  "create" (
@@ -377,6 +381,19 @@ CreateIndexStatement CreateIndexStatement() throws ParseException:
    {
      return cis;
    }
+}
+StatisticsSwitchDecl StatisticsSwitchDeclaration() throws ParseException:
+{
+	boolean statsSwitch = false;
+}
+{
+	("on" { statsSwitch = true; }
+	| "off" { statsSwitch = false; }
+	)
+	";"
+	{
+		return new StatisticsSwitchDecl(statsSwitch);
+	}
 }
 
 DataverseDecl DataverseDeclaration() throws ParseException:
