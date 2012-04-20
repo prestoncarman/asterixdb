@@ -227,14 +227,16 @@ public class APIClientThread extends Thread {
             pc.setGenerateJobSpec(true);
 
             MetadataManager.INSTANCE.init();
+            boolean statisticsEnabled = false;
             if (q != null) {
-                String dataverse = APIFramework.compileDdlStatements(q, out, pc, DisplayFormat.TEXT);
+                Pair<String, Boolean> conf = APIFramework.compileDdlStatements(q, out, pc, DisplayFormat.TEXT);
+                statisticsEnabled = conf.second;
                 Job[] dmlJobs = APIFramework.compileDmlStatements(dataverse, q, out, pc, DisplayFormat.TEXT);
                 APIFramework.executeJobArray(dmlJobs, pc.getPort(), out, DisplayFormat.TEXT);
             }
-
             Pair<AqlCompiledMetadataDeclarations, JobSpecification> metadataAndSpec = APIFramework.compileQuery(
-                    dataverse, q, parser.getVarCounter(), null, metadata, pc, out, DisplayFormat.TEXT, null);
+                    dataverse, q, parser.getVarCounter(), null, metadata, pc, out, DisplayFormat.TEXT, null,
+                    statisticsEnabled);
             JobSpecification spec = metadataAndSpec.second;
             metadata = metadataAndSpec.first;
             APIFramework.executeJobArray(new JobSpecification[] { spec },

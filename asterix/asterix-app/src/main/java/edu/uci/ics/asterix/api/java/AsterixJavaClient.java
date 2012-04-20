@@ -62,13 +62,16 @@ public class AsterixJavaClient {
         }
         MetadataManager.INSTANCE.init();
 
-        SessionConfig pc = new SessionConfig(AsterixHyracksIntegrationUtil.DEFAULT_HYRACKS_CC_CLIENT_PORT, optimize, false,
-                printRewrittenExpressions, printLogicalPlan, printOptimizedPlan, printPhysicalOpsOnly, printJob);
+        SessionConfig pc = new SessionConfig(AsterixHyracksIntegrationUtil.DEFAULT_HYRACKS_CC_CLIENT_PORT, optimize,
+                false, printRewrittenExpressions, printLogicalPlan, printOptimizedPlan, printPhysicalOpsOnly, printJob);
         pc.setGenerateJobSpec(generateBinaryRuntime);
 
         String dataverseName = null;
+        boolean statisticsEnabled = false;
         if (q != null) {
-            dataverseName =  APIFramework.compileDdlStatements(q, writer, pc, DisplayFormat.TEXT);
+            Pair<String, Boolean> conf = APIFramework.compileDdlStatements(q, writer, pc, DisplayFormat.TEXT);
+            dataverseName = conf.first;
+            statisticsEnabled = conf.second;
             dmlJobs = APIFramework.compileDmlStatements(dataverseName, q, writer, pc, DisplayFormat.TEXT);
         }
 
@@ -76,8 +79,9 @@ public class AsterixJavaClient {
             return;
         }
 
-        Pair<AqlCompiledMetadataDeclarations, JobSpecification> metadataAndSpec = APIFramework.compileQuery(dataverseName, q,
-                parser.getVarCounter(), null, null, pc, writer, DisplayFormat.TEXT, null);
+        Pair<AqlCompiledMetadataDeclarations, JobSpecification> metadataAndSpec = APIFramework.compileQuery(
+                dataverseName, q, parser.getVarCounter(), null, null, pc, writer, DisplayFormat.TEXT, null,
+                statisticsEnabled);
         if (metadataAndSpec != null) {
             queryJobSpec = metadataAndSpec.second;
         }

@@ -87,6 +87,7 @@ public class CCBootstrapImpl implements ICCBootstrap {
 
         appCtx.setDistributedState(proxy);
         MetadataManager.INSTANCE = new MetadataManager(proxy);
+        appCtx.setMessageBroker(MetadataManager.INSTANCE.getStaticticsConnector());
         apiServer = new ThreadedServer(DEFAULT_API_SERVER_PORT, new APIClientThreadFactory(appCtx));
         apiServer.start();
     }

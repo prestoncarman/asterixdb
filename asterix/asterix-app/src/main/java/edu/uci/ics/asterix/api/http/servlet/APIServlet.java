@@ -50,18 +50,22 @@ public class APIServlet extends HttpServlet {
             pc.setGenerateJobSpec(true);
 
             MetadataManager.INSTANCE.init();
-            String  dataverseName = null;
+            Pair<String, Boolean> conf = null;
+            String dataverseName = null;
 
             if (q != null) {
-                dataverseName = postDmlStatement(q, out, pc);
+                conf = postDmlStatement(q, out, pc);
             }
 
             if (q.isDummyQuery()) {
                 return;
             }
 
+            dataverseName = conf.first;
+            boolean statisticsEnabled = conf.second;
             Pair<AqlCompiledMetadataDeclarations, JobSpecification> metadataAndSpec = APIFramework.compileQuery(
-                    dataverseName, q, parser.getVarCounter(), null, null, pc, out, DisplayFormat.HTML, null);
+                    dataverseName, q, parser.getVarCounter(), null, null, pc, out, DisplayFormat.HTML, null,
+                    statisticsEnabled);
             JobSpecification spec = metadataAndSpec.second;
             GlobalConfig.ASTERIX_LOGGER.info(spec.toJSON().toString(1));
             AqlCompiledMetadataDeclarations metadata = metadataAndSpec.first;
@@ -94,7 +98,7 @@ public class APIServlet extends HttpServlet {
             out.println("==> " + line);
 
         } catch (Exception e) {
-            out.println(e.getMessage());
+            out.println("ERROR:" + e.toString());
         }
     }
 
@@ -119,9 +123,10 @@ public class APIServlet extends HttpServlet {
         out.println(form);
     }
 
-    private String postDmlStatement(Query dummyQ, PrintWriter out, SessionConfig pc) throws Exception {
+    private Pair<String, Boolean> postDmlStatement(Query dummyQ, PrintWriter out, SessionConfig pc) throws Exception {
 
-        String dataverseName = APIFramework.compileDdlStatements(dummyQ, out, pc, DisplayFormat.TEXT);
+        Pair<String, Boolean> conf = APIFramework.compileDdlStatements(dummyQ, out, pc, DisplayFormat.TEXT);
+        String dataverseName = conf.first;
         Job[] dmlJobSpecs = APIFramework.compileDmlStatements(dataverseName, dummyQ, out, pc, DisplayFormat.HTML);
 
         long startTime = System.currentTimeMillis();
@@ -129,7 +134,7 @@ public class APIServlet extends HttpServlet {
         long endTime = System.currentTimeMillis();
         double duration = (endTime - startTime) / 1000.00;
         out.println("<PRE>Duration of all jobs: " + duration + "</PRE>");
-        return dataverseName;
+        return conf;
     }
 
     private static boolean isSet(String requestParameter) {
