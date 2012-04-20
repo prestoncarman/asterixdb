@@ -52,6 +52,7 @@ import edu.uci.ics.asterix.aql.expression.RecordConstructor;
 import edu.uci.ics.asterix.aql.expression.RecordTypeDefinition;
 import edu.uci.ics.asterix.aql.expression.RecordTypeDefinition.RecordKind;
 import edu.uci.ics.asterix.aql.expression.SetStatement;
+import edu.uci.ics.asterix.aql.expression.StatisticsSwitchDecl;
 import edu.uci.ics.asterix.aql.expression.TypeDecl;
 import edu.uci.ics.asterix.aql.expression.TypeDropStatement;
 import edu.uci.ics.asterix.aql.expression.TypeExpression;
@@ -535,6 +536,11 @@ public class AQLPrintVisitor implements IAqlVisitorWithVoidReturn<Integer> {
     public void visit(BeginFeedStatement stmtDel, Integer arg) throws AsterixException {
         // TODO Auto-generated method stub
         
+    }
+
+    @Override
+    public void visit(StatisticsSwitchDecl s, Integer step) throws AsterixException {
+        out.println(skip(step) + "StatisticsCollection " + s.isStatsEnabled());
     }
 
 }

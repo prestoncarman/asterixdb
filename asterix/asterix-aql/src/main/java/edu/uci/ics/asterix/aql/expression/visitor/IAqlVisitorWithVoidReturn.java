@@ -38,6 +38,7 @@ import edu.uci.ics.asterix.aql.expression.Query;
 import edu.uci.ics.asterix.aql.expression.RecordConstructor;
 import edu.uci.ics.asterix.aql.expression.RecordTypeDefinition;
 import edu.uci.ics.asterix.aql.expression.SetStatement;
+import edu.uci.ics.asterix.aql.expression.StatisticsSwitchDecl;
 import edu.uci.ics.asterix.aql.expression.TypeDecl;
 import edu.uci.ics.asterix.aql.expression.TypeDropStatement;
 import edu.uci.ics.asterix.aql.expression.TypeReferenceExpression;
@@ -56,6 +57,8 @@ public interface IAqlVisitorWithVoidReturn<T> {
 
     void visit(Query q, T arg) throws AsterixException;
 
+    void visit(StatisticsSwitchDecl s, T arg) throws AsterixException;
+    
     void visit(FunctionDecl fd, T arg) throws AsterixException;
 
     void visit(TypeDecl t, T arg) throws AsterixException;
