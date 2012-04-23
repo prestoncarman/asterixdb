@@ -149,16 +149,16 @@ public class SimilarityJaccardEvaluator implements IEvaluator {
         // Build phase: Add items into hash map, starting with first list.
         // Value in map is a pair of integers. Set first integer to 1.
         IntegerPointable.setInteger(valEntry.buf, 0, 1);
-        while (buildIter.hasNext()) {           
+        while (buildIter.hasNext()) {
             byte[] buf = buildIter.getData();           
             int off = buildIter.getPos();
             int len = getItemLen(buf, off);
-            keyEntry.set(buf, off, len);            
+            keyEntry.set(buf, off, len);
             BinaryEntry entry = hashMap.put(keyEntry, valEntry);
             if (entry != null) {
                 // Increment value.
-                int firstValInt = IntegerPointable.getInteger(buf, 0);
-                IntegerPointable.setInteger(entry.buf, 0, firstValInt + 1);
+                int firstValInt = IntegerPointable.getInteger(entry.buf, entry.off);
+                IntegerPointable.setInteger(entry.buf, entry.off, firstValInt + 1);
             }
             buildIter.next();
         }
@@ -175,18 +175,18 @@ public class SimilarityJaccardEvaluator implements IEvaluator {
             BinaryEntry entry = hashMap.get(keyEntry);
             if (entry != null) {
                 // Increment second value.
-                int firstValInt = IntegerPointable.getInteger(buf, 0);
+                int firstValInt = IntegerPointable.getInteger(entry.buf, entry.off);
                 // Irrelevant for the intersection size.
                 if (firstValInt == 0) {
                     continue;
                 }
-                int secondValInt = IntegerPointable.getInteger(buf, 4);
+                int secondValInt = IntegerPointable.getInteger(entry.buf, entry.off + 4);
                 // Subtract old min value.
                 intersectionSize -= (firstValInt < secondValInt) ? firstValInt : secondValInt;
                 secondValInt++;
                 // Add new min value.
                 intersectionSize += (firstValInt < secondValInt) ? firstValInt : secondValInt;
-                IntegerPointable.setInteger(entry.buf, 0, secondValInt);
+                IntegerPointable.setInteger(entry.buf, entry.off + 4, secondValInt);
             }
             probeIter.next();
         }

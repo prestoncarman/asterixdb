@@ -119,7 +119,9 @@ public class BinaryHashMap {
 			if (cmp.compare(frame.array(), entryKeyOff, entryKeyLen, key.buf,
 					key.off, key.len) == 0) {
 				// Key found, set values and return.
-				returnValue.set(frame.array(), entryKeyOff, entryKeyLen);
+				int entryValOff = frameOff + ENTRY_HEADER_SIZE + entryKeyLen;
+				int entryValLen = frame.getShort(frameOff + SLOT_SIZE);
+				returnValue.set(frame.array(), entryValOff, entryValLen);
 				return returnValue;
 			}
 			headPtr = frame.getLong(frameOff + 2 * SLOT_SIZE);
