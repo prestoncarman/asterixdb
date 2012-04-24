@@ -8,6 +8,7 @@ import java.util.Map;
 
 import org.apache.commons.lang3.mutable.Mutable;
 
+import edu.uci.ics.asterix.metadata.declared.AqlCompiledDatasetDecl;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl;
 import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
 import edu.uci.ics.asterix.metadata.utils.DatasetUtils;
@@ -29,53 +30,21 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.functions.AlgebricksBuiltinFu
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.util.OperatorPropertiesUtil;
+import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.InnerJoinOperator;
 import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.rewriter.base.IAlgebraicRewriteRule;
 import edu.uci.ics.hyracks.algebricks.core.utils.Pair;
 
-/**
- * This rule tries to optimize simple selections with indexes. The use of an
- * index is expressed as an unnest over an index-search function which will be
- * replaced with the appropriate embodiment during codegen.
- * 
- * Matches the following operator patterns:
- * Standard secondary index pattern:
- * There must be at least one assign, but there may be more, e.g., when matching similarity-jaccard-check().
- * (select) <-- (assign)+ <-- (datasource scan)
- * Primary index lookup pattern:
- * Since no assign is necessary to get the primary key fields (they are already stored fields in the BTree tuples).
- * (select) <-- (datasource scan)
- * 
- * Replaces the above patterns with this pattern: (select) <-- (assign) <-- (btree search) <-- (sort) <-- (unnest(index search)) <-- (assign)
- * The sort is optional, and some access methods may choose not to sort.
- * 
- * Note that for some index-based optimizations do not remove the triggering
- * condition from the select, since the index only acts as a filter, and the
- * final verification must still be done via the original function.
- * 
- * The basic outline of this rule is: 
- * 1. Match operator pattern. 
- * 2. Analyze select to see if there are optimizable functions (delegated to IAccessMethods). 
- * 3. Check metadata to see if there are applicable indexes. 
- * 4. Choose an index to apply (for now only a single index will be chosen).
- * 5. Rewrite plan using index (delegated to IAccessMethods).
- * 
- */
-public class IntroduceAccessMethodSearchRule implements IAlgebraicRewriteRule {
+public class IntroduceJoinAccessMethodSearchRule implements IAlgebraicRewriteRule {
     
-	// Operators representing the patterns to be matched:
-    // These ops are set in matchesPattern()
-    protected Mutable<ILogicalOperator> selectRef = null;
-    protected SelectOperator select = null;
-	protected AbstractFunctionCallExpression selectCond = null;
-	protected final OptimizableOperatorSubTree subTree = new OptimizableOperatorSubTree();
+    protected Mutable<ILogicalOperator> joinRef = null;
+    protected InnerJoinOperator join = null;
+	protected AbstractFunctionCallExpression joinCond = null;
+	protected final OptimizableOperatorSubTree leftSubTree = new OptimizableOperatorSubTree();
+	protected final OptimizableOperatorSubTree rightSubTree = new OptimizableOperatorSubTree();
 	
 	protected static Map<FunctionIdentifier, List<IAccessMethod>> accessMethods = new HashMap<FunctionIdentifier, List<IAccessMethod>>();
 	static {
-	    registerAccessMethod(BTreeAccessMethod.INSTANCE);
-	    registerAccessMethod(RTreeAccessMethod.INSTANCE);
 	    registerAccessMethod(InvertedIndexAccessMethod.INSTANCE);
 	}
 	
@@ -98,39 +67,39 @@ public class IntroduceAccessMethodSearchRule implements IAlgebraicRewriteRule {
     
     @Override
     public boolean rewritePost(Mutable<ILogicalOperator> opRef, IOptimizationContext context) throws AlgebricksException {
-    	// Match operator pattern and initialize operator members.
+    	// Match operator pattern and initialize optimizable sub trees.
         if (!matchesOperatorPattern(opRef, context)) {
             return false;
         }
         
         // Analyze select condition.
         Map<IAccessMethod, AccessMethodAnalysisContext> analyzedAMs = new HashMap<IAccessMethod, AccessMethodAnalysisContext>();
-        if (!analyzeCondition(selectCond, subTree.assigns, analyzedAMs)) {
+        boolean matchInLeftSubTree = false;
+        boolean matchInRightSubTree = false;
+        if (leftSubTree.hasDataSourceScan()) {
+            matchInLeftSubTree = analyzeCondition(joinCond, leftSubTree.assigns, analyzedAMs);
+        }
+        if (rightSubTree.hasDataSourceScan()) {
+            matchInRightSubTree = analyzeCondition(joinCond, rightSubTree.assigns, analyzedAMs);
+        }
+        if (!matchInLeftSubTree && !matchInRightSubTree) {
             return false;
         }
 
         // Set dataset and type metadata.
-        if (!subTree.setDatasetAndTypeMetadata((AqlMetadataProvider) context.getMetadataProvider())) {
+        AqlMetadataProvider metadataProvider = (AqlMetadataProvider) context.getMetadataProvider();
+        if (!leftSubTree.setDatasetAndTypeMetadata(metadataProvider) && !rightSubTree.setDatasetAndTypeMetadata(metadataProvider)) {
             return false;
         }
         
-        // The assign may be null if there is only a filter on the primary index key.
-        // Match variables from lowest assign which comes directly after the dataset scan.
-        List<LogicalVariable> varList = (!subTree.assigns.isEmpty()) ? subTree.assigns.get(subTree.assigns.size() - 1).getVariables() : subTree.dataSourceScan.getVariables();
-        Iterator<Map.Entry<IAccessMethod, AccessMethodAnalysisContext>> amIt = analyzedAMs.entrySet().iterator();
-        // Check applicability of indexes by access method type.
-        while (amIt.hasNext()) {
-            Map.Entry<IAccessMethod, AccessMethodAnalysisContext> entry = amIt.next();
-            AccessMethodAnalysisContext amCtx = entry.getValue();
-            // For the current access method type, map variables from the assign op to applicable indexes.
-            fillAllIndexExprs(varList, amCtx);
-            pruneIndexCandidates(entry.getKey(), amCtx);
-            // Remove access methods for which there are definitely no applicable indexes.
-            if (amCtx.indexExprs.isEmpty()) {
-                amIt.remove();
-            }
+        if (matchInLeftSubTree) {
+            fillSubTreeIndexExprs(leftSubTree, analyzedAMs);
+        }
+        if (matchInRightSubTree) {
+            fillSubTreeIndexExprs(rightSubTree, analyzedAMs);
         }
         
+        /*
         // Choose index to be applied.
         Pair<IAccessMethod, AqlCompiledIndexDecl> chosenIndex = chooseIndex(analyzedAMs);
         if (chosenIndex == null) {
@@ -148,6 +117,28 @@ public class IntroduceAccessMethodSearchRule implements IAlgebraicRewriteRule {
         }
         context.addToDontApplySet(this, select);
         return res;
+        */
+        
+        return false;
+    }
+    
+    protected void fillSubTreeIndexExprs(OptimizableOperatorSubTree subTree, Map<IAccessMethod, AccessMethodAnalysisContext> analyzedAMs) {
+        // The assign may be null if there is only a filter on the primary index key.
+        // Match variables from lowest assign which comes directly after the dataset scan.
+        List<LogicalVariable> varList = (!subTree.assigns.isEmpty()) ? subTree.assigns.get(subTree.assigns.size() - 1).getVariables() : subTree.dataSourceScan.getVariables();
+        Iterator<Map.Entry<IAccessMethod, AccessMethodAnalysisContext>> amIt = analyzedAMs.entrySet().iterator();
+        // Check applicability of indexes by access method type.
+        while (amIt.hasNext()) {
+            Map.Entry<IAccessMethod, AccessMethodAnalysisContext> entry = amIt.next();
+            AccessMethodAnalysisContext amCtx = entry.getValue();
+            // For the current access method type, map variables from the assign op to applicable indexes.
+            fillAllIndexExprs(varList, subTree, amCtx);
+            pruneIndexCandidates(entry.getKey(), amCtx);
+            // Remove access methods for which there are definitely no applicable indexes.
+            if (amCtx.indexExprs.isEmpty()) {
+                amIt.remove();
+            }
+        }
     }
     
     /**
@@ -293,25 +284,31 @@ public class IntroduceAccessMethodSearchRule implements IAlgebraicRewriteRule {
     }
     
     protected boolean matchesOperatorPattern(Mutable<ILogicalOperator> opRef, IOptimizationContext context) {
-        // First check that the operator is a select and its condition is a function call.
+        // First check that the operator is a join and its condition is a function call.
         AbstractLogicalOperator op1 = (AbstractLogicalOperator) opRef.getValue();
         if (context.checkIfInDontApplySet(this, op1)) {
             return false;
         }
         // Check op is a select.
-        if (op1.getOperatorTag() != LogicalOperatorTag.SELECT) {
+        if (op1.getOperatorTag() != LogicalOperatorTag.INNERJOIN) {
             return false;
         }
         // Set and analyze select.
-        selectRef = opRef;
-        select = (SelectOperator) op1;
+        joinRef = opRef;
+        join = (InnerJoinOperator) op1;
         // Check that the select's condition is a function call.
-        ILogicalExpression condExpr = select.getCondition().getValue();
+        ILogicalExpression condExpr = join.getCondition().getValue();
         if (condExpr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
             return false;
         }
-        selectCond = (AbstractFunctionCallExpression) condExpr;
-        return subTree.initFromSubTree(op1.getInputs().get(0));
+        joinCond = (AbstractFunctionCallExpression) condExpr;
+        leftSubTree.initFromSubTree(op1.getInputs().get(0));
+        rightSubTree.initFromSubTree(op1.getInputs().get(0));
+        // One of the subtrees must have a datasource scan.
+        if (leftSubTree.hasDataSourceScan() || rightSubTree.hasDataSourceScan()) {
+            return true;
+        }
+        return false;
     }
        
 	/**
@@ -320,10 +317,10 @@ public class IntroduceAccessMethodSearchRule implements IAlgebraicRewriteRule {
 	 *         false otherwise
 	 */
     protected boolean fillIndexExprs(String fieldName, int matchedFuncExprIndex,
-    		AccessMethodAnalysisContext analysisCtx) {
-    	AqlCompiledIndexDecl primaryIndexDecl = DatasetUtils.getPrimaryIndex(subTree.datasetDecl);
+            AqlCompiledDatasetDecl datasetDecl, AccessMethodAnalysisContext analysisCtx) {
+    	AqlCompiledIndexDecl primaryIndexDecl = DatasetUtils.getPrimaryIndex(datasetDecl);
     	List<String> primaryIndexFields = primaryIndexDecl.getFieldExprs();    	
-        List<AqlCompiledIndexDecl> indexCandidates = DatasetUtils.findSecondaryIndexesByOneOfTheKeys(subTree.datasetDecl, fieldName);
+        List<AqlCompiledIndexDecl> indexCandidates = DatasetUtils.findSecondaryIndexesByOneOfTheKeys(datasetDecl, fieldName);
         // Check whether the primary index is a candidate. If so, add it to the list.
         if (primaryIndexFields.contains(fieldName)) {
             if (indexCandidates == null) {
@@ -342,7 +339,7 @@ public class IntroduceAccessMethodSearchRule implements IAlgebraicRewriteRule {
         return true;
     }
 
-    protected void fillAllIndexExprs(List<LogicalVariable> varList, AccessMethodAnalysisContext analysisCtx) {
+    protected void fillAllIndexExprs(List<LogicalVariable> varList, OptimizableOperatorSubTree subTree, AccessMethodAnalysisContext analysisCtx) {
     	for (int optFuncExprIndex = 0; optFuncExprIndex < analysisCtx.matchedFuncExprs.size(); optFuncExprIndex++) {
     		for (int varIndex = 0; varIndex < varList.size(); varIndex++) {
     			LogicalVariable var = varList.get(varIndex);
@@ -377,7 +374,7 @@ public class IntroduceAccessMethodSearchRule implements IAlgebraicRewriteRule {
                 if (subTree.recordType.isOpen()) {
                     continue;
                 }
-                fillIndexExprs(fieldName, optFuncExprIndex, analysisCtx);
+                fillIndexExprs(fieldName, optFuncExprIndex, subTree.datasetDecl, analysisCtx);
     		}
     	}
     }

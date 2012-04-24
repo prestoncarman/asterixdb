@@ -93,63 +93,101 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         if (funcExpr.getFunctionIdentifier() == AsterixBuiltinFunctions.CONTAINS) {
             return AccessMethodUtils.analyzeFuncExprArgsForOneConstAndVar(funcExpr, analysisCtx);
         }
-        if (funcExpr.getFunctionIdentifier() == AsterixBuiltinFunctions.GET_ITEM) {
-            ILogicalExpression arg1 = funcExpr.getArguments().get(0).getValue();
-            ILogicalExpression arg2 = funcExpr.getArguments().get(1).getValue();
-            // The second arg is the item index to be accessed. It must be a constant.
-            if (arg2.getExpressionTag() != LogicalExpressionTag.CONSTANT) {
-                return false;
-            }
-            // The first arg must be a variable or a function expr.
-            // If it is a variable we must track its origin in the assigns to get the original function expr.
-            if (arg1.getExpressionTag() != LogicalExpressionTag.VARIABLE &&
-            		arg1.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
-                return false;
-            }
-            AbstractFunctionCallExpression matchedFuncExpr = null;
-        	// The get-item arg is function call, directly check if it's optimizable.
-            if (arg1.getExpressionTag() == LogicalExpressionTag.FUNCTION_CALL) {
-            	matchedFuncExpr = (AbstractFunctionCallExpression) arg1;
-            }
-        	// The get-item arg is a variable. Search the assigns for its origination function.
-            int matchedAssignIndex = -1;
-            if (arg1.getExpressionTag() == LogicalExpressionTag.VARIABLE) {            	
-            	VariableReferenceExpression varRefExpr = (VariableReferenceExpression) arg1;
-        		// Try to find variable ref expr in all assigns.
-            	for (int i = 0; i < assigns.size(); i++) {
-            		AssignOperator assign = assigns.get(i);
-                    List<LogicalVariable> assignVars = assign.getVariables();
-                    List<Mutable<ILogicalExpression>> assignExprs = assign.getExpressions();
-                    for (int j = 0; j < assignVars.size(); j++) {
-                        LogicalVariable var = assignVars.get(j);
-                        if (var != varRefExpr.getVariableReference()) {
-                            continue;
-                        }
-                        // We've matched the variable in the first assign. Now analyze the originating function.
-                        ILogicalExpression matchedExpr = assignExprs.get(j).getValue();
-                        if (matchedExpr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
-                            return false;
-                        }
-                        matchedAssignIndex = i;
-                        matchedFuncExpr = (AbstractFunctionCallExpression) matchedExpr;
-                        break;
+        return analyzeGetItemFuncExpr(funcExpr, assigns, analysisCtx);
+    }
+    
+    public boolean analyzeGetItemFuncExpr(AbstractFunctionCallExpression funcExpr, List<AssignOperator> assigns, AccessMethodAnalysisContext analysisCtx) {
+        if (funcExpr.getFunctionIdentifier() != AsterixBuiltinFunctions.GET_ITEM) {
+            return false;
+        }
+        ILogicalExpression arg1 = funcExpr.getArguments().get(0).getValue();
+        ILogicalExpression arg2 = funcExpr.getArguments().get(1).getValue();
+        // The second arg is the item index to be accessed. It must be a constant.
+        if (arg2.getExpressionTag() != LogicalExpressionTag.CONSTANT) {
+            return false;
+        }
+        // The first arg must be a variable or a function expr.
+        // If it is a variable we must track its origin in the assigns to get the original function expr.
+        if (arg1.getExpressionTag() != LogicalExpressionTag.VARIABLE &&
+                arg1.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
+            return false;
+        }
+        AbstractFunctionCallExpression matchedFuncExpr = null;
+        // The get-item arg is function call, directly check if it's optimizable.
+        if (arg1.getExpressionTag() == LogicalExpressionTag.FUNCTION_CALL) {
+            matchedFuncExpr = (AbstractFunctionCallExpression) arg1;
+        }
+        // The get-item arg is a variable. Search the assigns for its origination function.
+        int matchedAssignIndex = -1;
+        if (arg1.getExpressionTag() == LogicalExpressionTag.VARIABLE) {             
+            VariableReferenceExpression varRefExpr = (VariableReferenceExpression) arg1;
+            // Try to find variable ref expr in all assigns.
+            for (int i = 0; i < assigns.size(); i++) {
+                AssignOperator assign = assigns.get(i);
+                List<LogicalVariable> assignVars = assign.getVariables();
+                List<Mutable<ILogicalExpression>> assignExprs = assign.getExpressions();
+                for (int j = 0; j < assignVars.size(); j++) {
+                    LogicalVariable var = assignVars.get(j);
+                    if (var != varRefExpr.getVariableReference()) {
+                        continue;
                     }
-                    // We've already found a match.
-                    if (matchedFuncExpr != null) {
-                    	break;
+                    // We've matched the variable in the first assign. Now analyze the originating function.
+                    ILogicalExpression matchedExpr = assignExprs.get(j).getValue();
+                    if (matchedExpr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
+                        return false;
                     }
-            	}
+                    matchedAssignIndex = i;
+                    matchedFuncExpr = (AbstractFunctionCallExpression) matchedExpr;
+                    break;
+                }
+                // We've already found a match.
+                if (matchedFuncExpr != null) {
+                    break;
+                }
             }
-            // Check that the matched function is optimizable by this access method.
-            if (!secondLevelFuncIdents.contains(matchedFuncExpr.getFunctionIdentifier())) {
-                return false;
-            }
-            return analyzeSimilarityCheckFuncExprArgs(matchedFuncExpr, assigns, matchedAssignIndex, analysisCtx);
+        }
+        // Check that the matched function is optimizable by this access method.
+        if (!secondLevelFuncIdents.contains(matchedFuncExpr.getFunctionIdentifier())) {
+            return false;
+        }
+        boolean selectMatchFound = analyzeSelectSimilarityCheckFuncExprArgs(matchedFuncExpr, assigns, matchedAssignIndex, analysisCtx);
+        boolean joinMatchFound = analyzeJoinSimilarityCheckFuncExprArgs(matchedFuncExpr, assigns, matchedAssignIndex, analysisCtx);
+        if (selectMatchFound || joinMatchFound) {
+            return true;
         }
         return false;
     }
 
-    private boolean analyzeSimilarityCheckFuncExprArgs(AbstractFunctionCallExpression funcExpr,
+    private boolean analyzeJoinSimilarityCheckFuncExprArgs(AbstractFunctionCallExpression funcExpr,
+            List<AssignOperator> assigns, int matchedAssignIndex, AccessMethodAnalysisContext analysisCtx) {
+        // There should be exactly three arguments.
+        // The last function argument is assumed to be the similarity threshold.
+        IAlgebricksConstantValue constThreshVal = null;
+        ILogicalExpression arg3 = funcExpr.getArguments().get(2).getValue();
+        if (arg3.getExpressionTag() != LogicalExpressionTag.CONSTANT) {
+            return false;
+        }
+        constThreshVal = ((ConstantExpression) arg3).getValue();
+        ILogicalExpression arg1 = funcExpr.getArguments().get(0).getValue();
+        ILogicalExpression arg2 = funcExpr.getArguments().get(1).getValue();
+        // We expect arg1 and arg2 to be non-constants for a join.
+        if (arg1.getExpressionTag() == LogicalExpressionTag.CONSTANT 
+                || arg2.getExpressionTag() == LogicalExpressionTag.CONSTANT) {
+            return false;
+        }
+        LogicalVariable fieldVar1 = getNonConstArgFieldVar(arg1, funcExpr, assigns, matchedAssignIndex);
+        if (fieldVar1 == null) {
+            return false;
+        }
+        LogicalVariable fieldVar2 = getNonConstArgFieldVar(arg2, funcExpr, assigns, matchedAssignIndex);
+        if (fieldVar2 == null) {
+            return false;
+        }
+        analysisCtx.matchedFuncExprs.add(new OptimizableJoinTernaryFuncExpr(funcExpr, fieldVar1, fieldVar2, constThreshVal));
+        return true;
+    }
+    
+    private boolean analyzeSelectSimilarityCheckFuncExprArgs(AbstractFunctionCallExpression funcExpr,
             List<AssignOperator> assigns, int matchedAssignIndex, AccessMethodAnalysisContext analysisCtx) {
         // There should be exactly three arguments.
         // The last function argument is assumed to be the similarity threshold.
@@ -177,8 +215,18 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         }
         ConstantExpression constExpr = (ConstantExpression) constArg;
         IAlgebricksConstantValue constFilterVal = constExpr.getValue();
+        LogicalVariable fieldVar = getNonConstArgFieldVar(nonConstArg, funcExpr, assigns, matchedAssignIndex);
+        if (fieldVar == null) {
+            return false;
+        }
+        analysisCtx.matchedFuncExprs.add(new OptimizableSelectTernaryFuncExpr(funcExpr, constFilterVal, constThreshVal, fieldVar));
+        return true;
+    }
+    
+    private LogicalVariable getNonConstArgFieldVar(ILogicalExpression nonConstArg, AbstractFunctionCallExpression funcExpr,
+            List<AssignOperator> assigns, int matchedAssignIndex) {
         LogicalVariable fieldVar = null;
-        // Analyze arg1 and arg2, depending on similarity function.
+        // Analyze nonConstArg depending on similarity function.
         if (funcExpr.getFunctionIdentifier() == AsterixBuiltinFunctions.SIMILARITY_JACCARD_CHECK) {            
             AbstractFunctionCallExpression nonConstFuncExpr = funcExpr;
             if (nonConstArg.getExpressionTag() == LogicalExpressionTag.FUNCTION_CALL) {
@@ -186,7 +234,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
                 // TODO: Currently, we're only looking for word and gram tokens (non hashed).
                 if (nonConstFuncExpr.getFunctionIdentifier() != AsterixBuiltinFunctions.WORD_TOKENS &&
                         nonConstFuncExpr.getFunctionIdentifier() != AsterixBuiltinFunctions.GRAM_TOKENS) {
-                    return false;
+                    return null;
                 }
                 // Find the variable that is being tokenized.
                 nonConstArg = nonConstFuncExpr.getArguments().get(0).getValue();
@@ -227,18 +275,14 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
                         break;
                     }
                 }
-                analysisCtx.matchedFuncExprs.add(new OptimizableTernaryFuncExpr(funcExpr, constFilterVal, constThreshVal, fieldVar));
-                return true;
             }
         }
         if (funcExpr.getFunctionIdentifier() == AsterixBuiltinFunctions.EDIT_DISTANCE_CHECK) {
             if (nonConstArg.getExpressionTag() == LogicalExpressionTag.VARIABLE) {
                 fieldVar = ((VariableReferenceExpression) nonConstArg).getVariableReference();                
-                analysisCtx.matchedFuncExprs.add(new OptimizableTernaryFuncExpr(funcExpr, constFilterVal, constThreshVal, fieldVar));
-                return true;
             }
         }
-        return false;
+        return fieldVar;
     }
     
     @Override
@@ -265,7 +309,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         // Pick the first expr optimizable by this index.
         List<Integer> indexExprs = analysisCtx.getIndexExprs(chosenIndex);
         int firstExprIndex = indexExprs.get(0);
-        OptimizableBinaryFuncExpr optFuncExpr = analysisCtx.matchedFuncExprs.get(firstExprIndex);
+        OptimizableSelectBinaryFuncExpr optFuncExpr = (OptimizableSelectBinaryFuncExpr) analysisCtx.matchedFuncExprs.get(firstExprIndex);
         
         DataSourceScanOperator dataSourceScan = (DataSourceScanOperator) dataSourceScanRef.getValue();
         // List of arguments to be passed into an unnest.
@@ -318,7 +362,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         return true;
     }
     
-    private void addKeyConstantType(OptimizableBinaryFuncExpr optFuncExpr, ArrayList<Mutable<ILogicalExpression>> secondaryIndexFuncArgs) throws AlgebricksException {
+    private void addKeyConstantType(OptimizableSelectBinaryFuncExpr optFuncExpr, ArrayList<Mutable<ILogicalExpression>> secondaryIndexFuncArgs) throws AlgebricksException {
         // Pass on type of constant value to pick the right tokenizer in jobgen.
         AsterixConstantValue constVal = (AsterixConstantValue) optFuncExpr.getConstVal();
         IAObject obj = constVal.getObject();
@@ -329,7 +373,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(new AInt32(typeTag.ordinal())))));
     }
     
-    private void addFunctionSpecificArgs(OptimizableBinaryFuncExpr optFuncExpr, ArrayList<Mutable<ILogicalExpression>> secondaryIndexFuncArgs) {
+    private void addFunctionSpecificArgs(OptimizableSelectBinaryFuncExpr optFuncExpr, ArrayList<Mutable<ILogicalExpression>> secondaryIndexFuncArgs) {
         if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.CONTAINS) {
             // Value 0 represents a conjunctive search modifier.
             secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(
@@ -343,7 +387,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
             secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(
                     new AInt32(SearchModifierType.JACCARD.ordinal())))));
             // Add the similarity threshold.
-            OptimizableTernaryFuncExpr ternOptFuncExpr = (OptimizableTernaryFuncExpr) optFuncExpr;
+            OptimizableSelectTernaryFuncExpr ternOptFuncExpr = (OptimizableSelectTernaryFuncExpr) optFuncExpr;
             secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(ternOptFuncExpr.getSecondConstVal())));
         }
         if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.EDIT_DISTANCE_CHECK) {
@@ -351,12 +395,12 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
             secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(
                     new AInt32(SearchModifierType.EDIT_DISTANCE.ordinal())))));
             // Add the similarity threshold.
-            OptimizableTernaryFuncExpr ternOptFuncExpr = (OptimizableTernaryFuncExpr) optFuncExpr;
+            OptimizableSelectTernaryFuncExpr ternOptFuncExpr = (OptimizableSelectTernaryFuncExpr) optFuncExpr;
             secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(ternOptFuncExpr.getSecondConstVal())));
         }
     }
 
-    private void addKeyVarsAndExprs(OptimizableBinaryFuncExpr optFuncExpr, ArrayList<LogicalVariable> keyVarList, ArrayList<Mutable<ILogicalExpression>> keyExprList, ArrayList<Mutable<ILogicalExpression>> secondaryIndexFuncArgs, IOptimizationContext context) throws AlgebricksException {
+    private void addKeyVarsAndExprs(OptimizableSelectBinaryFuncExpr optFuncExpr, ArrayList<LogicalVariable> keyVarList, ArrayList<Mutable<ILogicalExpression>> keyExprList, ArrayList<Mutable<ILogicalExpression>> secondaryIndexFuncArgs, IOptimizationContext context) throws AlgebricksException {
         // For now we are assuming a single secondary index key.
         // Add a variable and its expr to the lists which will be passed into an assign op.
         LogicalVariable keyVar = context.newVar();
@@ -369,11 +413,11 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
     }
 
     @Override
-    public boolean exprIsOptimizable(AqlCompiledIndexDecl index, OptimizableBinaryFuncExpr expr) {
+    public boolean exprIsOptimizable(AqlCompiledIndexDecl index, OptimizableSelectBinaryFuncExpr expr) {
         if (expr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.EDIT_DISTANCE_CHECK) {
             // Check for panic.
             // TODO: Panic also depends on prePost which is currently hardcoded to be true.
-            OptimizableTernaryFuncExpr ternaryExpr = (OptimizableTernaryFuncExpr) expr;            
+            OptimizableSelectTernaryFuncExpr ternaryExpr = (OptimizableSelectTernaryFuncExpr) expr;            
             AsterixConstantValue listOrStrConstVal = (AsterixConstantValue) expr.getConstVal();
             AsterixConstantValue intConstVal = (AsterixConstantValue) ternaryExpr.getSecondConstVal();
             IAObject listOrStrObj = listOrStrConstVal.getObject();

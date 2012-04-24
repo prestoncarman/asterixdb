@@ -104,7 +104,7 @@ public class BTreeAccessMethod implements IAccessMethod {
         boolean[] highKeyInclusive = new boolean[numSecondaryKeys];
         
         List<Integer> exprList = analysisCtx.indexExprs.get(chosenIndex);
-        List<OptimizableBinaryFuncExpr> matchedFuncExprs = analysisCtx.matchedFuncExprs;        
+        List<IOptimizableFuncExpr> matchedFuncExprs = analysisCtx.matchedFuncExprs;
         // List of function expressions that will be replaced by the secondary-index search.
         // These func exprs will be removed from the select condition at the very end of this method.
         Set<ILogicalExpression> replacedFuncExprs = new HashSet<ILogicalExpression>();
@@ -116,17 +116,18 @@ public class BTreeAccessMethod implements IAccessMethod {
         // and formulate a range predicate on the secondary-index keys.
         for (Integer exprIndex : exprList) {
             // Position of the field of matchedFuncExprs.get(exprIndex) in the chosen index's indexed exprs.
-            int keyPos = indexOf(matchedFuncExprs.get(exprIndex).getFieldName(), chosenIndex.getFieldExprs());
+            OptimizableSelectBinaryFuncExpr optFuncExpr = (OptimizableSelectBinaryFuncExpr) matchedFuncExprs.get(exprIndex);
+            int keyPos = indexOf(optFuncExpr.getFieldName(), chosenIndex.getFieldExprs());
             if (keyPos < 0) {
                 throw new InternalError();
             }
-            LimitType limit = getLimitType(matchedFuncExprs.get(exprIndex));
+            LimitType limit = getLimitType(optFuncExpr);
             switch (limit) {
                 case EQUAL: {
                     if (lowKeyLimits[keyPos] == null && highKeyLimits[keyPos] == null) {
                         lowKeyLimits[keyPos] = highKeyLimits[keyPos] = limit;
                         lowKeyInclusive[keyPos] = highKeyInclusive[keyPos] = true;
-                        lowKeyConstants[keyPos] = highKeyConstants[keyPos] = matchedFuncExprs.get(exprIndex).getConstVal();
+                        lowKeyConstants[keyPos] = highKeyConstants[keyPos] = optFuncExpr.getConstVal();
                     } else {
                         couldntFigureOut = true;
                     }
@@ -137,7 +138,7 @@ public class BTreeAccessMethod implements IAccessMethod {
                 case HIGH_EXCLUSIVE: {
                     if (highKeyLimits[keyPos] == null || (highKeyLimits[keyPos] != null && highKeyInclusive[keyPos])) {
                         highKeyLimits[keyPos] = limit;
-                        highKeyConstants[keyPos] = matchedFuncExprs.get(exprIndex).getConstVal();
+                        highKeyConstants[keyPos] = optFuncExpr.getConstVal();
                         highKeyInclusive[keyPos] = false;
                     } else {
                         couldntFigureOut = true;
@@ -148,7 +149,7 @@ public class BTreeAccessMethod implements IAccessMethod {
                 case HIGH_INCLUSIVE: {
                     if (highKeyLimits[keyPos] == null) {
                         highKeyLimits[keyPos] = limit;
-                        highKeyConstants[keyPos] = matchedFuncExprs.get(exprIndex).getConstVal();
+                        highKeyConstants[keyPos] = optFuncExpr.getConstVal();
                         highKeyInclusive[keyPos] = true;
                     } else {
                         couldntFigureOut = true;
@@ -159,7 +160,7 @@ public class BTreeAccessMethod implements IAccessMethod {
                 case LOW_EXCLUSIVE: {
                     if (lowKeyLimits[keyPos] == null || (lowKeyLimits[keyPos] != null && lowKeyInclusive[keyPos])) {
                         lowKeyLimits[keyPos] = limit;
-                        lowKeyConstants[keyPos] = matchedFuncExprs.get(exprIndex).getConstVal();
+                        lowKeyConstants[keyPos] = optFuncExpr.getConstVal();
                         lowKeyInclusive[keyPos] = false;
                     } else {
                         couldntFigureOut = true;
@@ -170,7 +171,7 @@ public class BTreeAccessMethod implements IAccessMethod {
                 case LOW_INCLUSIVE: {
                     if (lowKeyLimits[keyPos] == null) {
                         lowKeyLimits[keyPos] = limit;
-                        lowKeyConstants[keyPos] = matchedFuncExprs.get(exprIndex).getConstVal();
+                        lowKeyConstants[keyPos] = optFuncExpr.getConstVal();
                         lowKeyInclusive[keyPos] = true;
                     } else {
                         couldntFigureOut = true;
@@ -358,7 +359,7 @@ public class BTreeAccessMethod implements IAccessMethod {
         return -1;
     }
     
-    private LimitType getLimitType(OptimizableBinaryFuncExpr optFuncExpr) {
+    private LimitType getLimitType(OptimizableSelectBinaryFuncExpr optFuncExpr) {
         ComparisonKind ck = AlgebricksBuiltinFunctions.getComparisonType(optFuncExpr.getFuncExpr().getFunctionIdentifier());
         LimitType limit = null;
         switch (ck) {
@@ -402,7 +403,7 @@ public class BTreeAccessMethod implements IAccessMethod {
     }
 
     @Override
-    public boolean exprIsOptimizable(AqlCompiledIndexDecl index, OptimizableBinaryFuncExpr expr) {
+    public boolean exprIsOptimizable(AqlCompiledIndexDecl index, OptimizableSelectBinaryFuncExpr expr) {
         // No additional analysis required.
         return true;
     }

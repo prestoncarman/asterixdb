@@ -53,7 +53,7 @@ public class RTreeAccessMethod implements IAccessMethod {
     public boolean analyzeFuncExprArgs(AbstractFunctionCallExpression funcExpr, List<AssignOperator> assigns, AccessMethodAnalysisContext analysisCtx) {
         return AccessMethodUtils.analyzeFuncExprArgsForOneConstAndVar(funcExpr, analysisCtx);
     }
-
+    
     @Override
     public boolean matchAllIndexExprs() {
         return true;
@@ -69,16 +69,17 @@ public class RTreeAccessMethod implements IAccessMethod {
             Mutable<ILogicalOperator> dataSourceScanRef, AqlCompiledDatasetDecl datasetDecl, ARecordType recordType,
             AqlCompiledIndexDecl chosenIndex, AccessMethodAnalysisContext analysisCtx, IOptimizationContext context)
             throws AlgebricksException {
-        // Get the number of dimensions corresponding to the field indexed by
-        // chosenIndex.
-        IAType spatialType = AqlCompiledIndexDecl.keyFieldType(analysisCtx.matchedFuncExprs.get(0).getFieldName(), recordType);
-        int numDimensions = NonTaggedFormatUtil.getNumDimensions(spatialType.getTypeTag());
-        int numSecondaryKeys = numDimensions * 2;
-        
         // TODO: We can probably do something smarter here based on selectivity or MBR area.
         // Pick the first expr optimizable by this index.
         List<Integer> indexExprs = analysisCtx.getIndexExprs(chosenIndex);
         int firstExprIndex = indexExprs.get(0);
+        OptimizableSelectBinaryFuncExpr optFuncExpr = (OptimizableSelectBinaryFuncExpr) analysisCtx.matchedFuncExprs.get(firstExprIndex);
+        
+        // Get the number of dimensions corresponding to the field indexed by
+        // chosenIndex.
+        IAType spatialType = AqlCompiledIndexDecl.keyFieldType(optFuncExpr.getFieldName(), recordType);
+        int numDimensions = NonTaggedFormatUtil.getNumDimensions(spatialType.getTypeTag());
+        int numSecondaryKeys = numDimensions * 2;
         
         DataSourceScanOperator dataSourceScan = (DataSourceScanOperator) dataSourceScanRef.getValue();
         // List of arguments to be passed into an unnest.
@@ -104,7 +105,7 @@ public class RTreeAccessMethod implements IAccessMethod {
             AbstractFunctionCallExpression createMBR = new ScalarFunctionCallExpression(
                     FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.CREATE_MBR));
             // Spatial object is the constant from the func expr we are optimizing.
-            createMBR.getArguments().add(new MutableObject<ILogicalExpression>(new ConstantExpression(analysisCtx.matchedFuncExprs.get(firstExprIndex).getConstVal())));
+            createMBR.getArguments().add(new MutableObject<ILogicalExpression>(new ConstantExpression(optFuncExpr.getConstVal())));
             // The number of dimensions.
             createMBR.getArguments().add(
                     new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(
@@ -167,7 +168,7 @@ public class RTreeAccessMethod implements IAccessMethod {
     }
 
     @Override
-    public boolean exprIsOptimizable(AqlCompiledIndexDecl index, OptimizableBinaryFuncExpr expr) {
+    public boolean exprIsOptimizable(AqlCompiledIndexDecl index, OptimizableSelectBinaryFuncExpr expr) {
         // No additional analysis required.
         return true;
     }

@@ -49,7 +49,7 @@ public interface IAccessMethod {
      * @return true if funcExpr is optimizable by this access method, false otherwise 
      */
     public boolean analyzeFuncExprArgs(AbstractFunctionCallExpression funcExpr, List<AssignOperator> assigns, AccessMethodAnalysisContext analysisCtx);
- 
+    
     /**
      * Indicates whether all index expressions must be matched in order for this
      * index to be applicable.
@@ -90,5 +90,5 @@ public interface IAccessMethod {
      * @param expr
      * @return
      */
-    public boolean exprIsOptimizable(AqlCompiledIndexDecl index, OptimizableBinaryFuncExpr expr);
+    public boolean exprIsOptimizable(AqlCompiledIndexDecl index, OptimizableSelectBinaryFuncExpr expr);
 }

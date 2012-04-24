@@ -1,8 +1,1 @@
-similarity/jaccard-let-to-jaccard-check_01.aql
-similarity/jaccard-let-to-jaccard-check_02.aql
-similarity/jaccard-let-to-jaccard-check_03.aql
-similarity/jaccard-let-to-jaccard-check_04.aql
-similarity/jaccard-let-to-jaccard-check_05.aql
-similarity/jaccard-let-to-jaccard-check_06.aql
-similarity/jaccard-let-to-jaccard-check_07.aql
-similarity/jaccard-let-to-jaccard-check_08.aql
+inverted-index-join/ngram-edit-distance.aql
