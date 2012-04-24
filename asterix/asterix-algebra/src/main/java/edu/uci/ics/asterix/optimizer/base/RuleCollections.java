@@ -85,6 +85,7 @@ public final class RuleCollections {
         normalization.add(new ConstantFoldingRule());
         normalization.add(new UnnestToDataScanRule());
         normalization.add(new IfElseToSwitchCaseFunctionRule());
+        normalization.add(new SimilarityCheckRule());
         return normalization;
     }
 
@@ -134,8 +135,7 @@ public final class RuleCollections {
         List<IAlgebraicRewriteRule> fuzzy = new LinkedList<IAlgebraicRewriteRule>();
         fuzzy.add(new FuzzyJoinRule());
         fuzzy.add(new InferTypesRule());
-        fuzzy.add(new FuzzyEqRule());
-        fuzzy.add(new SimilarityCheckRule());
+        fuzzy.add(new FuzzyEqRule());        
         return fuzzy;
     }
 
