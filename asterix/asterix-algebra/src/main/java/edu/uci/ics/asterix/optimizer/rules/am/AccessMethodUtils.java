@@ -78,7 +78,7 @@ public class AccessMethodUtils {
         } else {
             return false;
         }
-        analysisCtx.matchedFuncExprs.add(new OptimizableSelectBinaryFuncExpr(funcExpr, constFilterVal, fieldVar));
+        analysisCtx.matchedFuncExprs.add(new OptimizableFuncExpr(funcExpr, fieldVar, constFilterVal));
         return true;
     }
     

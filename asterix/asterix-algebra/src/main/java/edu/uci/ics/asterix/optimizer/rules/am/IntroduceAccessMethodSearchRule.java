@@ -8,6 +8,7 @@ import java.util.Map;
 
 import org.apache.commons.lang3.mutable.Mutable;
 
+import edu.uci.ics.asterix.metadata.declared.AqlCompiledDatasetDecl;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl;
 import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
 import edu.uci.ics.asterix.metadata.utils.DatasetUtils;
@@ -123,7 +124,7 @@ public class IntroduceAccessMethodSearchRule implements IAlgebraicRewriteRule {
             Map.Entry<IAccessMethod, AccessMethodAnalysisContext> entry = amIt.next();
             AccessMethodAnalysisContext amCtx = entry.getValue();
             // For the current access method type, map variables from the assign op to applicable indexes.
-            fillAllIndexExprs(varList, amCtx);
+            fillAllIndexExprs(varList, subTree, amCtx);
             pruneIndexCandidates(entry.getKey(), amCtx);
             // Remove access methods for which there are definitely no applicable indexes.
             if (amCtx.indexExprs.isEmpty()) {
@@ -195,13 +196,14 @@ public class IntroduceAccessMethodSearchRule implements IAlgebraicRewriteRule {
                 boolean foundKeyField = false;
                 while (exprsIter.hasNext()) {
                     Integer ix = exprsIter.next();
-                    OptimizableSelectBinaryFuncExpr optFuncExpr = (OptimizableSelectBinaryFuncExpr) analysisCtx.matchedFuncExprs.get(ix);
+                    IOptimizableFuncExpr optFuncExpr = analysisCtx.matchedFuncExprs.get(ix);
                     // If expr is not optimizable by concrete index then remove expr and continue.
                     if (!accessMethod.exprIsOptimizable(index, optFuncExpr)) {
                         exprsIter.remove();
                         continue;
                     }
-                    if (optFuncExpr.getFieldName().equals(keyField)) {
+                    // TODO: May have to look at multiple fields here. For now just pick first one.
+                    if (optFuncExpr.getFieldName(0).equals(keyField)) {
                         foundKeyField = true;
                         if (lastFieldMatched == i - 1) {
                             lastFieldMatched = i;
@@ -314,16 +316,16 @@ public class IntroduceAccessMethodSearchRule implements IAlgebraicRewriteRule {
         return subTree.initFromSubTree(op1.getInputs().get(0));
     }
        
-	/**
+    /**
 	 * 
 	 * @return returns true if a candidate index was added to foundIndexExprs,
 	 *         false otherwise
 	 */
     protected boolean fillIndexExprs(String fieldName, int matchedFuncExprIndex,
-    		AccessMethodAnalysisContext analysisCtx) {
-    	AqlCompiledIndexDecl primaryIndexDecl = DatasetUtils.getPrimaryIndex(subTree.datasetDecl);
+            AqlCompiledDatasetDecl datasetDecl, AccessMethodAnalysisContext analysisCtx) {
+    	AqlCompiledIndexDecl primaryIndexDecl = DatasetUtils.getPrimaryIndex(datasetDecl);
     	List<String> primaryIndexFields = primaryIndexDecl.getFieldExprs();    	
-        List<AqlCompiledIndexDecl> indexCandidates = DatasetUtils.findSecondaryIndexesByOneOfTheKeys(subTree.datasetDecl, fieldName);
+        List<AqlCompiledIndexDecl> indexCandidates = DatasetUtils.findSecondaryIndexesByOneOfTheKeys(datasetDecl, fieldName);
         // Check whether the primary index is a candidate. If so, add it to the list.
         if (primaryIndexFields.contains(fieldName)) {
             if (indexCandidates == null) {
@@ -342,14 +344,21 @@ public class IntroduceAccessMethodSearchRule implements IAlgebraicRewriteRule {
         return true;
     }
 
-    protected void fillAllIndexExprs(List<LogicalVariable> varList, AccessMethodAnalysisContext analysisCtx) {
+    protected void fillAllIndexExprs(List<LogicalVariable> varList, OptimizableOperatorSubTree subTree, AccessMethodAnalysisContext analysisCtx) {
     	for (int optFuncExprIndex = 0; optFuncExprIndex < analysisCtx.matchedFuncExprs.size(); optFuncExprIndex++) {
     		for (int varIndex = 0; varIndex < varList.size(); varIndex++) {
     			LogicalVariable var = varList.get(varIndex);
-    			// TODO: Fix this for joins.
-    			OptimizableSelectBinaryFuncExpr optFuncExpr = (OptimizableSelectBinaryFuncExpr) analysisCtx.matchedFuncExprs.get(optFuncExprIndex);
-    			// Vars do not match, so just continue.
-    			if (var != optFuncExpr.getLogicalVar()) {
+    			IOptimizableFuncExpr optFuncExpr = analysisCtx.matchedFuncExprs.get(optFuncExprIndex);
+    			// TODO: Put this search into a separate method.
+    			int funcVarIndex = -1;
+    			for (int j = 0; j < optFuncExpr.getNumLogicalVars(); j++) {
+    				if (var == optFuncExpr.getLogicalVar(j)) {
+    					funcVarIndex = j;
+    					break;
+    				}
+    			}
+    			// No matching var in optFuncExpr.
+    			if (funcVarIndex == -1) {
     				continue;
     			}
     			// At this point we have matched the optimizable func expr at optFuncExprIndex to an assigned variable.
@@ -372,12 +381,12 @@ public class IntroduceAccessMethodSearchRule implements IAlgebraicRewriteRule {
                     fieldName = DatasetUtils.getPartitioningExpressions(subTree.datasetDecl).get(varIndex);
                 }
                 // Set the fieldName in the corresponding matched function expression.
-                optFuncExpr.setFieldName(fieldName);
+                optFuncExpr.setFieldName(funcVarIndex, fieldName);
                 // TODO: Don't just ignore open record types.
                 if (subTree.recordType.isOpen()) {
                     continue;
                 }
-                fillIndexExprs(fieldName, optFuncExprIndex, analysisCtx);
+                fillIndexExprs(fieldName, optFuncExprIndex, subTree.datasetDecl, analysisCtx);
     		}
     	}
     }

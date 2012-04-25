@@ -90,5 +90,5 @@ public interface IAccessMethod {
      * @param expr
      * @return
      */
-    public boolean exprIsOptimizable(AqlCompiledIndexDecl index, OptimizableSelectBinaryFuncExpr expr);
+    public boolean exprIsOptimizable(AqlCompiledIndexDecl index, IOptimizableFuncExpr optFuncExpr);
 }

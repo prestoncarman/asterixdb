@@ -72,7 +72,7 @@ public class IntroduceJoinAccessMethodSearchRule implements IAlgebraicRewriteRul
             return false;
         }
         
-        // Analyze select condition.
+        // Analyze condition on those optimizable subtrees that have a datasource scan.
         Map<IAccessMethod, AccessMethodAnalysisContext> analyzedAMs = new HashMap<IAccessMethod, AccessMethodAnalysisContext>();
         boolean matchInLeftSubTree = false;
         boolean matchInRightSubTree = false;
@@ -88,15 +88,14 @@ public class IntroduceJoinAccessMethodSearchRule implements IAlgebraicRewriteRul
 
         // Set dataset and type metadata.
         AqlMetadataProvider metadataProvider = (AqlMetadataProvider) context.getMetadataProvider();
-        if (!leftSubTree.setDatasetAndTypeMetadata(metadataProvider) && !rightSubTree.setDatasetAndTypeMetadata(metadataProvider)) {
-            return false;
-        }
-        
+        // TODO: Check return values of setting metadata.
         if (matchInLeftSubTree) {
-            fillSubTreeIndexExprs(leftSubTree, analyzedAMs);
+        	leftSubTree.setDatasetAndTypeMetadata(metadataProvider);
+        	fillSubTreeIndexExprs(leftSubTree, analyzedAMs);
         }
         if (matchInRightSubTree) {
-            fillSubTreeIndexExprs(rightSubTree, analyzedAMs);
+        	rightSubTree.setDatasetAndTypeMetadata(metadataProvider);
+        	fillSubTreeIndexExprs(rightSubTree, analyzedAMs);
         }
         
         /*
@@ -186,13 +185,14 @@ public class IntroduceJoinAccessMethodSearchRule implements IAlgebraicRewriteRul
                 boolean foundKeyField = false;
                 while (exprsIter.hasNext()) {
                     Integer ix = exprsIter.next();
-                    OptimizableSelectBinaryFuncExpr optFuncExpr = (OptimizableSelectBinaryFuncExpr) analysisCtx.matchedFuncExprs.get(ix);
+                    IOptimizableFuncExpr optFuncExpr = analysisCtx.matchedFuncExprs.get(ix);
                     // If expr is not optimizable by concrete index then remove expr and continue.
                     if (!accessMethod.exprIsOptimizable(index, optFuncExpr)) {
                         exprsIter.remove();
                         continue;
                     }
-                    if (optFuncExpr.getFieldName().equals(keyField)) {
+                    // TODO: May have to look at multiple fields here. For now just pick first one.
+                    if (optFuncExpr.getFieldName(0).equals(keyField)) {
                         foundKeyField = true;
                         if (lastFieldMatched == i - 1) {
                             lastFieldMatched = i;
@@ -343,10 +343,17 @@ public class IntroduceJoinAccessMethodSearchRule implements IAlgebraicRewriteRul
     	for (int optFuncExprIndex = 0; optFuncExprIndex < analysisCtx.matchedFuncExprs.size(); optFuncExprIndex++) {
     		for (int varIndex = 0; varIndex < varList.size(); varIndex++) {
     			LogicalVariable var = varList.get(varIndex);
-    			// TODO: Fix this for joins.
-    			OptimizableSelectBinaryFuncExpr optFuncExpr = (OptimizableSelectBinaryFuncExpr) analysisCtx.matchedFuncExprs.get(optFuncExprIndex);
-    			// Vars do not match, so just continue.
-    			if (var != optFuncExpr.getLogicalVar()) {
+    			IOptimizableFuncExpr optFuncExpr = analysisCtx.matchedFuncExprs.get(optFuncExprIndex);
+    			// TODO: Put this search into a separate method.
+    			int funcVarIndex = -1;
+    			for (int j = 0; j < optFuncExpr.getNumLogicalVars(); j++) {
+    				if (var == optFuncExpr.getLogicalVar(j)) {
+    					funcVarIndex = j;
+    					break;
+    				}
+    			}
+    			// No matching var in optFuncExpr.
+    			if (funcVarIndex == -1) {
     				continue;
     			}
     			// At this point we have matched the optimizable func expr at optFuncExprIndex to an assigned variable.
@@ -369,7 +376,7 @@ public class IntroduceJoinAccessMethodSearchRule implements IAlgebraicRewriteRul
                     fieldName = DatasetUtils.getPartitioningExpressions(subTree.datasetDecl).get(varIndex);
                 }
                 // Set the fieldName in the corresponding matched function expression.
-                optFuncExpr.setFieldName(fieldName);
+                optFuncExpr.setFieldName(funcVarIndex, fieldName);
                 // TODO: Don't just ignore open record types.
                 if (subTree.recordType.isOpen()) {
                     continue;

@@ -116,8 +116,8 @@ public class BTreeAccessMethod implements IAccessMethod {
         // and formulate a range predicate on the secondary-index keys.
         for (Integer exprIndex : exprList) {
             // Position of the field of matchedFuncExprs.get(exprIndex) in the chosen index's indexed exprs.
-            OptimizableSelectBinaryFuncExpr optFuncExpr = (OptimizableSelectBinaryFuncExpr) matchedFuncExprs.get(exprIndex);
-            int keyPos = indexOf(optFuncExpr.getFieldName(), chosenIndex.getFieldExprs());
+            IOptimizableFuncExpr optFuncExpr = matchedFuncExprs.get(exprIndex);
+            int keyPos = indexOf(optFuncExpr.getFieldName(0), chosenIndex.getFieldExprs());
             if (keyPos < 0) {
                 throw new InternalError();
             }
@@ -127,7 +127,7 @@ public class BTreeAccessMethod implements IAccessMethod {
                     if (lowKeyLimits[keyPos] == null && highKeyLimits[keyPos] == null) {
                         lowKeyLimits[keyPos] = highKeyLimits[keyPos] = limit;
                         lowKeyInclusive[keyPos] = highKeyInclusive[keyPos] = true;
-                        lowKeyConstants[keyPos] = highKeyConstants[keyPos] = optFuncExpr.getConstVal();
+                        lowKeyConstants[keyPos] = highKeyConstants[keyPos] = optFuncExpr.getConstantVal(0);
                     } else {
                         couldntFigureOut = true;
                     }
@@ -138,7 +138,7 @@ public class BTreeAccessMethod implements IAccessMethod {
                 case HIGH_EXCLUSIVE: {
                     if (highKeyLimits[keyPos] == null || (highKeyLimits[keyPos] != null && highKeyInclusive[keyPos])) {
                         highKeyLimits[keyPos] = limit;
-                        highKeyConstants[keyPos] = optFuncExpr.getConstVal();
+                        highKeyConstants[keyPos] = optFuncExpr.getConstantVal(0);
                         highKeyInclusive[keyPos] = false;
                     } else {
                         couldntFigureOut = true;
@@ -149,7 +149,7 @@ public class BTreeAccessMethod implements IAccessMethod {
                 case HIGH_INCLUSIVE: {
                     if (highKeyLimits[keyPos] == null) {
                         highKeyLimits[keyPos] = limit;
-                        highKeyConstants[keyPos] = optFuncExpr.getConstVal();
+                        highKeyConstants[keyPos] = optFuncExpr.getConstantVal(0);
                         highKeyInclusive[keyPos] = true;
                     } else {
                         couldntFigureOut = true;
@@ -160,7 +160,7 @@ public class BTreeAccessMethod implements IAccessMethod {
                 case LOW_EXCLUSIVE: {
                     if (lowKeyLimits[keyPos] == null || (lowKeyLimits[keyPos] != null && lowKeyInclusive[keyPos])) {
                         lowKeyLimits[keyPos] = limit;
-                        lowKeyConstants[keyPos] = optFuncExpr.getConstVal();
+                        lowKeyConstants[keyPos] = optFuncExpr.getConstantVal(0);
                         lowKeyInclusive[keyPos] = false;
                     } else {
                         couldntFigureOut = true;
@@ -171,7 +171,7 @@ public class BTreeAccessMethod implements IAccessMethod {
                 case LOW_INCLUSIVE: {
                     if (lowKeyLimits[keyPos] == null) {
                         lowKeyLimits[keyPos] = limit;
-                        lowKeyConstants[keyPos] = optFuncExpr.getConstVal();
+                        lowKeyConstants[keyPos] = optFuncExpr.getConstantVal(0);
                         lowKeyInclusive[keyPos] = true;
                     } else {
                         couldntFigureOut = true;
@@ -359,7 +359,7 @@ public class BTreeAccessMethod implements IAccessMethod {
         return -1;
     }
     
-    private LimitType getLimitType(OptimizableSelectBinaryFuncExpr optFuncExpr) {
+    private LimitType getLimitType(IOptimizableFuncExpr optFuncExpr) {
         ComparisonKind ck = AlgebricksBuiltinFunctions.getComparisonType(optFuncExpr.getFuncExpr().getFunctionIdentifier());
         LimitType limit = null;
         switch (ck) {
@@ -368,19 +368,19 @@ public class BTreeAccessMethod implements IAccessMethod {
                 break;
             }
             case GE: {
-                limit = optFuncExpr.constantIsOnLhs() ? LimitType.HIGH_INCLUSIVE : LimitType.LOW_INCLUSIVE;
+                limit = constantIsOnLhs(optFuncExpr) ? LimitType.HIGH_INCLUSIVE : LimitType.LOW_INCLUSIVE;
                 break;
             }
             case GT: {
-                limit = optFuncExpr.constantIsOnLhs() ? LimitType.HIGH_EXCLUSIVE : LimitType.LOW_EXCLUSIVE;
+                limit = constantIsOnLhs(optFuncExpr) ? LimitType.HIGH_EXCLUSIVE : LimitType.LOW_EXCLUSIVE;
                 break;
             }
             case LE: {
-                limit = optFuncExpr.constantIsOnLhs() ? LimitType.LOW_INCLUSIVE : LimitType.HIGH_INCLUSIVE;
+                limit = constantIsOnLhs(optFuncExpr) ? LimitType.LOW_INCLUSIVE : LimitType.HIGH_INCLUSIVE;
                 break;
             }
             case LT: {
-                limit = optFuncExpr.constantIsOnLhs() ? LimitType.LOW_EXCLUSIVE : LimitType.HIGH_EXCLUSIVE;
+                limit = constantIsOnLhs(optFuncExpr) ? LimitType.LOW_EXCLUSIVE : LimitType.HIGH_EXCLUSIVE;
                 break;
             }
             case NEQ: {
@@ -394,6 +394,12 @@ public class BTreeAccessMethod implements IAccessMethod {
         return limit;
     }
     
+    // Returns true if the constant value is on the "left hand side" (assuming a binary function).
+    public boolean constantIsOnLhs(IOptimizableFuncExpr optFuncExpr) {
+        return optFuncExpr.getFuncExpr().getArguments().get(0) == optFuncExpr.getConstantVal(0);
+    }
+
+    
     private ILogicalExpression createSelectCondition(List<Mutable<ILogicalExpression>> predList) {
         if (predList.size() > 1) {
             IFunctionInfo finfo = AsterixBuiltinFunctions.getAsterixFunctionInfo(AlgebricksBuiltinFunctions.AND);
@@ -403,7 +409,7 @@ public class BTreeAccessMethod implements IAccessMethod {
     }
 
     @Override
-    public boolean exprIsOptimizable(AqlCompiledIndexDecl index, OptimizableSelectBinaryFuncExpr expr) {
+    public boolean exprIsOptimizable(AqlCompiledIndexDecl index, IOptimizableFuncExpr optFuncExpr) {
         // No additional analysis required.
         return true;
     }

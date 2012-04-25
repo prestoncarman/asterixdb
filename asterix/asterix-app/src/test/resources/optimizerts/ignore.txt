@@ -1,2 +1,3 @@
 distinct_aggregate.aql
 cell-aggregation-with-filtering.aql
+inverted-index-join/ngram-edit-distance.aql
