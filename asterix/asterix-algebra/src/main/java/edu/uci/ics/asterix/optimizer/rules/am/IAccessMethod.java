@@ -4,9 +4,7 @@ import java.util.List;
 
 import org.apache.commons.lang3.mutable.Mutable;
 
-import edu.uci.ics.asterix.metadata.declared.AqlCompiledDatasetDecl;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl;
-import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IOptimizationContext;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
@@ -65,21 +63,18 @@ public interface IAccessMethod {
     public boolean matchPrefixIndexExprs();
     
     /**
-     * Applies the plan transformation to use chosenIndex which must be an access method of this type.
+     * Applies the plan transformation to use chosenIndex to optimize a selection query.
      * 
-     * @param selectRef
-     * @param assignRef
-     * @param dataSourceScanRef
-     * @param datasetDecl
-     * @param recordType
-     * @param chosenIndex
-     * @param analysisCtx
-     * @param context
-     * @return
-     * @throws AlgebricksException
      */
-    public boolean applyPlanTransformation(Mutable<ILogicalOperator> selectRef, Mutable<ILogicalOperator> assignRef,
-            Mutable<ILogicalOperator> dataSourceScanRef, AqlCompiledDatasetDecl datasetDecl, ARecordType recordType,
+    public boolean applySelectPlanTransformation(Mutable<ILogicalOperator> selectRef, OptimizableOperatorSubTree subTree,            
+            AqlCompiledIndexDecl chosenIndex, AccessMethodAnalysisContext analysisCtx, IOptimizationContext context)
+            throws AlgebricksException;
+    
+    /**
+     * Applies the plan transformation to use chosenIndex to optimize a join query.
+     * 
+     */
+    public boolean applyJoinPlanTransformation(Mutable<ILogicalOperator> joinRef, OptimizableOperatorSubTree leftSubTree, OptimizableOperatorSubTree rightSubTree,
             AqlCompiledIndexDecl chosenIndex, AccessMethodAnalysisContext analysisCtx, IOptimizationContext context)
             throws AlgebricksException;
     

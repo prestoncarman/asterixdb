@@ -212,7 +212,7 @@ public class IndexOperations {
         BTreeSearchOperatorDescriptor primarySearchOp = new BTreeSearchOperatorDescriptor(spec, primaryRecDesc,
                 storageManager, treeRegistryProvider, primarySplitsAndConstraint.first, primaryInteriorFrameFactory,
                 primaryLeafFrameFactory, primaryTypeTraits, primaryComparatorFactories, true, lowKeyFields,
-                highKeyFields, true, true, new BTreeDataflowHelperFactory());
+                highKeyFields, true, true, new BTreeDataflowHelperFactory(), false);
 
         AlgebricksPartitionConstraintHelper.setPartitionConstraintInJobSpec(spec, primarySearchOp,
                 primarySplitsAndConstraint.second);
@@ -423,7 +423,7 @@ public class IndexOperations {
         BTreeSearchOperatorDescriptor primarySearchOp = new BTreeSearchOperatorDescriptor(spec, primaryRecDesc,
                 storageManager, treeRegistryProvider, primarySplitsAndConstraint.first, primaryInteriorFrameFactory,
                 primaryLeafFrameFactory, primaryTypeTraits, primaryComparatorFactories, true, lowKeyFields,
-                highKeyFields, true, true, new BTreeDataflowHelperFactory());
+                highKeyFields, true, true, new BTreeDataflowHelperFactory(), false);
 
         AlgebricksPartitionConstraintHelper.setPartitionConstraintInJobSpec(spec, primarySearchOp,
                 primarySplitsAndConstraint.second);
@@ -663,7 +663,7 @@ public class IndexOperations {
         BTreeSearchOperatorDescriptor primarySearchOp = new BTreeSearchOperatorDescriptor(spec, primaryRecDesc,
                 storageManager, indexRegistryProvider, primarySplitsAndConstraint.first, primaryInteriorFrameFactory,
                 primaryLeafFrameFactory, primaryTypeTraits, primaryComparatorFactories, true, lowKeyFields,
-                highKeyFields, true, true, new BTreeDataflowHelperFactory());
+                highKeyFields, true, true, new BTreeDataflowHelperFactory(), false);
         AlgebricksPartitionConstraintHelper.setPartitionConstraintInJobSpec(spec, primarySearchOp,
                 primarySplitsAndConstraint.second);
 

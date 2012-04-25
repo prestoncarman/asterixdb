@@ -83,12 +83,14 @@ public class BTreeAccessMethod implements IAccessMethod {
     }
 
     @Override
-    public boolean applyPlanTransformation(Mutable<ILogicalOperator> selectRef, Mutable<ILogicalOperator> assignRef,
-            Mutable<ILogicalOperator> dataSourceScanRef, AqlCompiledDatasetDecl datasetDecl, ARecordType recordType,
+    public boolean applySelectPlanTransformation(Mutable<ILogicalOperator> selectRef, OptimizableOperatorSubTree subTree,
             AqlCompiledIndexDecl chosenIndex, AccessMethodAnalysisContext analysisCtx, IOptimizationContext context) 
                     throws AlgebricksException {
+        AqlCompiledDatasetDecl datasetDecl = subTree.datasetDecl;
+        ARecordType recordType = subTree.recordType;
         SelectOperator select = (SelectOperator) selectRef.getValue();
-        DataSourceScanOperator dataSourceScan = (DataSourceScanOperator) dataSourceScanRef.getValue();
+        DataSourceScanOperator dataSourceScan = subTree.dataSourceScan;
+        Mutable<ILogicalOperator> assignRef = (subTree.assignRefs.isEmpty()) ? null : subTree.assignRefs.get(0);
         AssignOperator assign = null;
         if (assignRef != null) {
             assign = (AssignOperator) assignRef.getValue();
@@ -247,8 +249,8 @@ public class BTreeAccessMethod implements IAccessMethod {
         // This is the logical representation of our RTree search.
         // An index search is expressed logically as an unnest over an index-search function.
         IFunctionInfo secondaryIndexSearch = FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.INDEX_SEARCH);
-        UnnestingFunctionCallExpression rangeSearchFun = new UnnestingFunctionCallExpression(secondaryIndexSearch, secondaryIndexFuncArgs);
-        rangeSearchFun.setReturnsUniqueValues(true);
+        UnnestingFunctionCallExpression rangeSearchFunc = new UnnestingFunctionCallExpression(secondaryIndexSearch, secondaryIndexFuncArgs);
+        rangeSearchFunc.setReturnsUniqueValues(true);
 
         // Generate the rest of the upstream plan which feeds the search results into the primary index.
         List<LogicalVariable> primaryIndexVars = dataSourceScan.getVariables();
@@ -257,10 +259,10 @@ public class BTreeAccessMethod implements IAccessMethod {
         if (!isPrimaryIndex) {
             List<Object> secondaryIndexTypes = AccessMethodUtils.getSecondaryIndexTypes(datasetDecl, chosenIndex, recordType, false);
             primaryIndexUnnestMap = AccessMethodUtils.createPrimaryIndexUnnestMap(datasetDecl, recordType,
-                    primaryIndexVars, chosenIndex, numSecondaryKeys, secondaryIndexTypes, rangeSearchFun,
+                    primaryIndexVars, chosenIndex, numSecondaryKeys, secondaryIndexTypes, rangeSearchFunc,
                     assignSearchKeys, context, false, true);
         } else {
-            primaryIndexUnnestMap = new UnnestMapOperator(primaryIndexVars, new MutableObject<ILogicalExpression>(rangeSearchFun),
+            primaryIndexUnnestMap = new UnnestMapOperator(primaryIndexVars, new MutableObject<ILogicalExpression>(rangeSearchFunc),
                     AccessMethodUtils.primaryIndexTypes(datasetDecl, recordType));
             primaryIndexUnnestMap.getInputs().add(new MutableObject<ILogicalOperator>(assignSearchKeys));
         }        
@@ -272,7 +274,7 @@ public class BTreeAccessMethod implements IAccessMethod {
             ILogicalExpression pulledCond = createSelectCondition(remainingFuncExprs);
             SelectOperator selectRest = new SelectOperator(new MutableObject<ILogicalExpression>(pulledCond));            
             if (assign != null) {
-                dataSourceScanRef.setValue(primaryIndexUnnestMap);
+                subTree.dataSourceScanRef.setValue(primaryIndexUnnestMap);
                 selectRest.getInputs().add(new MutableObject<ILogicalOperator>(assign));
             } else {
                 selectRest.getInputs().add(new MutableObject<ILogicalOperator>(primaryIndexUnnestMap));
@@ -282,13 +284,22 @@ public class BTreeAccessMethod implements IAccessMethod {
         } else {
             primaryIndexUnnestMap.setExecutionMode(ExecutionMode.PARTITIONED);
             if (assign != null) {
-                dataSourceScanRef.setValue(primaryIndexUnnestMap);
+                subTree.dataSourceScanRef.setValue(primaryIndexUnnestMap);
                 selectRef.setValue(assign);
             } else {
                 selectRef.setValue(primaryIndexUnnestMap);
             }
         }
         return true;
+    }
+    
+    @Override
+    public boolean applyJoinPlanTransformation(Mutable<ILogicalOperator> joinRef,
+            OptimizableOperatorSubTree leftSubTree, OptimizableOperatorSubTree rightSubTree,
+            AqlCompiledIndexDecl chosenIndex, AccessMethodAnalysisContext analysisCtx, IOptimizationContext context)
+            throws AlgebricksException {
+        // TODO Implement this.
+        return false;
     }
 
     private void createKeyVarsAndExprs(LimitType[] keyLimits, IAlgebricksConstantValue[] keyConstants,

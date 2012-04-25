@@ -152,7 +152,7 @@ public class TestKeywordIndexJob {
         BTreeSearchOperatorDescriptor secondarySearchOp = new BTreeSearchOperatorDescriptor(spec, secondaryRecDesc,
                 storageManager, btreeRegistryProvider, secondarySplitProvider, interiorFrameFactory, leafFrameFactory,
                 secondaryTypeTraits, secondaryComparatorFactories, true, lowKeyFields, highKeyFields, true, true,
-                new BTreeDataflowHelperFactory());
+                new BTreeDataflowHelperFactory(), false);
         String[] secondarySearchOpLocationConstraint = new String[nodeGroup.size()];
         for (int p = 0; p < nodeGroup.size(); p++) {
             secondarySearchOpLocationConstraint[p] = nodeGroup.get(p);

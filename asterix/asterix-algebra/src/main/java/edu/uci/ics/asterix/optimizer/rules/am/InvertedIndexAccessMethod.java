@@ -296,10 +296,11 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
     }
 
     @Override
-    public boolean applyPlanTransformation(Mutable<ILogicalOperator> selectRef, Mutable<ILogicalOperator> assignRef,
-            Mutable<ILogicalOperator> dataSourceScanRef, AqlCompiledDatasetDecl datasetDecl, ARecordType recordType,
+    public boolean applySelectPlanTransformation(Mutable<ILogicalOperator> selectRef, OptimizableOperatorSubTree subTree,
             AqlCompiledIndexDecl chosenIndex, AccessMethodAnalysisContext analysisCtx, IOptimizationContext context)
             throws AlgebricksException {
+        AqlCompiledDatasetDecl datasetDecl = subTree.datasetDecl;
+        ARecordType recordType = subTree.recordType;
         // TODO: Think more deeply about where this is used for inverted indexes, and what composite keys should mean.
         // For now we are assuming a single secondary index key.
         // int numSecondaryKeys = chosenIndex.getFieldExprs().size();
@@ -311,7 +312,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         int firstExprIndex = indexExprs.get(0);
         IOptimizableFuncExpr optFuncExpr = analysisCtx.matchedFuncExprs.get(firstExprIndex);
         
-        DataSourceScanOperator dataSourceScan = (DataSourceScanOperator) dataSourceScanRef.getValue();
+        DataSourceScanOperator dataSourceScan = subTree.dataSourceScan;
         // List of arguments to be passed into an unnest.
         // This logical rewrite rule, and the corresponding runtime op generated in the jobgen 
         // have a contract as to what goes into these arguments.
@@ -343,23 +344,32 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         AssignOperator assignSearchKeys = new AssignOperator(keyVarList, keyExprList);
         // Input to this assign is the EmptyTupleSource (which the dataSourceScan also must have had as input).
         assignSearchKeys.getInputs().add(dataSourceScan.getInputs().get(0));
-        assignSearchKeys.setExecutionMode(dataSourceScan.getExecutionMode());        
+        assignSearchKeys.setExecutionMode(dataSourceScan.getExecutionMode());
         
         // This is the logical representation of our secondary-index search.
         // An index search is expressed logically as an unnest over an index-search function.
         IFunctionInfo secondaryIndexSearch = FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.INDEX_SEARCH);
-        UnnestingFunctionCallExpression invIndexSearchFun = new UnnestingFunctionCallExpression(secondaryIndexSearch, secondaryIndexFuncArgs);
-        invIndexSearchFun.setReturnsUniqueValues(true);
+        UnnestingFunctionCallExpression invIndexSearchFunc = new UnnestingFunctionCallExpression(secondaryIndexSearch, secondaryIndexFuncArgs);
+        invIndexSearchFunc.setReturnsUniqueValues(true);
 
         // Generate the rest of the upstream plan which feeds the search results into the primary index.
         List<LogicalVariable> primaryIndexVars = dataSourceScan.getVariables();        
         List<Object> secondaryIndexTypes = AccessMethodUtils.getSecondaryIndexTypes(datasetDecl, chosenIndex, recordType, true);
         UnnestMapOperator primaryIndexUnnestMap = AccessMethodUtils.createPrimaryIndexUnnestMap(datasetDecl, recordType,
-                primaryIndexVars, chosenIndex, numSecondaryKeys, secondaryIndexTypes, invIndexSearchFun, assignSearchKeys,
+                primaryIndexVars, chosenIndex, numSecondaryKeys, secondaryIndexTypes, invIndexSearchFunc, assignSearchKeys,
                 context, true, true);
         // Replace the datasource scan with the new plan rooted at primaryIndexUnnestMap.
-        dataSourceScanRef.setValue(primaryIndexUnnestMap);
+        subTree.dataSourceScanRef.setValue(primaryIndexUnnestMap);
         return true;
+    }
+    
+    @Override
+    public boolean applyJoinPlanTransformation(Mutable<ILogicalOperator> joinRef,
+            OptimizableOperatorSubTree leftSubTree, OptimizableOperatorSubTree rightSubTree,
+            AqlCompiledIndexDecl chosenIndex, AccessMethodAnalysisContext analysisCtx, IOptimizationContext context)
+            throws AlgebricksException {
+        // TODO Implement this.
+        return false;
     }
     
     private void addKeyConstantType(IOptimizableFuncExpr optFuncExpr, ArrayList<Mutable<ILogicalExpression>> secondaryIndexFuncArgs) throws AlgebricksException {
@@ -412,9 +422,12 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
 
     @Override
     public boolean exprIsOptimizable(AqlCompiledIndexDecl index, IOptimizableFuncExpr optFuncExpr) {
-    	// Only enter this check if there are 2 constant values in optFuncExpr, which means we are dealing with a selection query.
-        if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.EDIT_DISTANCE_CHECK && optFuncExpr.getNumConstantVals() == 2) {
-            // Check for panic.
+        if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.EDIT_DISTANCE_CHECK) {
+            // Must be for a join query.
+            if (optFuncExpr.getNumConstantVals() == 1) {
+                return true;
+            }
+            // Check for panic in selection query.
             // TODO: Panic also depends on prePost which is currently hardcoded to be true.
             AsterixConstantValue listOrStrConstVal = (AsterixConstantValue) optFuncExpr.getConstantVal(0);
             AsterixConstantValue intConstVal = (AsterixConstantValue) optFuncExpr.getConstantVal(1);

@@ -383,7 +383,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         BTreeSearchOperatorDescriptor btreeSearchOp = new BTreeSearchOperatorDescriptor(jobSpec, recDesc,
                 appContext.getStorageManagerInterface(), appContext.getIndexRegistryProvider(), spPc.first,
                 interiorFrameFactory, leafFrameFactory, typeTraits, comparatorFactories, true, lowKeyFields,
-                highKeyFields, lowKeyInclusive, highKeyInclusive, new BTreeDataflowHelperFactory());
+                highKeyFields, lowKeyInclusive, highKeyInclusive, new BTreeDataflowHelperFactory(), false);
 
         return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(btreeSearchOp, spPc.second);
     }

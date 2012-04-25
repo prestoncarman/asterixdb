@@ -207,6 +207,7 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
         // TODO: Here we assume there is only one search key field.
         int queryField = keyFields[0];
         // Get tokenizer and search modifier factories.
+        // TODO: retainInput is hardcoded to false, but should be passed be the caller.
         IInvertedIndexSearchModifierFactory searchModifierFactory = InvertedIndexAccessMethod.getSearchModifierFactory(searchModifierType, simThresh, index);
         IBinaryTokenizerFactory queryTokenizerFactory = InvertedIndexAccessMethod.getBinaryTokenizerFactory(searchModifierType, searchKeyType, index);
         InvertedIndexSearchOperatorDescriptor invIndexSearchOp = new InvertedIndexSearchOperatorDescriptor(
@@ -215,7 +216,7 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
                 appContext.getIndexRegistryProvider(), tokenTypeTraits,
                 tokenComparatorFactories, invListsTypeTraits,
                 invListsComparatorFactories, new BTreeDataflowHelperFactory(),
-                queryTokenizerFactory, searchModifierFactory, invListRecDesc);
+                queryTokenizerFactory, searchModifierFactory, invListRecDesc, false);
         return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(invIndexSearchOp, secondarySplitsAndConstraint.second);
     }
 }

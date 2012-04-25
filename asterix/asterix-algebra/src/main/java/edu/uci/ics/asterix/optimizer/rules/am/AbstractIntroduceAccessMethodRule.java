@@ -10,7 +10,6 @@ import org.apache.commons.lang3.mutable.Mutable;
 
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledDatasetDecl;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl;
-import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
 import edu.uci.ics.asterix.metadata.utils.DatasetUtils;
 import edu.uci.ics.asterix.om.base.AInt32;
 import edu.uci.ics.asterix.om.base.AString;
@@ -21,100 +20,38 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IOptimizationContext;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalExpressionTag;
-import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalOperatorTag;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractLogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.AlgebricksBuiltinFunctions;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.util.OperatorPropertiesUtil;
-import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.rewriter.base.IAlgebraicRewriteRule;
 import edu.uci.ics.hyracks.algebricks.core.utils.Pair;
 
-/**
- * This rule tries to optimize simple selections with indexes. The use of an
- * index is expressed as an unnest over an index-search function which will be
- * replaced with the appropriate embodiment during codegen.
- * 
- * Matches the following operator patterns:
- * Standard secondary index pattern:
- * There must be at least one assign, but there may be more, e.g., when matching similarity-jaccard-check().
- * (select) <-- (assign)+ <-- (datasource scan)
- * Primary index lookup pattern:
- * Since no assign is necessary to get the primary key fields (they are already stored fields in the BTree tuples).
- * (select) <-- (datasource scan)
- * 
- * Replaces the above patterns with this pattern: (select) <-- (assign) <-- (btree search) <-- (sort) <-- (unnest(index search)) <-- (assign)
- * The sort is optional, and some access methods may choose not to sort.
- * 
- * Note that for some index-based optimizations do not remove the triggering
- * condition from the select, since the index only acts as a filter, and the
- * final verification must still be done via the original function.
- * 
- * The basic outline of this rule is: 
- * 1. Match operator pattern. 
- * 2. Analyze select to see if there are optimizable functions (delegated to IAccessMethods). 
- * 3. Check metadata to see if there are applicable indexes. 
- * 4. Choose an index to apply (for now only a single index will be chosen).
- * 5. Rewrite plan using index (delegated to IAccessMethods).
- * 
- */
-public class IntroduceAccessMethodSearchRule implements IAlgebraicRewriteRule {
+public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRewriteRule {
     
-	// Operators representing the patterns to be matched:
-    // These ops are set in matchesPattern()
-    protected Mutable<ILogicalOperator> selectRef = null;
-    protected SelectOperator select = null;
-	protected AbstractFunctionCallExpression selectCond = null;
-	protected final OptimizableOperatorSubTree subTree = new OptimizableOperatorSubTree();
-	
-	protected static Map<FunctionIdentifier, List<IAccessMethod>> accessMethods = new HashMap<FunctionIdentifier, List<IAccessMethod>>();
-	static {
-	    registerAccessMethod(BTreeAccessMethod.INSTANCE);
-	    registerAccessMethod(RTreeAccessMethod.INSTANCE);
-	    registerAccessMethod(InvertedIndexAccessMethod.INSTANCE);
-	}
-	
-	public static void registerAccessMethod(IAccessMethod accessMethod) {
-	    List<FunctionIdentifier> funcs = accessMethod.getOptimizableFunctions();
-	    for (FunctionIdentifier funcIdent : funcs) {
-	        List<IAccessMethod> l = accessMethods.get(funcIdent);
-	        if (l == null) {
-	            l = new ArrayList<IAccessMethod>();
-	            accessMethods.put(funcIdent, l);
-	        }
-	        l.add(accessMethod);
-	    }
-	}
-	
+    protected static Map<FunctionIdentifier, List<IAccessMethod>> accessMethods = new HashMap<FunctionIdentifier, List<IAccessMethod>>();
+    
+    protected static void registerAccessMethod(IAccessMethod accessMethod) {
+        List<FunctionIdentifier> funcs = accessMethod.getOptimizableFunctions();
+        for (FunctionIdentifier funcIdent : funcs) {
+            List<IAccessMethod> l = accessMethods.get(funcIdent);
+            if (l == null) {
+                l = new ArrayList<IAccessMethod>();
+                accessMethods.put(funcIdent, l);
+            }
+            l.add(accessMethod);
+        }
+    }
+    
     @Override
     public boolean rewritePre(Mutable<ILogicalOperator> opRef, IOptimizationContext context) {
         return false;
     }
     
-    @Override
-    public boolean rewritePost(Mutable<ILogicalOperator> opRef, IOptimizationContext context) throws AlgebricksException {
-    	// Match operator pattern and initialize operator members.
-        if (!matchesOperatorPattern(opRef, context)) {
-            return false;
-        }
-        
-        // Analyze select condition.
-        Map<IAccessMethod, AccessMethodAnalysisContext> analyzedAMs = new HashMap<IAccessMethod, AccessMethodAnalysisContext>();
-        if (!analyzeCondition(selectCond, subTree.assigns, analyzedAMs)) {
-            return false;
-        }
-
-        // Set dataset and type metadata.
-        if (!subTree.setDatasetAndTypeMetadata((AqlMetadataProvider) context.getMetadataProvider())) {
-            return false;
-        }
-        
+    protected void fillSubTreeIndexExprs(OptimizableOperatorSubTree subTree, Map<IAccessMethod, AccessMethodAnalysisContext> analyzedAMs) {
         // The assign may be null if there is only a filter on the primary index key.
         // Match variables from lowest assign which comes directly after the dataset scan.
         List<LogicalVariable> varList = (!subTree.assigns.isEmpty()) ? subTree.assigns.get(subTree.assigns.size() - 1).getVariables() : subTree.dataSourceScan.getVariables();
@@ -125,30 +62,21 @@ public class IntroduceAccessMethodSearchRule implements IAlgebraicRewriteRule {
             AccessMethodAnalysisContext amCtx = entry.getValue();
             // For the current access method type, map variables from the assign op to applicable indexes.
             fillAllIndexExprs(varList, subTree, amCtx);
+        }
+    }
+
+    protected void pruneIndexCandidates(Map<IAccessMethod, AccessMethodAnalysisContext> analyzedAMs) {
+        Iterator<Map.Entry<IAccessMethod, AccessMethodAnalysisContext>> amIt = analyzedAMs.entrySet().iterator();
+        // Check applicability of indexes by access method type.
+        while (amIt.hasNext()) {
+            Map.Entry<IAccessMethod, AccessMethodAnalysisContext> entry = amIt.next();
+            AccessMethodAnalysisContext amCtx = entry.getValue();
             pruneIndexCandidates(entry.getKey(), amCtx);
             // Remove access methods for which there are definitely no applicable indexes.
             if (amCtx.indexExprs.isEmpty()) {
                 amIt.remove();
             }
         }
-        
-        // Choose index to be applied.
-        Pair<IAccessMethod, AqlCompiledIndexDecl> chosenIndex = chooseIndex(analyzedAMs);
-        if (chosenIndex == null) {
-            context.addToDontApplySet(this, select);
-            return false;
-        }
-        
-        // Apply plan transformation using chosen index.
-        AccessMethodAnalysisContext analysisCtx = analyzedAMs.get(chosenIndex.first);
-        Mutable<ILogicalOperator> assignRef = (subTree.assignRefs.isEmpty()) ? null : subTree.assignRefs.get(0);
-        boolean res = chosenIndex.first.applyPlanTransformation(selectRef, assignRef, subTree.dataSourceScanRef,
-                subTree.datasetDecl, subTree.recordType, chosenIndex.second, analysisCtx, context);
-        if (res) {
-            OperatorPropertiesUtil.typeOpRec(opRef, context);
-        }
-        context.addToDontApplySet(this, select);
-        return res;
     }
     
     /**
@@ -202,8 +130,8 @@ public class IntroduceAccessMethodSearchRule implements IAlgebraicRewriteRule {
                         exprsIter.remove();
                         continue;
                     }
-                    // TODO: May have to look at multiple fields here. For now just pick first one.
-                    if (optFuncExpr.getFieldName(0).equals(keyField)) {
+                    // Check if any field name in the optFuncExpr matches.
+                    if (optFuncExpr.findFieldName(keyField) != -1) {
                         foundKeyField = true;
                         if (lastFieldMatched == i - 1) {
                             lastFieldMatched = i;
@@ -294,37 +222,15 @@ public class IntroduceAccessMethodSearchRule implements IAlgebraicRewriteRule {
         return atLeastOneMatchFound;
     }
     
-    protected boolean matchesOperatorPattern(Mutable<ILogicalOperator> opRef, IOptimizationContext context) {
-        // First check that the operator is a select and its condition is a function call.
-        AbstractLogicalOperator op1 = (AbstractLogicalOperator) opRef.getValue();
-        if (context.checkIfInDontApplySet(this, op1)) {
-            return false;
-        }
-        // Check op is a select.
-        if (op1.getOperatorTag() != LogicalOperatorTag.SELECT) {
-            return false;
-        }
-        // Set and analyze select.
-        selectRef = opRef;
-        select = (SelectOperator) op1;
-        // Check that the select's condition is a function call.
-        ILogicalExpression condExpr = select.getCondition().getValue();
-        if (condExpr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
-            return false;
-        }
-        selectCond = (AbstractFunctionCallExpression) condExpr;
-        return subTree.initFromSubTree(op1.getInputs().get(0));
-    }
-       
     /**
-	 * 
-	 * @return returns true if a candidate index was added to foundIndexExprs,
-	 *         false otherwise
-	 */
+     * 
+     * @return returns true if a candidate index was added to foundIndexExprs,
+     *         false otherwise
+     */
     protected boolean fillIndexExprs(String fieldName, int matchedFuncExprIndex,
             AqlCompiledDatasetDecl datasetDecl, AccessMethodAnalysisContext analysisCtx) {
-    	AqlCompiledIndexDecl primaryIndexDecl = DatasetUtils.getPrimaryIndex(datasetDecl);
-    	List<String> primaryIndexFields = primaryIndexDecl.getFieldExprs();    	
+        AqlCompiledIndexDecl primaryIndexDecl = DatasetUtils.getPrimaryIndex(datasetDecl);
+        List<String> primaryIndexFields = primaryIndexDecl.getFieldExprs();     
         List<AqlCompiledIndexDecl> indexCandidates = DatasetUtils.findSecondaryIndexesByOneOfTheKeys(datasetDecl, fieldName);
         // Check whether the primary index is a candidate. If so, add it to the list.
         if (primaryIndexFields.contains(fieldName)) {
@@ -335,34 +241,27 @@ public class IntroduceAccessMethodSearchRule implements IAlgebraicRewriteRule {
         }
         // No index candidates for fieldName.
         if (indexCandidates == null) {
-        	return false;
+            return false;
         }
         // Go through the candidates and fill indexExprs.
         for (AqlCompiledIndexDecl index : indexCandidates) {
-        	analysisCtx.addIndexExpr(index, matchedFuncExprIndex);
+            analysisCtx.addIndexExpr(index, matchedFuncExprIndex);
         }
         return true;
     }
 
     protected void fillAllIndexExprs(List<LogicalVariable> varList, OptimizableOperatorSubTree subTree, AccessMethodAnalysisContext analysisCtx) {
-    	for (int optFuncExprIndex = 0; optFuncExprIndex < analysisCtx.matchedFuncExprs.size(); optFuncExprIndex++) {
-    		for (int varIndex = 0; varIndex < varList.size(); varIndex++) {
-    			LogicalVariable var = varList.get(varIndex);
-    			IOptimizableFuncExpr optFuncExpr = analysisCtx.matchedFuncExprs.get(optFuncExprIndex);
-    			// TODO: Put this search into a separate method.
-    			int funcVarIndex = -1;
-    			for (int j = 0; j < optFuncExpr.getNumLogicalVars(); j++) {
-    				if (var == optFuncExpr.getLogicalVar(j)) {
-    					funcVarIndex = j;
-    					break;
-    				}
-    			}
-    			// No matching var in optFuncExpr.
-    			if (funcVarIndex == -1) {
-    				continue;
-    			}
-    			// At this point we have matched the optimizable func expr at optFuncExprIndex to an assigned variable.
-    			String fieldName = null;
+        for (int optFuncExprIndex = 0; optFuncExprIndex < analysisCtx.matchedFuncExprs.size(); optFuncExprIndex++) {
+            for (int varIndex = 0; varIndex < varList.size(); varIndex++) {
+                LogicalVariable var = varList.get(varIndex);
+                IOptimizableFuncExpr optFuncExpr = analysisCtx.matchedFuncExprs.get(optFuncExprIndex);
+                int funcVarIndex = optFuncExpr.findLogicalVar(var);
+                // No matching var in optFuncExpr.
+                if (funcVarIndex == -1) {
+                    continue;
+                }
+                // At this point we have matched the optimizable func expr at optFuncExprIndex to an assigned variable.
+                String fieldName = null;
                 if (!subTree.assigns.isEmpty()) {
                     // Get the fieldName corresponding to the assigned variable at varIndex
                     // from the assign operator right above the datasource scan.
@@ -387,8 +286,8 @@ public class IntroduceAccessMethodSearchRule implements IAlgebraicRewriteRule {
                     continue;
                 }
                 fillIndexExprs(fieldName, optFuncExprIndex, subTree.datasetDecl, analysisCtx);
-    		}
-    	}
+            }
+        }
     }
     
     /**
@@ -402,31 +301,31 @@ public class IntroduceAccessMethodSearchRule implements IAlgebraicRewriteRule {
      */
     protected String getFieldNameOfFieldAccess(AssignOperator assign, ARecordType recordType, int varIndex) {
         // Get expression corresponding to var at varIndex.
-    	AbstractLogicalExpression assignExpr = (AbstractLogicalExpression) assign.getExpressions()
-    			.get(varIndex).getValue();
-    	if (assignExpr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
-    		return null;
-    	}
-    	// Analyze the assign op to get the field name
-    	// corresponding to the field being assigned at varIndex.
-    	AbstractFunctionCallExpression assignFuncExpr = (AbstractFunctionCallExpression) assignExpr;
-    	FunctionIdentifier assignFuncIdent = assignFuncExpr.getFunctionIdentifier();
-    	if (assignFuncIdent == AsterixBuiltinFunctions.FIELD_ACCESS_BY_NAME) {
-    		ILogicalExpression nameArg = assignFuncExpr.getArguments().get(1).getValue();
-    		if (nameArg.getExpressionTag() != LogicalExpressionTag.CONSTANT) {
-    			return null;
-    		}
-    		ConstantExpression constExpr = (ConstantExpression) nameArg;
-    		return ((AString) ((AsterixConstantValue) constExpr.getValue()).getObject()).getStringValue();
-    	} else if (assignFuncIdent == AsterixBuiltinFunctions.FIELD_ACCESS_BY_INDEX) {
-    		ILogicalExpression idxArg = assignFuncExpr.getArguments().get(1).getValue();
-    		if (idxArg.getExpressionTag() != LogicalExpressionTag.CONSTANT) {
-    			return null;
-    		}
-    		ConstantExpression constExpr = (ConstantExpression) idxArg;
-    		int fieldIndex = ((AInt32) ((AsterixConstantValue) constExpr.getValue()).getObject()).getIntegerValue();
-    		return recordType.getFieldNames()[fieldIndex];
-    	}
-    	return null;
+        AbstractLogicalExpression assignExpr = (AbstractLogicalExpression) assign.getExpressions()
+                .get(varIndex).getValue();
+        if (assignExpr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
+            return null;
+        }
+        // Analyze the assign op to get the field name
+        // corresponding to the field being assigned at varIndex.
+        AbstractFunctionCallExpression assignFuncExpr = (AbstractFunctionCallExpression) assignExpr;
+        FunctionIdentifier assignFuncIdent = assignFuncExpr.getFunctionIdentifier();
+        if (assignFuncIdent == AsterixBuiltinFunctions.FIELD_ACCESS_BY_NAME) {
+            ILogicalExpression nameArg = assignFuncExpr.getArguments().get(1).getValue();
+            if (nameArg.getExpressionTag() != LogicalExpressionTag.CONSTANT) {
+                return null;
+            }
+            ConstantExpression constExpr = (ConstantExpression) nameArg;
+            return ((AString) ((AsterixConstantValue) constExpr.getValue()).getObject()).getStringValue();
+        } else if (assignFuncIdent == AsterixBuiltinFunctions.FIELD_ACCESS_BY_INDEX) {
+            ILogicalExpression idxArg = assignFuncExpr.getArguments().get(1).getValue();
+            if (idxArg.getExpressionTag() != LogicalExpressionTag.CONSTANT) {
+                return null;
+            }
+            ConstantExpression constExpr = (ConstantExpression) idxArg;
+            int fieldIndex = ((AInt32) ((AsterixConstantValue) constExpr.getValue()).getObject()).getIntegerValue();
+            return recordType.getFieldNames()[fieldIndex];
+        }
+        return null;
     }
 }

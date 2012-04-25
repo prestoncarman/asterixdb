@@ -65,10 +65,11 @@ public class RTreeAccessMethod implements IAccessMethod {
     }
 
     @Override
-    public boolean applyPlanTransformation(Mutable<ILogicalOperator> selectRef, Mutable<ILogicalOperator> assignRef,
-            Mutable<ILogicalOperator> dataSourceScanRef, AqlCompiledDatasetDecl datasetDecl, ARecordType recordType,
+    public boolean applySelectPlanTransformation(Mutable<ILogicalOperator> selectRef, OptimizableOperatorSubTree subTree,
             AqlCompiledIndexDecl chosenIndex, AccessMethodAnalysisContext analysisCtx, IOptimizationContext context)
             throws AlgebricksException {
+        AqlCompiledDatasetDecl datasetDecl = subTree.datasetDecl;
+        ARecordType recordType = subTree.recordType;
         // TODO: We can probably do something smarter here based on selectivity or MBR area.
         // Pick the first expr optimizable by this index.
         List<Integer> indexExprs = analysisCtx.getIndexExprs(chosenIndex);
@@ -81,7 +82,7 @@ public class RTreeAccessMethod implements IAccessMethod {
         int numDimensions = NonTaggedFormatUtil.getNumDimensions(spatialType.getTypeTag());
         int numSecondaryKeys = numDimensions * 2;
         
-        DataSourceScanOperator dataSourceScan = (DataSourceScanOperator) dataSourceScanRef.getValue();
+        DataSourceScanOperator dataSourceScan = subTree.dataSourceScan;
         // List of arguments to be passed into an unnest.
         // This logical rewrite rule, and the corresponding runtime op generated in the jobgen 
         // have a contract as to what goes into these arguments.
@@ -132,18 +133,27 @@ public class RTreeAccessMethod implements IAccessMethod {
         // This is the logical representation of our RTree search.
         // An index search is expressed logically as an unnest over an index-search function.
         IFunctionInfo secondaryIndexSearch = FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.INDEX_SEARCH);
-        UnnestingFunctionCallExpression rangeSearchFun = new UnnestingFunctionCallExpression(secondaryIndexSearch, secondaryIndexFuncArgs);
-        rangeSearchFun.setReturnsUniqueValues(true);
+        UnnestingFunctionCallExpression rangeSearchFunc = new UnnestingFunctionCallExpression(secondaryIndexSearch, secondaryIndexFuncArgs);
+        rangeSearchFunc.setReturnsUniqueValues(true);
 
         // Generate the rest of the upstream plan which feeds the search results into the primary index.
         List<LogicalVariable> primaryIndexVars = dataSourceScan.getVariables();
         List<Object> secondaryIndexTypes = getSecondaryIndexTypes(datasetDecl, chosenIndex, recordType);
         UnnestMapOperator primaryIndexUnnestMap = AccessMethodUtils.createPrimaryIndexUnnestMap(datasetDecl, recordType,
-                primaryIndexVars, chosenIndex, numSecondaryKeys, secondaryIndexTypes, rangeSearchFun, assignSearchKeys,
+                primaryIndexVars, chosenIndex, numSecondaryKeys, secondaryIndexTypes, rangeSearchFunc, assignSearchKeys,
                 context, false, true);
         // Replace the datasource scan with the new plan rooted at primaryIndexUnnestMap.
-        dataSourceScanRef.setValue(primaryIndexUnnestMap);
+        subTree.dataSourceScanRef.setValue(primaryIndexUnnestMap);
         return true;
+    }
+    
+    @Override
+    public boolean applyJoinPlanTransformation(Mutable<ILogicalOperator> joinRef,
+            OptimizableOperatorSubTree leftSubTree, OptimizableOperatorSubTree rightSubTree,
+            AqlCompiledIndexDecl chosenIndex, AccessMethodAnalysisContext analysisCtx, IOptimizationContext context)
+            throws AlgebricksException {
+        // TODO Implement this.
+        return false;
     }
     
     /**

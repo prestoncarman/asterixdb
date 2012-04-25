@@ -26,8 +26,8 @@ public class OptimizableOperatorSubTree {
     public Mutable<ILogicalOperator> dataSourceScanRef = null;
     public DataSourceScanOperator dataSourceScan = null;
     // Dataset and type metadata. Set in setDatasetAndTypeMetadata().
-    public ARecordType recordType = null;
     public AqlCompiledDatasetDecl datasetDecl = null;
+    public ARecordType recordType = null;    
     
     public boolean initFromSubTree(Mutable<ILogicalOperator> subTreeOpRef) {
         // Examine the select's children to match the expected patterns.

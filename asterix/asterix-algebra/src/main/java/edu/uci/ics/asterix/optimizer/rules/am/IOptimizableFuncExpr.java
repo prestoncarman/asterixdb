@@ -12,4 +12,7 @@ public interface IOptimizableFuncExpr {
     public void setFieldName(int index, String fieldName);
     public String getFieldName(int index);
     public IAlgebricksConstantValue getConstantVal(int index);
+    
+    public int findLogicalVar(LogicalVariable var);
+    public int findFieldName(String fieldName);
 }

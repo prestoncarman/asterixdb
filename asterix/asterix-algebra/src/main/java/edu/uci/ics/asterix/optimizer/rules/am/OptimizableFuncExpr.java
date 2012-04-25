@@ -59,4 +59,24 @@ public class OptimizableFuncExpr implements IOptimizableFuncExpr {
 	public IAlgebricksConstantValue getConstantVal(int index) {
 		return constantVals[index];
 	}
+
+    @Override
+    public int findLogicalVar(LogicalVariable var) {
+        for (int i = 0; i < logicalVars.length; i++) {
+            if (var == logicalVars[i]) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    @Override
+    public int findFieldName(String fieldName) {
+        for (int i = 0; i < fieldNames.length; i++) {
+            if (fieldName.equals(fieldNames[i])) {
+                return i;
+            }
+        }
+        return -1;
+    }
 }
