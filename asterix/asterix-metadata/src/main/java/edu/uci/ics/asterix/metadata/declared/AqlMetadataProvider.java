@@ -497,7 +497,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         RTreeSearchOperatorDescriptor rtreeSearchOp = new RTreeSearchOperatorDescriptor(jobSpec, recDesc,
                 appContext.getStorageManagerInterface(), appContext.getIndexRegistryProvider(), spPc.first,
                 interiorFrameFactory, leafFrameFactory, typeTraits, comparatorFactories, keyFields,
-                new RTreeDataflowHelperFactory());
+                new RTreeDataflowHelperFactory(), false);
 
         return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(rtreeSearchOp, spPc.second);
     }
