@@ -21,6 +21,8 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.DataSourceS
 import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
 
 public class OptimizableOperatorSubTree {
+    public ILogicalOperator root;
+    public Mutable<ILogicalOperator> rootRef;
     public final List<Mutable<ILogicalOperator>> assignRefs = new ArrayList<Mutable<ILogicalOperator>>();
     public final List<AssignOperator> assigns = new ArrayList<AssignOperator>();
     public Mutable<ILogicalOperator> dataSourceScanRef = null;
@@ -30,8 +32,10 @@ public class OptimizableOperatorSubTree {
     public ARecordType recordType = null;    
     
     public boolean initFromSubTree(Mutable<ILogicalOperator> subTreeOpRef) {
+        rootRef = subTreeOpRef;
+        root = subTreeOpRef.getValue();
         // Examine the select's children to match the expected patterns.
-        AbstractLogicalOperator subTreeOp = (AbstractLogicalOperator) subTreeOpRef.getValue();   
+        AbstractLogicalOperator subTreeOp = (AbstractLogicalOperator) subTreeOpRef.getValue();
         // First check primary-index pattern.
         if (subTreeOp.getOperatorTag() != LogicalOperatorTag.ASSIGN) {
             // Pattern may still match if we are looking for primary index matches as well.

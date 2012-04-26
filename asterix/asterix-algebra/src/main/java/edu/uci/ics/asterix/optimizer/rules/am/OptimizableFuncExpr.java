@@ -8,6 +8,7 @@ public class OptimizableFuncExpr implements IOptimizableFuncExpr {
 	protected final AbstractFunctionCallExpression funcExpr;
     protected final LogicalVariable[] logicalVars;
     protected final String[] fieldNames;
+    protected final OptimizableOperatorSubTree[] subTrees;
     protected final IAlgebricksConstantValue[] constantVals;
     
     public OptimizableFuncExpr(AbstractFunctionCallExpression funcExpr, LogicalVariable[] logicalVars, IAlgebricksConstantValue[] constantVals) {
@@ -15,6 +16,8 @@ public class OptimizableFuncExpr implements IOptimizableFuncExpr {
     	this.logicalVars = logicalVars;
     	this.constantVals = constantVals;
     	this.fieldNames = new String[logicalVars.length];
+    	this.subTrees = new OptimizableOperatorSubTree[logicalVars.length];
+    	
     }
     
     // Special, more convenient c'tor for simple binary functions.
@@ -23,6 +26,7 @@ public class OptimizableFuncExpr implements IOptimizableFuncExpr {
     	this.logicalVars = new LogicalVariable[] { logicalVar };
     	this.constantVals = new IAlgebricksConstantValue[] { constantVal };
     	this.fieldNames = new String[logicalVars.length];
+    	this.subTrees = new OptimizableOperatorSubTree[logicalVars.length];
     }
     
 	@Override
@@ -78,5 +82,15 @@ public class OptimizableFuncExpr implements IOptimizableFuncExpr {
             }
         }
         return -1;
+    }
+
+    @Override
+    public void setOptimizableSubTree(int index, OptimizableOperatorSubTree subTree) {
+        subTrees[index] = subTree;
+    }
+
+    @Override
+    public OptimizableOperatorSubTree getOperatorSubTree(int index) {
+        return subTrees[index];
     }
 }

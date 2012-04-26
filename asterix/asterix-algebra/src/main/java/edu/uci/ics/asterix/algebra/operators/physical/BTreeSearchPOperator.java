@@ -68,11 +68,12 @@ public class BTreeSearchPOperator extends IndexSearchPOperator {
         }
         String idxName = getStringArgument(f, 0);
         String datasetName = getStringArgument(f, 2);
+        boolean retainInput = getBooleanArgument(f, 3);
 
-        Pair<int[], Integer> keysLeft = getKeys(f, 3, inputSchemas);
-        Pair<int[], Integer> keysRight = getKeys(f, 4 + keysLeft.second, inputSchemas);
+        Pair<int[], Integer> keysLeft = getKeys(f, 4, inputSchemas);
+        Pair<int[], Integer> keysRight = getKeys(f, 5 + keysLeft.second, inputSchemas);
 
-        int p = 5 + keysLeft.second + keysRight.second;
+        int p = 6 + keysLeft.second + keysRight.second;
         boolean loInclusive = isTrue((ConstantExpression) f.getArguments().get(p).getValue());
         boolean hiInclusive = isTrue((ConstantExpression) f.getArguments().get(p + 1).getValue());
         buildBtreeSearch(builder, context, unnestMap, opSchema, datasetName, idxName, keysLeft.first, keysRight.first,

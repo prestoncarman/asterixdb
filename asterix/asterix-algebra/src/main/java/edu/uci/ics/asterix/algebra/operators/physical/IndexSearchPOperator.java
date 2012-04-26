@@ -2,6 +2,7 @@ package edu.uci.ics.asterix.algebra.operators.physical;
 
 
 import edu.uci.ics.asterix.metadata.declared.AqlSourceId;
+import edu.uci.ics.asterix.om.base.ABoolean;
 import edu.uci.ics.asterix.om.base.AInt32;
 import edu.uci.ics.asterix.om.base.AString;
 import edu.uci.ics.asterix.om.base.IAObject;
@@ -83,5 +84,11 @@ public abstract class IndexSearchPOperator extends AbstractScanPOperator {
         IAObject typeTagObj = ((AsterixConstantValue)((ConstantExpression)f.getArguments().get(k).getValue())
                 .getValue()).getObject();
         return ((AInt32)typeTagObj).getIntegerValue();
+    }
+    
+    protected boolean getBooleanArgument(AbstractFunctionCallExpression f, int k) {
+        IAObject typeTagObj = ((AsterixConstantValue)((ConstantExpression)f.getArguments().get(k).getValue())
+                .getValue()).getObject();
+        return ((ABoolean)typeTagObj).getBoolean();
     }
 }

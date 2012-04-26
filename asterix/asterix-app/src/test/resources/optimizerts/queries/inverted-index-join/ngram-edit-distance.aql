@@ -26,4 +26,4 @@ write output to nc1:"rttest/inverted-index-join_ngram-edit-distance.adm";
 for $a in dataset('DBLP')
 for $b in dataset('DBLP')
 where edit-distance-check($a.authors, $b.authors, 1)[0]
-return {"aname": $a.authors, "bname": $b.authors }
+return {"arec": $a, "brec": $b }

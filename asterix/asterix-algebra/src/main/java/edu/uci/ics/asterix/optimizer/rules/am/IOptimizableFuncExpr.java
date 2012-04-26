@@ -11,6 +11,8 @@ public interface IOptimizableFuncExpr {
     public LogicalVariable getLogicalVar(int index);
     public void setFieldName(int index, String fieldName);
     public String getFieldName(int index);
+    public void setOptimizableSubTree(int index, OptimizableOperatorSubTree subTree);
+    public OptimizableOperatorSubTree getOperatorSubTree(int index);
     public IAlgebricksConstantValue getConstantVal(int index);
     
     public int findLogicalVar(LogicalVariable var);

@@ -11,6 +11,7 @@ import edu.uci.ics.asterix.common.functions.FunctionArgumentsConstants;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledDatasetDecl;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl;
 import edu.uci.ics.asterix.metadata.utils.DatasetUtils;
+import edu.uci.ics.asterix.om.base.ABoolean;
 import edu.uci.ics.asterix.om.base.AInt32;
 import edu.uci.ics.asterix.om.base.AString;
 import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
@@ -53,6 +54,18 @@ public class AccessMethodUtils {
 	
 	public static ConstantExpression createStringConstant(String str) {
         return new ConstantExpression(new AsterixConstantValue(new AString(str)));
+    }
+	
+	public static ConstantExpression createInt32Constant(int i) {
+        return new ConstantExpression(new AsterixConstantValue(new AInt32(i)));
+    }
+	
+	public static ConstantExpression createBooleanConstant(boolean b) {
+        if (b) {
+            return new ConstantExpression(new AsterixConstantValue(ABoolean.TRUE));
+        } else {
+            return new ConstantExpression(new AsterixConstantValue(ABoolean.FALSE));
+        }
     }
 	
     public static boolean analyzeFuncExprArgsForOneConstAndVar(AbstractFunctionCallExpression funcExpr,
@@ -105,7 +118,7 @@ public class AccessMethodUtils {
             ARecordType recordType, List<LogicalVariable> primaryIndexVars, AqlCompiledIndexDecl secondaryIndex,
             int numSecondaryKeys, List<Object> secondaryIndexTypes, UnnestingFunctionCallExpression rangeSearchFun,
             AssignOperator assignSearchKeys, IOptimizationContext context, boolean outputPrimaryKeysOnly,
-            boolean sortPrimaryKeys) throws AlgebricksException {
+            boolean sortPrimaryKeys, boolean retainInput) throws AlgebricksException {
         // List of variables for the primary keys coming out of a secondary-index search.
         int numPrimaryKeys = DatasetUtils.getPartitioningFunctions(datasetDecl).size();
         ArrayList<LogicalVariable> secondaryIndexPrimaryKeys = new ArrayList<LogicalVariable>(numPrimaryKeys);
@@ -147,18 +160,17 @@ public class AccessMethodUtils {
         // The arguments are: the name of the primary index, the type of index, the name of the dataset, 
         // the number of primary-index keys, and the variable references corresponding to the primary-index search keys.
         List<Mutable<ILogicalExpression>> primaryIndexFuncArgs = new ArrayList<Mutable<ILogicalExpression>>();
-        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(datasetDecl.getName())));
-        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(FunctionArgumentsConstants.BTREE_INDEX)));
-        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(datasetDecl.getName())));
+        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(createStringConstant(datasetDecl.getName())));
+        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(createStringConstant(FunctionArgumentsConstants.BTREE_INDEX)));
+        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(createStringConstant(datasetDecl.getName())));
+        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(createBooleanConstant(retainInput)));
         // Add the variables corresponding to the primary-index search keys (low key).
-        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(new AInt32(
-                numPrimaryKeys)))));
+        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(createInt32Constant(numPrimaryKeys)));
         for (LogicalVariable v : secondaryIndexPrimaryKeys) {
             primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(v)));
         }
         // Add the variables corresponding to the primary-index search keys (high key).
-        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(new AInt32(
-                numPrimaryKeys)))));
+        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(createInt32Constant(numPrimaryKeys)));
         for (LogicalVariable v : secondaryIndexPrimaryKeys) {
             primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(v)));
         }

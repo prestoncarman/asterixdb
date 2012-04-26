@@ -96,6 +96,7 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
         }
         // Get dataset, and do sanity check.
         String datasetName = getStringArgument(unnestFuncExpr, 2);
+        boolean retainInput = getBooleanArgument(unnestFuncExpr, 3);
         AqlMetadataProvider metadataProvider = (AqlMetadataProvider) context.getMetadataProvider();
         AqlCompiledMetadataDeclarations metadata = metadataProvider.getMetadataDeclarations();
         AqlCompiledDatasetDecl datasetDecl = metadata.findDataset(datasetName);
@@ -106,15 +107,15 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
             throw new AlgebricksException("Trying to run inverted index search over external dataset (" + datasetName + ").");
         }
         // Get search modifier type.
-        int searchModifierOrdinal = getInt32Argument(unnestFuncExpr, 3);
+        int searchModifierOrdinal = getInt32Argument(unnestFuncExpr, 4);
         SearchModifierType searchModifierType = SearchModifierType.values()[searchModifierOrdinal];
         // Similarity threshold. Concrete type depends on search modifier.
-        IAObject simThresh = ((AsterixConstantValue) ((ConstantExpression) unnestFuncExpr.getArguments().get(4).getValue())
+        IAObject simThresh = ((AsterixConstantValue) ((ConstantExpression) unnestFuncExpr.getArguments().get(5).getValue())
                 .getValue()).getObject();
         // Get type of search key.
-        int typeTagOrdinal = getInt32Argument(unnestFuncExpr, 5);
+        int typeTagOrdinal = getInt32Argument(unnestFuncExpr, 6);
         ATypeTag searchKeyType = ATypeTag.values()[typeTagOrdinal];
-        Pair<int[], Integer> keys = getKeys(unnestFuncExpr, 6, inputSchemas);
+        Pair<int[], Integer> keys = getKeys(unnestFuncExpr, 7, inputSchemas);
         
         // Build runtime.
         Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> invIndexSearch = buildInvertedIndexRuntime(

@@ -1,6 +1,7 @@
 package edu.uci.ics.asterix.optimizer.rules.am;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.apache.commons.lang3.mutable.Mutable;
@@ -13,6 +14,7 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.base.IOptimizationContext;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalExpressionTag;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalOperatorTag;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
+import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.util.OperatorPropertiesUtil;
@@ -57,10 +59,11 @@ public class IntroduceSelectAccessMethodRule extends AbstractIntroduceAccessMeth
 	protected final OptimizableOperatorSubTree subTree = new OptimizableOperatorSubTree();
 
 	// Register access methods.
+	protected static Map<FunctionIdentifier, List<IAccessMethod>> accessMethods = new HashMap<FunctionIdentifier, List<IAccessMethod>>();
 	static {
-	    registerAccessMethod(BTreeAccessMethod.INSTANCE);
-	    registerAccessMethod(RTreeAccessMethod.INSTANCE);
-	    registerAccessMethod(InvertedIndexAccessMethod.INSTANCE);
+	    registerAccessMethod(BTreeAccessMethod.INSTANCE, accessMethods);
+	    registerAccessMethod(RTreeAccessMethod.INSTANCE, accessMethods);
+	    registerAccessMethod(InvertedIndexAccessMethod.INSTANCE, accessMethods);
 	}
 	
     @Override
@@ -122,5 +125,10 @@ public class IntroduceSelectAccessMethodRule extends AbstractIntroduceAccessMeth
         }
         selectCond = (AbstractFunctionCallExpression) condExpr;
         return subTree.initFromSubTree(op1.getInputs().get(0));
+    }
+
+    @Override
+    public Map<FunctionIdentifier, List<IAccessMethod>> getAccessMethods() {
+        return accessMethods;
     }
 }

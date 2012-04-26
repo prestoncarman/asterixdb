@@ -226,6 +226,8 @@ public class BTreeAccessMethod implements IAccessMethod {
         secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(chosenIndex.getIndexName())));
         secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(FunctionArgumentsConstants.BTREE_INDEX)));
         secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(datasetDecl.getName())));
+        // TODO: For now retainInput is always false.
+        secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createBooleanConstant(false)));
         // Here we generate vars and funcs for assigning the secondary-index keys to be fed into the secondary-index search.
         // List of variables for the assign.
         ArrayList<LogicalVariable> keyVarList = new ArrayList<LogicalVariable>();
@@ -260,7 +262,7 @@ public class BTreeAccessMethod implements IAccessMethod {
             List<Object> secondaryIndexTypes = AccessMethodUtils.getSecondaryIndexTypes(datasetDecl, chosenIndex, recordType, false);
             primaryIndexUnnestMap = AccessMethodUtils.createPrimaryIndexUnnestMap(datasetDecl, recordType,
                     primaryIndexVars, chosenIndex, numSecondaryKeys, secondaryIndexTypes, rangeSearchFunc,
-                    assignSearchKeys, context, false, true);
+                    assignSearchKeys, context, false, true, false);
         } else {
             primaryIndexUnnestMap = new UnnestMapOperator(primaryIndexVars, new MutableObject<ILogicalExpression>(rangeSearchFunc),
                     AccessMethodUtils.primaryIndexTypes(datasetDecl, recordType));
@@ -272,7 +274,7 @@ public class BTreeAccessMethod implements IAccessMethod {
         // Generate new select using the new condition.
         if (!remainingFuncExprs.isEmpty()) {
             ILogicalExpression pulledCond = createSelectCondition(remainingFuncExprs);
-            SelectOperator selectRest = new SelectOperator(new MutableObject<ILogicalExpression>(pulledCond));            
+            SelectOperator selectRest = new SelectOperator(new MutableObject<ILogicalExpression>(pulledCond));
             if (assign != null) {
                 subTree.dataSourceScanRef.setValue(primaryIndexUnnestMap);
                 selectRest.getInputs().add(new MutableObject<ILogicalOperator>(assign));

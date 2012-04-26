@@ -1,7 +1,6 @@
 package edu.uci.ics.asterix.optimizer.rules.am;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -32,9 +31,7 @@ import edu.uci.ics.hyracks.algebricks.core.utils.Pair;
 
 public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRewriteRule {
     
-    protected static Map<FunctionIdentifier, List<IAccessMethod>> accessMethods = new HashMap<FunctionIdentifier, List<IAccessMethod>>();
-    
-    protected static void registerAccessMethod(IAccessMethod accessMethod) {
+    protected static void registerAccessMethod(IAccessMethod accessMethod, Map<FunctionIdentifier, List<IAccessMethod>> accessMethods) {
         List<FunctionIdentifier> funcs = accessMethod.getOptimizableFunctions();
         for (FunctionIdentifier funcIdent : funcs) {
             List<IAccessMethod> l = accessMethods.get(funcIdent);
@@ -195,7 +192,7 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
             return false;
         }
         // Retrieves the list of access methods that are relevant based on the funcIdent.
-        List<IAccessMethod> relevantAMs = accessMethods.get(funcIdent);
+        List<IAccessMethod> relevantAMs = getAccessMethods().get(funcIdent);
         if (relevantAMs == null) {
             return false;
         }
@@ -245,7 +242,7 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
         }
         // Go through the candidates and fill indexExprs.
         for (AqlCompiledIndexDecl index : indexCandidates) {
-            analysisCtx.addIndexExpr(index, matchedFuncExprIndex);
+            analysisCtx.addIndexExpr(datasetDecl, index, matchedFuncExprIndex);
         }
         return true;
     }
@@ -279,8 +276,9 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
                     // The variable value is one of the partitioning fields.
                     fieldName = DatasetUtils.getPartitioningExpressions(subTree.datasetDecl).get(varIndex);
                 }
-                // Set the fieldName in the corresponding matched function expression.
+                // Set the fieldName in the corresponding matched function expression, and remember matching subtree.
                 optFuncExpr.setFieldName(funcVarIndex, fieldName);
+                optFuncExpr.setOptimizableSubTree(funcVarIndex, subTree);
                 // TODO: Don't just ignore open record types.
                 if (subTree.recordType.isOpen()) {
                     continue;
@@ -328,4 +326,6 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
         }
         return null;
     }
+    
+    public abstract Map<FunctionIdentifier, List<IAccessMethod>> getAccessMethods();
 }

@@ -1,6 +1,7 @@
 package edu.uci.ics.asterix.optimizer.rules.am;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.apache.commons.lang3.mutable.Mutable;
@@ -13,6 +14,7 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.base.IOptimizationContext;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalExpressionTag;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalOperatorTag;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
+import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.InnerJoinOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.util.OperatorPropertiesUtil;
@@ -28,8 +30,9 @@ public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethod
 	protected final OptimizableOperatorSubTree rightSubTree = new OptimizableOperatorSubTree();
 	
 	// Register access methods.
+	protected static Map<FunctionIdentifier, List<IAccessMethod>> accessMethods = new HashMap<FunctionIdentifier, List<IAccessMethod>>();
 	static {
-	    registerAccessMethod(InvertedIndexAccessMethod.INSTANCE);
+	    registerAccessMethod(InvertedIndexAccessMethod.INSTANCE, accessMethods);
 	}
 	
     @Override
@@ -55,7 +58,6 @@ public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethod
 
         // Set dataset and type metadata.
         AqlMetadataProvider metadataProvider = (AqlMetadataProvider) context.getMetadataProvider();
-        // TODO: Check return values of setting metadata.
         boolean checkLeftSubTreeMetadata = false;
         boolean checkRightSubTreeMetadata = false;
         if (matchInLeftSubTree) {
@@ -113,11 +115,16 @@ public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethod
         }
         joinCond = (AbstractFunctionCallExpression) condExpr;
         leftSubTree.initFromSubTree(op1.getInputs().get(0));
-        rightSubTree.initFromSubTree(op1.getInputs().get(0));
+        rightSubTree.initFromSubTree(op1.getInputs().get(1));
         // One of the subtrees must have a datasource scan.
         if (leftSubTree.hasDataSourceScan() || rightSubTree.hasDataSourceScan()) {
             return true;
         }
         return false;
+    }
+
+    @Override
+    public Map<FunctionIdentifier, List<IAccessMethod>> getAccessMethods() {
+        return accessMethods;
     }
 }
