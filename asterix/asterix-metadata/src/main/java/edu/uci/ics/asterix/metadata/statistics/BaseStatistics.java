@@ -27,7 +27,7 @@ public class BaseStatistics extends AbstractMessageClass implements Serializable
      * 
      */
     private static final long serialVersionUID = 1L;
-    private long tupleCount;
+    private long recordCount;
     private AqlSourceId ds;
     private String nodeId;
 
@@ -35,17 +35,23 @@ public class BaseStatistics extends AbstractMessageClass implements Serializable
         this.ds = datasource;
     }
 
+    public BaseStatistics(AqlSourceId datasource, String nodeId, long recordCount) {
+        this.ds = datasource;
+        this.nodeId = nodeId;
+        this.recordCount = recordCount;
+    }
+
     @Override
     public MessageType getMessageType() {
         return MessageType.STATISTICS;
     }
 
-    public void setTupleCount(long tupleCount) {
-        this.tupleCount = tupleCount;
+    public void setRecordCount(long recordCount) {
+        this.recordCount = recordCount;
     }
 
-    public long getTupleCount() {
-        return this.tupleCount;
+    public long getRecordCount() {
+        return this.recordCount;
     }
 
     public String getNodeId() {
@@ -62,6 +68,6 @@ public class BaseStatistics extends AbstractMessageClass implements Serializable
 
     @Override
     public String toString() {
-        return "{ \"nodeId\": \"" + this.nodeId + "\", \"tupleCount\"" + this.tupleCount + "}";
+        return "{ \"nodeId\": \"" + this.nodeId + "\", \"tupleCount\"" + this.recordCount + "}";
     }
 }

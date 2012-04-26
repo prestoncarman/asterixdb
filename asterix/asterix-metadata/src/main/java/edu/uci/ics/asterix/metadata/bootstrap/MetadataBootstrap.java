@@ -40,7 +40,6 @@ import edu.uci.ics.asterix.metadata.entities.InternalDatasetDetails.FileStructur
 import edu.uci.ics.asterix.metadata.entities.InternalDatasetDetails.PartitioningStrategy;
 import edu.uci.ics.asterix.metadata.entities.Node;
 import edu.uci.ics.asterix.metadata.entities.NodeGroup;
-import edu.uci.ics.asterix.metadata.statistics.StatisticsManager;
 import edu.uci.ics.asterix.om.types.BuiltinType;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.asterix.runtime.transaction.TreeResourceManager;
@@ -98,7 +97,8 @@ public class MetadataBootstrap {
         primaryIndexes = new IMetadataIndex[] { MetadataPrimaryIndexes.DATAVERSE_DATASET,
                 MetadataPrimaryIndexes.DATASET_DATASET, MetadataPrimaryIndexes.DATATYPE_DATASET,
                 MetadataPrimaryIndexes.INDEX_DATASET, MetadataPrimaryIndexes.NODE_DATASET,
-                MetadataPrimaryIndexes.NODEGROUP_DATASET, MetadataPrimaryIndexes.FUNCTION_DATASET };
+                MetadataPrimaryIndexes.NODEGROUP_DATASET, MetadataPrimaryIndexes.FUNCTION_DATASET,
+                MetadataPrimaryIndexes.STATISTICS_DATASET };
         secondaryIndexes = new IMetadataIndex[] { MetadataSecondaryIndexes.GROUPNAME_ON_DATASET_INDEX,
                 MetadataSecondaryIndexes.DATATYPENAME_ON_DATASET_INDEX,
                 MetadataSecondaryIndexes.DATATYPENAME_ON_DATATYPE_INDEX };
@@ -143,7 +143,6 @@ public class MetadataBootstrap {
             openIndexFile(secondaryIndexes[i]);
         }
 
-        StatisticsManager.getInstance().setMetadatastore(metadataStore);
         // Begin a transaction against the metadata.
         // Lock the metadata in X mode.
         MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();

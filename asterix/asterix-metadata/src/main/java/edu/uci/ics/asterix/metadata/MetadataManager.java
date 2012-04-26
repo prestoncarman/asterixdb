@@ -494,9 +494,7 @@ public class MetadataManager implements IMetadataManager {
     }
 
     public IMessageBroker getStaticticsConnector() {
-        return new StatisticsConnector() {
-
-        };
+        return new StatisticsConnector();
     }
 
     class StatisticsConnector implements IMessageBroker {
@@ -516,7 +514,7 @@ public class MetadataManager implements IMetadataManager {
                     LOGGER.log(Level.SEVERE, e1.getMessage(), e1);
                 }
                 try {
-                    metadataNode.addStatistics(ctx.getTxnId(), (BaseStatistics) message, nodeId);
+                    metadataNode.addStatistics(ctx.getTxnId(), (BaseStatistics) message);
                     ctx.commit(ctx);
                 } catch (MetadataException e) {
                     LOGGER.log(Level.SEVERE, e.getMessage(), e);

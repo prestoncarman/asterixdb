@@ -43,6 +43,7 @@ public final class MetadataRecordTypes {
     public static ARecordType NODE_RECORDTYPE;
     public static ARecordType NODEGROUP_RECORDTYPE;
     public static ARecordType FUNCTION_RECORDTYPE;
+    public static ARecordType RECORDCOUNT_RECORDTYPE;
     public static ARecordType BASE_STATISTICS_RECORDTYPE;
 
     /**
@@ -72,18 +73,31 @@ public final class MetadataRecordTypes {
         NODEGROUP_RECORDTYPE = createNodeGroupRecordType();
         FUNCTION_RECORDTYPE = createFunctionRecordType();
 
+        RECORDCOUNT_RECORDTYPE = createRecordCountRecordType();
         BASE_STATISTICS_RECORDTYPE = createBaseStatisticsRecordType();
+    }
+
+    public static final int RECORDCOUNT_ARECORD_RECORDCOUNT_INDEX = 0;
+
+    private static ARecordType createRecordCountRecordType() {
+        return new ARecordType(null, new String[] { "RecordCount" }, new IAType[] { BuiltinType.AINT64 }, true);
     }
 
     public static final int BASE_STATISTICS_ARECORD_DATAVERSE_INDEX = 0;
     public static final int BASE_STATISTICS_ARECORD_DATASET_INDEX = 1;
     public static final int BASE_STATISTICS_ARECORD_NODEID_INDEX = 2;
-    public static final int BASE_STATISTICS_ARECORD_TUPLECOUNT_INDEX = 3;
+    public static final int BASE_STATISTICS_ARECORD_RECORDCOUNT_INDEX = 3;
+    public static final int BASE_STATISTICS_ARECORD_TIMESTAMP_INDEX = 4;
 
     private static ARecordType createBaseStatisticsRecordType() {
-        return new ARecordType("BaseStatistics",
-                new String[] { "DataverseName", "DatasetName", "nodeId", "tupleCount" }, new IAType[] {
-                        BuiltinType.ASTRING, BuiltinType.ASTRING, BuiltinType.ASTRING, BuiltinType.ASTRING }, true);
+        List<IAType> internalRecordUnionList = new ArrayList<IAType>();
+        internalRecordUnionList.add(BuiltinType.ANULL);
+        internalRecordUnionList.add(RECORDCOUNT_RECORDTYPE);
+        AUnionType internalRecordUnion = new AUnionType(internalRecordUnionList, null);
+
+        return new ARecordType("BaseStatistics", new String[] { "DataverseName", "DatasetName", "NodeId",
+                "RecordCount", "Timestamp" }, new IAType[] { BuiltinType.ASTRING, BuiltinType.ASTRING,
+                BuiltinType.ASTRING, internalRecordUnion, BuiltinType.ASTRING }, true);
     }
 
     // Helper constants for accessing fields in an ARecord of type

@@ -416,6 +416,6 @@ public interface IMetadataNode extends Remote, Serializable {
      */
     public void addFunction(long txnId, Function function) throws MetadataException, RemoteException;
 
-    void addStatistics(long txnId, BaseStatistics stats, String nodeId) throws MetadataException,
-            RemoteException;
+
+    void addStatistics(long txnId, BaseStatistics stats) throws MetadataException, RemoteException;
 }

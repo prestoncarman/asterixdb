@@ -38,6 +38,7 @@ import edu.uci.ics.asterix.metadata.entities.Index;
 import edu.uci.ics.asterix.metadata.entities.InternalDatasetDetails;
 import edu.uci.ics.asterix.metadata.entities.Node;
 import edu.uci.ics.asterix.metadata.entities.NodeGroup;
+import edu.uci.ics.asterix.metadata.entitytupletranslators.BaseStatisticsTupleTranslator;
 import edu.uci.ics.asterix.metadata.entitytupletranslators.DatasetTupleTranslator;
 import edu.uci.ics.asterix.metadata.entitytupletranslators.DatatypeTupleTranslator;
 import edu.uci.ics.asterix.metadata.entitytupletranslators.DataverseTupleTranslator;
@@ -46,7 +47,6 @@ import edu.uci.ics.asterix.metadata.entitytupletranslators.IndexTupleTranslator;
 import edu.uci.ics.asterix.metadata.entitytupletranslators.NodeGroupTupleTranslator;
 import edu.uci.ics.asterix.metadata.entitytupletranslators.NodeTupleTranslator;
 import edu.uci.ics.asterix.metadata.statistics.BaseStatistics;
-import edu.uci.ics.asterix.metadata.statistics.StatisticsManager;
 import edu.uci.ics.asterix.metadata.valueextractors.DatasetNameValueExtractor;
 import edu.uci.ics.asterix.metadata.valueextractors.DatatypeNameValueExtractor;
 import edu.uci.ics.asterix.metadata.valueextractors.MetadataEntityValueExtractor;
@@ -179,17 +179,6 @@ public class MetadataNode implements IMetadataNode {
     }
 
     @Override
-    public void addStatistics(long txnId, BaseStatistics stats, String nodeId) throws MetadataException,
-            RemoteException {
-        try {
-            stats.setNodeId(nodeId);
-            StatisticsManager.getInstance().saveStatistics(stats);
-        } catch (Exception e) {
-            throw new MetadataException(e);
-        }
-    }
-
-    @Override
     public void addIndex(long txnId, Index index) throws MetadataException, RemoteException {
         try {
             IndexTupleTranslator tupleWriter = new IndexTupleTranslator(true);
@@ -197,6 +186,19 @@ public class MetadataNode implements IMetadataNode {
             insertTupleIntoIndex(txnId, MetadataPrimaryIndexes.INDEX_DATASET, tuple);
         } catch (BTreeDuplicateKeyException e) {
             throw new MetadataException("An index with name '" + index.getIndexName() + "' already exists.", e);
+        } catch (Exception e) {
+            throw new MetadataException(e);
+        }
+    }
+
+    @Override
+    public void addStatistics(long txnId, BaseStatistics stats) throws MetadataException, RemoteException {
+        try {
+            BaseStatisticsTupleTranslator tupleWriter = new BaseStatisticsTupleTranslator(true);
+            ITupleReference tuple = tupleWriter.getTupleFromMetadataEntity(stats);
+            insertTupleIntoIndex(txnId, MetadataPrimaryIndexes.STATISTICS_DATASET, tuple);
+        } catch (BTreeDuplicateKeyException e) {
+            throw new MetadataException("Statistics already exists.", e);
         } catch (Exception e) {
             throw new MetadataException(e);
         }
@@ -271,7 +273,7 @@ public class MetadataNode implements IMetadataNode {
         btree.open(fileId);
         ITreeIndexAccessor indexAccessor = btree.createAccessor();
         TransactionContext txnCtx = transactionProvider.getTransactionManager().getTransactionContext(txnId);
-        transactionProvider.getLockManager().lock(txnCtx, index.getResourceId(), LockMode.EXCLUSIVE);
+        //transactionProvider.getLockManager().lock(txnCtx, index.getResourceId(), LockMode.EXCLUSIVE);
         // TODO: fix exceptions once new BTree exception model is in hyracks.
         indexAccessor.insert(tuple);
         index.getTreeLogger().generateLogRecord(transactionProvider, txnCtx, IndexOp.INSERT, tuple);

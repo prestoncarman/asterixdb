@@ -32,6 +32,7 @@ public class MetadataPrimaryIndexes {
     public static IMetadataIndex NODE_DATASET;
     public static IMetadataIndex NODEGROUP_DATASET;
     public static IMetadataIndex FUNCTION_DATASET;
+    public static IMetadataIndex STATISTICS_DATASET;
 
 
     /**
@@ -73,6 +74,10 @@ public class MetadataPrimaryIndexes {
 				new IAType[] { BuiltinType.ASTRING, BuiltinType.ASTRING,
 						BuiltinType.ASTRING }, new String[] { "DataverseName",
                         "FunctionName", "FunctionArity" }, MetadataRecordTypes.FUNCTION_RECORDTYPE);
-
+        
+        STATISTICS_DATASET = new MetadataIndex("Statistics", null, 4,
+                new IAType[] { BuiltinType.ASTRING, BuiltinType.ASTRING,
+                        BuiltinType.ASTRING }, new String[] { "DataverseName",
+                        "DatasetName", "NodeId" }, MetadataRecordTypes.BASE_STATISTICS_RECORDTYPE);
     }
 }
