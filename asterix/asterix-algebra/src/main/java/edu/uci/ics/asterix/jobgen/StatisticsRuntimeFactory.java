@@ -13,7 +13,6 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.operators.base.Abstra
 import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.operators.base.AbstractOneInputOneOutputRuntimeFactory;
 import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
-import edu.uci.ics.hyracks.api.messages.IMessage;
 import edu.uci.ics.hyracks.api.util.JavaSerializationUtils;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.ArrayBackedValueStorage;
 
@@ -67,7 +66,9 @@ public class StatisticsRuntimeFactory extends AbstractOneInputOneOutputRuntimeFa
 
                 @Override
                 public void close() throws HyracksDataException {
-                    statsData.setTupleCount(this.tupleCount);
+                    statsData.setRecordCount(this.tupleCount);
+                    statsData.setNodeId(context.getHyracksContext().getJobletContext().getApplicationContext()
+                            .getNodeId());
                     try {
                         context.getHyracksContext().sendMessage(JavaSerializationUtils.serialize(statsData),
                                 context.getHyracksContext().getJobletContext().getApplicationContext().getNodeId());
@@ -111,7 +112,7 @@ public class StatisticsRuntimeFactory extends AbstractOneInputOneOutputRuntimeFa
                         evalOutput.reset();
                         try {
                             eval.evaluate(tRef);
-                            // TODO: add binary Evaluator 
+                            // TODO: add binary Evaluator
                         } catch (AlgebricksException ae) {
                             throw new HyracksDataException(ae);
                         }
@@ -127,7 +128,7 @@ public class StatisticsRuntimeFactory extends AbstractOneInputOneOutputRuntimeFa
 
                 @Override
                 public void close() throws HyracksDataException {
-                    statsData.setTupleCount(this.tupleCount);
+                    statsData.setRecordCount(this.tupleCount);
                     try {
                         context.getHyracksContext().sendMessage(JavaSerializationUtils.serialize(statsData),
                                 context.getHyracksContext().getJobletContext().getApplicationContext().getNodeId());
