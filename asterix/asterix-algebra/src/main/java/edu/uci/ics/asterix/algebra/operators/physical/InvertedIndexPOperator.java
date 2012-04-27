@@ -28,9 +28,11 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.base.IHyracksJobBuilder;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalExpressionTag;
+import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.PhysicalOperatorTag;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
+import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IVariableTypeEnvironment;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.metadata.IDataSourceIndex;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.IOperatorSchema;
@@ -56,8 +58,8 @@ import edu.uci.ics.hyracks.storage.am.invertedindex.dataflow.InvertedIndexSearch
 import edu.uci.ics.hyracks.storage.am.invertedindex.tokenizers.IBinaryTokenizerFactory;
 
 public class InvertedIndexPOperator extends IndexSearchPOperator {
-    public InvertedIndexPOperator(IDataSourceIndex<String, AqlSourceId> idx) {
-        super(idx);
+    public InvertedIndexPOperator(IDataSourceIndex<String, AqlSourceId> idx, boolean requiresBroadcast) {
+        super(idx, requiresBroadcast);
     }
 
     @Override
@@ -97,6 +99,7 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
         // Get dataset, and do sanity check.
         String datasetName = getStringArgument(unnestFuncExpr, 2);
         boolean retainInput = getBooleanArgument(unnestFuncExpr, 3);
+        boolean requiresBroadcast = getBooleanArgument(unnestFuncExpr, 4);
         AqlMetadataProvider metadataProvider = (AqlMetadataProvider) context.getMetadataProvider();
         AqlCompiledMetadataDeclarations metadata = metadataProvider.getMetadataDeclarations();
         AqlCompiledDatasetDecl datasetDecl = metadata.findDataset(datasetName);
@@ -106,23 +109,26 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
         if (datasetDecl.getDatasetType() == DatasetType.EXTERNAL) {
             throw new AlgebricksException("Trying to run inverted index search over external dataset (" + datasetName + ").");
         }
+
+        IVariableTypeEnvironment typeEnv = context.getTypeEnvironment(unnestMap);
+        
         // Get search modifier type.
-        int searchModifierOrdinal = getInt32Argument(unnestFuncExpr, 4);
+        int searchModifierOrdinal = getInt32Argument(unnestFuncExpr, 5);
         SearchModifierType searchModifierType = SearchModifierType.values()[searchModifierOrdinal];
         // Similarity threshold. Concrete type depends on search modifier.
-        IAObject simThresh = ((AsterixConstantValue) ((ConstantExpression) unnestFuncExpr.getArguments().get(5).getValue())
+        IAObject simThresh = ((AsterixConstantValue) ((ConstantExpression) unnestFuncExpr.getArguments().get(6).getValue())
                 .getValue()).getObject();
         // Get type of search key.
-        int typeTagOrdinal = getInt32Argument(unnestFuncExpr, 6);
+        int typeTagOrdinal = getInt32Argument(unnestFuncExpr, 7);
         ATypeTag searchKeyType = ATypeTag.values()[typeTagOrdinal];
-        Pair<int[], Integer> keys = getKeys(unnestFuncExpr, 7, inputSchemas);
+        Pair<int[], Integer> keys = getKeys(unnestFuncExpr, 8, inputSchemas);
         
         // Build runtime.
         Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> invIndexSearch = buildInvertedIndexRuntime(
-                metadata, context, builder.getJobSpec(), datasetName, datasetDecl, indexName, searchKeyType, keys.first, searchModifierType, simThresh);
+                metadata, context, builder.getJobSpec(), typeEnv, inputSchemas, retainInput, datasetName, datasetDecl, indexName, searchKeyType, keys.first, searchModifierType, simThresh);
         // Contribute operator in hyracks job.
         builder.contributeHyracksOperator(unnestMap, invIndexSearch.first);
-        builder.contributeAlgebricksPartitionConstraint(invIndexSearch.first, invIndexSearch.second);
+        builder.contributeAlgebricksPartitionConstraint(invIndexSearch.first, invIndexSearch.second);        
         ILogicalOperator srcExchange = unnestMap.getInputs().get(0).getValue();
         builder.contributeGraphEdge(srcExchange, 0, unnestMap, 0);
     }
@@ -130,7 +136,7 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
     @SuppressWarnings("rawtypes")
     public static Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> buildInvertedIndexRuntime(
             AqlCompiledMetadataDeclarations metadata, JobGenContext context,
-            JobSpecification jobSpec, String datasetName,
+            JobSpecification jobSpec, IVariableTypeEnvironment typeEnv, IOperatorSchema[] inputSchemas, boolean retainInput, String datasetName,
             AqlCompiledDatasetDecl datasetDecl, String indexName,
             ATypeTag searchKeyType, int[] keyFields, SearchModifierType searchModifierType,
             IAObject simThresh) throws AlgebricksException {
@@ -174,23 +180,38 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
             tokenTypeTraits[i] = InvertedIndexAccessMethod.getTokenTypeTrait(secondaryKeyType);
         }
         
+        // Number of input fields that are also output by this index operator.
+        int numInOutFields = (retainInput) ? inputSchemas[0].getSize() : 0;
+        // Total number of fields output by the index operator.
+        int numOutputFields = numPrimaryKeys + numInOutFields;
+        
         // The inverted lists contain primary keys.
-        ISerializerDeserializer[] invListsRecFields = new ISerializerDeserializer[numPrimaryKeys];
-        ITypeTraits[] invListsTypeTraits = new ITypeTraits[numPrimaryKeys];
+        // This operator optionally forwards its input fields, and outputs primary keys whose data items match the search condition.
+        ISerializerDeserializer[] outputRecFields = new ISerializerDeserializer[numOutputFields];
+        ITypeTraits[] outputTypeTraits = new ITypeTraits[numOutputFields];
+        if (retainInput) {
+            for (int i = 0; i < numInOutFields; i++) {
+                LogicalVariable inputVar = inputSchemas[0].getVariable(i);
+                IAType inputVarType = (IAType) typeEnv.getVarType(inputVar);
+                outputRecFields[i] = metadata.getFormat().getSerdeProvider()
+                    .getSerializerDeserializer(inputVarType);
+                outputTypeTraits[i] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(inputVarType);
+            }
+        }
+        
         IBinaryComparatorFactory[] invListsComparatorFactories = new IBinaryComparatorFactory[numPrimaryKeys];
         int i = 0;
         for (Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType> evalFactoryAndType : DatasetUtils
                 .getPartitioningFunctions(datasetDecl)) {
-            IAType keyType = evalFactoryAndType.third;
-            ISerializerDeserializer keySerde = metadata.getFormat().getSerdeProvider()
-                    .getSerializerDeserializer(keyType);
-            invListsRecFields[i] = keySerde;
+            IAType keyType = evalFactoryAndType.third;            
             invListsComparatorFactories[i] = AqlBinaryComparatorFactoryProvider.INSTANCE.getBinaryComparatorFactory(
                     keyType, OrderKind.ASC);
-            invListsTypeTraits[i] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(keyType);
+            outputRecFields[i + numInOutFields] = metadata.getFormat().getSerdeProvider()
+                    .getSerializerDeserializer(keyType);
+            outputTypeTraits[i + numInOutFields] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(keyType);
             ++i;
         }        
-        RecordDescriptor invListRecDesc = new RecordDescriptor(invListsRecFields);
+        RecordDescriptor invListRecDesc = new RecordDescriptor(outputRecFields, outputTypeTraits);
         
         IAsterixApplicationContextInfo appContext = (IAsterixApplicationContextInfo) context.getAppContext();        
         Pair<IFileSplitProvider, AlgebricksPartitionConstraint> secondarySplitsAndConstraint;
@@ -208,16 +229,15 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
         // TODO: Here we assume there is only one search key field.
         int queryField = keyFields[0];
         // Get tokenizer and search modifier factories.
-        // TODO: retainInput is hardcoded to false, but should be passed be the caller.
         IInvertedIndexSearchModifierFactory searchModifierFactory = InvertedIndexAccessMethod.getSearchModifierFactory(searchModifierType, simThresh, index);
         IBinaryTokenizerFactory queryTokenizerFactory = InvertedIndexAccessMethod.getBinaryTokenizerFactory(searchModifierType, searchKeyType, index);
         InvertedIndexSearchOperatorDescriptor invIndexSearchOp = new InvertedIndexSearchOperatorDescriptor(
                 jobSpec, queryField, appContext.getStorageManagerInterface(),
                 fileSplitProviders.first, fileSplitProviders.second,
                 appContext.getIndexRegistryProvider(), tokenTypeTraits,
-                tokenComparatorFactories, invListsTypeTraits,
+                tokenComparatorFactories, outputTypeTraits,
                 invListsComparatorFactories, new BTreeDataflowHelperFactory(),
-                queryTokenizerFactory, searchModifierFactory, invListRecDesc, false);
+                queryTokenizerFactory, searchModifierFactory, invListRecDesc, retainInput);        
         return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(invIndexSearchOp, secondarySplitsAndConstraint.second);
     }
 }

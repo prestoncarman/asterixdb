@@ -43,6 +43,7 @@ import edu.uci.ics.asterix.om.util.NonTaggedFormatUtil;
 import edu.uci.ics.asterix.runtime.transaction.TreeIndexInsertUpdateDeleteOperatorDescriptor;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import edu.uci.ics.hyracks.algebricks.core.algebra.data.IPrinterFactory;
+import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IVariableTypeEnvironment;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.IFunctionInfo;
@@ -151,7 +152,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         String indexName = DatasetUtils.getPrimaryIndex(acedl).getIndexName();
 
         try {
-            return buildBtreeRuntime(metadata, context, jobSpec, datasetName, acedl, indexName, null, null, true, true);
+            return buildBtreeRuntime(metadata, context, jobSpec, null, null, false, datasetName, acedl, indexName, null, null, true, true);
         } catch (AlgebricksException e) {
             throw new AlgebricksException(e);
         }
@@ -293,7 +294,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
     @SuppressWarnings("rawtypes")
     public static Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> buildBtreeRuntime(
             AqlCompiledMetadataDeclarations metadata, JobGenContext context, JobSpecification jobSpec,
-            String datasetName, AqlCompiledDatasetDecl ddecl, String indexName, int[] lowKeyFields,
+            IVariableTypeEnvironment typeEnv, IOperatorSchema[] inputSchemas, boolean retainInput, String datasetName, AqlCompiledDatasetDecl ddecl, String indexName, int[] lowKeyFields,
             int[] highKeyFields, boolean lowKeyInclusive, boolean highKeyInclusive) throws AlgebricksException {
         String itemTypeName = ddecl.getItemTypeName();
         IAType itemType;
@@ -311,6 +312,8 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         }
 
         int numPrimaryKeys = DatasetUtils.getPartitioningFunctions(ddecl).size();
+        // Number of input fields that are also output by this index operator.
+        int numInOutFields = (retainInput) ? inputSchemas[0].getSize() : 0;               
         ISerializerDeserializer[] recordFields;
         IBinaryComparatorFactory[] comparatorFactories;
         ITypeTraits[] typeTraits;
@@ -324,11 +327,23 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
             }
             List<String> secondaryKeyFields = cid.getFieldExprs();
             numSecondaryKeys = secondaryKeyFields.size();
+            // Total number of fields output by the index operator.
+            int numOutputFields = numSecondaryKeys + numPrimaryKeys + numInOutFields;
             int numKeys = numSecondaryKeys + numPrimaryKeys;
-            recordFields = new ISerializerDeserializer[numKeys];
-            typeTraits = new ITypeTraits[numKeys];
-            // comparatorFactories = new
-            // IBinaryComparatorFactory[numSecondaryKeys];
+            recordFields = new ISerializerDeserializer[numOutputFields];
+            typeTraits = new ITypeTraits[numOutputFields];
+            
+            // This operator optionally forwards its input fields, and outputs primary keys whose data items match the search condition.
+            if (retainInput) {
+                for (int j = 0; j < numInOutFields; j++) {
+                    LogicalVariable inputVar = inputSchemas[0].getVariable(j);
+                    IAType inputVarType = (IAType) typeEnv.getVarType(inputVar);
+                    recordFields[j] = metadata.getFormat().getSerdeProvider()
+                        .getSerializerDeserializer(inputVarType);
+                    typeTraits[j] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(inputVarType);
+                }
+            }
+            
             comparatorFactories = new IBinaryComparatorFactory[numKeys];
             if (itemType.getTypeTag() != ATypeTag.RECORD) {
                 throw new AlgebricksException("Only record types can be indexed.");
@@ -336,12 +351,11 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
             ARecordType recType = (ARecordType) itemType;
             for (i = 0; i < numSecondaryKeys; i++) {
                 IAType keyType = AqlCompiledIndexDecl.keyFieldType(secondaryKeyFields.get(i), recType);
-                ISerializerDeserializer keySerde = metadata.getFormat().getSerdeProvider()
-                        .getSerializerDeserializer(keyType);
-                recordFields[i] = keySerde;
                 comparatorFactories[i] = AqlBinaryComparatorFactoryProvider.INSTANCE.getBinaryComparatorFactory(
                         keyType, OrderKind.ASC);
-                typeTraits[i] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(keyType);
+                typeTraits[i + numInOutFields] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(keyType);
+                recordFields[i + numInOutFields] = metadata.getFormat().getSerdeProvider()
+                        .getSerializerDeserializer(keyType);
             }
         } else {
             recordFields = new ISerializerDeserializer[numPrimaryKeys + 1];
@@ -351,19 +365,15 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
                     .getSerializerDeserializer(itemType);
             recordFields[numPrimaryKeys] = payloadSerde;
             typeTraits[numPrimaryKeys] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(itemType);
-        }
-
+        }                
         for (Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType> evalFactoryAndType : DatasetUtils
                 .getPartitioningFunctions(ddecl)) {
             IAType keyType = evalFactoryAndType.third;
-            ISerializerDeserializer keySerde = metadata.getFormat().getSerdeProvider()
-                    .getSerializerDeserializer(keyType);
-            recordFields[i] = keySerde;
-            // if (!isSecondary) {
             comparatorFactories[i] = AqlBinaryComparatorFactoryProvider.INSTANCE.getBinaryComparatorFactory(keyType,
                     OrderKind.ASC);
-            // }
-            typeTraits[i] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(keyType);
+            typeTraits[i + numInOutFields] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(keyType);
+            recordFields[i + numInOutFields] = metadata.getFormat().getSerdeProvider()
+                    .getSerializerDeserializer(keyType);;
             ++i;
         }
 
@@ -383,7 +393,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         BTreeSearchOperatorDescriptor btreeSearchOp = new BTreeSearchOperatorDescriptor(jobSpec, recDesc,
                 appContext.getStorageManagerInterface(), appContext.getIndexRegistryProvider(), spPc.first,
                 interiorFrameFactory, leafFrameFactory, typeTraits, comparatorFactories, true, lowKeyFields,
-                highKeyFields, lowKeyInclusive, highKeyInclusive, new BTreeDataflowHelperFactory(), false);
+                highKeyFields, lowKeyInclusive, highKeyInclusive, new BTreeDataflowHelperFactory(), retainInput);
 
         return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(btreeSearchOp, spPc.second);
     }

@@ -22,16 +22,23 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.metadata.IDataSourcePropertie
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractScanOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.IOperatorSchema;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.physical.AbstractScanPOperator;
+import edu.uci.ics.hyracks.algebricks.core.algebra.properties.BroadcastPartitioningProperty;
+import edu.uci.ics.hyracks.algebricks.core.algebra.properties.IPartitioningRequirementsCoordinator;
+import edu.uci.ics.hyracks.algebricks.core.algebra.properties.IPhysicalPropertiesVector;
+import edu.uci.ics.hyracks.algebricks.core.algebra.properties.PhysicalRequirements;
+import edu.uci.ics.hyracks.algebricks.core.algebra.properties.StructuralPropertiesVector;
 import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.api.exceptions.NotImplementedException;
 import edu.uci.ics.hyracks.algebricks.core.utils.Pair;
 
 public abstract class IndexSearchPOperator extends AbstractScanPOperator {
 
-    private IDataSourceIndex<String, AqlSourceId> idx;
+    private final IDataSourceIndex<String, AqlSourceId> idx;
+    private final boolean requiresBroadcast;
 
-    public IndexSearchPOperator(IDataSourceIndex<String, AqlSourceId> idx) {
+    public IndexSearchPOperator(IDataSourceIndex<String, AqlSourceId> idx, boolean requiresBroadcast) {
         this.idx = idx;
+        this.requiresBroadcast = requiresBroadcast;
     }
 
     @Override
@@ -90,5 +97,16 @@ public abstract class IndexSearchPOperator extends AbstractScanPOperator {
         IAObject typeTagObj = ((AsterixConstantValue)((ConstantExpression)f.getArguments().get(k).getValue())
                 .getValue()).getObject();
         return ((ABoolean)typeTagObj).getBoolean();
+    }
+    
+    public PhysicalRequirements getRequiredPropertiesForChildren(ILogicalOperator op,
+            IPhysicalPropertiesVector reqdByParent) {
+        if (requiresBroadcast) {
+            StructuralPropertiesVector[] pv = new StructuralPropertiesVector[1];
+            pv[0] = new StructuralPropertiesVector(new BroadcastPartitioningProperty(null), null);
+            return new PhysicalRequirements(pv, IPartitioningRequirementsCoordinator.NO_COORDINATION);
+        } else {
+            return super.getRequiredPropertiesForChildren(op, reqdByParent);
+        }
     }
 }

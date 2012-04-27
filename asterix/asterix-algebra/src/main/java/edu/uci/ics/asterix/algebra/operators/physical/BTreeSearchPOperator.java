@@ -17,9 +17,9 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalExpressionTag;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.PhysicalOperatorTag;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
+import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IVariableTypeEnvironment;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import edu.uci.ics.hyracks.algebricks.core.algebra.metadata.IDataSourceIndex;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractScanOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.IOperatorSchema;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.jobgen.impl.JobGenContext;
@@ -31,8 +31,8 @@ import edu.uci.ics.hyracks.api.dataflow.IOperatorDescriptor;
 
 public class BTreeSearchPOperator extends IndexSearchPOperator {
 
-    public BTreeSearchPOperator(IDataSourceIndex<String, AqlSourceId> idx) {
-        super(idx);
+    public BTreeSearchPOperator(IDataSourceIndex<String, AqlSourceId> idx, boolean requiresBroadcast) {
+        super(idx, requiresBroadcast);
     }
 
     @Override
@@ -69,24 +69,15 @@ public class BTreeSearchPOperator extends IndexSearchPOperator {
         String idxName = getStringArgument(f, 0);
         String datasetName = getStringArgument(f, 2);
         boolean retainInput = getBooleanArgument(f, 3);
+        boolean requiresBroadcast = getBooleanArgument(f, 4);
 
-        Pair<int[], Integer> keysLeft = getKeys(f, 4, inputSchemas);
-        Pair<int[], Integer> keysRight = getKeys(f, 5 + keysLeft.second, inputSchemas);
+        Pair<int[], Integer> keysLeft = getKeys(f, 5, inputSchemas);
+        Pair<int[], Integer> keysRight = getKeys(f, 6 + keysLeft.second, inputSchemas);
 
-        int p = 6 + keysLeft.second + keysRight.second;
+        int p = 7 + keysLeft.second + keysRight.second;
         boolean loInclusive = isTrue((ConstantExpression) f.getArguments().get(p).getValue());
         boolean hiInclusive = isTrue((ConstantExpression) f.getArguments().get(p + 1).getValue());
-        buildBtreeSearch(builder, context, unnestMap, opSchema, datasetName, idxName, keysLeft.first, keysRight.first,
-                loInclusive, hiInclusive);
-    }
-
-    private boolean isTrue(ConstantExpression k) {
-        return k.getValue().isTrue();
-    }
-
-    private static void buildBtreeSearch(IHyracksJobBuilder builder, JobGenContext context, AbstractScanOperator scan,
-            IOperatorSchema opSchema, String datasetName, String indexName, int[] lowKeyFields, int[] highKeyFields,
-            boolean lowKeyInclusive, boolean highKeyInclusive) throws AlgebricksException, AlgebricksException {
+        
         AqlMetadataProvider mp = (AqlMetadataProvider) context.getMetadataProvider();
         AqlCompiledMetadataDeclarations metadata = mp.getMetadataDeclarations();
         AqlCompiledDatasetDecl adecl = metadata.findDataset(datasetName);
@@ -96,14 +87,18 @@ public class BTreeSearchPOperator extends IndexSearchPOperator {
         if (adecl.getDatasetType() == DatasetType.EXTERNAL) {
             throw new AlgebricksException("Trying to run btree search over external dataset (" + datasetName + ").");
         }
+        IVariableTypeEnvironment typeEnv = context.getTypeEnvironment(unnestMap);
         Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> btreeSearch = AqlMetadataProvider.buildBtreeRuntime(
-                metadata, context, builder.getJobSpec(), datasetName, adecl, indexName, lowKeyFields, highKeyFields,
-                lowKeyInclusive, highKeyInclusive);
-        builder.contributeHyracksOperator(scan, btreeSearch.first);
+                metadata, context, builder.getJobSpec(), typeEnv, inputSchemas, retainInput, datasetName, adecl, idxName, keysLeft.first, keysRight.first,
+                loInclusive, hiInclusive);
+        builder.contributeHyracksOperator(unnestMap, btreeSearch.first);
         builder.contributeAlgebricksPartitionConstraint(btreeSearch.first, btreeSearch.second);
 
-        ILogicalOperator srcExchange = scan.getInputs().get(0).getValue();
-        builder.contributeGraphEdge(srcExchange, 0, scan, 0);
+        ILogicalOperator srcExchange = unnestMap.getInputs().get(0).getValue();
+        builder.contributeGraphEdge(srcExchange, 0, unnestMap, 0);
     }
 
+    private boolean isTrue(ConstantExpression k) {
+        return k.getValue().isTrue();
+    }
 }

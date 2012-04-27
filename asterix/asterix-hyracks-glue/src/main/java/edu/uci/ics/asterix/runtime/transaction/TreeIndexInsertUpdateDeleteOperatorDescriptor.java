@@ -55,7 +55,7 @@ public class TreeIndexInsertUpdateDeleteOperatorDescriptor extends
 			IBinaryComparatorFactory[] comparatorFactories,
 			IIndexDataflowHelperFactory dataflowHelperFactory,
 			int[] fieldPermutation, IndexOp op, long transactionId) {
-		super(spec, 1, 1, recDesc, storageManager, treeIndexRegistryProvider,
+		super(spec, 1, 1, false, recDesc, storageManager, treeIndexRegistryProvider,
 				fileSplitProvider, interiorFrameFactory, leafFrameFactory,
 				typeTraits, comparatorFactories, dataflowHelperFactory);
 

@@ -30,8 +30,8 @@ import edu.uci.ics.hyracks.api.dataflow.IOperatorDescriptor;
 
 public class RTreeSearchPOperator extends IndexSearchPOperator {
 
-    public RTreeSearchPOperator(IDataSourceIndex<String, AqlSourceId> idx) {
-        super(idx);
+    public RTreeSearchPOperator(IDataSourceIndex<String, AqlSourceId> idx, boolean requiresBroadcast) {
+        super(idx, requiresBroadcast);
     }
 
     @Override
@@ -72,8 +72,10 @@ public class RTreeSearchPOperator extends IndexSearchPOperator {
         }
         String idxName = getStringArgument(f, 0);
         String datasetName = getStringArgument(f, 2);
+        boolean retainInput = getBooleanArgument(f, 3);
+        boolean requiresBroadcast = getBooleanArgument(f, 4);
 
-        Pair<int[], Integer> keys = getKeys(f, 3, inputSchemas);
+        Pair<int[], Integer> keys = getKeys(f, 5, inputSchemas);
         buildRtreeSearch(builder, context, unnestMap, opSchema, datasetName, idxName, keys.first);
     }
 

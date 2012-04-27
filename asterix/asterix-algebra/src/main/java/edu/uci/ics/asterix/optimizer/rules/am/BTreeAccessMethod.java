@@ -226,6 +226,8 @@ public class BTreeAccessMethod implements IAccessMethod {
         secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(datasetDecl.getName())));
         // TODO: For now retainInput is always false.
         secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createBooleanConstant(false)));
+        // TODO: For now requiresBroadcast is always false.
+        secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createBooleanConstant(false)));
         // Here we generate vars and funcs for assigning the secondary-index keys to be fed into the secondary-index search.
         // List of variables for the assign.
         ArrayList<LogicalVariable> keyVarList = new ArrayList<LogicalVariable>();
@@ -258,7 +260,7 @@ public class BTreeAccessMethod implements IAccessMethod {
         if (!isPrimaryIndex) {
             int numPrimaryKeys = DatasetUtils.getPartitioningFunctions(datasetDecl).size();
             List<LogicalVariable> primaryKeyVars = AccessMethodUtils.getPrimaryKeyVars(secondaryIndexUnnestOp.getVariables(), numPrimaryKeys, numSecondaryKeys, false);
-            primaryIndexUnnestOp = AccessMethodUtils.createPrimaryIndexUnnestMap(datasetDecl, recordType, primaryIndexVars, secondaryIndexUnnestOp, context, primaryKeyVars, true, false);
+            primaryIndexUnnestOp = AccessMethodUtils.createPrimaryIndexUnnestMap(datasetDecl, recordType, primaryIndexVars, secondaryIndexUnnestOp, context, primaryKeyVars, true, false, false);
         } else {
             primaryIndexUnnestOp = new UnnestMapOperator(primaryIndexVars, secondaryIndexUnnestOp.getExpressionRef(),
                     AccessMethodUtils.primaryIndexTypes(datasetDecl, recordType));

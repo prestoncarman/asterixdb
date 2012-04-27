@@ -47,7 +47,6 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.OrderOperat
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.visitors.VariableUtilities;
-import edu.uci.ics.hyracks.algebricks.core.algebra.util.OperatorPropertiesUtil;
 import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.ITypeTraits;
@@ -298,7 +297,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
     }
 
     private UnnestMapOperator createSecondaryToPrimaryPlan(Mutable<ILogicalOperator> selectOrJoinRef, OptimizableOperatorSubTree indexSubTree, OptimizableOperatorSubTree probeSubTree, 
-            AqlCompiledIndexDecl chosenIndex, boolean retainInput, AccessMethodAnalysisContext analysisCtx, IOptimizationContext context) throws AlgebricksException {
+            AqlCompiledIndexDecl chosenIndex, boolean retainInput, boolean requiresBroadcast, AccessMethodAnalysisContext analysisCtx, IOptimizationContext context) throws AlgebricksException {
         AqlCompiledDatasetDecl datasetDecl = indexSubTree.datasetDecl;
         ARecordType recordType = indexSubTree.recordType;
         // TODO: Think more deeply about where this is used for inverted indexes, and what composite keys should mean.
@@ -327,6 +326,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         }
         secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(datasetDecl.getName())));
         secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createBooleanConstant(retainInput)));
+        secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createBooleanConstant(requiresBroadcast)));
         // Add function-specific args such as search modifier, and possibly a similarity threshold.
         addFunctionSpecificArgs(optFuncExpr, secondaryIndexFuncArgs);
         // Add the type of search key from the optFuncExpr.
@@ -374,7 +374,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         List<LogicalVariable> primaryKeyVars = AccessMethodUtils.getPrimaryKeyVars(secondaryIndexUnnestOp.getVariables(), numPrimaryKeys, numSecondaryKeys, true);
         List<LogicalVariable> primaryIndexVars = dataSourceScan.getVariables();
         // Generate the rest of the upstream plan which feeds the search results into the primary index.
-        UnnestMapOperator primaryIndexUnnestOp = AccessMethodUtils.createPrimaryIndexUnnestMap(datasetDecl, recordType, primaryIndexVars, secondaryIndexUnnestOp, context, primaryKeyVars, true, false);
+        UnnestMapOperator primaryIndexUnnestOp = AccessMethodUtils.createPrimaryIndexUnnestMap(datasetDecl, recordType, primaryIndexVars, secondaryIndexUnnestOp, context, primaryKeyVars, true, retainInput, false);
         return primaryIndexUnnestOp;
     }
     
@@ -382,7 +382,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
     public boolean applySelectPlanTransformation(Mutable<ILogicalOperator> selectRef, OptimizableOperatorSubTree subTree,
             AqlCompiledIndexDecl chosenIndex, AccessMethodAnalysisContext analysisCtx, IOptimizationContext context)
             throws AlgebricksException {
-        UnnestMapOperator primaryIndexUnnestMap = createSecondaryToPrimaryPlan(selectRef, subTree, null, chosenIndex, false, analysisCtx, context);
+        UnnestMapOperator primaryIndexUnnestMap = createSecondaryToPrimaryPlan(selectRef, subTree, null, chosenIndex, false, false, analysisCtx, context);
         // Replace the datasource scan with the new plan rooted at primaryIndexUnnestMap.
         subTree.dataSourceScanRef.setValue(primaryIndexUnnestMap);
         return true;
@@ -407,23 +407,14 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
             probeSubTree = leftSubTree;
         }
         
-        List<LogicalVariable> leftLiveVars = new ArrayList<LogicalVariable>();
-        VariableUtilities.getLiveVariables(indexSubTree.root, leftLiveVars);
-        List<LogicalVariable> rightLiveVars = new ArrayList<LogicalVariable>();
-        VariableUtilities.getLiveVariables(probeSubTree.root, rightLiveVars);
-        List<LogicalVariable> joinLiveVars = new ArrayList<LogicalVariable>();
-        VariableUtilities.getLiveVariables(joinRef.getValue(), joinLiveVars);
-        
-        UnnestMapOperator primaryIndexUnnestMap = createSecondaryToPrimaryPlan(joinRef, indexSubTree, probeSubTree, chosenIndex, true, analysisCtx, context);
+        UnnestMapOperator primaryIndexUnnestMap = createSecondaryToPrimaryPlan(joinRef, indexSubTree, probeSubTree, chosenIndex, true, true, analysisCtx, context);
         indexSubTree.dataSourceScanRef.setValue(primaryIndexUnnestMap);
         
         // Change join into a select with the same condition.
         InnerJoinOperator join = (InnerJoinOperator) joinRef.getValue();
         SelectOperator topSelect = new SelectOperator(join.getCondition());
         topSelect.getInputs().add(indexSubTree.rootRef);
-        joinRef.setValue(topSelect);                
-        OperatorPropertiesUtil.typeOpRec(joinRef, context);
-        context.computeAndSetTypeEnvironmentForOperator(joinRef.getValue());
+        joinRef.setValue(topSelect);
         
         return true;
     }

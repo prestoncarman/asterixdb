@@ -6,13 +6,13 @@ import java.util.List;
 import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.commons.lang3.mutable.MutableObject;
 
-import edu.uci.ics.hyracks.algebricks.rewriter.util.JoinUtils;
 import edu.uci.ics.asterix.algebra.operators.physical.BTreeSearchPOperator;
-import edu.uci.ics.asterix.algebra.operators.physical.RTreeSearchPOperator;
 import edu.uci.ics.asterix.algebra.operators.physical.InvertedIndexPOperator;
+import edu.uci.ics.asterix.algebra.operators.physical.RTreeSearchPOperator;
 import edu.uci.ics.asterix.common.functions.FunctionArgumentsConstants;
 import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
 import edu.uci.ics.asterix.metadata.declared.AqlSourceId;
+import edu.uci.ics.asterix.om.base.ABoolean;
 import edu.uci.ics.asterix.om.base.AString;
 import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
@@ -45,6 +45,7 @@ import edu.uci.ics.hyracks.algebricks.core.api.exceptions.NotImplementedExceptio
 import edu.uci.ics.hyracks.algebricks.core.rewriter.base.IAlgebraicRewriteRule;
 import edu.uci.ics.hyracks.algebricks.core.rewriter.base.PhysicalOptimizationConfig;
 import edu.uci.ics.hyracks.algebricks.core.utils.Pair;
+import edu.uci.ics.hyracks.algebricks.rewriter.util.JoinUtils;
 
 public class SetAsterixPhysicalOperatorsRule implements IAlgebraicRewriteRule {
 
@@ -164,14 +165,18 @@ public class SetAsterixPhysicalOperatorsRule implements IAlgebraicRewriteRule {
                             ConstantExpression ce1 = (ConstantExpression) f.getArguments().get(1).getValue();
                             String indexType = ((AString) ((AsterixConstantValue) ce1.getValue()).getObject())
                                     .getStringValue();
+                            ConstantExpression ce4 = (ConstantExpression) f.getArguments().get(4).getValue();
+                            boolean requiresBroadcast = ((ABoolean) ((AsterixConstantValue) ce4.getValue()).getObject())
+                                    .getBoolean();
+                            // TODO: Make this a switch case.
                             if (indexType == FunctionArgumentsConstants.BTREE_INDEX) {
-                                op.setPhysicalOperator(new BTreeSearchPOperator(dsi));
+                                op.setPhysicalOperator(new BTreeSearchPOperator(dsi, requiresBroadcast));
                             } else if (indexType == FunctionArgumentsConstants.RTREE_INDEX) {
-                                op.setPhysicalOperator(new RTreeSearchPOperator(dsi));
+                                op.setPhysicalOperator(new RTreeSearchPOperator(dsi, requiresBroadcast));
                             } else if (indexType == FunctionArgumentsConstants.WORD_INVERTED_INDEX ) {
-                                op.setPhysicalOperator(new InvertedIndexPOperator(dsi));
+                                op.setPhysicalOperator(new InvertedIndexPOperator(dsi, requiresBroadcast));
                             } else if (indexType == FunctionArgumentsConstants.NGRAM_INVERTED_INDEX ) {
-                                op.setPhysicalOperator(new InvertedIndexPOperator(dsi));
+                                op.setPhysicalOperator(new InvertedIndexPOperator(dsi, requiresBroadcast));
                             } else {
                                 throw new NotImplementedException(indexType + " indexes are not implemented.");
                             }
