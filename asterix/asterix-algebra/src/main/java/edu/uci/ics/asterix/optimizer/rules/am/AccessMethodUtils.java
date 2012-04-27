@@ -30,8 +30,8 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCal
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.UnnestingFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.IFunctionInfo;
+import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator.ExecutionMode;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.OrderOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOperator;
@@ -114,12 +114,27 @@ public class AccessMethodUtils {
         return types;
     }
     
-    public static UnnestMapOperator createPrimaryIndexUnnestMap(AqlCompiledDatasetDecl datasetDecl,
-            ARecordType recordType, List<LogicalVariable> primaryIndexVars, AqlCompiledIndexDecl secondaryIndex,
-            int numSecondaryKeys, List<Object> secondaryIndexTypes, UnnestingFunctionCallExpression rangeSearchFun,
-            AssignOperator assignSearchKeys, IOptimizationContext context, boolean outputPrimaryKeysOnly,
-            boolean sortPrimaryKeys, boolean retainInput) throws AlgebricksException {
-        // List of variables for the primary keys coming out of a secondary-index search.
+    public static List<LogicalVariable> getPrimaryKeyVars(List<LogicalVariable> sourceVars, int numPrimaryKeys, int numSecondaryKeys, boolean outputPrimaryKeysOnly) {
+        List<LogicalVariable> primaryKeyVars = new ArrayList<LogicalVariable>();
+        int start = sourceVars.size() - numPrimaryKeys;
+        int stop = sourceVars.size();        
+        for (int i = start; i < stop; i++) {
+            primaryKeyVars.add(sourceVars.get(i));
+        }
+        return primaryKeyVars;
+    }
+    
+    public static UnnestMapOperator createSecondaryIndexUnnestMap(AqlCompiledDatasetDecl datasetDecl,
+            ARecordType recordType, AqlCompiledIndexDecl indexDecl, ILogicalOperator inputOp,
+            ArrayList<Mutable<ILogicalExpression>> secondaryIndexFuncArgs, int numSecondaryKeys, List<Object> secondaryIndexTypes,
+            IOptimizationContext context, boolean outputPrimaryKeysOnly, boolean retainInput) throws AlgebricksException {        
+    	// This is the logical representation of our secondary-index search.
+        // An index search is expressed logically as an unnest over an index-search function.
+        IFunctionInfo secondaryIndexSearch = FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.INDEX_SEARCH);
+        UnnestingFunctionCallExpression secondaryIndexSearchFunc = new UnnestingFunctionCallExpression(secondaryIndexSearch, secondaryIndexFuncArgs);
+        secondaryIndexSearchFunc.setReturnsUniqueValues(true);
+    	
+    	// List of variables for the primary keys coming out of a secondary-index search.
         int numPrimaryKeys = DatasetUtils.getPartitioningFunctions(datasetDecl).size();
         ArrayList<LogicalVariable> secondaryIndexPrimaryKeys = new ArrayList<LogicalVariable>(numPrimaryKeys);
         for (int i = 0; i < numPrimaryKeys; i++) {
@@ -138,21 +153,27 @@ public class AccessMethodUtils {
         // This is the operator that jobgen will be looking for. It contains an unnest function that has all necessary arguments to determine
         // which index to use, which variables contain the index-search keys, what is the original dataset, etc.
         UnnestMapOperator secondaryIndexUnnestOp = new UnnestMapOperator(secondaryIndexUnnestVars, new MutableObject<ILogicalExpression>(
-                rangeSearchFun), secondaryIndexTypes);
-        secondaryIndexUnnestOp.getInputs().add(new MutableObject<ILogicalOperator>(assignSearchKeys));
+                secondaryIndexSearchFunc), secondaryIndexTypes);
+        secondaryIndexUnnestOp.getInputs().add(new MutableObject<ILogicalOperator>(inputOp));
         secondaryIndexUnnestOp.setExecutionMode(ExecutionMode.PARTITIONED);
-
+        
+        return secondaryIndexUnnestOp;
+    }
+    
+    public static UnnestMapOperator createPrimaryIndexUnnestMap(AqlCompiledDatasetDecl datasetDecl, 
+            ARecordType recordType, List<LogicalVariable> primaryIndexVars, ILogicalOperator inputOp,
+            IOptimizationContext context, List<LogicalVariable> primaryKeyVars, boolean sortPrimaryKeys, boolean retainInput) throws AlgebricksException {
         // Optionally add a sort on the primary-index keys before searching the primary index.
         OrderOperator order = null;
         if (sortPrimaryKeys) {
             order = new OrderOperator();
-            for (LogicalVariable v : secondaryIndexPrimaryKeys) {
-                Mutable<ILogicalExpression> vRef = new MutableObject<ILogicalExpression>(new VariableReferenceExpression(v));
+            for (LogicalVariable pkVar : primaryKeyVars) {
+                Mutable<ILogicalExpression> vRef = new MutableObject<ILogicalExpression>(new VariableReferenceExpression(pkVar));
                 order.getOrderExpressions().add(
                         new Pair<IOrder, Mutable<ILogicalExpression>>(OrderOperator.ASC_ORDER, vRef));
             }
             // The secondary-index search feeds into the sort.
-            order.getInputs().add(new MutableObject<ILogicalOperator>(secondaryIndexUnnestOp));
+            order.getInputs().add(new MutableObject<ILogicalOperator>(inputOp));
             order.setExecutionMode(ExecutionMode.LOCAL);
         }
 
@@ -165,14 +186,14 @@ public class AccessMethodUtils {
         primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(createStringConstant(datasetDecl.getName())));
         primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(createBooleanConstant(retainInput)));
         // Add the variables corresponding to the primary-index search keys (low key).
-        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(createInt32Constant(numPrimaryKeys)));
-        for (LogicalVariable v : secondaryIndexPrimaryKeys) {
-            primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(v)));
+        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(createInt32Constant(primaryKeyVars.size())));
+        for (LogicalVariable pkVar : primaryKeyVars) {
+            primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(pkVar)));
         }
         // Add the variables corresponding to the primary-index search keys (high key).
-        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(createInt32Constant(numPrimaryKeys)));
-        for (LogicalVariable v : secondaryIndexPrimaryKeys) {
-            primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(v)));
+        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(createInt32Constant(primaryKeyVars.size())));
+        for (LogicalVariable pkVar : primaryKeyVars) {
+            primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(pkVar)));
         }
         // Low key inclusive, and high key inclusive are both true, meaning the search interval is closed.
         // Since the low key and high key are also the same, we have a point lookup.
@@ -180,16 +201,16 @@ public class AccessMethodUtils {
         primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(ConstantExpression.TRUE));
         IFunctionInfo primaryIndexSearch = FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.INDEX_SEARCH);
         AbstractFunctionCallExpression searchPrimIdxFun = new ScalarFunctionCallExpression(primaryIndexSearch, primaryIndexFuncArgs);
-        UnnestMapOperator primaryIndexUnnestMap = new UnnestMapOperator(primaryIndexVars, new MutableObject<ILogicalExpression>(searchPrimIdxFun),
+        UnnestMapOperator primaryIndexUnnestOp = new UnnestMapOperator(primaryIndexVars, new MutableObject<ILogicalExpression>(searchPrimIdxFun),
                 AccessMethodUtils.primaryIndexTypes(datasetDecl, recordType));
         // Fed by the order operator or the secondaryIndexUnnestOp.
         if (sortPrimaryKeys) {
-            primaryIndexUnnestMap.getInputs().add(new MutableObject<ILogicalOperator>(order));
+            primaryIndexUnnestOp.getInputs().add(new MutableObject<ILogicalOperator>(order));
         } else {
-            primaryIndexUnnestMap.getInputs().add(new MutableObject<ILogicalOperator>(secondaryIndexUnnestOp));
+            primaryIndexUnnestOp.getInputs().add(new MutableObject<ILogicalOperator>(inputOp));
         }
-        primaryIndexUnnestMap.setExecutionMode(ExecutionMode.PARTITIONED);
-        return primaryIndexUnnestMap;
+        primaryIndexUnnestOp.setExecutionMode(ExecutionMode.PARTITIONED);
+        return primaryIndexUnnestOp;
     }
     
 }

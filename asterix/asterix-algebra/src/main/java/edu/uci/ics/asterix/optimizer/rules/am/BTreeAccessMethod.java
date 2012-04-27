@@ -9,7 +9,6 @@ import java.util.Set;
 import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.commons.lang3.mutable.MutableObject;
 
-import edu.uci.ics.asterix.aql.util.FunctionUtils;
 import edu.uci.ics.asterix.common.functions.FunctionArgumentsConstants;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledDatasetDecl;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl;
@@ -27,7 +26,6 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionC
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IAlgebricksConstantValue;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
-import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.UnnestingFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.AlgebricksBuiltinFunctions;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.AlgebricksBuiltinFunctions.ComparisonKind;
@@ -95,7 +93,7 @@ public class BTreeAccessMethod implements IAccessMethod {
         if (assignRef != null) {
             assign = (AssignOperator) assignRef.getValue();
         }        
-        int numSecondaryKeys = chosenIndex.getFieldExprs().size();
+        int numSecondaryKeys = chosenIndex.getFieldExprs().size();        
         
         // Info on high and low keys for the BTree search predicate.
         IAlgebricksConstantValue[] lowKeyConstants = new IAlgebricksConstantValue[numSecondaryKeys];
@@ -247,26 +245,24 @@ public class BTreeAccessMethod implements IAccessMethod {
         // Input to this assign is the EmptyTupleSource (which the dataSourceScan also must have had as input).
         assignSearchKeys.getInputs().add(dataSourceScan.getInputs().get(0));
         assignSearchKeys.setExecutionMode(dataSourceScan.getExecutionMode());
-
-        // This is the logical representation of our RTree search.
-        // An index search is expressed logically as an unnest over an index-search function.
-        IFunctionInfo secondaryIndexSearch = FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.INDEX_SEARCH);
-        UnnestingFunctionCallExpression rangeSearchFunc = new UnnestingFunctionCallExpression(secondaryIndexSearch, secondaryIndexFuncArgs);
-        rangeSearchFunc.setReturnsUniqueValues(true);
-
+        
+        List<Object> secondaryIndexTypes = AccessMethodUtils.getSecondaryIndexTypes(datasetDecl, chosenIndex, recordType, false);
+        UnnestMapOperator secondaryIndexUnnestOp = AccessMethodUtils.createSecondaryIndexUnnestMap(datasetDecl,
+                recordType, chosenIndex, assignSearchKeys, secondaryIndexFuncArgs, numSecondaryKeys, secondaryIndexTypes, context, false,
+                false);
+        
         // Generate the rest of the upstream plan which feeds the search results into the primary index.
         List<LogicalVariable> primaryIndexVars = dataSourceScan.getVariables();
-        UnnestMapOperator primaryIndexUnnestMap;
+        UnnestMapOperator primaryIndexUnnestOp;
         boolean isPrimaryIndex = chosenIndex == DatasetUtils.getPrimaryIndex(datasetDecl);
         if (!isPrimaryIndex) {
-            List<Object> secondaryIndexTypes = AccessMethodUtils.getSecondaryIndexTypes(datasetDecl, chosenIndex, recordType, false);
-            primaryIndexUnnestMap = AccessMethodUtils.createPrimaryIndexUnnestMap(datasetDecl, recordType,
-                    primaryIndexVars, chosenIndex, numSecondaryKeys, secondaryIndexTypes, rangeSearchFunc,
-                    assignSearchKeys, context, false, true, false);
+            int numPrimaryKeys = DatasetUtils.getPartitioningFunctions(datasetDecl).size();
+            List<LogicalVariable> primaryKeyVars = AccessMethodUtils.getPrimaryKeyVars(secondaryIndexUnnestOp.getVariables(), numPrimaryKeys, numSecondaryKeys, false);
+            primaryIndexUnnestOp = AccessMethodUtils.createPrimaryIndexUnnestMap(datasetDecl, recordType, primaryIndexVars, secondaryIndexUnnestOp, context, primaryKeyVars, true, false);
         } else {
-            primaryIndexUnnestMap = new UnnestMapOperator(primaryIndexVars, new MutableObject<ILogicalExpression>(rangeSearchFunc),
+            primaryIndexUnnestOp = new UnnestMapOperator(primaryIndexVars, secondaryIndexUnnestOp.getExpressionRef(),
                     AccessMethodUtils.primaryIndexTypes(datasetDecl, recordType));
-            primaryIndexUnnestMap.getInputs().add(new MutableObject<ILogicalOperator>(assignSearchKeys));
+            primaryIndexUnnestOp.getInputs().add(new MutableObject<ILogicalOperator>(assignSearchKeys));
         }        
 
         List<Mutable<ILogicalExpression>> remainingFuncExprs = new ArrayList<Mutable<ILogicalExpression>>();
@@ -276,20 +272,20 @@ public class BTreeAccessMethod implements IAccessMethod {
             ILogicalExpression pulledCond = createSelectCondition(remainingFuncExprs);
             SelectOperator selectRest = new SelectOperator(new MutableObject<ILogicalExpression>(pulledCond));
             if (assign != null) {
-                subTree.dataSourceScanRef.setValue(primaryIndexUnnestMap);
+                subTree.dataSourceScanRef.setValue(primaryIndexUnnestOp);
                 selectRest.getInputs().add(new MutableObject<ILogicalOperator>(assign));
             } else {
-                selectRest.getInputs().add(new MutableObject<ILogicalOperator>(primaryIndexUnnestMap));
+                selectRest.getInputs().add(new MutableObject<ILogicalOperator>(primaryIndexUnnestOp));
             }
             selectRest.setExecutionMode(((AbstractLogicalOperator) selectRef.getValue()).getExecutionMode());
             selectRef.setValue(selectRest);
         } else {
-            primaryIndexUnnestMap.setExecutionMode(ExecutionMode.PARTITIONED);
+            primaryIndexUnnestOp.setExecutionMode(ExecutionMode.PARTITIONED);
             if (assign != null) {
-                subTree.dataSourceScanRef.setValue(primaryIndexUnnestMap);
+                subTree.dataSourceScanRef.setValue(primaryIndexUnnestOp);
                 selectRef.setValue(assign);
             } else {
-                selectRef.setValue(primaryIndexUnnestMap);
+                selectRef.setValue(primaryIndexUnnestOp);
             }
         }
         return true;

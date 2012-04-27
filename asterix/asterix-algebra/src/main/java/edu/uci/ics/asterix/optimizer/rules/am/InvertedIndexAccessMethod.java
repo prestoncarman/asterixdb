@@ -7,7 +7,6 @@ import java.util.List;
 import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.commons.lang3.mutable.MutableObject;
 
-import edu.uci.ics.asterix.aql.util.FunctionUtils;
 import edu.uci.ics.asterix.common.functions.FunctionArgumentsConstants;
 import edu.uci.ics.asterix.dataflow.data.common.ListEditDistanceSearchModifierFactory;
 import edu.uci.ics.asterix.formats.nontagged.AqlBinaryComparatorFactoryProvider;
@@ -16,6 +15,7 @@ import edu.uci.ics.asterix.formats.nontagged.AqlTypeTraitProvider;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledDatasetDecl;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl.IndexKind;
+import edu.uci.ics.asterix.metadata.utils.DatasetUtils;
 import edu.uci.ics.asterix.om.base.AFloat;
 import edu.uci.ics.asterix.om.base.AInt32;
 import edu.uci.ics.asterix.om.base.AString;
@@ -38,16 +38,15 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IAlgebricksConstantValue;
-import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.UnnestingFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
-import edu.uci.ics.hyracks.algebricks.core.algebra.functions.IFunctionInfo;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.DataSourceScanOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.InnerJoinOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder.OrderKind;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOperator;
+import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.visitors.VariableUtilities;
 import edu.uci.ics.hyracks.algebricks.core.algebra.util.OperatorPropertiesUtil;
 import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.api.dataflow.value.IBinaryComparatorFactory;
@@ -367,19 +366,16 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
             assignSearchKeys = (AssignOperator) probeSubTree.root;
         }
         
-        // This is the logical representation of our secondary-index search.
-        // An index search is expressed logically as an unnest over an index-search function.
-        IFunctionInfo secondaryIndexSearch = FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.INDEX_SEARCH);
-        UnnestingFunctionCallExpression invIndexSearchFunc = new UnnestingFunctionCallExpression(secondaryIndexSearch, secondaryIndexFuncArgs);
-        invIndexSearchFunc.setReturnsUniqueValues(true);
-
-        // Generate the rest of the upstream plan which feeds the search results into the primary index.
-        List<LogicalVariable> primaryIndexVars = dataSourceScan.getVariables();        
         List<Object> secondaryIndexTypes = AccessMethodUtils.getSecondaryIndexTypes(datasetDecl, chosenIndex, recordType, true);
-        UnnestMapOperator primaryIndexUnnestMap = AccessMethodUtils.createPrimaryIndexUnnestMap(datasetDecl, recordType,
-                primaryIndexVars, chosenIndex, numSecondaryKeys, secondaryIndexTypes, invIndexSearchFunc, assignSearchKeys,
-                context, true, true, retainInput);
-        return primaryIndexUnnestMap;
+        UnnestMapOperator secondaryIndexUnnestOp = AccessMethodUtils.createSecondaryIndexUnnestMap(datasetDecl,
+                recordType, chosenIndex, assignSearchKeys, secondaryIndexFuncArgs, numSecondaryKeys,
+                secondaryIndexTypes, context, true, retainInput);
+        int numPrimaryKeys = DatasetUtils.getPartitioningFunctions(datasetDecl).size();
+        List<LogicalVariable> primaryKeyVars = AccessMethodUtils.getPrimaryKeyVars(secondaryIndexUnnestOp.getVariables(), numPrimaryKeys, numSecondaryKeys, true);
+        List<LogicalVariable> primaryIndexVars = dataSourceScan.getVariables();
+        // Generate the rest of the upstream plan which feeds the search results into the primary index.
+        UnnestMapOperator primaryIndexUnnestOp = AccessMethodUtils.createPrimaryIndexUnnestMap(datasetDecl, recordType, primaryIndexVars, secondaryIndexUnnestOp, context, primaryKeyVars, true, false);
+        return primaryIndexUnnestOp;
     }
     
     @Override
@@ -410,6 +406,14 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
             indexSubTree = rightSubTree;
             probeSubTree = leftSubTree;
         }
+        
+        List<LogicalVariable> leftLiveVars = new ArrayList<LogicalVariable>();
+        VariableUtilities.getLiveVariables(indexSubTree.root, leftLiveVars);
+        List<LogicalVariable> rightLiveVars = new ArrayList<LogicalVariable>();
+        VariableUtilities.getLiveVariables(probeSubTree.root, rightLiveVars);
+        List<LogicalVariable> joinLiveVars = new ArrayList<LogicalVariable>();
+        VariableUtilities.getLiveVariables(joinRef.getValue(), joinLiveVars);
+        
         UnnestMapOperator primaryIndexUnnestMap = createSecondaryToPrimaryPlan(joinRef, indexSubTree, probeSubTree, chosenIndex, true, analysisCtx, context);
         indexSubTree.dataSourceScanRef.setValue(primaryIndexUnnestMap);
         
@@ -417,11 +421,9 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         InnerJoinOperator join = (InnerJoinOperator) joinRef.getValue();
         SelectOperator topSelect = new SelectOperator(join.getCondition());
         topSelect.getInputs().add(indexSubTree.rootRef);
-        joinRef.setValue(topSelect);
+        joinRef.setValue(topSelect);                
         OperatorPropertiesUtil.typeOpRec(joinRef, context);
         context.computeAndSetTypeEnvironmentForOperator(joinRef.getValue());
-        
-        System.out.println("HUH");
         
         return true;
     }
