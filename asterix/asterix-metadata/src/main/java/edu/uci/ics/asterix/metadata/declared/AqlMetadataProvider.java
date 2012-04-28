@@ -315,6 +315,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         // Number of input fields that are also output by this index operator.
         int numInOutFields = (retainInput) ? inputSchemas[0].getSize() : 0;               
         ISerializerDeserializer[] recordFields;
+        ITypeTraits[] recordTypeTraits;
         IBinaryComparatorFactory[] comparatorFactories;
         ITypeTraits[] typeTraits;
         int numSecondaryKeys = 0;
@@ -331,7 +332,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
             int numOutputFields = numSecondaryKeys + numPrimaryKeys + numInOutFields;
             int numKeys = numSecondaryKeys + numPrimaryKeys;
             recordFields = new ISerializerDeserializer[numOutputFields];
-            typeTraits = new ITypeTraits[numOutputFields];
+            recordTypeTraits = new ITypeTraits[numOutputFields];            
             
             // This operator optionally forwards its input fields, and outputs primary keys whose data items match the search condition.
             if (retainInput) {
@@ -340,11 +341,12 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
                     IAType inputVarType = (IAType) typeEnv.getVarType(inputVar);
                     recordFields[j] = metadata.getFormat().getSerdeProvider()
                         .getSerializerDeserializer(inputVarType);
-                    typeTraits[j] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(inputVarType);
+                    recordTypeTraits[j] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(inputVarType);
                 }
             }
             
             comparatorFactories = new IBinaryComparatorFactory[numKeys];
+            typeTraits = new ITypeTraits[numKeys];
             if (itemType.getTypeTag() != ATypeTag.RECORD) {
                 throw new AlgebricksException("Only record types can be indexed.");
             }
@@ -353,17 +355,35 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
                 IAType keyType = AqlCompiledIndexDecl.keyFieldType(secondaryKeyFields.get(i), recType);
                 comparatorFactories[i] = AqlBinaryComparatorFactoryProvider.INSTANCE.getBinaryComparatorFactory(
                         keyType, OrderKind.ASC);
-                typeTraits[i + numInOutFields] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(keyType);
+                typeTraits[i] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(keyType);
                 recordFields[i + numInOutFields] = metadata.getFormat().getSerdeProvider()
                         .getSerializerDeserializer(keyType);
+                recordTypeTraits[i + numInOutFields] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(keyType);
             }
         } else {
-            recordFields = new ISerializerDeserializer[numPrimaryKeys + 1];
+            // TODO: Clean up common code here.
+            // Total number of fields output by the index operator.
+            int numOutputFields = numPrimaryKeys + numInOutFields + 1;
+            recordFields = new ISerializerDeserializer[numOutputFields];
+            recordTypeTraits = new ITypeTraits[numOutputFields];            
+            
+            // This operator optionally forwards its input fields, and outputs primary keys whose data items match the search condition.
+            if (retainInput) {
+                for (int j = 0; j < numInOutFields; j++) {
+                    LogicalVariable inputVar = inputSchemas[0].getVariable(j);
+                    IAType inputVarType = (IAType) typeEnv.getVarType(inputVar);
+                    recordFields[j] = metadata.getFormat().getSerdeProvider()
+                        .getSerializerDeserializer(inputVarType);
+                    recordTypeTraits[j] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(inputVarType);
+                }
+            }
+            
             comparatorFactories = new IBinaryComparatorFactory[numPrimaryKeys];
             typeTraits = new ITypeTraits[numPrimaryKeys + 1];
             ISerializerDeserializer payloadSerde = metadata.getFormat().getSerdeProvider()
                     .getSerializerDeserializer(itemType);
-            recordFields[numPrimaryKeys] = payloadSerde;
+            recordFields[numPrimaryKeys + numInOutFields] = payloadSerde;
+            recordTypeTraits[numPrimaryKeys + numInOutFields] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(itemType);
             typeTraits[numPrimaryKeys] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(itemType);
         }                
         for (Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType> evalFactoryAndType : DatasetUtils
@@ -371,9 +391,10 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
             IAType keyType = evalFactoryAndType.third;
             comparatorFactories[i] = AqlBinaryComparatorFactoryProvider.INSTANCE.getBinaryComparatorFactory(keyType,
                     OrderKind.ASC);
-            typeTraits[i + numInOutFields] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(keyType);
+            typeTraits[i] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(keyType);
+            recordTypeTraits[i + numInOutFields] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(keyType);
             recordFields[i + numInOutFields] = metadata.getFormat().getSerdeProvider()
-                    .getSerializerDeserializer(keyType);;
+                    .getSerializerDeserializer(keyType);
             ++i;
         }
 
@@ -381,7 +402,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         ITreeIndexFrameFactory leafFrameFactory = createBTreeNSMLeafFrameFactory(typeTraits);
 
         IAsterixApplicationContextInfo appContext = (IAsterixApplicationContextInfo) context.getAppContext();
-        RecordDescriptor recDesc = new RecordDescriptor(recordFields);
+        RecordDescriptor recDesc = new RecordDescriptor(recordFields, recordTypeTraits);
 
         Pair<IFileSplitProvider, AlgebricksPartitionConstraint> spPc;
         try {

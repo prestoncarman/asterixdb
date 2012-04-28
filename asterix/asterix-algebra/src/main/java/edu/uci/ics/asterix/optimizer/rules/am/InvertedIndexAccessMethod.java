@@ -374,7 +374,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         List<LogicalVariable> primaryKeyVars = AccessMethodUtils.getPrimaryKeyVars(secondaryIndexUnnestOp.getVariables(), numPrimaryKeys, numSecondaryKeys, true);
         List<LogicalVariable> primaryIndexVars = dataSourceScan.getVariables();
         // Generate the rest of the upstream plan which feeds the search results into the primary index.
-        UnnestMapOperator primaryIndexUnnestOp = AccessMethodUtils.createPrimaryIndexUnnestMap(datasetDecl, recordType, primaryIndexVars, secondaryIndexUnnestOp, context, primaryKeyVars, true, retainInput, false);
+        UnnestMapOperator primaryIndexUnnestOp = AccessMethodUtils.createPrimaryIndexUnnestMap(datasetDecl, recordType, primaryIndexVars, secondaryIndexUnnestOp, context, primaryKeyVars, false, retainInput, false);
         return primaryIndexUnnestOp;
     }
     
@@ -415,6 +415,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         SelectOperator topSelect = new SelectOperator(join.getCondition());
         topSelect.getInputs().add(indexSubTree.rootRef);
         joinRef.setValue(topSelect);
+        context.computeAndSetTypeEnvironmentForOperator(topSelect);
         
         return true;
     }

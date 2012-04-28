@@ -200,6 +200,7 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
         }
         
         IBinaryComparatorFactory[] invListsComparatorFactories = new IBinaryComparatorFactory[numPrimaryKeys];
+        ITypeTraits[] invListsTypeTraits = new ITypeTraits[numPrimaryKeys];
         int i = 0;
         for (Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType> evalFactoryAndType : DatasetUtils
                 .getPartitioningFunctions(datasetDecl)) {
@@ -209,9 +210,10 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
             outputRecFields[i + numInOutFields] = metadata.getFormat().getSerdeProvider()
                     .getSerializerDeserializer(keyType);
             outputTypeTraits[i + numInOutFields] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(keyType);
+            invListsTypeTraits[i] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(keyType);
             ++i;
         }        
-        RecordDescriptor invListRecDesc = new RecordDescriptor(outputRecFields, outputTypeTraits);
+        RecordDescriptor outputRecDesc = new RecordDescriptor(outputRecFields, outputTypeTraits);
         
         IAsterixApplicationContextInfo appContext = (IAsterixApplicationContextInfo) context.getAppContext();        
         Pair<IFileSplitProvider, AlgebricksPartitionConstraint> secondarySplitsAndConstraint;
@@ -235,9 +237,9 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
                 jobSpec, queryField, appContext.getStorageManagerInterface(),
                 fileSplitProviders.first, fileSplitProviders.second,
                 appContext.getIndexRegistryProvider(), tokenTypeTraits,
-                tokenComparatorFactories, outputTypeTraits,
+                tokenComparatorFactories, invListsTypeTraits,
                 invListsComparatorFactories, new BTreeDataflowHelperFactory(),
-                queryTokenizerFactory, searchModifierFactory, invListRecDesc, retainInput);        
+                queryTokenizerFactory, searchModifierFactory, outputRecDesc, retainInput);        
         return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(invIndexSearchOp, secondarySplitsAndConstraint.second);
     }
 }
