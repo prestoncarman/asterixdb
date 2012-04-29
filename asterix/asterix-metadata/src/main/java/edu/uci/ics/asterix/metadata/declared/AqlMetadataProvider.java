@@ -150,12 +150,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         AqlSourceId asid = dataSource.getId();
         String datasetName = asid.getDatasetName();
         String indexName = DatasetUtils.getPrimaryIndex(acedl).getIndexName();
-
-        try {
-            return buildBtreeRuntime(metadata, context, jobSpec, null, null, false, datasetName, acedl, indexName, null, null, true, true);
-        } catch (AlgebricksException e) {
-            throw new AlgebricksException(e);
-        }
+        return buildBtreeRuntime(metadata, context, jobSpec, null, null, false, datasetName, acedl, indexName, null, null, true, true);
     }
 
     private Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> buildExternalDatasetScan(JobSpecification jobSpec,
@@ -291,6 +286,14 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(feedMessenger, spPc.second);
     }
 
+    
+    /*
+    public static Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> buildBtreeRuntime(
+            AqlCompiledMetadataDeclarations metadata, JobGenContext context, JobSpecification jobSpec,
+            IVariableTypeEnvironment typeEnv, IOperatorSchema[] inputSchemas, boolean retainInput, String datasetName, AqlCompiledDatasetDecl ddecl, String indexName, int[] lowKeyFields,
+            int[] highKeyFields, boolean lowKeyInclusive, boolean highKeyInclusive) throws AlgebricksException {
+    */
+    
     @SuppressWarnings("rawtypes")
     public static Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> buildBtreeRuntime(
             AqlCompiledMetadataDeclarations metadata, JobGenContext context, JobSpecification jobSpec,

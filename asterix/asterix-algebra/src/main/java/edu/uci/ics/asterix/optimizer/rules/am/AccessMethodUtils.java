@@ -14,6 +14,7 @@ import edu.uci.ics.asterix.metadata.utils.DatasetUtils;
 import edu.uci.ics.asterix.om.base.ABoolean;
 import edu.uci.ics.asterix.om.base.AInt32;
 import edu.uci.ics.asterix.om.base.AString;
+import edu.uci.ics.asterix.om.base.IAObject;
 import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
 import edu.uci.ics.asterix.om.types.ARecordType;
@@ -67,6 +68,24 @@ public class AccessMethodUtils {
         } else {
             return new ConstantExpression(new AsterixConstantValue(ABoolean.FALSE));
         }
+    }
+	
+	public static String getStringConstant(Mutable<ILogicalExpression> expr) {
+        IAObject obj = ((AsterixConstantValue)((ConstantExpression) expr.getValue())
+                .getValue()).getObject();
+        return ((AString)obj).getStringValue();
+    }
+	
+    public static int getInt32Constant(Mutable<ILogicalExpression> expr) {
+        IAObject obj = ((AsterixConstantValue)((ConstantExpression) expr.getValue())
+                .getValue()).getObject();
+        return ((AInt32)obj).getIntegerValue();
+    }
+    
+    public static boolean getBooleanConstant(Mutable<ILogicalExpression> expr) {
+        IAObject obj = ((AsterixConstantValue)((ConstantExpression) expr.getValue())
+                .getValue()).getObject();
+        return ((ABoolean)obj).getBoolean();
     }
 	
     public static boolean analyzeFuncExprArgsForOneConstAndVar(AbstractFunctionCallExpression funcExpr,

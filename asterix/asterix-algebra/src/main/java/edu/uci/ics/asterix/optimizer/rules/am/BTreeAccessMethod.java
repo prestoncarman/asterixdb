@@ -13,8 +13,6 @@ import edu.uci.ics.asterix.common.functions.FunctionArgumentsConstants;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledDatasetDecl;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl;
 import edu.uci.ics.asterix.metadata.utils.DatasetUtils;
-import edu.uci.ics.asterix.om.base.AInt32;
-import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
@@ -26,7 +24,6 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionC
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IAlgebricksConstantValue;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
-import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.AlgebricksBuiltinFunctions;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.AlgebricksBuiltinFunctions.ComparisonKind;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
@@ -216,32 +213,28 @@ public class BTreeAccessMethod implements IAccessMethod {
         }
         
         // List of arguments to be passed into an unnest.
+        // TODO: Fix this comment to be current.
         // This logical rewrite rule, and the corresponding runtime op generated in the jobgen 
         // have a contract as to what goes into these arguments.
         // Here, we put the name of the chosen index, the type of index, the name of the dataset, 
         // the number of secondary-index keys, and the variable references corresponding to the secondary-index search keys.
         ArrayList<Mutable<ILogicalExpression>> secondaryIndexFuncArgs = new ArrayList<Mutable<ILogicalExpression>>();
-        secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(chosenIndex.getIndexName())));
-        secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(FunctionArgumentsConstants.BTREE_INDEX)));
-        secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(datasetDecl.getName())));
-        // TODO: For now retainInput is always false.
-        secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createBooleanConstant(false)));
-        // TODO: For now requiresBroadcast is always false.
-        secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createBooleanConstant(false)));
         // Here we generate vars and funcs for assigning the secondary-index keys to be fed into the secondary-index search.
         // List of variables for the assign.
         ArrayList<LogicalVariable> keyVarList = new ArrayList<LogicalVariable>();
         // List of expressions for the assign.
         ArrayList<Mutable<ILogicalExpression>> keyExprList = new ArrayList<Mutable<ILogicalExpression>>();
-        createKeyVarsAndExprs(lowKeyLimits, lowKeyConstants, keyExprList, keyVarList, secondaryIndexFuncArgs, context);
-        createKeyVarsAndExprs(highKeyLimits, highKeyConstants, keyExprList, keyVarList, secondaryIndexFuncArgs, context);
-
-        // Set low and high key inclusive for secondary-index search.
-        ILogicalExpression lowKeyExpr = lowKeyInclusive[0] ? ConstantExpression.TRUE : ConstantExpression.FALSE;
-        secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(lowKeyExpr));
-        ILogicalExpression highKeyExpr = highKeyInclusive[0] ? ConstantExpression.TRUE : ConstantExpression.FALSE;
-        secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(highKeyExpr));
-
+        int numLowKeys = createKeyVarsAndExprs(lowKeyLimits, lowKeyConstants, keyExprList, keyVarList, context);
+        int numHighKeys = createKeyVarsAndExprs(highKeyLimits, highKeyConstants, keyExprList, keyVarList, context);
+        
+        // TODO: For now retainInput and requiresBroadcast are always false.
+        BTreeJobGenParams jobGenParams = new BTreeJobGenParams(chosenIndex.getIndexName(), FunctionArgumentsConstants.BTREE_INDEX, datasetDecl.getName(), false, false);
+        jobGenParams.setLowKeyInclusive(lowKeyInclusive[0]);
+        jobGenParams.setHighKeyInclusive(highKeyInclusive[0]);
+        jobGenParams.setLowKeyVarList(keyVarList, 0, numLowKeys);
+        jobGenParams.setHighKeyVarList(keyVarList, numLowKeys, numHighKeys);
+        jobGenParams.writeToFuncArgs(secondaryIndexFuncArgs);
+        
         // Assign operator that sets the secondary-index search-key fields.
         AssignOperator assignSearchKeys = new AssignOperator(keyVarList, keyExprList);
         // Input to this assign is the EmptyTupleSource (which the dataSourceScan also must have had as input).
@@ -302,27 +295,19 @@ public class BTreeAccessMethod implements IAccessMethod {
         return false;
     }
 
-    private void createKeyVarsAndExprs(LimitType[] keyLimits, IAlgebricksConstantValue[] keyConstants,
+    private int createKeyVarsAndExprs(LimitType[] keyLimits, IAlgebricksConstantValue[] keyConstants,
             ArrayList<Mutable<ILogicalExpression>> keyExprList, ArrayList<LogicalVariable> keyVarList,
-            ArrayList<Mutable<ILogicalExpression>> secondaryIndexFuncArgs, IOptimizationContext context) {
-        int numKeys = keyLimits.length;
-        if (keyLimits[0] != null) {
-            Mutable<ILogicalExpression> numKeysRef = new MutableObject<ILogicalExpression>(new ConstantExpression(
-                    new AsterixConstantValue(new AInt32(numKeys))));
-            secondaryIndexFuncArgs.add(numKeysRef);
-            for (int i = 0; i < numKeys; i++) {
-                LogicalVariable keyVar = context.newVar();
-                keyVarList.add(keyVar);
-                keyExprList.add(new MutableObject<ILogicalExpression>(new ConstantExpression(keyConstants[i])));
-                Mutable<ILogicalExpression> keyVarRef = new MutableObject<ILogicalExpression>(
-                        new VariableReferenceExpression(keyVar));
-                secondaryIndexFuncArgs.add(keyVarRef);
-            }
-        } else {
-            Mutable<ILogicalExpression> zeroRef = new MutableObject<ILogicalExpression>(new ConstantExpression(
-                    new AsterixConstantValue(new AInt32(0))));
-            secondaryIndexFuncArgs.add(zeroRef);
+            IOptimizationContext context) {        
+        if (keyLimits[0] == null) {
+            return 0;
         }
+        int numKeys = keyLimits.length;
+        for (int i = 0; i < numKeys; i++) {
+            LogicalVariable keyVar = context.newVar();
+            keyVarList.add(keyVar);
+            keyExprList.add(new MutableObject<ILogicalExpression>(new ConstantExpression(keyConstants[i])));
+        }
+        return numKeys;
     }
     
     private void getNewSelectExprs(SelectOperator select, Set<ILogicalExpression> replacedFuncExprs, List<Mutable<ILogicalExpression>> remainingFuncExprs) {

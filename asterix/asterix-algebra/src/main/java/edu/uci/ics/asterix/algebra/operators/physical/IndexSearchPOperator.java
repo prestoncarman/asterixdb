@@ -1,17 +1,14 @@
 package edu.uci.ics.asterix.algebra.operators.physical;
 
 
+import java.util.List;
+
 import edu.uci.ics.asterix.metadata.declared.AqlSourceId;
-import edu.uci.ics.asterix.om.base.ABoolean;
 import edu.uci.ics.asterix.om.base.AInt32;
-import edu.uci.ics.asterix.om.base.AString;
 import edu.uci.ics.asterix.om.base.IAObject;
 import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
-import edu.uci.ics.asterix.om.types.ATypeTag;
-import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IOptimizationContext;
-import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalExpressionTag;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
@@ -27,8 +24,6 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.properties.IPartitioningRequi
 import edu.uci.ics.hyracks.algebricks.core.algebra.properties.IPhysicalPropertiesVector;
 import edu.uci.ics.hyracks.algebricks.core.algebra.properties.PhysicalRequirements;
 import edu.uci.ics.hyracks.algebricks.core.algebra.properties.StructuralPropertiesVector;
-import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
-import edu.uci.ics.hyracks.algebricks.core.api.exceptions.NotImplementedException;
 import edu.uci.ics.hyracks.algebricks.core.utils.Pair;
 
 public abstract class IndexSearchPOperator extends AbstractScanPOperator {
@@ -69,34 +64,16 @@ public abstract class IndexSearchPOperator extends AbstractScanPOperator {
         }
         return new Pair<int[], Integer>(keys, numKeys);
     }
-
-    protected String getStringArgument(AbstractFunctionCallExpression f, int k) throws AlgebricksException {
-        ILogicalExpression arg = f.getArguments().get(k).getValue();
-        if (arg.getExpressionTag() != LogicalExpressionTag.CONSTANT) {
-            throw new NotImplementedException("Index search calls with non-constant " + k
-                    + "-th argument are not implemented.");
-        }
-        ConstantExpression ce = (ConstantExpression) arg;
-        if (!(ce.getValue() instanceof AsterixConstantValue)) {
-            throw new AlgebricksException("Third argument to index-search() should be a string.");
-        }
-        IAObject v = ((AsterixConstantValue) ce.getValue()).getObject();
-        if (v.getType().getTypeTag() != ATypeTag.STRING) {
-            throw new AlgebricksException("Third argument to index-search() should be a string.");
-        }
-        return ((AString) v).getStringValue();
-    }
     
-    protected int getInt32Argument(AbstractFunctionCallExpression f, int k) {
-        IAObject typeTagObj = ((AsterixConstantValue)((ConstantExpression)f.getArguments().get(k).getValue())
-                .getValue()).getObject();
-        return ((AInt32)typeTagObj).getIntegerValue();
-    }
-    
-    protected boolean getBooleanArgument(AbstractFunctionCallExpression f, int k) {
-        IAObject typeTagObj = ((AsterixConstantValue)((ConstantExpression)f.getArguments().get(k).getValue())
-                .getValue()).getObject();
-        return ((ABoolean)typeTagObj).getBoolean();
+    protected int[] getKeyIndexes(List<LogicalVariable> keyVarList, IOperatorSchema[] inputSchemas) {
+        if (keyVarList == null) {
+            return null;
+        }
+        int[] keyIndexes = new int[keyVarList.size()];
+        for (int i = 0; i < keyVarList.size(); i++) {
+            keyIndexes[i] = inputSchemas[0].findVariable(keyVarList.get(i));
+        }
+        return keyIndexes;
     }
     
     public PhysicalRequirements getRequiredPropertiesForChildren(ILogicalOperator op,

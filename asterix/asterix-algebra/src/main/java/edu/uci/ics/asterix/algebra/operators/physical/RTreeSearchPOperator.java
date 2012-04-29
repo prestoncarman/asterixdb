@@ -10,6 +10,7 @@ import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
 import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
 import edu.uci.ics.asterix.metadata.declared.AqlSourceId;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
+import edu.uci.ics.asterix.optimizer.rules.am.AccessMethodUtils;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IHyracksJobBuilder;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
@@ -64,18 +65,18 @@ public class RTreeSearchPOperator extends IndexSearchPOperator {
     private void contributeRtreeSearch(IHyracksJobBuilder builder, JobGenContext context, UnnestMapOperator unnestMap,
             IOperatorSchema opSchema, IOperatorSchema[] inputSchemas) throws AlgebricksException, AlgebricksException {
         Mutable<ILogicalExpression> unnestExpr = unnestMap.getExpressionRef();
-        AbstractFunctionCallExpression f = (AbstractFunctionCallExpression) unnestExpr.getValue();
+        AbstractFunctionCallExpression unnestFuncExpr = (AbstractFunctionCallExpression) unnestExpr.getValue();
 
-        String idxType = getStringArgument(f, 1);
+        String idxType = AccessMethodUtils.getStringConstant(unnestFuncExpr.getArguments().get(1));
         if (idxType != FunctionArgumentsConstants.RTREE_INDEX) {
             throw new NotImplementedException(idxType + " indexes are not implemented.");
         }
-        String idxName = getStringArgument(f, 0);
-        String datasetName = getStringArgument(f, 2);
-        boolean retainInput = getBooleanArgument(f, 3);
-        boolean requiresBroadcast = getBooleanArgument(f, 4);
+        String idxName = AccessMethodUtils.getStringConstant(unnestFuncExpr.getArguments().get(0));
+        String datasetName = AccessMethodUtils.getStringConstant(unnestFuncExpr.getArguments().get(2));
+        boolean retainInput = AccessMethodUtils.getBooleanConstant(unnestFuncExpr.getArguments().get(3));
+        boolean requiresBroadcast = AccessMethodUtils.getBooleanConstant(unnestFuncExpr.getArguments().get(4));
 
-        Pair<int[], Integer> keys = getKeys(f, 5, inputSchemas);
+        Pair<int[], Integer> keys = getKeys(unnestFuncExpr, 5, inputSchemas);
         buildRtreeSearch(builder, context, unnestMap, opSchema, datasetName, idxName, keys.first);
     }
 

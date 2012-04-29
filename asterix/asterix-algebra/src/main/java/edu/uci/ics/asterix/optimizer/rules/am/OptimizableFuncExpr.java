@@ -17,7 +17,6 @@ public class OptimizableFuncExpr implements IOptimizableFuncExpr {
     	this.constantVals = constantVals;
     	this.fieldNames = new String[logicalVars.length];
     	this.subTrees = new OptimizableOperatorSubTree[logicalVars.length];
-    	
     }
     
     // Special, more convenient c'tor for simple binary functions.
