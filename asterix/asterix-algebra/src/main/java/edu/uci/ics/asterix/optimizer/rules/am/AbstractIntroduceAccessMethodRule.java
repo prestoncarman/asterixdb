@@ -164,7 +164,12 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
      */
     protected boolean analyzeCondition(ILogicalExpression cond, List<AssignOperator> assigns, Map<IAccessMethod, AccessMethodAnalysisContext> analyzedAMs) {
         AbstractFunctionCallExpression funcExpr = (AbstractFunctionCallExpression) cond;
-        boolean found = analyzeFunctionExpr(funcExpr, assigns, analyzedAMs);
+        FunctionIdentifier funcIdent = funcExpr.getFunctionIdentifier();
+        // Don't consider optimizing a disjunctive condition with an index (too complicated for now).
+        if (funcIdent == AlgebricksBuiltinFunctions.OR) {
+            return false;
+        }
+        boolean found = analyzeFunctionExpr(funcExpr, assigns, analyzedAMs);        
         for (Mutable<ILogicalExpression> arg : funcExpr.getArguments()) {
             ILogicalExpression argExpr = arg.getValue();
             if (argExpr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
@@ -187,7 +192,7 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
      * @return
      */
     protected boolean analyzeFunctionExpr(AbstractFunctionCallExpression funcExpr, List<AssignOperator> assigns, Map<IAccessMethod, AccessMethodAnalysisContext> analyzedAMs) {
-        FunctionIdentifier funcIdent = funcExpr.getFunctionIdentifier();        
+        FunctionIdentifier funcIdent = funcExpr.getFunctionIdentifier();
         if (funcIdent == AlgebricksBuiltinFunctions.AND) {
             return false;
         }

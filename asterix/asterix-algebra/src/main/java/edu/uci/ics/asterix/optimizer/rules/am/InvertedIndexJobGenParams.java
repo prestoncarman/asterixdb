@@ -59,17 +59,18 @@ public class InvertedIndexJobGenParams extends AccessMethodJobGenParams {
     
     public void readFromFuncArgs(List<Mutable<ILogicalExpression>> funcArgs) {
         super.readFromFuncArgs(funcArgs);
+        int index = super.getNumParams();
         // Read search modifier type.
-        int searchModifierOrdinal = AccessMethodUtils.getInt32Constant(funcArgs.get(5));
+        int searchModifierOrdinal = AccessMethodUtils.getInt32Constant(funcArgs.get(index));
         searchModifierType = SearchModifierType.values()[searchModifierOrdinal];
         // Read similarity threshold. Concrete type depends on search modifier.
-        similarityThreshold = ((AsterixConstantValue) ((ConstantExpression) funcArgs.get(6).getValue()).getValue());
+        similarityThreshold = ((AsterixConstantValue) ((ConstantExpression) funcArgs.get(index + 1).getValue()).getValue());
         // Read type of search key.
-        int typeTagOrdinal = AccessMethodUtils.getInt32Constant(funcArgs.get(7));
+        int typeTagOrdinal = AccessMethodUtils.getInt32Constant(funcArgs.get(index + 2));
         searchKeyType = ATypeTag.values()[typeTagOrdinal];
         // Read key var list.
         keyVarList = new ArrayList<LogicalVariable>();
-        readVarList(funcArgs, 8, keyVarList);
+        readVarList(funcArgs, index + 3, keyVarList);
     }
     
     public SearchModifierType getSearchModifierType() {

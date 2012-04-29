@@ -208,30 +208,19 @@ public class AccessMethodUtils {
             context.computeAndSetTypeEnvironmentForOperator(order);
         }
 
-        // TODO: Use BTreeJobGenParams here.
+        // TODO: Fix comments.
         // List of arguments to be passed into the primary index unnest (these arguments will be consumed by the corresponding physical rewrite rule). 
         // The arguments are: the name of the primary index, the type of index, the name of the dataset, 
         // the number of primary-index keys, and the variable references corresponding to the primary-index search keys.
         List<Mutable<ILogicalExpression>> primaryIndexFuncArgs = new ArrayList<Mutable<ILogicalExpression>>();
-        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(createStringConstant(datasetDecl.getName())));
-        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(createInt32Constant(IndexKind.BTREE.ordinal())));
-        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(createStringConstant(datasetDecl.getName())));
-        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(createBooleanConstant(retainInput)));
-        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(createBooleanConstant(requiresBroadcast)));
-        // Add the variables corresponding to the primary-index search keys (low key).
-        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(createInt32Constant(primaryKeyVars.size())));
-        for (LogicalVariable pkVar : primaryKeyVars) {
-            primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(pkVar)));
-        }
-        // Add the variables corresponding to the primary-index search keys (high key).
-        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(createInt32Constant(primaryKeyVars.size())));
-        for (LogicalVariable pkVar : primaryKeyVars) {
-            primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(pkVar)));
-        }
-        // Low key inclusive, and high key inclusive are both true, meaning the search interval is closed.
-        // Since the low key and high key are also the same, we have a point lookup.
-        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(ConstantExpression.TRUE));
-        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(ConstantExpression.TRUE));
+        BTreeJobGenParams jobGenParams = new BTreeJobGenParams(datasetDecl.getName(), IndexKind.BTREE, datasetDecl.getName(), retainInput, requiresBroadcast);
+        // Set low/high inclusive to true for a point lookup.
+        jobGenParams.setLowKeyInclusive(true);
+        jobGenParams.setHighKeyInclusive(true);
+        jobGenParams.setLowKeyVarList(primaryKeyVars, 0, primaryKeyVars.size());
+        jobGenParams.setHighKeyVarList(primaryKeyVars, 0, primaryKeyVars.size());
+        jobGenParams.writeToFuncArgs(primaryIndexFuncArgs);
+        
         IFunctionInfo primaryIndexSearch = FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.INDEX_SEARCH);
         AbstractFunctionCallExpression searchPrimIdxFun = new ScalarFunctionCallExpression(primaryIndexSearch, primaryIndexFuncArgs);
         List<Object> primaryIndexTypes = AccessMethodUtils.primaryIndexTypes(datasetDecl, recordType);

@@ -20,6 +20,8 @@ public class AccessMethodJobGenParams {
     protected boolean retainInput;
     protected boolean requiresBroadcast;
     
+    private final int NUM_PARAMS = 5;
+    
     public AccessMethodJobGenParams() {
     }
     
@@ -88,5 +90,9 @@ public class AccessMethodJobGenParams {
             }
         }
         return index + numLowKeys + 1;
+    }
+    
+    protected int getNumParams() {
+        return NUM_PARAMS;
     }
 }

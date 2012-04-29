@@ -15,7 +15,7 @@ import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
 /**
  * Interface an access method should implement to work with the
  * IntroduceAccessMethodSearchRule that optimizes simple scan-select queries
- * with access methods (the am must still be manually registered in the
+ * with access methods (the IAccessMethod must still be manually registered in the
  * IntroduceAccessMethodSearchRule). The IntroduceAccessMethodSearchRule will
  * match an operator pattern, and take care of choosing an index to be applied.
  * This interface abstracts away the analysis of the select condition to see
@@ -29,7 +29,6 @@ public interface IAccessMethod {
     /**
      * @return A list of function identifiers that are optimizable by this
      *         access method.
-     * 
      */
     public List<FunctionIdentifier> getOptimizableFunctions();
     

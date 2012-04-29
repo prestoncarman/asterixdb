@@ -62,9 +62,10 @@ public class BTreeJobGenParams extends AccessMethodJobGenParams {
     
     public void readFromFuncArgs(List<Mutable<ILogicalExpression>> funcArgs) {
         super.readFromFuncArgs(funcArgs);
+        int index = super.getNumParams();
         lowKeyVarList = new ArrayList<LogicalVariable>();
         highKeyVarList = new ArrayList<LogicalVariable>();
-        int nextIndex = readVarList(funcArgs, 5, lowKeyVarList);
+        int nextIndex = readVarList(funcArgs, index, lowKeyVarList);
         nextIndex = readVarList(funcArgs, nextIndex, highKeyVarList);
         readKeyInclusives(funcArgs, nextIndex);        
     }
