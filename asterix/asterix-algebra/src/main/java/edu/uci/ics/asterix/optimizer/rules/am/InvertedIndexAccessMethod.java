@@ -7,7 +7,6 @@ import java.util.List;
 import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.commons.lang3.mutable.MutableObject;
 
-import edu.uci.ics.asterix.common.functions.FunctionArgumentsConstants;
 import edu.uci.ics.asterix.dataflow.data.common.ListEditDistanceSearchModifierFactory;
 import edu.uci.ics.asterix.formats.nontagged.AqlBinaryComparatorFactoryProvider;
 import edu.uci.ics.asterix.formats.nontagged.AqlBinaryTokenizerFactoryProvider;
@@ -41,6 +40,7 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ConstantExpressio
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IAlgebricksConstantValue;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
+import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.DataSourceScanOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.InnerJoinOperator;
@@ -319,20 +319,14 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         // Here, we put the name of the chosen index, the type of index, the name of the dataset, 
         // the number of secondary-index keys, and the variable references corresponding to the secondary-index search keys.
         ArrayList<Mutable<ILogicalExpression>> secondaryIndexFuncArgs = new ArrayList<Mutable<ILogicalExpression>>();
-        String indexType = null;
-        // TODO: Use a type enum instead of a nasty string.
-        if (chosenIndex.getKind() == IndexKind.WORD_INVIX) {
-            indexType = FunctionArgumentsConstants.WORD_INVERTED_INDEX;
-        } else if (chosenIndex.getKind() == IndexKind.NGRAM_INVIX) {
-            indexType = FunctionArgumentsConstants.NGRAM_INVERTED_INDEX;
-        }
-        InvertedIndexJobGenParams jobGenParams = new InvertedIndexJobGenParams(chosenIndex.getIndexName(), indexType, datasetDecl.getName(), retainInput, requiresBroadcast);
+        InvertedIndexJobGenParams jobGenParams = new InvertedIndexJobGenParams(chosenIndex.getIndexName(), chosenIndex.getKind(), datasetDecl.getName(), retainInput, requiresBroadcast);
         // Add function-specific args such as search modifier, and possibly a similarity threshold.
         addFunctionSpecificArgs(optFuncExpr, jobGenParams);
         // Add the type of search key from the optFuncExpr.
         addSearchKeyType(optFuncExpr, indexSubTree, context, jobGenParams);
         
-        AssignOperator assignSearchKeys = null;
+        // Operator that feeds the secondary-index search.
+        AbstractLogicalOperator inputOp = null;
         // Here we generate vars and funcs for assigning the secondary-index keys to be fed into the secondary-index search.
         // List of variables for the assign.
         ArrayList<LogicalVariable> keyVarList = new ArrayList<LogicalVariable>();
@@ -343,10 +337,10 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
             // Add key vars and exprs to argument list.
             addKeyVarsAndExprs(optFuncExpr, keyVarList, keyExprList, context);
             // Assign operator that sets the secondary-index search-key fields.
-            assignSearchKeys = new AssignOperator(keyVarList, keyExprList);            
+            inputOp = new AssignOperator(keyVarList, keyExprList);            
             // Input to this assign is the EmptyTupleSource (which the dataSourceScan also must have had as input).
-            assignSearchKeys.getInputs().add(dataSourceScan.getInputs().get(0));
-            assignSearchKeys.setExecutionMode(dataSourceScan.getExecutionMode());
+            inputOp.getInputs().add(dataSourceScan.getInputs().get(0));
+            inputOp.setExecutionMode(dataSourceScan.getExecutionMode());
         } else {
             // We are optimizing a join. Add the input variable to the secondaryIndexFuncArgs.
             LogicalVariable inputSearchVariable = null;
@@ -358,16 +352,14 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
                 inputSearchVariable = optFuncExpr.getLogicalVar(0);
             }
             keyVarList.add(inputSearchVariable);
-            // Input to this assign is probe subtree.
-            // TODO: Fix, because it may not be an assign op.
-            assignSearchKeys = (AssignOperator) probeSubTree.root;
+            inputOp = (AbstractLogicalOperator) probeSubTree.root;
         }
         jobGenParams.setKeyVarList(keyVarList);
         jobGenParams.writeToFuncArgs(secondaryIndexFuncArgs);
         
         List<Object> secondaryIndexTypes = AccessMethodUtils.getSecondaryIndexTypes(datasetDecl, chosenIndex, recordType, true);
         UnnestMapOperator secondaryIndexUnnestOp = AccessMethodUtils.createSecondaryIndexUnnestMap(datasetDecl,
-                recordType, chosenIndex, assignSearchKeys, secondaryIndexFuncArgs, numSecondaryKeys,
+                recordType, chosenIndex, inputOp, secondaryIndexFuncArgs, numSecondaryKeys,
                 secondaryIndexTypes, context, true, retainInput);
         int numPrimaryKeys = DatasetUtils.getPartitioningFunctions(datasetDecl).size();
         List<LogicalVariable> primaryKeyVars = AccessMethodUtils.getPrimaryKeyVars(secondaryIndexUnnestOp.getVariables(), numPrimaryKeys, numSecondaryKeys, true);

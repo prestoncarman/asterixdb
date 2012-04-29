@@ -1,11 +1,10 @@
 package edu.uci.ics.asterix.algebra.operators.physical;
 
-
 import org.apache.commons.lang3.mutable.Mutable;
 
 import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
-import edu.uci.ics.asterix.common.functions.FunctionArgumentsConstants;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledDatasetDecl;
+import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl.IndexKind;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
 import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
 import edu.uci.ics.asterix.metadata.declared.AqlSourceId;
@@ -67,9 +66,10 @@ public class RTreeSearchPOperator extends IndexSearchPOperator {
         Mutable<ILogicalExpression> unnestExpr = unnestMap.getExpressionRef();
         AbstractFunctionCallExpression unnestFuncExpr = (AbstractFunctionCallExpression) unnestExpr.getValue();
 
-        String idxType = AccessMethodUtils.getStringConstant(unnestFuncExpr.getArguments().get(1));
-        if (idxType != FunctionArgumentsConstants.RTREE_INDEX) {
-            throw new NotImplementedException(idxType + " indexes are not implemented.");
+        int indexKindOrdinal = AccessMethodUtils.getInt32Constant(unnestFuncExpr.getArguments().get(1));
+        IndexKind indexKind = IndexKind.values()[indexKindOrdinal];
+        if (indexKind != IndexKind.RTREE) {
+            throw new NotImplementedException(indexKind + " indexes are not implemented.");
         }
         String idxName = AccessMethodUtils.getStringConstant(unnestFuncExpr.getArguments().get(0));
         String datasetName = AccessMethodUtils.getStringConstant(unnestFuncExpr.getArguments().get(2));

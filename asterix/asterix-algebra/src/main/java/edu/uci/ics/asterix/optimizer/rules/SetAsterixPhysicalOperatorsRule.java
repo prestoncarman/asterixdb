@@ -9,7 +9,7 @@ import org.apache.commons.lang3.mutable.MutableObject;
 import edu.uci.ics.asterix.algebra.operators.physical.BTreeSearchPOperator;
 import edu.uci.ics.asterix.algebra.operators.physical.InvertedIndexPOperator;
 import edu.uci.ics.asterix.algebra.operators.physical.RTreeSearchPOperator;
-import edu.uci.ics.asterix.common.functions.FunctionArgumentsConstants;
+import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl.IndexKind;
 import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
 import edu.uci.ics.asterix.metadata.declared.AqlSourceId;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
@@ -155,19 +155,28 @@ public class SetAsterixPhysicalOperatorsRule implements IAlgebraicRewriteRule {
                             throw new AlgebricksException("Could not find index " + jobGenParams.getIndexName() + " for dataset "
                                     + dataSourceId);
                         }
-                        // TODO: Make this a switch case.
-                        String indexType = jobGenParams.getIndexType();
+                        IndexKind indexKind = jobGenParams.getIndexKind();
                         boolean requiresBroadcast = jobGenParams.getRequiresBroadcast();
-                        if (indexType == FunctionArgumentsConstants.BTREE_INDEX) {
-                            op.setPhysicalOperator(new BTreeSearchPOperator(dsi, requiresBroadcast));
-                        } else if (indexType == FunctionArgumentsConstants.RTREE_INDEX) {
-                            op.setPhysicalOperator(new RTreeSearchPOperator(dsi, requiresBroadcast));
-                        } else if (indexType == FunctionArgumentsConstants.WORD_INVERTED_INDEX ) {
-                            op.setPhysicalOperator(new InvertedIndexPOperator(dsi, requiresBroadcast));
-                        } else if (indexType == FunctionArgumentsConstants.NGRAM_INVERTED_INDEX ) {
-                            op.setPhysicalOperator(new InvertedIndexPOperator(dsi, requiresBroadcast));
-                        } else {
-                            throw new NotImplementedException(indexType + " indexes are not implemented.");
+                        switch (indexKind) {
+                            case BTREE: {
+                                op.setPhysicalOperator(new BTreeSearchPOperator(dsi, requiresBroadcast));
+                                break;
+                            }
+                            case RTREE: {
+                                op.setPhysicalOperator(new RTreeSearchPOperator(dsi, requiresBroadcast));
+                                break;
+                            }
+                            case WORD_INVIX: {
+                                op.setPhysicalOperator(new InvertedIndexPOperator(dsi, requiresBroadcast));
+                                break;
+                            }
+                            case NGRAM_INVIX: {
+                                op.setPhysicalOperator(new InvertedIndexPOperator(dsi, requiresBroadcast));
+                                break;
+                            }
+                            default: {
+                                throw new NotImplementedException(indexKind + " indexes are not implemented.");
+                            }
                         }
                     }
                     break;

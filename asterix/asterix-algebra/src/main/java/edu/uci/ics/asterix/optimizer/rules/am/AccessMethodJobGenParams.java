@@ -1,11 +1,11 @@
 package edu.uci.ics.asterix.optimizer.rules.am;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.commons.lang3.mutable.MutableObject;
 
+import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl.IndexKind;
 import edu.uci.ics.asterix.om.base.AInt32;
 import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
@@ -15,7 +15,7 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.VariableReference
 
 public class AccessMethodJobGenParams {
     protected String indexName;
-    protected String indexType;
+    protected IndexKind indexKind;
     protected String datasetName;
     protected boolean retainInput;
     protected boolean requiresBroadcast;
@@ -23,9 +23,9 @@ public class AccessMethodJobGenParams {
     public AccessMethodJobGenParams() {
     }
     
-    public AccessMethodJobGenParams(String indexName, String indexType, String datasetName, boolean retainInput, boolean requiresBroadcast) {
+    public AccessMethodJobGenParams(String indexName, IndexKind indexKind, String datasetName, boolean retainInput, boolean requiresBroadcast) {
         this.indexName = indexName;
-        this.indexType = indexType;
+        this.indexKind = indexKind;
         this.datasetName = datasetName;
         this.retainInput = retainInput;
         this.requiresBroadcast = requiresBroadcast;
@@ -33,7 +33,7 @@ public class AccessMethodJobGenParams {
     
     public void writeToFuncArgs(List<Mutable<ILogicalExpression>> funcArgs) {
         funcArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(indexName)));
-        funcArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(indexType)));
+        funcArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createInt32Constant(indexKind.ordinal())));
         funcArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(datasetName)));
         funcArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createBooleanConstant(retainInput)));
         funcArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createBooleanConstant(requiresBroadcast)));
@@ -41,7 +41,7 @@ public class AccessMethodJobGenParams {
 
     public void readFromFuncArgs(List<Mutable<ILogicalExpression>> funcArgs) {
         indexName = AccessMethodUtils.getStringConstant(funcArgs.get(0));
-        indexType = AccessMethodUtils.getStringConstant(funcArgs.get(1));
+        indexKind = IndexKind.values()[AccessMethodUtils.getInt32Constant(funcArgs.get(1))];
         datasetName = AccessMethodUtils.getStringConstant(funcArgs.get(2));
         retainInput = AccessMethodUtils.getBooleanConstant(funcArgs.get(3));
         requiresBroadcast = AccessMethodUtils.getBooleanConstant(funcArgs.get(4));
@@ -51,8 +51,8 @@ public class AccessMethodJobGenParams {
         return indexName;
     }
 
-    public String getIndexType() {
-        return indexType;
+    public IndexKind getIndexKind() {
+        return indexKind;
     }
 
     public String getDatasetName() {

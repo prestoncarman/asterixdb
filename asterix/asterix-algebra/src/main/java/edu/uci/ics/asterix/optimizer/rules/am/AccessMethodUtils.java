@@ -7,9 +7,9 @@ import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.commons.lang3.mutable.MutableObject;
 
 import edu.uci.ics.asterix.aql.util.FunctionUtils;
-import edu.uci.ics.asterix.common.functions.FunctionArgumentsConstants;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledDatasetDecl;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl;
+import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl.IndexKind;
 import edu.uci.ics.asterix.metadata.utils.DatasetUtils;
 import edu.uci.ics.asterix.om.base.ABoolean;
 import edu.uci.ics.asterix.om.base.AInt32;
@@ -208,12 +208,13 @@ public class AccessMethodUtils {
             context.computeAndSetTypeEnvironmentForOperator(order);
         }
 
+        // TODO: Use BTreeJobGenParams here.
         // List of arguments to be passed into the primary index unnest (these arguments will be consumed by the corresponding physical rewrite rule). 
         // The arguments are: the name of the primary index, the type of index, the name of the dataset, 
         // the number of primary-index keys, and the variable references corresponding to the primary-index search keys.
         List<Mutable<ILogicalExpression>> primaryIndexFuncArgs = new ArrayList<Mutable<ILogicalExpression>>();
         primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(createStringConstant(datasetDecl.getName())));
-        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(createStringConstant(FunctionArgumentsConstants.BTREE_INDEX)));
+        primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(createInt32Constant(IndexKind.BTREE.ordinal())));
         primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(createStringConstant(datasetDecl.getName())));
         primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(createBooleanConstant(retainInput)));
         primaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(createBooleanConstant(requiresBroadcast)));

@@ -1,8 +1,8 @@
 package edu.uci.ics.asterix.algebra.operators.physical;
 
 import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
-import edu.uci.ics.asterix.common.functions.FunctionArgumentsConstants;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledDatasetDecl;
+import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl.IndexKind;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
 import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
 import edu.uci.ics.asterix.metadata.declared.AqlSourceId;
@@ -53,8 +53,8 @@ public class BTreeSearchPOperator extends IndexSearchPOperator {
         }
         BTreeJobGenParams jobGenParams = new BTreeJobGenParams();
         jobGenParams.readFromFuncArgs(unnestFuncExpr.getArguments());
-        if (!jobGenParams.getIndexType().equals(FunctionArgumentsConstants.BTREE_INDEX)) {
-            throw new NotImplementedException(jobGenParams.getIndexType() + " indexes are not implemented.");
+        if (jobGenParams.getIndexKind() != IndexKind.BTREE) {
+            throw new NotImplementedException(jobGenParams.getIndexKind() + " indexes are not implemented.");
         }
         int[] lowKeyIndexes = getKeyIndexes(jobGenParams.getLowKeyVarList(), inputSchemas);
         int[] highKeyIndexes = getKeyIndexes(jobGenParams.getHighKeyVarList(), inputSchemas);

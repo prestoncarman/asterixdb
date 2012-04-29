@@ -6,10 +6,10 @@ import java.util.List;
 import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.commons.lang3.mutable.MutableObject;
 
+import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl.IndexKind;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
-import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
 
 public class BTreeJobGenParams extends AccessMethodJobGenParams {
 
@@ -23,9 +23,9 @@ public class BTreeJobGenParams extends AccessMethodJobGenParams {
         super();
     }
     
-    public BTreeJobGenParams(String indexName, String indexType, String datasetName, boolean retainInput,
+    public BTreeJobGenParams(String indexName, IndexKind indexKind, String datasetName, boolean retainInput,
             boolean requiresBroadcast) {
-        super(indexName, indexType, datasetName, retainInput, requiresBroadcast);
+        super(indexName, indexKind, datasetName, retainInput, requiresBroadcast);
     }
 
     public void setLowKeyVarList(List<LogicalVariable> keyVarList, int startIndex, int numKeys) {
@@ -54,8 +54,6 @@ public class BTreeJobGenParams extends AccessMethodJobGenParams {
     
     public void writeToFuncArgs(List<Mutable<ILogicalExpression>> funcArgs) {
         super.writeToFuncArgs(funcArgs);
-        // TODO: Would like to reverse these, but somehow it doesn't work. I cannot find the place where
-        // the failing UnnestMapOp is created.
         writeVarList(lowKeyVarList, funcArgs);
         writeVarList(highKeyVarList, funcArgs);
         writeKeyInclusive(lowKeyInclusive, funcArgs);
@@ -64,32 +62,11 @@ public class BTreeJobGenParams extends AccessMethodJobGenParams {
     
     public void readFromFuncArgs(List<Mutable<ILogicalExpression>> funcArgs) {
         super.readFromFuncArgs(funcArgs);
-        int nextIndex = readKeyVarLists(funcArgs, 5);
+        lowKeyVarList = new ArrayList<LogicalVariable>();
+        highKeyVarList = new ArrayList<LogicalVariable>();
+        int nextIndex = readVarList(funcArgs, 5, lowKeyVarList);
+        nextIndex = readVarList(funcArgs, nextIndex, highKeyVarList);
         readKeyInclusives(funcArgs, nextIndex);        
-    }
-    
-    private int readKeyVarLists(List<Mutable<ILogicalExpression>> funcArgs, int index) {
-        // TODO: Use common methods from parent.
-        int numLowKeys = AccessMethodUtils.getInt32Constant(funcArgs.get(index));
-        if (numLowKeys > 0) {
-            lowKeyVarList = new ArrayList<LogicalVariable>(numLowKeys);
-            for (int i = 0; i < numLowKeys; i++) {
-                LogicalVariable var = ((VariableReferenceExpression) funcArgs.get(index + 1 + i).getValue())
-                        .getVariableReference();
-                lowKeyVarList.add(var);
-            }
-        }
-        int highKeysIndex = index + numLowKeys + 1;
-        int numHighKeys = AccessMethodUtils.getInt32Constant(funcArgs.get(highKeysIndex));
-        if (numHighKeys > 0) {
-            highKeyVarList = new ArrayList<LogicalVariable>(numHighKeys);
-            for (int i = 0; i < numHighKeys; i++) {
-                LogicalVariable var = ((VariableReferenceExpression) funcArgs.get(highKeysIndex + 1 + i).getValue())
-                        .getVariableReference();
-                highKeyVarList.add(var);
-            }
-        }
-        return highKeysIndex + numHighKeys + 1;
     }
     
     private void readKeyInclusives(List<Mutable<ILogicalExpression>> funcArgs, int index) {
