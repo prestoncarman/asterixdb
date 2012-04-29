@@ -212,13 +212,6 @@ public class BTreeAccessMethod implements IAccessMethod {
             highKeyInclusive[0] = true;
         }
         
-        // List of arguments to be passed into an unnest.
-        // TODO: Fix this comment to be current.
-        // This logical rewrite rule, and the corresponding runtime op generated in the jobgen 
-        // have a contract as to what goes into these arguments.
-        // Here, we put the name of the chosen index, the type of index, the name of the dataset, 
-        // the number of secondary-index keys, and the variable references corresponding to the secondary-index search keys.
-        ArrayList<Mutable<ILogicalExpression>> secondaryIndexFuncArgs = new ArrayList<Mutable<ILogicalExpression>>();
         // Here we generate vars and funcs for assigning the secondary-index keys to be fed into the secondary-index search.
         // List of variables for the assign.
         ArrayList<LogicalVariable> keyVarList = new ArrayList<LogicalVariable>();
@@ -233,7 +226,6 @@ public class BTreeAccessMethod implements IAccessMethod {
         jobGenParams.setHighKeyInclusive(highKeyInclusive[0]);
         jobGenParams.setLowKeyVarList(keyVarList, 0, numLowKeys);
         jobGenParams.setHighKeyVarList(keyVarList, numLowKeys, numHighKeys);
-        jobGenParams.writeToFuncArgs(secondaryIndexFuncArgs);
         
         // Assign operator that sets the secondary-index search-key fields.
         AssignOperator assignSearchKeys = new AssignOperator(keyVarList, keyExprList);
@@ -241,10 +233,8 @@ public class BTreeAccessMethod implements IAccessMethod {
         assignSearchKeys.getInputs().add(dataSourceScan.getInputs().get(0));
         assignSearchKeys.setExecutionMode(dataSourceScan.getExecutionMode());
         
-        List<Object> secondaryIndexTypes = AccessMethodUtils.getSecondaryIndexTypes(datasetDecl, chosenIndex, recordType, false);
         UnnestMapOperator secondaryIndexUnnestOp = AccessMethodUtils.createSecondaryIndexUnnestMap(datasetDecl,
-                recordType, chosenIndex, assignSearchKeys, secondaryIndexFuncArgs, numSecondaryKeys, secondaryIndexTypes, context, false,
-                false);
+                recordType, chosenIndex, assignSearchKeys, jobGenParams, context, false, false);
         
         // Generate the rest of the upstream plan which feeds the search results into the primary index.
         List<LogicalVariable> primaryIndexVars = dataSourceScan.getVariables();

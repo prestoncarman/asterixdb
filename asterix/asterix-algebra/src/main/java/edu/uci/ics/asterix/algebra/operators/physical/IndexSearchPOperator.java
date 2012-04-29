@@ -1,18 +1,11 @@
 package edu.uci.ics.asterix.algebra.operators.physical;
 
-
 import java.util.List;
 
 import edu.uci.ics.asterix.metadata.declared.AqlSourceId;
-import edu.uci.ics.asterix.om.base.AInt32;
-import edu.uci.ics.asterix.om.base.IAObject;
-import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IOptimizationContext;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
-import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
-import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
-import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.metadata.IDataSource;
 import edu.uci.ics.hyracks.algebricks.core.algebra.metadata.IDataSourceIndex;
 import edu.uci.ics.hyracks.algebricks.core.algebra.metadata.IDataSourcePropertiesProvider;
@@ -24,7 +17,6 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.properties.IPartitioningRequi
 import edu.uci.ics.hyracks.algebricks.core.algebra.properties.IPhysicalPropertiesVector;
 import edu.uci.ics.hyracks.algebricks.core.algebra.properties.PhysicalRequirements;
 import edu.uci.ics.hyracks.algebricks.core.algebra.properties.StructuralPropertiesVector;
-import edu.uci.ics.hyracks.algebricks.core.utils.Pair;
 
 public abstract class IndexSearchPOperator extends AbstractScanPOperator {
 
@@ -49,22 +41,6 @@ public abstract class IndexSearchPOperator extends AbstractScanPOperator {
         deliveredProperties = dspp.computePropertiesVector(as.getVariables());
     }
 
-    protected Pair<int[], Integer> getKeys(AbstractFunctionCallExpression f, int k, IOperatorSchema[] inputSchemas) {
-        IAObject obj = ((AsterixConstantValue) ((ConstantExpression) f.getArguments().get(k).getValue())
-                .getValue()).getObject();
-        int numKeys = ((AInt32) obj).getIntegerValue();
-        int[] keys = null;
-        if (numKeys > 0) {
-            keys = new int[numKeys];
-            for (int i = 0; i < numKeys; i++) {
-                LogicalVariable var = ((VariableReferenceExpression) f.getArguments().get(k + 1 + i).getValue())
-                        .getVariableReference();
-                keys[i] = inputSchemas[0].findVariable(var);
-            }
-        }
-        return new Pair<int[], Integer>(keys, numKeys);
-    }
-    
     protected int[] getKeyIndexes(List<LogicalVariable> keyVarList, IOperatorSchema[] inputSchemas) {
         if (keyVarList == null) {
             return null;

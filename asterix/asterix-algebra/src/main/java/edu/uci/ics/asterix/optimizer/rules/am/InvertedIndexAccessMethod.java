@@ -312,13 +312,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         IOptimizableFuncExpr optFuncExpr = analysisCtx.matchedFuncExprs.get(firstExprIndex);
         
         DataSourceScanOperator dataSourceScan = indexSubTree.dataSourceScan;
-        // List of arguments to be passed into an unnest.
-        // TODO: Update comment for currency.
-        // This logical rewrite rule, and the corresponding runtime op generated in the jobgen 
-        // have a contract as to what goes into these arguments.
-        // Here, we put the name of the chosen index, the type of index, the name of the dataset, 
-        // the number of secondary-index keys, and the variable references corresponding to the secondary-index search keys.
-        ArrayList<Mutable<ILogicalExpression>> secondaryIndexFuncArgs = new ArrayList<Mutable<ILogicalExpression>>();
+        
         InvertedIndexJobGenParams jobGenParams = new InvertedIndexJobGenParams(chosenIndex.getIndexName(), chosenIndex.getKind(), datasetDecl.getName(), retainInput, requiresBroadcast);
         // Add function-specific args such as search modifier, and possibly a similarity threshold.
         addFunctionSpecificArgs(optFuncExpr, jobGenParams);
@@ -355,12 +349,9 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
             inputOp = (AbstractLogicalOperator) probeSubTree.root;
         }
         jobGenParams.setKeyVarList(keyVarList);
-        jobGenParams.writeToFuncArgs(secondaryIndexFuncArgs);
         
-        List<Object> secondaryIndexTypes = AccessMethodUtils.getSecondaryIndexTypes(datasetDecl, chosenIndex, recordType, true);
         UnnestMapOperator secondaryIndexUnnestOp = AccessMethodUtils.createSecondaryIndexUnnestMap(datasetDecl,
-                recordType, chosenIndex, inputOp, secondaryIndexFuncArgs, numSecondaryKeys,
-                secondaryIndexTypes, context, true, retainInput);
+                recordType, chosenIndex, inputOp, jobGenParams, context, true, retainInput);
         int numPrimaryKeys = DatasetUtils.getPartitioningFunctions(datasetDecl).size();
         List<LogicalVariable> primaryKeyVars = AccessMethodUtils.getPrimaryKeyVars(secondaryIndexUnnestOp.getVariables(), numPrimaryKeys, numSecondaryKeys, true);
         List<LogicalVariable> primaryIndexVars = dataSourceScan.getVariables();

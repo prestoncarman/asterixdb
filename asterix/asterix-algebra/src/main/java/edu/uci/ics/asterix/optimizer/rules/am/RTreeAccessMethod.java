@@ -28,9 +28,7 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.DataSourceScanOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOperator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluatorFactory;
 import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
-import edu.uci.ics.hyracks.algebricks.core.utils.Triple;
 
 public class RTreeAccessMethod implements IAccessMethod {
 
@@ -80,13 +78,6 @@ public class RTreeAccessMethod implements IAccessMethod {
         int numSecondaryKeys = numDimensions * 2;
         
         DataSourceScanOperator dataSourceScan = subTree.dataSourceScan;
-        // TODO: Fix comments.
-        // List of arguments to be passed into an unnest.
-        // This logical rewrite rule, and the corresponding runtime op generated in the jobgen 
-        // have a contract as to what goes into these arguments.
-        // Here, we put the name of the chosen index, the type of index, the name of the dataset, 
-        // the number of secondary-index keys, and the variable references corresponding to the secondary-index search keys.
-        ArrayList<Mutable<ILogicalExpression>> secondaryIndexFuncArgs = new ArrayList<Mutable<ILogicalExpression>>();
         // TODO: For now retainInput and requiresBroadcast are always false.
         RTreeJobGenParams jobGenParams = new RTreeJobGenParams(chosenIndex.getIndexName(), IndexKind.RTREE, datasetDecl.getName(), false, false);
         // A spatial object is serialized in the constant of the func expr we are optimizing.
@@ -115,7 +106,6 @@ public class RTreeAccessMethod implements IAccessMethod {
             keyExprList.add(new MutableObject<ILogicalExpression>(createMBR));
         }
         jobGenParams.setKeyVarList(keyVarList);
-        jobGenParams.writeToFuncArgs(secondaryIndexFuncArgs);
 
         // Assign operator that "extracts" the MBR fields from the func-expr constant into a tuple.
         AssignOperator assignSearchKeys = new AssignOperator(keyVarList, keyExprList);
@@ -123,10 +113,8 @@ public class RTreeAccessMethod implements IAccessMethod {
         assignSearchKeys.getInputs().add(dataSourceScan.getInputs().get(0));
         assignSearchKeys.setExecutionMode(dataSourceScan.getExecutionMode());
 
-        List<Object> secondaryIndexTypes = getSecondaryIndexTypes(datasetDecl, chosenIndex, recordType);
         UnnestMapOperator secondaryIndexUnnestOp = AccessMethodUtils.createSecondaryIndexUnnestMap(datasetDecl,
-                recordType, chosenIndex, assignSearchKeys, secondaryIndexFuncArgs, numSecondaryKeys,
-                secondaryIndexTypes, context, false, false);
+                recordType, chosenIndex, assignSearchKeys, jobGenParams, context, false, false);
         int numPrimaryKeys = DatasetUtils.getPartitioningFunctions(datasetDecl).size();
         List<LogicalVariable> primaryKeyVars = AccessMethodUtils.getPrimaryKeyVars(secondaryIndexUnnestOp.getVariables(), numPrimaryKeys, numSecondaryKeys, false);
         List<LogicalVariable> primaryIndexVars = dataSourceScan.getVariables();
@@ -146,27 +134,6 @@ public class RTreeAccessMethod implements IAccessMethod {
         return false;
     }
     
-    /**
-     * @return A list of types corresponding to fields produced by the given
-     *         index when searched.
-     */
-    private static List<Object> getSecondaryIndexTypes(AqlCompiledDatasetDecl datasetDecl, AqlCompiledIndexDecl index,
-            ARecordType itemType) throws AlgebricksException {
-        List<Object> types = new ArrayList<Object>();
-        IAType keyType = AqlCompiledIndexDecl.keyFieldType(index.getFieldExprs().get(0), itemType);
-        int numDimensions = NonTaggedFormatUtil.getNumDimensions(keyType.getTypeTag());
-        int numKeys = numDimensions * 2;
-        IAType nestedKeyType = NonTaggedFormatUtil.getNestedSpatialType(keyType.getTypeTag());
-        for (int i = 0; i < numKeys; i++) {
-            types.add(nestedKeyType);
-        }
-        for (Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType> t : DatasetUtils
-                .getPartitioningFunctions(datasetDecl)) {
-            types.add(t.third);
-        }
-        return types;
-    }
-
     @Override
     public boolean exprIsOptimizable(AqlCompiledIndexDecl index, IOptimizableFuncExpr optFuncExpr) {
         // No additional analysis required.

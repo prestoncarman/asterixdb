@@ -1,1 +1,0 @@
-index/ngram-edit-distance.aql

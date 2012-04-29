@@ -19,6 +19,7 @@ import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.IAType;
+import edu.uci.ics.asterix.om.util.NonTaggedFormatUtil;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IOptimizationContext;
@@ -115,29 +116,75 @@ public class AccessMethodUtils {
         return true;
     }
     
-    /**
-     * @return A list of types corresponding to fields produced by the given
-     *         index when searched.
-     */
-    public static List<Object> getSecondaryIndexTypes(AqlCompiledDatasetDecl datasetDecl, AqlCompiledIndexDecl index,
-            ARecordType recordType, boolean primaryKeysOnly) throws AlgebricksException {
-        List<Object> types = new ArrayList<Object>();
-        if (!primaryKeysOnly) {
-            for (String sk : index.getFieldExprs()) {
-                types.add(AqlCompiledIndexDecl.keyFieldType(sk, recordType));
+    public static int getNumSecondaryKeys(AqlCompiledDatasetDecl datasetDecl, AqlCompiledIndexDecl indexDecl,
+            ARecordType recordType) throws AlgebricksException {
+        switch (indexDecl.getKind()) {
+            case BTREE:
+            case WORD_INVIX:
+            case NGRAM_INVIX: {
+                return indexDecl.getFieldExprs().size();
+            }
+            case RTREE: {
+                IAType keyType = AqlCompiledIndexDecl.keyFieldType(indexDecl.getFieldExprs().get(0), recordType);
+                int numDimensions = NonTaggedFormatUtil.getNumDimensions(keyType.getTypeTag());
+                return numDimensions * 2;
+            }
+            default: {
+                throw new AlgebricksException("Unknown index kind: " + indexDecl.getKind());
             }
         }
-        for (Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType> t : DatasetUtils
-                .getPartitioningFunctions(datasetDecl)) {
-            types.add(t.third);
-        }
-        return types;
     }
     
-    public static List<LogicalVariable> getPrimaryKeyVars(List<LogicalVariable> sourceVars, int numPrimaryKeys, int numSecondaryKeys, boolean outputPrimaryKeysOnly) {
+    /**
+     * @return Appends the types corresponding to fields produced by the given
+     *         index when searched.
+     */
+    public static void getSecondaryIndexTypes(AqlCompiledDatasetDecl datasetDecl, ARecordType recordType,
+            AqlCompiledIndexDecl indexDecl, boolean primaryKeysOnly, List<Object> dest) throws AlgebricksException {
+        if (!primaryKeysOnly) {
+            switch (indexDecl.getKind()) {
+                case BTREE:
+                case WORD_INVIX:
+                case NGRAM_INVIX: {
+                    for (String sk : indexDecl.getFieldExprs()) {
+                        dest.add(AqlCompiledIndexDecl.keyFieldType(sk, recordType));
+                    }
+                    break;
+                }
+                case RTREE: {
+                    IAType keyType = AqlCompiledIndexDecl.keyFieldType(indexDecl.getFieldExprs().get(0), recordType);
+                    IAType nestedKeyType = NonTaggedFormatUtil.getNestedSpatialType(keyType.getTypeTag());
+                    int numKeys = getNumSecondaryKeys(datasetDecl, indexDecl, recordType);
+                    for (int i = 0; i < numKeys; i++) {
+                        dest.add(nestedKeyType);
+                    }
+                    break;
+                }
+            }
+        }
+        // Primary keys.
+        for (Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType> t : DatasetUtils
+                .getPartitioningFunctions(datasetDecl)) {
+            dest.add(t.third);
+        }
+    }
+    
+    public static void createSecondaryIndexOutputVars(AqlCompiledDatasetDecl datasetDecl, ARecordType recordType,
+            AqlCompiledIndexDecl indexDecl, boolean primaryKeysOnly, IOptimizationContext context,
+            List<LogicalVariable> dest) throws AlgebricksException {
+        int numPrimaryKeys = DatasetUtils.getPartitioningFunctions(datasetDecl).size();
+        int numSecondaryKeys = getNumSecondaryKeys(datasetDecl, indexDecl, recordType);
+        int numVars = (primaryKeysOnly) ? numPrimaryKeys : numPrimaryKeys + numSecondaryKeys;
+        for (int i = 0; i < numVars; i++) {
+            dest.add(context.newVar());
+        }
+    }
+    
+    public static List<LogicalVariable> getPrimaryKeyVars(List<LogicalVariable> sourceVars, int numPrimaryKeys,
+            int numSecondaryKeys, boolean outputPrimaryKeysOnly) {
         List<LogicalVariable> primaryKeyVars = new ArrayList<LogicalVariable>();
         int start = sourceVars.size() - numPrimaryKeys;
-        int stop = sourceVars.size();        
+        int stop = sourceVars.size();
         for (int i = start; i < stop; i++) {
             primaryKeyVars.add(sourceVars.get(i));
         }
@@ -146,47 +193,36 @@ public class AccessMethodUtils {
     
     public static UnnestMapOperator createSecondaryIndexUnnestMap(AqlCompiledDatasetDecl datasetDecl,
             ARecordType recordType, AqlCompiledIndexDecl indexDecl, ILogicalOperator inputOp,
-            ArrayList<Mutable<ILogicalExpression>> secondaryIndexFuncArgs, int numSecondaryKeys, List<Object> secondaryIndexTypes,
-            IOptimizationContext context, boolean outputPrimaryKeysOnly, boolean retainInput) throws AlgebricksException {        
-    	// This is the logical representation of our secondary-index search.
-        // An index search is expressed logically as an unnest over an index-search function.
+            AccessMethodJobGenParams jobGenParams, IOptimizationContext context, boolean outputPrimaryKeysOnly,
+            boolean retainInput) throws AlgebricksException {
+        // The job gen parameters are transferred to the actual job gen via 
+        // the UnnestMapOperator's function arguments.
+        ArrayList<Mutable<ILogicalExpression>> secondaryIndexFuncArgs = new ArrayList<Mutable<ILogicalExpression>>();
+        jobGenParams.writeToFuncArgs(secondaryIndexFuncArgs);
+        // An secondary-index search is logically expressed as an unnest over an index-search function.
         IFunctionInfo secondaryIndexSearch = FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.INDEX_SEARCH);
         UnnestingFunctionCallExpression secondaryIndexSearchFunc = new UnnestingFunctionCallExpression(secondaryIndexSearch, secondaryIndexFuncArgs);
         secondaryIndexSearchFunc.setReturnsUniqueValues(true);
-    	// List of variables for the primary keys coming out of a secondary-index search.
-        int numPrimaryKeys = DatasetUtils.getPartitioningFunctions(datasetDecl).size();
-        ArrayList<LogicalVariable> secondaryIndexPrimaryKeys = new ArrayList<LogicalVariable>(numPrimaryKeys);
-        for (int i = 0; i < numPrimaryKeys; i++) {
-            secondaryIndexPrimaryKeys.add(context.newVar());
-        }
         // List of variables coming out of the secondary-index search. It contains the primary keys, and optionally the secondary keys.
-        ArrayList<LogicalVariable> secondaryIndexUnnestVars = new ArrayList<LogicalVariable>();
+        List<LogicalVariable> secondaryIndexUnnestVars = new ArrayList<LogicalVariable>();
+        List<Object> secondaryIndexOutputTypes = new ArrayList<Object>();
         if (retainInput) {
             VariableUtilities.getLiveVariables(inputOp, secondaryIndexUnnestVars);
-            List<Object> newSecondaryIndexTypes = new ArrayList<Object>();
             IVariableTypeEnvironment typeEnv = context.getOutputTypeEnvironment(inputOp);
             for (LogicalVariable var : secondaryIndexUnnestVars) {
-                newSecondaryIndexTypes.add(typeEnv.getVarType(var));
-            }
-            newSecondaryIndexTypes.addAll(secondaryIndexTypes);
-            secondaryIndexTypes = newSecondaryIndexTypes;
-        }
-        if (!outputPrimaryKeysOnly) {
-            // Add one variable per secondary-index key.
-            for (int i = 0; i < numSecondaryKeys; i++) {
-                secondaryIndexUnnestVars.add(context.newVar());
+                secondaryIndexOutputTypes.add(typeEnv.getVarType(var));
             }
         }
-        // Add the primary keys after the secondary keys.
-        secondaryIndexUnnestVars.addAll(secondaryIndexPrimaryKeys);
+        // Fill output variables/types generated by the secondary-index search (not forwarded from input).
+        AccessMethodUtils.createSecondaryIndexOutputVars(datasetDecl, recordType, indexDecl, outputPrimaryKeysOnly, context, secondaryIndexUnnestVars);
+        AccessMethodUtils.getSecondaryIndexTypes(datasetDecl, recordType, indexDecl, outputPrimaryKeysOnly, secondaryIndexOutputTypes);
         // This is the operator that jobgen will be looking for. It contains an unnest function that has all necessary arguments to determine
         // which index to use, which variables contain the index-search keys, what is the original dataset, etc.
         UnnestMapOperator secondaryIndexUnnestOp = new UnnestMapOperator(secondaryIndexUnnestVars, new MutableObject<ILogicalExpression>(
-                secondaryIndexSearchFunc), secondaryIndexTypes);
+                secondaryIndexSearchFunc), secondaryIndexOutputTypes);
         secondaryIndexUnnestOp.getInputs().add(new MutableObject<ILogicalOperator>(inputOp));
         secondaryIndexUnnestOp.setExecutionMode(ExecutionMode.PARTITIONED);
         context.computeAndSetTypeEnvironmentForOperator(secondaryIndexUnnestOp);
-        
         return secondaryIndexUnnestOp;
     }
     
