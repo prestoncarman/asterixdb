@@ -2,10 +2,7 @@ package edu.uci.ics.asterix.algebra.operators.physical;
 
 import java.util.List;
 
-import org.apache.commons.lang3.mutable.Mutable;
-
 import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
-import edu.uci.ics.asterix.common.functions.FunctionArgumentsConstants;
 import edu.uci.ics.asterix.dataflow.base.IAsterixApplicationContextInfo;
 import edu.uci.ics.asterix.metadata.MetadataException;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledDatasetDecl;
@@ -20,9 +17,9 @@ import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.asterix.om.types.IAType;
-import edu.uci.ics.asterix.optimizer.rules.am.AccessMethodUtils;
 import edu.uci.ics.asterix.optimizer.rules.am.InvertedIndexAccessMethod;
 import edu.uci.ics.asterix.optimizer.rules.am.InvertedIndexAccessMethod.SearchModifierType;
+import edu.uci.ics.asterix.optimizer.rules.am.InvertedIndexJobGenParams;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IHyracksJobBuilder;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
@@ -30,7 +27,7 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalExpressionTag;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.PhysicalOperatorTag;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
-import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
+import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IAlgebricksConstantValue;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IVariableTypeEnvironment;
 import edu.uci.ics.hyracks.algebricks.core.algebra.metadata.IDataSourceIndex;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.IOperatorSchema;
@@ -39,7 +36,6 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.jobgen.impl.JobGenCon
 import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.jobgen.impl.JobGenHelper;
 import edu.uci.ics.hyracks.algebricks.core.api.constraints.AlgebricksPartitionConstraint;
 import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
-import edu.uci.ics.hyracks.algebricks.core.api.exceptions.NotImplementedException;
 import edu.uci.ics.hyracks.algebricks.core.utils.Pair;
 import edu.uci.ics.hyracks.api.dataflow.IOperatorDescriptor;
 import edu.uci.ics.hyracks.api.dataflow.value.IBinaryComparatorFactory;
@@ -77,53 +73,31 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
         if (unnestFuncExpr.getFunctionIdentifier() != AsterixBuiltinFunctions.INDEX_SEARCH) {
             return;
         }
-        contributeInvertedIndexSearch(builder, context, unnestMapOp, opSchema, inputSchemas);
-    }
-
-    private void contributeInvertedIndexSearch(IHyracksJobBuilder builder, JobGenContext context, UnnestMapOperator unnestMap,
-            IOperatorSchema opSchema, IOperatorSchema[] inputSchemas) throws AlgebricksException, AlgebricksException {
-        Mutable<ILogicalExpression> unnestExpr = unnestMap.getExpressionRef();
-        AbstractFunctionCallExpression unnestFuncExpr = (AbstractFunctionCallExpression) unnestExpr.getValue();
-        // Get name of secondary index to be used.
-        String indexName = AccessMethodUtils.getStringConstant(unnestFuncExpr.getArguments().get(0));
-        // Get type of index and do sanity check.
-        String indexType = AccessMethodUtils.getStringConstant(unnestFuncExpr.getArguments().get(1));
-        if (!indexType.equals(FunctionArgumentsConstants.WORD_INVERTED_INDEX) && !indexType.equals(FunctionArgumentsConstants.NGRAM_INVERTED_INDEX)) {
-            throw new NotImplementedException(indexType + " indexes are not implemented.");
-        }
-        // Get dataset, and do sanity check.
-        String datasetName = AccessMethodUtils.getStringConstant(unnestFuncExpr.getArguments().get(2));
-        boolean retainInput = AccessMethodUtils.getBooleanConstant(unnestFuncExpr.getArguments().get(3));
-        boolean requiresBroadcast = AccessMethodUtils.getBooleanConstant(unnestFuncExpr.getArguments().get(4));
+        InvertedIndexJobGenParams jobGenParams = new InvertedIndexJobGenParams();
+        jobGenParams.readFromFuncArgs(unnestFuncExpr.getArguments());
+        
         AqlMetadataProvider metadataProvider = (AqlMetadataProvider) context.getMetadataProvider();
         AqlCompiledMetadataDeclarations metadata = metadataProvider.getMetadataDeclarations();
-        AqlCompiledDatasetDecl datasetDecl = metadata.findDataset(datasetName);
+        AqlCompiledDatasetDecl datasetDecl = metadata.findDataset(jobGenParams.getDatasetName());
         if (datasetDecl == null) {
-            throw new AlgebricksException("Unknown dataset " + datasetName);
+            throw new AlgebricksException("Unknown dataset " + jobGenParams.getDatasetName());
         }
         if (datasetDecl.getDatasetType() == DatasetType.EXTERNAL) {
-            throw new AlgebricksException("Trying to run inverted index search over external dataset (" + datasetName + ").");
+            throw new AlgebricksException("Trying to run inverted index search over external dataset (" + jobGenParams.getDatasetName() + ").");
         }
-
-        // Get search modifier type.
-        int searchModifierOrdinal = AccessMethodUtils.getInt32Constant(unnestFuncExpr.getArguments().get(5));
-        SearchModifierType searchModifierType = SearchModifierType.values()[searchModifierOrdinal];
-        // Similarity threshold. Concrete type depends on search modifier.
-        IAObject simThresh = ((AsterixConstantValue) ((ConstantExpression) unnestFuncExpr.getArguments().get(6).getValue())
-                .getValue()).getObject();
-        // Get type of search key.
-        int typeTagOrdinal = AccessMethodUtils.getInt32Constant(unnestFuncExpr.getArguments().get(7));
-        ATypeTag searchKeyType = ATypeTag.values()[typeTagOrdinal];
-        Pair<int[], Integer> keys = getKeys(unnestFuncExpr, 8, inputSchemas);
+        int[] keyIndexes = getKeyIndexes(jobGenParams.getKeyVarList(), inputSchemas);
         
         // Build runtime.
-        Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> invIndexSearch = buildInvertedIndexRuntime(
-                metadata, context, builder.getJobSpec(), unnestMap, opSchema, retainInput, datasetName, datasetDecl, indexName, searchKeyType, keys.first, searchModifierType, simThresh);
+        Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> invIndexSearch = buildInvertedIndexRuntime(metadata,
+                context, builder.getJobSpec(), unnestMapOp, opSchema, jobGenParams.getRetainInput(),
+                jobGenParams.getDatasetName(), datasetDecl, jobGenParams.getIndexName(),
+                jobGenParams.getSearchKeyType(), keyIndexes, jobGenParams.getSearchModifierType(),
+                jobGenParams.getSimilarityThreshold());
         // Contribute operator in hyracks job.
-        builder.contributeHyracksOperator(unnestMap, invIndexSearch.first);
+        builder.contributeHyracksOperator(unnestMapOp, invIndexSearch.first);
         builder.contributeAlgebricksPartitionConstraint(invIndexSearch.first, invIndexSearch.second);        
-        ILogicalOperator srcExchange = unnestMap.getInputs().get(0).getValue();
-        builder.contributeGraphEdge(srcExchange, 0, unnestMap, 0);
+        ILogicalOperator srcExchange = unnestMapOp.getInputs().get(0).getValue();
+        builder.contributeGraphEdge(srcExchange, 0, unnestMapOp, 0);
     }
     
     public static Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> buildInvertedIndexRuntime(
@@ -132,7 +106,8 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
             IOperatorSchema opSchema, boolean retainInput, String datasetName,
             AqlCompiledDatasetDecl datasetDecl, String indexName,
             ATypeTag searchKeyType, int[] keyFields, SearchModifierType searchModifierType,
-            IAObject simThresh) throws AlgebricksException {
+            IAlgebricksConstantValue similarityThreshold) throws AlgebricksException {
+        IAObject simThresh = ((AsterixConstantValue)similarityThreshold).getObject();
         String itemTypeName = datasetDecl.getItemTypeName();
         IAType itemType;
         try {

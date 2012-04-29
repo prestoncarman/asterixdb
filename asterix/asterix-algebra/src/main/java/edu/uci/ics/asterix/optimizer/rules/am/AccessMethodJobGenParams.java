@@ -1,11 +1,17 @@
 package edu.uci.ics.asterix.optimizer.rules.am;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.commons.lang3.mutable.MutableObject;
 
+import edu.uci.ics.asterix.om.base.AInt32;
+import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
+import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
+import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
+import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
 
 public class AccessMethodJobGenParams {
     protected String indexName;
@@ -59,5 +65,28 @@ public class AccessMethodJobGenParams {
 
     public boolean getRequiresBroadcast() {
         return requiresBroadcast;
+    }
+    
+    protected void writeVarList(List<LogicalVariable> varList, List<Mutable<ILogicalExpression>> funcArgs) {
+        Mutable<ILogicalExpression> numKeysRef = new MutableObject<ILogicalExpression>(new ConstantExpression(
+                new AsterixConstantValue(new AInt32(varList.size()))));
+        funcArgs.add(numKeysRef);
+        for (LogicalVariable keyVar : varList) {
+            Mutable<ILogicalExpression> keyVarRef = new MutableObject<ILogicalExpression>(
+                    new VariableReferenceExpression(keyVar));
+            funcArgs.add(keyVarRef);
+        }
+    }
+    
+    protected int readVarList(List<Mutable<ILogicalExpression>> funcArgs, int index, List<LogicalVariable> varList) {
+        int numLowKeys = AccessMethodUtils.getInt32Constant(funcArgs.get(index));
+        if (numLowKeys > 0) {
+            for (int i = 0; i < numLowKeys; i++) {
+                LogicalVariable var = ((VariableReferenceExpression) funcArgs.get(index + 1 + i).getValue())
+                        .getVariableReference();
+                varList.add(var);
+            }
+        }
+        return index + numLowKeys + 1;
     }
 }

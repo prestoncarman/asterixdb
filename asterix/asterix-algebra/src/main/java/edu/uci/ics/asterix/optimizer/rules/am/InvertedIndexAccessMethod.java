@@ -18,6 +18,7 @@ import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl.IndexKind;
 import edu.uci.ics.asterix.metadata.utils.DatasetUtils;
 import edu.uci.ics.asterix.om.base.AFloat;
 import edu.uci.ics.asterix.om.base.AInt32;
+import edu.uci.ics.asterix.om.base.ANull;
 import edu.uci.ics.asterix.om.base.AString;
 import edu.uci.ics.asterix.om.base.IACollection;
 import edu.uci.ics.asterix.om.base.IAObject;
@@ -312,39 +313,37 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         
         DataSourceScanOperator dataSourceScan = indexSubTree.dataSourceScan;
         // List of arguments to be passed into an unnest.
+        // TODO: Update comment for currency.
         // This logical rewrite rule, and the corresponding runtime op generated in the jobgen 
         // have a contract as to what goes into these arguments.
         // Here, we put the name of the chosen index, the type of index, the name of the dataset, 
         // the number of secondary-index keys, and the variable references corresponding to the secondary-index search keys.
         ArrayList<Mutable<ILogicalExpression>> secondaryIndexFuncArgs = new ArrayList<Mutable<ILogicalExpression>>();
-        secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(chosenIndex.getIndexName())));
+        String indexType = null;
+        // TODO: Use a type enum instead of a nasty string.
         if (chosenIndex.getKind() == IndexKind.WORD_INVIX) {
-            secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(FunctionArgumentsConstants.WORD_INVERTED_INDEX)));
+            indexType = FunctionArgumentsConstants.WORD_INVERTED_INDEX;
         } else if (chosenIndex.getKind() == IndexKind.NGRAM_INVIX) {
-            secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(FunctionArgumentsConstants.NGRAM_INVERTED_INDEX)));
+            indexType = FunctionArgumentsConstants.NGRAM_INVERTED_INDEX;
         }
-        secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(datasetDecl.getName())));
-        secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createBooleanConstant(retainInput)));
-        secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createBooleanConstant(requiresBroadcast)));
+        InvertedIndexJobGenParams jobGenParams = new InvertedIndexJobGenParams(chosenIndex.getIndexName(), indexType, datasetDecl.getName(), retainInput, requiresBroadcast);
         // Add function-specific args such as search modifier, and possibly a similarity threshold.
-        addFunctionSpecificArgs(optFuncExpr, secondaryIndexFuncArgs);
+        addFunctionSpecificArgs(optFuncExpr, jobGenParams);
         // Add the type of search key from the optFuncExpr.
-        addSearchKeyType(optFuncExpr, indexSubTree, context, secondaryIndexFuncArgs);
-        secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(
-                new AInt32(numSecondaryKeys)))));
+        addSearchKeyType(optFuncExpr, indexSubTree, context, jobGenParams);
         
         AssignOperator assignSearchKeys = null;
+        // Here we generate vars and funcs for assigning the secondary-index keys to be fed into the secondary-index search.
+        // List of variables for the assign.
+        ArrayList<LogicalVariable> keyVarList = new ArrayList<LogicalVariable>();
         // probeSubTree is null if we are dealing with a selection query, and non-null for join queries.
         if (probeSubTree == null) {
-            // Here we generate vars and funcs for assigning the secondary-index keys to be fed into the secondary-index search.
-            // List of variables for the assign.
-            ArrayList<LogicalVariable> keyVarList = new ArrayList<LogicalVariable>();
             // List of expressions for the assign.
             ArrayList<Mutable<ILogicalExpression>> keyExprList = new ArrayList<Mutable<ILogicalExpression>>();
-            // Assign operator that sets the secondary-index search-key fields.
-            assignSearchKeys = new AssignOperator(keyVarList, keyExprList);
             // Add key vars and exprs to argument list.
-            addKeyVarsAndExprs(optFuncExpr, keyVarList, keyExprList, secondaryIndexFuncArgs, context);
+            addKeyVarsAndExprs(optFuncExpr, keyVarList, keyExprList, context);
+            // Assign operator that sets the secondary-index search-key fields.
+            assignSearchKeys = new AssignOperator(keyVarList, keyExprList);            
             // Input to this assign is the EmptyTupleSource (which the dataSourceScan also must have had as input).
             assignSearchKeys.getInputs().add(dataSourceScan.getInputs().get(0));
             assignSearchKeys.setExecutionMode(dataSourceScan.getExecutionMode());
@@ -358,12 +357,13 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
                 // If the index is on a dataset in subtree 1, then subtree 0 will feed.
                 inputSearchVariable = optFuncExpr.getLogicalVar(0);
             }
-            Mutable<ILogicalExpression> keyVarRef = new MutableObject<ILogicalExpression>(
-                    new VariableReferenceExpression(inputSearchVariable));
-            secondaryIndexFuncArgs.add(keyVarRef);
+            keyVarList.add(inputSearchVariable);
             // Input to this assign is probe subtree.
+            // TODO: Fix, because it may not be an assign op.
             assignSearchKeys = (AssignOperator) probeSubTree.root;
         }
+        jobGenParams.setKeyVarList(keyVarList);
+        jobGenParams.writeToFuncArgs(secondaryIndexFuncArgs);
         
         List<Object> secondaryIndexTypes = AccessMethodUtils.getSecondaryIndexTypes(datasetDecl, chosenIndex, recordType, true);
         UnnestMapOperator secondaryIndexUnnestOp = AccessMethodUtils.createSecondaryIndexUnnestMap(datasetDecl,
@@ -373,7 +373,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         List<LogicalVariable> primaryKeyVars = AccessMethodUtils.getPrimaryKeyVars(secondaryIndexUnnestOp.getVariables(), numPrimaryKeys, numSecondaryKeys, true);
         List<LogicalVariable> primaryIndexVars = dataSourceScan.getVariables();
         // Generate the rest of the upstream plan which feeds the search results into the primary index.
-        UnnestMapOperator primaryIndexUnnestOp = AccessMethodUtils.createPrimaryIndexUnnestMap(datasetDecl, recordType, primaryIndexVars, secondaryIndexUnnestOp, context, primaryKeyVars, true, retainInput, false);
+        UnnestMapOperator primaryIndexUnnestOp = AccessMethodUtils.createPrimaryIndexUnnestMap(datasetDecl, recordType, primaryIndexVars, secondaryIndexUnnestOp, context, primaryKeyVars, false, retainInput, false);
         return primaryIndexUnnestOp;
     }
     
@@ -419,7 +419,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         return true;
     }
     
-    private void addSearchKeyType(IOptimizableFuncExpr optFuncExpr, OptimizableOperatorSubTree indexSubTree, IOptimizationContext context, ArrayList<Mutable<ILogicalExpression>> secondaryIndexFuncArgs) throws AlgebricksException {
+    private void addSearchKeyType(IOptimizableFuncExpr optFuncExpr, OptimizableOperatorSubTree indexSubTree, IOptimizationContext context, InvertedIndexJobGenParams jobGenParams) throws AlgebricksException {
         // If we have two variables in the optFunxExpr, then we are optimizing a join.
         IAType type = null;
         ATypeTag typeTag = null;
@@ -443,42 +443,31 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
                 throw new AlgebricksException("Only ordered lists and string types supported.");
             }
         }
-        secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createInt32Constant(typeTag.ordinal())));
+        jobGenParams.setSearchKeyType(typeTag);
     }
     
-    private void addFunctionSpecificArgs(IOptimizableFuncExpr optFuncExpr, ArrayList<Mutable<ILogicalExpression>> secondaryIndexFuncArgs) {
+    private void addFunctionSpecificArgs(IOptimizableFuncExpr optFuncExpr, InvertedIndexJobGenParams jobGenParams) {
         if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.CONTAINS) {
-            // Value 0 represents a conjunctive search modifier.
-            secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(
-                    new AInt32(SearchModifierType.CONJUNCTIVE.ordinal())))));
-            // We add this dummy value, so that we can get the the key arguments starting from a fixed index.
-            secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(
-                    new AInt32(-1)))));
+            jobGenParams.setSearchModifierType(SearchModifierType.CONJUNCTIVE);
+            jobGenParams.setSimilarityThreshold(new AsterixConstantValue(ANull.NULL));
         }
         if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.SIMILARITY_JACCARD_CHECK) {
-            // Value 1 represents a jaccard search modifier.
-            secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(
-                    new AInt32(SearchModifierType.JACCARD.ordinal())))));
+            jobGenParams.setSearchModifierType(SearchModifierType.JACCARD);
             // Add the similarity threshold which, by convention, is the last constant value.
-            secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(optFuncExpr.getConstantVal(optFuncExpr.getNumConstantVals() - 1))));
+            jobGenParams.setSimilarityThreshold(optFuncExpr.getConstantVal(optFuncExpr.getNumConstantVals() - 1));
         }
         if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.EDIT_DISTANCE_CHECK) {
-            // Value 1 represents an edit distance search modifier.
-            secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(
-                    new AInt32(SearchModifierType.EDIT_DISTANCE.ordinal())))));
+            jobGenParams.setSearchModifierType(SearchModifierType.EDIT_DISTANCE);
             // Add the similarity threshold which, by convention, is the last constant value.
-            secondaryIndexFuncArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(optFuncExpr.getConstantVal(optFuncExpr.getNumConstantVals() - 1))));
+            jobGenParams.setSimilarityThreshold(optFuncExpr.getConstantVal(optFuncExpr.getNumConstantVals() - 1));
         }
     }
 
-    private void addKeyVarsAndExprs(IOptimizableFuncExpr optFuncExpr, ArrayList<LogicalVariable> keyVarList, ArrayList<Mutable<ILogicalExpression>> keyExprList, ArrayList<Mutable<ILogicalExpression>> secondaryIndexFuncArgs, IOptimizationContext context) throws AlgebricksException {
+    private void addKeyVarsAndExprs(IOptimizableFuncExpr optFuncExpr, ArrayList<LogicalVariable> keyVarList, ArrayList<Mutable<ILogicalExpression>> keyExprList, IOptimizationContext context) throws AlgebricksException {
         // For now we are assuming a single secondary index key.
         // Add a variable and its expr to the lists which will be passed into an assign op.
         LogicalVariable keyVar = context.newVar();
         keyVarList.add(keyVar);
-        Mutable<ILogicalExpression> keyVarRef = new MutableObject<ILogicalExpression>(
-                new VariableReferenceExpression(keyVar));
-        secondaryIndexFuncArgs.add(keyVarRef);
         keyExprList.add(new MutableObject<ILogicalExpression>(new ConstantExpression(optFuncExpr.getConstantVal(0))));        
         return;
     }

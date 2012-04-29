@@ -12,10 +12,8 @@ import edu.uci.ics.asterix.algebra.operators.physical.RTreeSearchPOperator;
 import edu.uci.ics.asterix.common.functions.FunctionArgumentsConstants;
 import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
 import edu.uci.ics.asterix.metadata.declared.AqlSourceId;
-import edu.uci.ics.asterix.om.base.ABoolean;
-import edu.uci.ics.asterix.om.base.AString;
-import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
+import edu.uci.ics.asterix.optimizer.rules.am.AccessMethodJobGenParams;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalPlan;
@@ -26,7 +24,6 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.OperatorAnnotations;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AggregateFunctionCallExpression;
-import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IMergeAggregationExpressionFactory;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
@@ -142,48 +139,36 @@ public class SetAsterixPhysicalOperatorsRule implements IAlgebraicRewriteRule {
                 case UNNEST_MAP: {
                     UnnestMapOperator unnestMap = (UnnestMapOperator) op;
                     ILogicalExpression unnestExpr = unnestMap.getExpressionRef().getValue();
-                    boolean notSet = true;
                     if (unnestExpr.getExpressionTag() == LogicalExpressionTag.FUNCTION_CALL) {
                         AbstractFunctionCallExpression f = (AbstractFunctionCallExpression) unnestExpr;
                         FunctionIdentifier fid = f.getFunctionIdentifier();
-                        if (fid.equals(AsterixBuiltinFunctions.INDEX_SEARCH)) {
-                            notSet = false;
-                            AqlMetadataProvider mp = (AqlMetadataProvider) context.getMetadataProvider();
-                            ConstantExpression ce0 = (ConstantExpression) f.getArguments().get(0).getValue();
-                            String indexId = ((AString) ((AsterixConstantValue) ce0.getValue()).getObject())
-                                    .getStringValue();
-                            ConstantExpression ce2 = (ConstantExpression) f.getArguments().get(2).getValue();
-                            String datasetName = ((AString) ((AsterixConstantValue) ce2.getValue()).getObject())
-                                    .getStringValue();
-                            String dvName = mp.getMetadataDeclarations().getDataverseName();
-                            AqlSourceId dataSourceId = new AqlSourceId(dvName, datasetName);
-                            IDataSourceIndex<String, AqlSourceId> dsi = mp.findDataSourceIndex(indexId, dataSourceId);
-                            if (dsi == null) {
-                                throw new AlgebricksException("Could not find index " + indexId + " for dataset "
-                                        + dataSourceId);
-                            }
-                            ConstantExpression ce1 = (ConstantExpression) f.getArguments().get(1).getValue();
-                            String indexType = ((AString) ((AsterixConstantValue) ce1.getValue()).getObject())
-                                    .getStringValue();
-                            ConstantExpression ce4 = (ConstantExpression) f.getArguments().get(4).getValue();
-                            boolean requiresBroadcast = ((ABoolean) ((AsterixConstantValue) ce4.getValue()).getObject())
-                                    .getBoolean();
-                            // TODO: Make this a switch case.
-                            if (indexType == FunctionArgumentsConstants.BTREE_INDEX) {
-                                op.setPhysicalOperator(new BTreeSearchPOperator(dsi, requiresBroadcast));
-                            } else if (indexType == FunctionArgumentsConstants.RTREE_INDEX) {
-                                op.setPhysicalOperator(new RTreeSearchPOperator(dsi, requiresBroadcast));
-                            } else if (indexType == FunctionArgumentsConstants.WORD_INVERTED_INDEX ) {
-                                op.setPhysicalOperator(new InvertedIndexPOperator(dsi, requiresBroadcast));
-                            } else if (indexType == FunctionArgumentsConstants.NGRAM_INVERTED_INDEX ) {
-                                op.setPhysicalOperator(new InvertedIndexPOperator(dsi, requiresBroadcast));
-                            } else {
-                                throw new NotImplementedException(indexType + " indexes are not implemented.");
-                            }
+                        if (!fid.equals(AsterixBuiltinFunctions.INDEX_SEARCH)) {
+                            throw new IllegalStateException();
                         }
-                    }
-                    if (notSet) {
-                        throw new IllegalStateException();
+                        AccessMethodJobGenParams jobGenParams = new AccessMethodJobGenParams();
+                        jobGenParams.readFromFuncArgs(f.getArguments());
+                        AqlMetadataProvider mp = (AqlMetadataProvider) context.getMetadataProvider();
+                        String dataverseName = mp.getMetadataDeclarations().getDataverseName();
+                        AqlSourceId dataSourceId = new AqlSourceId(dataverseName, jobGenParams.getDatasetName());
+                        IDataSourceIndex<String, AqlSourceId> dsi = mp.findDataSourceIndex(jobGenParams.getIndexName(), dataSourceId);
+                        if (dsi == null) {
+                            throw new AlgebricksException("Could not find index " + jobGenParams.getIndexName() + " for dataset "
+                                    + dataSourceId);
+                        }
+                        // TODO: Make this a switch case.
+                        String indexType = jobGenParams.getIndexType();
+                        boolean requiresBroadcast = jobGenParams.getRequiresBroadcast();
+                        if (indexType == FunctionArgumentsConstants.BTREE_INDEX) {
+                            op.setPhysicalOperator(new BTreeSearchPOperator(dsi, requiresBroadcast));
+                        } else if (indexType == FunctionArgumentsConstants.RTREE_INDEX) {
+                            op.setPhysicalOperator(new RTreeSearchPOperator(dsi, requiresBroadcast));
+                        } else if (indexType == FunctionArgumentsConstants.WORD_INVERTED_INDEX ) {
+                            op.setPhysicalOperator(new InvertedIndexPOperator(dsi, requiresBroadcast));
+                        } else if (indexType == FunctionArgumentsConstants.NGRAM_INVERTED_INDEX ) {
+                            op.setPhysicalOperator(new InvertedIndexPOperator(dsi, requiresBroadcast));
+                        } else {
+                            throw new NotImplementedException(indexType + " indexes are not implemented.");
+                        }
                     }
                     break;
                 }
