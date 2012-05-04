@@ -21,8 +21,8 @@ import java.util.List;
 
 import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
 import edu.uci.ics.asterix.common.config.DatasetConfig.IndexType;
+import edu.uci.ics.asterix.common.dataflow.IAsterixApplicationContextInfo;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
-import edu.uci.ics.asterix.dataflow.base.IAsterixApplicationContextInfo;
 import edu.uci.ics.asterix.formats.nontagged.AqlSerializerDeserializerProvider;
 import edu.uci.ics.asterix.metadata.api.IMetadataIndex;
 import edu.uci.ics.asterix.metadata.api.IMetadataNode;
@@ -796,7 +796,7 @@ public class MetadataNode implements IMetadataNode {
             searchCmps[i] = comparatorFactories[i].createBinaryComparator();
         }
         MultiComparator searchCmp = new MultiComparator(searchCmps);
-        RangePredicate rangePred = new RangePredicate(true, searchKey, searchKey, true, true, searchCmp, searchCmp);
+        RangePredicate rangePred = new RangePredicate(searchKey, searchKey, true, true, searchCmp, searchCmp);
         indexAccessor.search(rangeCursor, rangePred);
 
         try {

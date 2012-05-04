@@ -5,6 +5,7 @@ import org.apache.commons.lang3.mutable.Mutable;
 import edu.uci.ics.asterix.aql.util.FunctionUtils;
 import edu.uci.ics.asterix.common.config.GlobalConfig;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
+import edu.uci.ics.asterix.om.typecomputer.base.TypeComputerUtilities;
 import edu.uci.ics.asterix.om.types.AOrderedListType;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.AUnionType;
@@ -90,6 +91,11 @@ public class SetClosedRecordConstructorsRule implements IAlgebraicRewriteRule {
             boolean allClosed = true;
             boolean changed = false;
             if (expr.getFunctionIdentifier().equals(AsterixBuiltinFunctions.OPEN_RECORD_CONSTRUCTOR)) {
+                ARecordType reqType = (ARecordType) TypeComputerUtilities.getRequiredType(expr);
+                if (reqType != null) {
+                    if (reqType.isOpen())
+                        allClosed = false;
+                }
                 int n = expr.getArguments().size();
                 if (n % 2 > 0) {
                     throw new AlgebricksException("Record constructor expected to have an even number of arguments: "

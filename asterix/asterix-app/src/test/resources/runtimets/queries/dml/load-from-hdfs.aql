@@ -1,5 +1,4 @@
 drop dataverse test if exists;
-  
 create dataverse test;
 use dataverse test;
 
@@ -8,7 +7,7 @@ create type LineItemType as closed {
   l_partkey: int32, 
   l_suppkey: int32, 
   l_linenumber: int32, 
-  l_quantity: int32, 
+  l_quantity: double, 
   l_extendedprice: double,
   l_discount: double, 
   l_tax: double,
@@ -22,19 +21,16 @@ create type LineItemType as closed {
   l_comment: string
 }
 
-create nodegroup group1  if not exists on nc1, nc2;
-
 create dataset LineItem(LineItemType)
-  partitioned by key l_orderkey, l_linenumber on group1;
+  partitioned by key l_orderkey, l_linenumber;
 
 load dataset LineItem 
-using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
-(("path"="nc1://data/tpch0.001/lineitem.tbl"),("format"="delimited-text"),("delimiter"="|")) pre-sorted;
+using "edu.uci.ics.asterix.external.dataset.adapter.HDFSAdapter"
+(("hdfs"="hdfs://localhost:10009"),("path"="/tpch/lineitem.tbl"),
+("input-format"="text-input-format"),("format"="delimited-text"),("delimiter"="|"));
 
-
-delete $l from dataset LineItem where $l.l_orderkey>=10;
-
-write output to nc1:"rttest/dml_delete.adm";      
+write output to nc1:"rttest/dml_load-from-hdfs.adm";      
 for $c in dataset('LineItem')
 order by $c.l_orderkey, $c.l_linenumber
 return $c 
+
