@@ -273,7 +273,8 @@ public class MetadataNode implements IMetadataNode {
         btree.open(fileId);
         ITreeIndexAccessor indexAccessor = btree.createAccessor();
         TransactionContext txnCtx = transactionProvider.getTransactionManager().getTransactionContext(txnId);
-        //transactionProvider.getLockManager().lock(txnCtx, index.getResourceId(), LockMode.EXCLUSIVE);
+        // transactionProvider.getLockManager().lock(txnCtx,
+        // index.getResourceId(), LockMode.EXCLUSIVE);
         // TODO: fix exceptions once new BTree exception model is in hyracks.
         indexAccessor.insert(tuple);
         index.getTreeLogger().generateLogRecord(transactionProvider, txnCtx, IndexOp.INSERT, tuple);
@@ -360,10 +361,47 @@ public class MetadataNode implements IMetadataNode {
                     dropIndex(txnId, dataverseName, datasetName, index.getIndexName());
                 }
             }
+            if (dataset.getType() == DatasetType.INTERNAL) {
+                List<BaseStatistics> datasetIndexes = getDatasetStatistics(txnId, dataverseName, datasetName);
+                if (datasetIndexes != null) {
+                    for (BaseStatistics index : datasetIndexes) {
+                        dropStatistic(txnId, dataverseName, datasetName, index.getNodeId());
+                    }
+                }
+            }
             // TODO: Change this to be a BTree specific exception, e.g.,
             // BTreeKeyDoesNotExistException.
         } catch (TreeIndexException e) {
             throw new MetadataException("Cannot drop dataset '" + datasetName + "' because it doesn't exist.", e);
+        } catch (Exception e) {
+            throw new MetadataException(e);
+        }
+    }
+
+    @Override
+    public void dropStatistic(long txnId, String dataverseName, String datasetName, String nodeId)
+            throws MetadataException, RemoteException {
+        BaseStatistics stat;
+        try {
+            stat = getStatistic(txnId, dataverseName, datasetName, nodeId);
+        } catch (Exception e) {
+            throw new MetadataException(e);
+        }
+        if (stat == null) {
+            throw new MetadataException("Cannot drop stats '" + datasetName + "." + nodeId
+                    + "' because it doesn't exist.");
+        }
+        try {
+            ITupleReference searchKey = createTuple(dataverseName, datasetName, nodeId);
+            // Searches the index for the tuple to be deleted. Acquires an S
+            // lock on the 'statistics' dataset.
+            ITupleReference tuple = getTupleToBeDeleted(txnId, MetadataPrimaryIndexes.STATISTICS_DATASET, searchKey);
+            deleteTupleFromIndex(txnId, MetadataPrimaryIndexes.STATISTICS_DATASET, tuple);
+            // TODO: Change this to be a BTree specific exception, e.g.,
+            // BTreeKeyDoesNotExistException.
+        } catch (TreeIndexException e) {
+            throw new MetadataException("Cannot drop statistics '" + datasetName + "." + nodeId
+                    + "' because it doesn't exist.", e);
         } catch (Exception e) {
             throw new MetadataException(e);
         }
@@ -589,6 +627,44 @@ public class MetadataNode implements IMetadataNode {
                 return null;
             }
             return results.get(0);
+        } catch (Exception e) {
+            throw new MetadataException(e);
+        }
+    }
+
+    @Override
+    public BaseStatistics getStatistic(long txnId, String dataverseName, String datasetName, String nodeId)
+            throws MetadataException, RemoteException {
+        try {
+            ITupleReference searchKey = createTuple(dataverseName, datasetName, nodeId);
+            BaseStatisticsTupleTranslator tupleReaderWriter = new BaseStatisticsTupleTranslator(false);
+            List<BaseStatistics> results = new ArrayList<BaseStatistics>();
+            IValueExtractor<BaseStatistics> valueExtractor = new MetadataEntityValueExtractor<BaseStatistics>(
+                    tupleReaderWriter);
+            searchIndex(txnId, MetadataPrimaryIndexes.STATISTICS_DATASET, searchKey, valueExtractor, results);
+            if (results.isEmpty()) {
+                return null;
+            }
+            return results.get(0);
+        } catch (Exception e) {
+            throw new MetadataException(e);
+        }
+    }
+
+    @Override
+    public List<BaseStatistics> getDatasetStatistics(long txnId, String dataverseName, String datasetName)
+            throws MetadataException, RemoteException {
+        try {
+            ITupleReference searchKey = createTuple(dataverseName, datasetName);
+            BaseStatisticsTupleTranslator tupleReaderWriter = new BaseStatisticsTupleTranslator(false);
+            List<BaseStatistics> results = new ArrayList<BaseStatistics>();
+            IValueExtractor<BaseStatistics> valueExtractor = new MetadataEntityValueExtractor<BaseStatistics>(
+                    tupleReaderWriter);
+            searchIndex(txnId, MetadataPrimaryIndexes.STATISTICS_DATASET, searchKey, valueExtractor, results);
+            if (results.isEmpty()) {
+                return null;
+            }
+            return results;
         } catch (Exception e) {
             throw new MetadataException(e);
         }

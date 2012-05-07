@@ -418,4 +418,12 @@ public interface IMetadataNode extends Remote, Serializable {
 
 
     void addStatistics(long txnId, BaseStatistics stats) throws MetadataException, RemoteException;
+
+    List<BaseStatistics> getDatasetStatistics(long txnId, String dataverseName, String datasetName)
+            throws MetadataException, RemoteException;
+
+    public BaseStatistics getStatistic(long txnId, String dataverseName, String datasetName, String nodeId)
+            throws MetadataException, RemoteException;
+
+    public void dropStatistic(long txnId, String dataverseName, String datasetName, String nodeId) throws MetadataException, RemoteException;
 }

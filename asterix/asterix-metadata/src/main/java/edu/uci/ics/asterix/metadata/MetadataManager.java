@@ -77,6 +77,7 @@ public class MetadataManager implements IMetadataManager {
     private final MetadataCache cache = new MetadataCache();
     private IAsterixStateProxy proxy;
     private IMetadataNode metadataNode;
+    protected static Object Lock = new Object();
 
     public MetadataManager(IAsterixStateProxy proxy) {
         if (proxy == null) {
@@ -505,34 +506,46 @@ public class MetadataManager implements IMetadataManager {
         public void receivedMessageFromNC(IMessage message, String nodeId) {
             AbstractMessageClass msg = (AbstractMessageClass) message;
             MetadataTransactionContext ctx = null;
-            if (msg.getMessageType() == AbstractMessageClass.MessageType.STATISTICS) {
-                try {
-                    ctx = beginTransaction();
-                } catch (RemoteException e1) {
-                    LOGGER.log(Level.SEVERE, e1.getMessage(), e1);
-                } catch (ACIDException e1) {
-                    LOGGER.log(Level.SEVERE, e1.getMessage(), e1);
-                }
-                try {
-                    metadataNode.addStatistics(ctx.getTxnId(), (BaseStatistics) message);
-                    ctx.commit(ctx);
-                } catch (MetadataException e) {
-                    LOGGER.log(Level.SEVERE, e.getMessage(), e);
+            synchronized (Lock) {
+                if (msg.getMessageType() == AbstractMessageClass.MessageType.STATISTICS) {
                     try {
-                        abortTransaction(ctx);
+                        ctx = beginTransaction();
                     } catch (RemoteException e1) {
                         LOGGER.log(Level.SEVERE, e1.getMessage(), e1);
                     } catch (ACIDException e1) {
                         LOGGER.log(Level.SEVERE, e1.getMessage(), e1);
                     }
-                } catch (RemoteException e) {
-                    LOGGER.log(Level.SEVERE, e.getMessage(), e);
                     try {
-                        abortTransaction(ctx);
-                    } catch (RemoteException e1) {
-                        LOGGER.log(Level.SEVERE, e1.getMessage(), e1);
-                    } catch (ACIDException e1) {
-                        LOGGER.log(Level.SEVERE, e1.getMessage(), e1);
+                        BaseStatistics stats = (BaseStatistics) message;
+                        BaseStatistics existingStats = metadataNode.getStatistic(ctx.getTxnId(), stats.getAqlSourceId()
+                                .getDataverseName(), stats.getAqlSourceId().getDatasetName(), stats.getNodeId());
+                        if (existingStats != null) {
+                            // TODO: Merge statistics!!!
+                            metadataNode.dropStatistic(ctx.getTxnId(), existingStats.getAqlSourceId()
+                                    .getDataverseName(), existingStats.getAqlSourceId().getDatasetName(), existingStats
+                                    .getNodeId());
+                            ctx.commit(ctx);
+                        }
+                        metadataNode.addStatistics(ctx.getTxnId(), stats);
+                        ctx.commit(ctx);
+                    } catch (MetadataException e) {
+                        LOGGER.log(Level.SEVERE, e.getMessage(), e);
+                        try {
+                            abortTransaction(ctx);
+                        } catch (RemoteException e1) {
+                            LOGGER.log(Level.SEVERE, e1.getMessage(), e1);
+                        } catch (ACIDException e1) {
+                            LOGGER.log(Level.SEVERE, e1.getMessage(), e1);
+                        }
+                    } catch (RemoteException e) {
+                        LOGGER.log(Level.SEVERE, e.getMessage(), e);
+                        try {
+                            abortTransaction(ctx);
+                        } catch (RemoteException e1) {
+                            LOGGER.log(Level.SEVERE, e1.getMessage(), e1);
+                        } catch (ACIDException e1) {
+                            LOGGER.log(Level.SEVERE, e1.getMessage(), e1);
+                        }
                     }
                 }
             }
