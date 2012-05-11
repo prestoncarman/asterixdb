@@ -3,8 +3,8 @@ package edu.uci.ics.asterix.common.api;
 import java.util.Map;
 import java.util.Set;
 
+import edu.uci.ics.asterix.common.context.AsterixIndexRegistryProvider;
 import edu.uci.ics.asterix.common.context.AsterixStorageManagerInterface;
-import edu.uci.ics.asterix.common.context.AsterixTreeRegistryProvider;
 import edu.uci.ics.asterix.common.dataflow.IAsterixApplicationContextInfo;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.IIndex;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.IIndexRegistryProvider;
@@ -21,7 +21,7 @@ public class AsterixAppContextInfoImpl implements IAsterixApplicationContextInfo
 
     @Override
     public IIndexRegistryProvider<IIndex> getIndexRegistryProvider() {
-        return AsterixTreeRegistryProvider.INSTANCE;
+        return AsterixIndexRegistryProvider.INSTANCE;
     }
 
     @Override

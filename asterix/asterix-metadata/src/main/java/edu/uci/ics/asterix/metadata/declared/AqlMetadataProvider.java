@@ -42,8 +42,12 @@ import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.asterix.om.util.NonTaggedFormatUtil;
 import edu.uci.ics.asterix.runtime.transaction.TreeIndexInsertUpdateDeleteOperatorDescriptor;
+import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksAbsolutePartitionConstraint;
+import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksPartitionConstraint;
+import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
+import edu.uci.ics.hyracks.algebricks.common.utils.Pair;
+import edu.uci.ics.hyracks.algebricks.common.utils.Triple;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
-import edu.uci.ics.hyracks.algebricks.core.algebra.data.IPrinterFactory;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IVariableTypeEnvironment;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
@@ -53,16 +57,11 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.metadata.IDataSource;
 import edu.uci.ics.hyracks.algebricks.core.algebra.metadata.IDataSourceIndex;
 import edu.uci.ics.hyracks.algebricks.core.algebra.metadata.IMetadataProvider;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.IOperatorSchema;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder.OrderKind;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluatorFactory;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IPushRuntimeFactory;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.jobgen.impl.JobGenContext;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.operators.std.SinkWriterRuntimeFactory;
-import edu.uci.ics.hyracks.algebricks.core.api.constraints.AlgebricksAbsolutePartitionConstraint;
-import edu.uci.ics.hyracks.algebricks.core.api.constraints.AlgebricksPartitionConstraint;
-import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
-import edu.uci.ics.hyracks.algebricks.core.utils.Pair;
-import edu.uci.ics.hyracks.algebricks.core.utils.Triple;
+import edu.uci.ics.hyracks.algebricks.core.jobgen.impl.JobGenContext;
+import edu.uci.ics.hyracks.algebricks.data.IPrinterFactory;
+import edu.uci.ics.hyracks.algebricks.runtime.base.IEvaluatorFactory;
+import edu.uci.ics.hyracks.algebricks.runtime.base.IPushRuntimeFactory;
+import edu.uci.ics.hyracks.algebricks.runtime.operators.std.SinkWriterRuntimeFactory;
 import edu.uci.ics.hyracks.api.dataflow.IOperatorDescriptor;
 import edu.uci.ics.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
@@ -392,7 +391,7 @@ public class AqlMetadataProvider implements
             for (i = 0; i < numSecondaryKeys; i++) {
                 IAType keyType = AqlCompiledIndexDecl.keyFieldType(secondaryKeyFields.get(i), recType);
                 comparatorFactories[i] = AqlBinaryComparatorFactoryProvider.INSTANCE.getBinaryComparatorFactory(
-                        keyType, OrderKind.ASC);
+                        keyType, true);
                 typeTraits[i] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(keyType);
                 recordFields[i + numInOutFields] = metadata.getFormat().getSerdeProvider()
                         .getSerializerDeserializer(keyType);
@@ -428,7 +427,7 @@ public class AqlMetadataProvider implements
                 .getPartitioningFunctions(ddecl)) {
             IAType keyType = evalFactoryAndType.third;
             comparatorFactories[i] = AqlBinaryComparatorFactoryProvider.INSTANCE.getBinaryComparatorFactory(keyType,
-                    OrderKind.ASC);
+                    true);
             typeTraits[i] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(keyType);
             recordTypeTraits[i + numInOutFields] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(keyType);
             recordFields[i + numInOutFields] = metadata.getFormat().getSerdeProvider()
@@ -530,8 +529,7 @@ public class AqlMetadataProvider implements
 						.getSerializerDeserializer(nestedKeyType);
 				recordFields[i] = keySerde;
 				comparatorFactories[i] = AqlBinaryComparatorFactoryProvider.INSTANCE
-						.getBinaryComparatorFactory(nestedKeyType,
-								OrderKind.ASC);
+						.getBinaryComparatorFactory(nestedKeyType, true);
 				typeTraits[i] = AqlTypeTraitProvider.INSTANCE
 						.getTypeTrait(nestedKeyType);
 				valueProviderFactories[i] = AqlPrimitiveValueProviderFactory.INSTANCE;
@@ -918,14 +916,14 @@ public class AqlMetadataProvider implements
 			IAType keyType = AqlCompiledIndexDecl.keyFieldType(
 					secondaryKeyExprs.get(i).toString(), recType);
 			comparatorFactories[i] = AqlBinaryComparatorFactoryProvider.INSTANCE
-					.getBinaryComparatorFactory(keyType, OrderKind.ASC);
+					.getBinaryComparatorFactory(keyType, true);
 			typeTraits[i] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(keyType);
 		}
 		for (Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType> evalFactoryAndType : DatasetUtils
 				.getPartitioningFunctions(compiledDatasetDecl)) {
 			IAType keyType = evalFactoryAndType.third;
 			comparatorFactories[i] = AqlBinaryComparatorFactoryProvider.INSTANCE
-					.getBinaryComparatorFactory(keyType, OrderKind.ASC);
+					.getBinaryComparatorFactory(keyType, true);
 			typeTraits[i] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(keyType);
 			++i;
 		}
@@ -999,10 +997,8 @@ public class AqlMetadataProvider implements
 				.getNestedSpatialType(spatialType.getTypeTag());
 		IPrimitiveValueProviderFactory[] valueProviderFactories = new IPrimitiveValueProviderFactory[numSecondaryKeys];
 		for (i = 0; i < numSecondaryKeys; i++) {
-			ISerializerDeserializer keySerde = AqlSerializerDeserializerProvider.INSTANCE
-					.getSerializerDeserializer(nestedKeyType);
 			comparatorFactories[i] = AqlBinaryComparatorFactoryProvider.INSTANCE
-					.getBinaryComparatorFactory(nestedKeyType, OrderKind.ASC);
+					.getBinaryComparatorFactory(nestedKeyType, true);
 			typeTraits[i] = AqlTypeTraitProvider.INSTANCE
 					.getTypeTrait(nestedKeyType);
 			valueProviderFactories[i] = AqlPrimitiveValueProviderFactory.INSTANCE;
@@ -1011,7 +1007,7 @@ public class AqlMetadataProvider implements
 				.getPartitioningFunctions(compiledDatasetDecl)) {
 			IAType keyType = evalFactoryAndType.third;
 			comparatorFactories[i] = AqlBinaryComparatorFactoryProvider.INSTANCE
-					.getBinaryComparatorFactory(keyType, OrderKind.ASC);
+					.getBinaryComparatorFactory(keyType, true);
 			typeTraits[i] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(keyType);
 			++i;
 		}
