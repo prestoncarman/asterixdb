@@ -535,7 +535,7 @@ public class MetadataManager implements IMetadataManager {
 				.getLogger(StatisticsConnector.class.getName());
 
 		@Override
-		public void receivedMessageFromNC(IMessage message, String nodeId) {
+		public void receivedMessage(IMessage message, String nodeId) {
 			AbstractMessageClass msg = (AbstractMessageClass) message;
 			MetadataTransactionContext ctx = null;
 			synchronized (Lock) {
