@@ -70,7 +70,7 @@ public class StatisticsRuntimeFactory extends AbstractOneInputOneOutputRuntimeFa
                     statsData.setNodeId(context.getHyracksContext().getJobletContext().getApplicationContext()
                             .getNodeId());
                     try {
-                        context.getHyracksContext().sendMessage(JavaSerializationUtils.serialize(statsData),
+                        context.getHyracksContext().sendApplicationMessageToCC(JavaSerializationUtils.serialize(statsData),
                                 context.getHyracksContext().getJobletContext().getApplicationContext().getNodeId());
 
                     } catch (Exception e) {
@@ -130,7 +130,7 @@ public class StatisticsRuntimeFactory extends AbstractOneInputOneOutputRuntimeFa
                 public void close() throws HyracksDataException {
                     statsData.setRecordCount(this.tupleCount);
                     try {
-                        context.getHyracksContext().sendMessage(JavaSerializationUtils.serialize(statsData),
+                        context.getHyracksContext().sendApplicationMessageToCC(JavaSerializationUtils.serialize(statsData),
                                 context.getHyracksContext().getJobletContext().getApplicationContext().getNodeId());
 
                     } catch (Exception e) {
