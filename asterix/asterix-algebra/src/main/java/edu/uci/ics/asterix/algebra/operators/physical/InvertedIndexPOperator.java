@@ -44,6 +44,7 @@ import edu.uci.ics.hyracks.api.dataflow.value.RecordDescriptor;
 import edu.uci.ics.hyracks.api.job.JobSpecification;
 import edu.uci.ics.hyracks.dataflow.std.file.IFileSplitProvider;
 import edu.uci.ics.hyracks.storage.am.btree.dataflow.BTreeDataflowHelperFactory;
+import edu.uci.ics.hyracks.storage.am.common.impls.NoOpOperationCallbackProvider;
 import edu.uci.ics.hyracks.storage.am.invertedindex.api.IInvertedIndexSearchModifierFactory;
 import edu.uci.ics.hyracks.storage.am.invertedindex.dataflow.InvertedIndexSearchOperatorDescriptor;
 import edu.uci.ics.hyracks.storage.am.invertedindex.tokenizers.IBinaryTokenizerFactory;
@@ -174,13 +175,14 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
         // Get tokenizer and search modifier factories.
         IInvertedIndexSearchModifierFactory searchModifierFactory = InvertedIndexAccessMethod.getSearchModifierFactory(searchModifierType, simThresh, index);
         IBinaryTokenizerFactory queryTokenizerFactory = InvertedIndexAccessMethod.getBinaryTokenizerFactory(searchModifierType, searchKeyType, index);
-        InvertedIndexSearchOperatorDescriptor invIndexSearchOp = new InvertedIndexSearchOperatorDescriptor(
-                jobSpec, queryField, appContext.getStorageManagerInterface(),
-                fileSplitProviders.first, fileSplitProviders.second,
-                appContext.getIndexRegistryProvider(), tokenTypeTraits,
-                tokenComparatorFactories, invListsTypeTraits,
-                invListsComparatorFactories, new BTreeDataflowHelperFactory(),
-                queryTokenizerFactory, searchModifierFactory, outputRecDesc, retainInput);        
+		InvertedIndexSearchOperatorDescriptor invIndexSearchOp = new InvertedIndexSearchOperatorDescriptor(
+				jobSpec, queryField, appContext.getStorageManagerInterface(),
+				fileSplitProviders.first, fileSplitProviders.second,
+				appContext.getIndexRegistryProvider(), tokenTypeTraits,
+				tokenComparatorFactories, invListsTypeTraits,
+				invListsComparatorFactories, new BTreeDataflowHelperFactory(),
+				queryTokenizerFactory, searchModifierFactory, outputRecDesc,
+				retainInput, NoOpOperationCallbackProvider.INSTANCE);        
         return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(invIndexSearchOp, secondarySplitsAndConstraint.second);
     }
 }
