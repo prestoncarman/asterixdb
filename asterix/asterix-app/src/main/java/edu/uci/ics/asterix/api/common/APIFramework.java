@@ -29,6 +29,7 @@ import edu.uci.ics.asterix.metadata.MetadataManager;
 import edu.uci.ics.asterix.metadata.MetadataTransactionContext;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
 import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
+import edu.uci.ics.asterix.optimizer.base.AsterixOptimizationContext;
 import edu.uci.ics.asterix.optimizer.base.RuleCollections;
 import edu.uci.ics.asterix.runtime.job.listener.JobEventListenerFactory;
 import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
@@ -60,7 +61,6 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.prettyprint.PlanPrettyPrinter
 import edu.uci.ics.hyracks.algebricks.core.api.constraints.AlgebricksPartitionConstraint;
 import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.rewriter.base.AbstractRuleController;
-import edu.uci.ics.hyracks.algebricks.core.rewriter.base.AlgebricksOptimizationContext;
 import edu.uci.ics.hyracks.algebricks.core.rewriter.base.IAlgebraicRewriteRule;
 import edu.uci.ics.hyracks.algebricks.core.rewriter.base.IOptimizationContextFactory;
 import edu.uci.ics.hyracks.algebricks.core.rewriter.base.PhysicalOptimizationConfig;
@@ -120,6 +120,7 @@ public class APIFramework {
     private static class AqlOptimizationContextFactory implements IOptimizationContextFactory {
 
         public static final AqlOptimizationContextFactory INSTANCE = new AqlOptimizationContextFactory();
+        private boolean statsEnabled;
 
         private AqlOptimizationContextFactory() {
         }
@@ -129,10 +130,16 @@ public class APIFramework {
                 IExpressionEvalSizeComputer expressionEvalSizeComputer,
                 IMergeAggregationExpressionFactory mergeAggregationExpressionFactory,
                 IExpressionTypeComputer expressionTypeComputer, INullableTypeComputer nullableTypeComputer,
-                PhysicalOptimizationConfig physicalOptimizationConfig, boolean statisticsEnabled) {
-            return new AlgebricksOptimizationContext(varCounter, frameSize, expressionEvalSizeComputer,
-                    mergeAggregationExpressionFactory, expressionTypeComputer, nullableTypeComputer,
-                    physicalOptimizationConfig, statisticsEnabled);
+                PhysicalOptimizationConfig physicalOptimizationConfig) {
+            AsterixOptimizationContext ctx = new AsterixOptimizationContext(varCounter, frameSize,
+                    expressionEvalSizeComputer, mergeAggregationExpressionFactory, expressionTypeComputer,
+                    nullableTypeComputer, physicalOptimizationConfig);
+            ctx.setStatisticsEnabled(this.statsEnabled);
+            return ctx;
+        }
+
+        protected void setStatsEnabled(boolean statsEnabled) {
+            this.statsEnabled = statsEnabled;
         }
 
     }
@@ -163,8 +170,8 @@ public class APIFramework {
     }
 
     public static Job[] compileDmlStatements(String dataverseName, Query query, PrintWriter out, SessionConfig pc,
-            DisplayFormat pdf) throws AsterixException, AlgebricksException, JSONException, RemoteException,
-            ACIDException {
+            DisplayFormat pdf, boolean statsEnabled) throws AsterixException, AlgebricksException, JSONException,
+            RemoteException, ACIDException {
 
         // Begin a transaction against the metadata.
         // Lock the metadata in S mode to protect against other DDL
@@ -204,7 +211,7 @@ public class APIFramework {
                         Pair<AqlCompiledMetadataDeclarations, JobSpecification> mj = compileQueryInternal(mdTxnCtx,
                                 dataverseName, stmtLoad.getQuery(), stmtLoad.getVarCounter(),
                                 stmtLoad.getDatasetName(), metadata, sc2, out, pdf,
-                                Statement.Kind.WRITE_FROM_QUERY_RESULT, false);
+                                Statement.Kind.WRITE_FROM_QUERY_RESULT, statsEnabled);
                         dmlJobs.add(new Job(mj.second));
                         break;
                     }
@@ -303,6 +310,7 @@ public class APIFramework {
             int varCounter, String outputDatasetName, AqlCompiledMetadataDeclarations metadataDecls, SessionConfig pc,
             PrintWriter out, DisplayFormat pdf, Statement.Kind dmlKind, boolean statisticsEnabled)
             throws AsterixException, AlgebricksException, JSONException, RemoteException, ACIDException {
+        AqlOptimizationContextFactory.INSTANCE.setStatsEnabled(statisticsEnabled);
         MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
         try {
             MetadataManager.INSTANCE.lock(mdTxnCtx, LockMode.SHARED);
@@ -468,7 +476,7 @@ public class APIFramework {
         OptimizationConfUtil.getPhysicalOptimizationConfig().setFrameSize(frameSize);
         builder.setPhysicalOptimizationConfig(OptimizationConfUtil.getPhysicalOptimizationConfig());
         ICompiler compiler = compilerFactory.createCompiler(planAndMetadata.getPlan(),
-                planAndMetadata.getMetadataProvider(), t.getVarCounter(), statisticsEnabled);
+                planAndMetadata.getMetadataProvider(), t.getVarCounter());
         if (pc.isOptimize()) {
             compiler.optimize();
             if (pc.isPrintPhysicalOpsOnly()) {

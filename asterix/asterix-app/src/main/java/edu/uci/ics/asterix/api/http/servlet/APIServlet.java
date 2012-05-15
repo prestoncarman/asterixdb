@@ -127,7 +127,8 @@ public class APIServlet extends HttpServlet {
 
         Pair<String, Boolean> conf = APIFramework.compileDdlStatements(dummyQ, out, pc, DisplayFormat.TEXT);
         String dataverseName = conf.first;
-        Job[] dmlJobSpecs = APIFramework.compileDmlStatements(dataverseName, dummyQ, out, pc, DisplayFormat.HTML);
+        Job[] dmlJobSpecs = APIFramework.compileDmlStatements(dataverseName, dummyQ, out, pc, DisplayFormat.HTML,
+                conf.second);
 
         long startTime = System.currentTimeMillis();
         APIFramework.executeJobArray(dmlJobSpecs, pc.getPort(), out, DisplayFormat.HTML);

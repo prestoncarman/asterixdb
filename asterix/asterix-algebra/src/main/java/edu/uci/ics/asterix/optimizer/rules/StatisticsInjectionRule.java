@@ -23,6 +23,7 @@ import edu.uci.ics.asterix.algebra.operators.logical.StatisticsOperator;
 import edu.uci.ics.asterix.algebra.operators.physical.StatisticsPOperator;
 import edu.uci.ics.asterix.metadata.declared.AqlDataSource;
 import edu.uci.ics.asterix.metadata.declared.AqlSourceId;
+import edu.uci.ics.asterix.optimizer.base.AsterixOptimizationContext;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IOptimizationContext;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
@@ -48,7 +49,8 @@ public class StatisticsInjectionRule implements IAlgebraicRewriteRule {
     @Override
     public boolean rewritePost(Mutable<ILogicalOperator> opRef, IOptimizationContext context)
             throws AlgebricksException {
-        if (!context.isStatisticsEnabled()) {
+
+        if (!((AsterixOptimizationContext) context).isStatisticsEnabled()) {
             return false;
         }
         AbstractLogicalOperator op = (AbstractLogicalOperator) opRef.getValue();

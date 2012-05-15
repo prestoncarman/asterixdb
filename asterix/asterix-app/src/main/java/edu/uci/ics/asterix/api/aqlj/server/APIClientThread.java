@@ -231,7 +231,7 @@ public class APIClientThread extends Thread {
             if (q != null) {
                 Pair<String, Boolean> conf = APIFramework.compileDdlStatements(q, out, pc, DisplayFormat.TEXT);
                 statisticsEnabled = conf.second;
-                Job[] dmlJobs = APIFramework.compileDmlStatements(dataverse, q, out, pc, DisplayFormat.TEXT);
+                Job[] dmlJobs = APIFramework.compileDmlStatements(dataverse, q, out, pc, DisplayFormat.TEXT, statisticsEnabled);
                 APIFramework.executeJobArray(dmlJobs, pc.getPort(), out, DisplayFormat.TEXT);
             }
             Pair<AqlCompiledMetadataDeclarations, JobSpecification> metadataAndSpec = APIFramework.compileQuery(

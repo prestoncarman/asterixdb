@@ -72,7 +72,7 @@ public class AsterixJavaClient {
             Pair<String, Boolean> conf = APIFramework.compileDdlStatements(q, writer, pc, DisplayFormat.TEXT);
             dataverseName = conf.first;
             statisticsEnabled = conf.second;
-            dmlJobs = APIFramework.compileDmlStatements(dataverseName, q, writer, pc, DisplayFormat.TEXT);
+            dmlJobs = APIFramework.compileDmlStatements(dataverseName, q, writer, pc, DisplayFormat.TEXT, conf.second);
         }
 
         if (q.isDummyQuery()) {
