@@ -19,6 +19,7 @@ import java.util.List;
 import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.commons.lang3.mutable.MutableObject;
 
+import edu.uci.ics.asterix.algebra.operators.logical.StatisticsOperator;
 import edu.uci.ics.asterix.algebra.operators.physical.StatisticsPOperator;
 import edu.uci.ics.asterix.metadata.declared.AqlDataSource;
 import edu.uci.ics.asterix.metadata.declared.AqlSourceId;
@@ -27,7 +28,7 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.base.IOptimizationContext;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.DataSourceScanOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.ExchangeOperator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.StatisticsOperator;
+import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.ExtensionOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.physical.OneToOneExchangePOperator;
 import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.rewriter.base.IAlgebraicRewriteRule;
@@ -59,7 +60,7 @@ public class StatisticsInjectionRule implements IAlgebraicRewriteRule {
                     DataSourceScanOperator datascan = (DataSourceScanOperator) preceedingOp;
                     AqlDataSource ds = (AqlDataSource) datascan.getDataSource();
 
-                    StatisticsOperator opNew = new StatisticsOperator();
+                    ExtensionOperator opNew = new ExtensionOperator(new StatisticsOperator());
                     final StatisticsPOperator physicalOp = new StatisticsPOperator();
                     opNew.setPhysicalOperator(physicalOp);
                     physicalOp.createStatsDataObject((AqlSourceId) datascan.getDataSource().getId());
