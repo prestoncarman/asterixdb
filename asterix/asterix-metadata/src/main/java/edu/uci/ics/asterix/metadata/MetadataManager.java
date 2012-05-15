@@ -524,10 +524,10 @@ public class MetadataManager implements IMetadataManager {
                             metadataNode.dropStatistic(ctx.getTxnId(), existingStats.getAqlSourceId()
                                     .getDataverseName(), existingStats.getAqlSourceId().getDatasetName(), existingStats
                                     .getNodeId());
-                            ctx.commit(ctx);
+                            commitTransaction(ctx);
                         }
                         metadataNode.addStatistics(ctx.getTxnId(), stats);
-                        ctx.commit(ctx);
+                        commitTransaction(ctx);
                     } catch (MetadataException e) {
                         LOGGER.log(Level.SEVERE, e.getMessage(), e);
                         try {
@@ -546,6 +546,8 @@ public class MetadataManager implements IMetadataManager {
                         } catch (ACIDException e1) {
                             LOGGER.log(Level.SEVERE, e1.getMessage(), e1);
                         }
+                    } catch (ACIDException e) {
+                        LOGGER.log(Level.SEVERE, e.getMessage(), e);
                     }
                 }
             }
