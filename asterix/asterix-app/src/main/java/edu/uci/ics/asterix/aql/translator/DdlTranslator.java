@@ -499,6 +499,13 @@ public class DdlTranslator extends AbstractAqlTranslator {
                         compiledDeclarations);
                 break;
             }
+            case WORD_INVIX:
+            case NGRAM_INVIX: {
+                spec = IndexOperations.buildInvertedIndexCreationJobSpec(stmtCreateIndex.getDatasetName().getValue(),
+                        stmtCreateIndex.getIndexName().getValue(), stmtCreateIndex.getFieldExprs(), stmtCreateIndex.getIndexType(),
+                        stmtCreateIndex.getGramLength(), compiledDeclarations);
+                break;
+            }
             default: {
                 throw new AsterixException("Create index not implemented for index type: "
                         + stmtCreateIndex.getIndexType());

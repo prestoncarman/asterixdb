@@ -7,6 +7,7 @@ import java.util.List;
 import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.commons.lang3.mutable.MutableObject;
 
+import edu.uci.ics.asterix.common.config.DatasetConfig.IndexType;
 import edu.uci.ics.asterix.dataflow.data.common.ListEditDistanceSearchModifierFactory;
 import edu.uci.ics.asterix.formats.nontagged.AqlBinaryComparatorFactoryProvider;
 import edu.uci.ics.asterix.formats.nontagged.AqlBinaryTokenizerFactoryProvider;
@@ -29,7 +30,6 @@ import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.asterix.om.types.AUnorderedListType;
 import edu.uci.ics.asterix.om.types.AbstractCollectionType;
 import edu.uci.ics.asterix.om.types.IAType;
-import edu.uci.ics.asterix.translator.DmlTranslator.CompiledCreateIndexStatement;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
@@ -592,18 +592,18 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         }
     }
     
-    public static IBinaryTokenizerFactory getBinaryTokenizerFactory(ATypeTag keyType, CompiledCreateIndexStatement createIndexStmt)
+    public static IBinaryTokenizerFactory getBinaryTokenizerFactory(ATypeTag keyType, IndexType indexType, int gramLength)
             throws AlgebricksException {
-        switch (createIndexStmt.getIndexType()) {
+        switch (indexType) {
             case WORD_INVIX: {
                 return AqlBinaryTokenizerFactoryProvider.INSTANCE.getWordTokenizerFactory(keyType, false);
             }
             case NGRAM_INVIX: {
                 return AqlBinaryTokenizerFactoryProvider.INSTANCE.getNGramTokenizerFactory(keyType,
-                        createIndexStmt.getGramLength(), true, false);
+                        gramLength, true, false);
             }
             default: {
-                throw new AlgebricksException("Tokenizer not applicable to index type '" + createIndexStmt.getIndexType() + "'.");
+                throw new AlgebricksException("Tokenizer not applicable to index type '" + indexType + "'.");
             }
         }
     }

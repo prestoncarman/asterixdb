@@ -5,6 +5,7 @@ import java.util.List;
 
 import edu.uci.ics.asterix.aql.translator.DdlTranslator.CompiledIndexDropStatement;
 import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
+import edu.uci.ics.asterix.common.config.DatasetConfig.IndexType;
 import edu.uci.ics.asterix.common.config.OptimizationConfUtil;
 import edu.uci.ics.asterix.common.context.AsterixIndexRegistryProvider;
 import edu.uci.ics.asterix.common.context.AsterixStorageManagerInterface;
@@ -59,6 +60,7 @@ import edu.uci.ics.hyracks.storage.am.common.dataflow.TreeIndexDropOperatorDescr
 import edu.uci.ics.hyracks.storage.am.common.impls.NoOpOperationCallbackProvider;
 import edu.uci.ics.hyracks.storage.am.invertedindex.dataflow.BinaryTokenizerOperatorDescriptor;
 import edu.uci.ics.hyracks.storage.am.invertedindex.dataflow.InvertedIndexBulkLoadOperatorDescriptor;
+import edu.uci.ics.hyracks.storage.am.invertedindex.dataflow.InvertedIndexCreateOperatorDescriptor;
 import edu.uci.ics.hyracks.storage.am.invertedindex.tokenizers.IBinaryTokenizerFactory;
 import edu.uci.ics.hyracks.storage.am.rtree.dataflow.RTreeDataflowHelperFactory;
 import edu.uci.ics.hyracks.storage.common.IStorageManagerInterface;
@@ -647,6 +649,83 @@ public class IndexOperations {
 
     }
 
+    // TODO: Lots of common code in this file. Refactor everything after merging in asterix-fix-issue-9.
+	public static JobSpecification buildInvertedIndexCreationJobSpec(
+			String datasetName, String secondaryIndexName,
+			List<String> secondaryKeyFields, IndexType indexType, int gramLength,
+			AqlCompiledMetadataDeclarations metadata) throws AsterixException,
+			AlgebricksException {
+        JobSpecification spec = new JobSpecification();
+        AqlCompiledDatasetDecl compiledDatasetDecl = metadata.findDataset(datasetName);
+        if (compiledDatasetDecl == null) {
+            throw new AsterixException("Could not find dataset " + datasetName);
+        }
+
+        if (compiledDatasetDecl.getDatasetType() == DatasetType.EXTERNAL) {
+            throw new AsterixException("Cannot index an external dataset (" + datasetName + ").");
+        }
+        ARecordType itemType = (ARecordType) metadata.findType(compiledDatasetDecl.getItemTypeName());
+        int numPrimaryKeys = DatasetUtils.getPartitioningFunctions(compiledDatasetDecl).size();
+        // Sanity checks.
+        if (numPrimaryKeys > 1) {
+            throw new AsterixException("Cannot create inverted keyword index on dataset with composite primary key.");
+        }
+        IAType fieldsToTokenizeType = AqlCompiledIndexDecl
+                .keyFieldType(secondaryKeyFields.get(0), itemType);
+        for (String fieldName : secondaryKeyFields) {
+            IAType nextFieldToTokenizeType = AqlCompiledIndexDecl.keyFieldType(fieldName, itemType);
+            if (nextFieldToTokenizeType.getTypeTag() != fieldsToTokenizeType.getTypeTag()) {
+                throw new AsterixException(
+                        "Cannot create inverted keyword index. Fields to tokenize must be of the same type.");
+            }
+        }
+        IIndexRegistryProvider<IIndex> indexRegistryProvider = AsterixIndexRegistryProvider.INSTANCE;
+        IStorageManagerInterface storageManager = AsterixStorageManagerInterface.INSTANCE;
+        IBinaryComparatorFactory[] primaryComparatorFactories = new IBinaryComparatorFactory[numPrimaryKeys];
+        ITypeTraits[] primaryTypeTraits = new ITypeTraits[numPrimaryKeys + 1];
+        ITypeTraits[] invListsTypeTraits = new ITypeTraits[numPrimaryKeys];
+        IBinaryComparatorFactory[] invListsComparatorFactories = new IBinaryComparatorFactory[numPrimaryKeys];
+        int i = 0;
+        for (Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType> evalFactoryAndType : DatasetUtils
+                .getPartitioningFunctions(compiledDatasetDecl)) {
+            IAType keyType = evalFactoryAndType.third;
+            primaryComparatorFactories[i] = AqlBinaryComparatorFactoryProvider.INSTANCE.getBinaryComparatorFactory(
+                    keyType, true);
+            primaryTypeTraits[i] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(keyType);
+            invListsComparatorFactories[i] = AqlBinaryComparatorFactoryProvider.INSTANCE.getBinaryComparatorFactory(
+                    keyType, true);
+            invListsTypeTraits[i] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(keyType);
+            ++i;
+        }
+        primaryTypeTraits[numPrimaryKeys] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(itemType);
+        int numSecondaryKeys = secondaryKeyFields.size();
+        ITypeTraits[] tokenTypeTraits = new ITypeTraits[numSecondaryKeys];
+        IBinaryComparatorFactory[] tokenComparatorFactories = new IBinaryComparatorFactory[numSecondaryKeys];
+        for (i = 0; i < numSecondaryKeys; i++) {
+            IAType keyType = AqlCompiledIndexDecl.keyFieldType(secondaryKeyFields.get(i), itemType);
+            tokenComparatorFactories[i] = InvertedIndexAccessMethod.getTokenBinaryComparatorFactory(keyType);
+            tokenTypeTraits[i] = InvertedIndexAccessMethod.getTokenTypeTrait(keyType);
+        }
+        IBinaryTokenizerFactory tokenizerFactory = InvertedIndexAccessMethod.getBinaryTokenizerFactory(fieldsToTokenizeType.getTypeTag(), indexType, gramLength);
+        Pair<IFileSplitProvider, AlgebricksPartitionConstraint> secondarySplitsAndConstraint = metadata
+                .splitProviderAndPartitionConstraintsForInternalOrFeedDataset(datasetName, secondaryIndexName);
+        Pair<IFileSplitProvider, IFileSplitProvider> fileSplitProviders = metadata
+                .getInvertedIndexFileSplitProviders(secondarySplitsAndConstraint.first);
+        InvertedIndexCreateOperatorDescriptor invIndexCreateOp = new InvertedIndexCreateOperatorDescriptor(
+                spec, storageManager,
+                fileSplitProviders.first, fileSplitProviders.second,
+                indexRegistryProvider, tokenTypeTraits,
+                tokenComparatorFactories, invListsTypeTraits,
+                invListsComparatorFactories, tokenizerFactory,
+                new BTreeDataflowHelperFactory(),
+                NoOpOperationCallbackProvider.INSTANCE);
+        AlgebricksPartitionConstraintHelper.setPartitionConstraintInJobSpec(
+                spec, invIndexCreateOp, secondarySplitsAndConstraint.second);
+        spec.addRoot(invIndexCreateOp);
+        spec.setConnectorPolicyAssignmentPolicy(new ConnectorPolicyAssignmentPolicy());
+        return spec;
+    }
+    
     @SuppressWarnings("rawtypes")
     public static JobSpecification buildInvertedIndexLoadingJobSpec(CompiledCreateIndexStatement createIndexStmt,
             AqlCompiledMetadataDeclarations datasetDecls) throws AsterixException, AlgebricksException {
@@ -828,7 +907,10 @@ public class IndexOperations {
 
         // TODO: We might want to expose the hashing option at the AQL level, 
         // and add the choice to the index metadata.
-		IBinaryTokenizerFactory tokenizerFactory = InvertedIndexAccessMethod.getBinaryTokenizerFactory(fieldsToTokenizeType.getTypeTag(), createIndexStmt);
+		IBinaryTokenizerFactory tokenizerFactory = InvertedIndexAccessMethod
+				.getBinaryTokenizerFactory(fieldsToTokenizeType.getTypeTag(),
+						createIndexStmt.getIndexType(),
+						createIndexStmt.getGramLength());
         BinaryTokenizerOperatorDescriptor tokenizerOp = new BinaryTokenizerOperatorDescriptor(spec,
                 tokenKeyPairRecDesc, tokenizerFactory, fieldsToTokenize, primaryKeyFields);
         Pair<IFileSplitProvider, AlgebricksPartitionConstraint> secondarySplitsAndConstraint = datasetDecls
