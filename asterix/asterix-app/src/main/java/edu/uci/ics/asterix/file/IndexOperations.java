@@ -960,7 +960,7 @@ public class IndexOperations {
 				indexRegistryProvider, tokenTypeTraits,
 				tokenComparatorFactories, invListsTypeTraits,
 				invListsComparatorFactories, tokenizerFactory,
-				new BTreeDataflowHelperFactory(), false,
+				new BTreeDataflowHelperFactory(),
 				NoOpOperationCallbackProvider.INSTANCE);
 		AlgebricksPartitionConstraintHelper.setPartitionConstraintInJobSpec(
 				spec, invIndexBulkLoadOp, secondarySplitsAndConstraint.second);
