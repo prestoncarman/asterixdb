@@ -237,18 +237,20 @@ public class BTreeAccessMethod implements IAccessMethod {
                 recordType, chosenIndex, assignSearchKeys, jobGenParams, context, false, false);
         
         // Generate the rest of the upstream plan which feeds the search results into the primary index.
-        List<LogicalVariable> primaryIndexVars = dataSourceScan.getVariables();
+        List<LogicalVariable> primaryIndexOutputVars = dataSourceScan.getVariables();
         UnnestMapOperator primaryIndexUnnestOp;
         boolean isPrimaryIndex = chosenIndex == DatasetUtils.getPrimaryIndex(datasetDecl);
         if (!isPrimaryIndex) {
-            int numPrimaryKeys = DatasetUtils.getPartitioningFunctions(datasetDecl).size();
+            int numPrimaryKeys = DatasetUtils.getPartitioningFunctions(datasetDecl).size();            
             List<LogicalVariable> primaryKeyVars = AccessMethodUtils.getPrimaryKeyVars(secondaryIndexUnnestOp.getVariables(), numPrimaryKeys, numSecondaryKeys, false);
-            primaryIndexUnnestOp = AccessMethodUtils.createPrimaryIndexUnnestMap(datasetDecl, recordType, primaryIndexVars, secondaryIndexUnnestOp, context, primaryKeyVars, true, false, false);
+            primaryIndexUnnestOp = AccessMethodUtils.createPrimaryIndexUnnestMap(datasetDecl, recordType, primaryIndexOutputVars, secondaryIndexUnnestOp, context, primaryKeyVars, true, false, false);
         } else {
-            primaryIndexUnnestOp = new UnnestMapOperator(primaryIndexVars, secondaryIndexUnnestOp.getExpressionRef(),
-                    AccessMethodUtils.primaryIndexTypes(datasetDecl, recordType));
+            List<Object> primaryIndexOutputTypes = new ArrayList<Object>();
+            AccessMethodUtils.appendPrimaryIndexTypes(datasetDecl, recordType, primaryIndexOutputTypes);
+            primaryIndexUnnestOp = new UnnestMapOperator(primaryIndexOutputVars,
+                    secondaryIndexUnnestOp.getExpressionRef(), primaryIndexOutputTypes);
             primaryIndexUnnestOp.getInputs().add(new MutableObject<ILogicalOperator>(assignSearchKeys));
-        }        
+        }
 
         List<Mutable<ILogicalExpression>> remainingFuncExprs = new ArrayList<Mutable<ILogicalExpression>>();
         getNewSelectExprs(select, replacedFuncExprs, remainingFuncExprs);

@@ -80,9 +80,6 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
      * Simply picks the first index that it finds.
      * TODO: Improve this decision process by making it more systematic.
      * 
-     * @param datasetDecl
-     * @param indexExprs
-     * @return
      */
     protected Pair<IAccessMethod, AqlCompiledIndexDecl> chooseIndex(
             Map<IAccessMethod, AccessMethodAnalysisContext> analyzedAMs) {
@@ -158,9 +155,6 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
      * Analyzes the given selection condition, filling analyzedAMs with applicable access method types.
      * At this point we are not yet consulting the metadata whether an actual index exists or not.
      * 
-     * @param cond
-     * @param analyzedAMs
-     * @return
      */
     protected boolean analyzeCondition(ILogicalExpression cond, List<AssignOperator> assigns, Map<IAccessMethod, AccessMethodAnalysisContext> analyzedAMs) {
         AbstractFunctionCallExpression funcExpr = (AbstractFunctionCallExpression) cond;
@@ -187,9 +181,6 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
      * the function identifier, and an analysis of the function's arguments.
      * Updates the analyzedAMs accordingly.
      * 
-     * @param cond
-     * @param analyzedAMs
-     * @return
      */
     protected boolean analyzeFunctionExpr(AbstractFunctionCallExpression funcExpr, List<AssignOperator> assigns, Map<IAccessMethod, AccessMethodAnalysisContext> analyzedAMs) {
         FunctionIdentifier funcIdent = funcExpr.getFunctionIdentifier();
@@ -202,11 +193,11 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
             return false;
         }
         boolean atLeastOneMatchFound = false;
-        // Placeholder for a new analysis context in case we need one.
+        // Place holder for a new analysis context in case we need one.
         AccessMethodAnalysisContext newAnalysisCtx = new AccessMethodAnalysisContext();
         for(IAccessMethod accessMethod : relevantAMs) {
             AccessMethodAnalysisContext analysisCtx = analyzedAMs.get(accessMethod);
-            // Use the current placeholder.
+            // Use the current place holder.
             if (analysisCtx == null) {
                 analysisCtx = newAnalysisCtx;
             }
@@ -297,10 +288,6 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
      * Returns the field name corresponding to the assigned variable at varIndex.
      * Returns null if the expr at varIndex is not a field access function.
      * 
-     * @param assign
-     * @param recordType
-     * @param varIndex
-     * @return
      */
     protected String getFieldNameOfFieldAccess(AssignOperator assign, ARecordType recordType, int varIndex) {
         // Get expression corresponding to var at varIndex.

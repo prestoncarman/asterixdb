@@ -621,7 +621,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
                 int edThresh = ((AInt32) simThresh).getIntegerValue();
                 switch (index.getKind()) {
                     case NGRAM_INVIX: {
-                        // Edit distance on overlapping grams.
+                        // Edit distance on strings, filtered with overlapping grams.
                         return new EditDistanceSearchModifierFactory(index.getGramLength(), edThresh);
                     }
                     case WORD_INVIX: {
