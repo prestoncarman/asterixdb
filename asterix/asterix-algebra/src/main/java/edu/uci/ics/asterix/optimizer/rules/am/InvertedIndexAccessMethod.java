@@ -15,7 +15,6 @@ import edu.uci.ics.asterix.formats.nontagged.AqlTypeTraitProvider;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledDatasetDecl;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl.IndexKind;
-import edu.uci.ics.asterix.metadata.utils.DatasetUtils;
 import edu.uci.ics.asterix.om.base.AFloat;
 import edu.uci.ics.asterix.om.base.AInt32;
 import edu.uci.ics.asterix.om.base.ANull;
@@ -299,10 +298,6 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
             AqlCompiledIndexDecl chosenIndex, boolean retainInput, boolean requiresBroadcast, AccessMethodAnalysisContext analysisCtx, IOptimizationContext context) throws AlgebricksException {
         AqlCompiledDatasetDecl datasetDecl = indexSubTree.datasetDecl;
         ARecordType recordType = indexSubTree.recordType;
-        // TODO: Think more deeply about where this is used for inverted indexes, and what composite keys should mean.
-        // For now we are assuming a single secondary index key.
-        // int numSecondaryKeys = chosenIndex.getFieldExprs().size();
-        int numSecondaryKeys = 1;
         
         // TODO: We can probably do something smarter here based on selectivity.
         // Pick the first expr optimizable by this index.
@@ -351,13 +346,11 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         
         UnnestMapOperator secondaryIndexUnnestOp = AccessMethodUtils.createSecondaryIndexUnnestMap(datasetDecl,
                 recordType, chosenIndex, inputOp, jobGenParams, context, true, retainInput);
-        int numPrimaryKeys = DatasetUtils.getPartitioningFunctions(datasetDecl).size();
-        List<LogicalVariable> primaryKeyVars = AccessMethodUtils.getPrimaryKeyVars(secondaryIndexUnnestOp.getVariables(), numPrimaryKeys, numSecondaryKeys, true);
         List<LogicalVariable> primaryIndexVars = dataSourceScan.getVariables();
         // Generate the rest of the upstream plan which feeds the search results
         // into the primary index.
         UnnestMapOperator primaryIndexUnnestOp = AccessMethodUtils.createPrimaryIndexUnnestMap(datasetDecl, recordType,
-                primaryIndexVars, secondaryIndexUnnestOp, context, primaryKeyVars, true, retainInput, false);
+                primaryIndexVars, secondaryIndexUnnestOp, context, true, retainInput, false);
         return primaryIndexUnnestOp;
     }
     

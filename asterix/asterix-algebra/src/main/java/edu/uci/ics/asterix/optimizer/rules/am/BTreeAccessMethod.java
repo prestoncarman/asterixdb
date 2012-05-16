@@ -241,9 +241,7 @@ public class BTreeAccessMethod implements IAccessMethod {
         UnnestMapOperator primaryIndexUnnestOp;
         boolean isPrimaryIndex = chosenIndex == DatasetUtils.getPrimaryIndex(datasetDecl);
         if (!isPrimaryIndex) {
-            int numPrimaryKeys = DatasetUtils.getPartitioningFunctions(datasetDecl).size();            
-            List<LogicalVariable> primaryKeyVars = AccessMethodUtils.getPrimaryKeyVars(secondaryIndexUnnestOp.getVariables(), numPrimaryKeys, numSecondaryKeys, false);
-            primaryIndexUnnestOp = AccessMethodUtils.createPrimaryIndexUnnestMap(datasetDecl, recordType, primaryIndexOutputVars, secondaryIndexUnnestOp, context, primaryKeyVars, true, false, false);
+            primaryIndexUnnestOp = AccessMethodUtils.createPrimaryIndexUnnestMap(datasetDecl, recordType, primaryIndexOutputVars, secondaryIndexUnnestOp, context, true, false, false);
         } else {
             List<Object> primaryIndexOutputTypes = new ArrayList<Object>();
             AccessMethodUtils.appendPrimaryIndexTypes(datasetDecl, recordType, primaryIndexOutputTypes);

@@ -178,9 +178,12 @@ public class AccessMethodUtils {
         }
     }
     
-    public static List<LogicalVariable> getPrimaryKeyVars(List<LogicalVariable> sourceVars, int numPrimaryKeys,
-            int numSecondaryKeys, boolean outputPrimaryKeysOnly) {
+    public static List<LogicalVariable> getPrimaryKeyVarsFromUnnestMap(AqlCompiledDatasetDecl datasetDecl,
+            ILogicalOperator unnestMapOp) {
+        int numPrimaryKeys = DatasetUtils.getPartitioningFunctions(datasetDecl).size();
         List<LogicalVariable> primaryKeyVars = new ArrayList<LogicalVariable>();
+        List<LogicalVariable> sourceVars = ((UnnestMapOperator) unnestMapOp).getVariables();
+        // Assumes the primary keys are located at the end.
         int start = sourceVars.size() - numPrimaryKeys;
         int stop = sourceVars.size();
         for (int i = start; i < stop; i++) {
@@ -202,8 +205,7 @@ public class AccessMethodUtils {
             ARecordType recordType, AqlCompiledIndexDecl indexDecl, ILogicalOperator inputOp,
             AccessMethodJobGenParams jobGenParams, IOptimizationContext context, boolean outputPrimaryKeysOnly,
             boolean retainInput) throws AlgebricksException {
-        // The job gen parameters are transferred to the actual job gen via 
-        // the UnnestMapOperator's function arguments.
+        // The job gen parameters are transferred to the actual job gen via the UnnestMapOperator's function arguments.
         ArrayList<Mutable<ILogicalExpression>> secondaryIndexFuncArgs = new ArrayList<Mutable<ILogicalExpression>>();
         jobGenParams.writeToFuncArgs(secondaryIndexFuncArgs);
         // An secondary-index search is logically expressed as an unnest over an index-search function.
@@ -231,7 +233,8 @@ public class AccessMethodUtils {
     
     public static UnnestMapOperator createPrimaryIndexUnnestMap(AqlCompiledDatasetDecl datasetDecl, 
             ARecordType recordType, List<LogicalVariable> primaryIndexOutputVars, ILogicalOperator inputOp,
-            IOptimizationContext context, List<LogicalVariable> primaryKeyVars, boolean sortPrimaryKeys, boolean retainInput, boolean requiresBroadcast) throws AlgebricksException {
+            IOptimizationContext context, boolean sortPrimaryKeys, boolean retainInput, boolean requiresBroadcast) throws AlgebricksException {        
+        List<LogicalVariable> primaryKeyVars = AccessMethodUtils.getPrimaryKeyVarsFromUnnestMap(datasetDecl, inputOp);
         // Optionally add a sort on the primary-index keys before searching the primary index.
         OrderOperator order = null;
         if (sortPrimaryKeys) {
@@ -246,7 +249,7 @@ public class AccessMethodUtils {
             order.setExecutionMode(ExecutionMode.LOCAL);           
             context.computeAndSetTypeEnvironmentForOperator(order);
         }
-        // List of arguments to be passed into the primary index unnest (these arguments will be consumed by the corresponding physical rewrite rule). 
+        // The job gen parameters are transferred to the actual job gen via the UnnestMapOperator's function arguments. 
         List<Mutable<ILogicalExpression>> primaryIndexFuncArgs = new ArrayList<Mutable<ILogicalExpression>>();
         BTreeJobGenParams jobGenParams = new BTreeJobGenParams(datasetDecl.getName(), IndexKind.BTREE, datasetDecl.getName(), retainInput, requiresBroadcast);
         // Set low/high inclusive to true for a point lookup.
@@ -258,7 +261,7 @@ public class AccessMethodUtils {
         
         IFunctionInfo primaryIndexSearch = FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.INDEX_SEARCH);
         AbstractFunctionCallExpression searchPrimIdxFun = new ScalarFunctionCallExpression(primaryIndexSearch, primaryIndexFuncArgs);
-        // Variables and types coming out of the primary-index search. 
+        // Variables and types coming out of the primary-index search.
         List<LogicalVariable> primaryIndexUnnestVars = new ArrayList<LogicalVariable>();
         List<Object> primaryIndexOutputTypes = new ArrayList<Object>();
         if (retainInput) {
