@@ -298,13 +298,11 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
             AqlCompiledIndexDecl chosenIndex, boolean retainInput, boolean requiresBroadcast, AccessMethodAnalysisContext analysisCtx, IOptimizationContext context) throws AlgebricksException {
         AqlCompiledDatasetDecl datasetDecl = indexSubTree.datasetDecl;
         ARecordType recordType = indexSubTree.recordType;
-        
         // TODO: We can probably do something smarter here based on selectivity.
         // Pick the first expr optimizable by this index.
         List<Integer> indexExprs = analysisCtx.getIndexExprs(chosenIndex);
         int firstExprIndex = indexExprs.get(0);
         IOptimizableFuncExpr optFuncExpr = analysisCtx.matchedFuncExprs.get(firstExprIndex);
-        
         DataSourceScanOperator dataSourceScan = indexSubTree.dataSourceScan;
         
         InvertedIndexJobGenParams jobGenParams = new InvertedIndexJobGenParams(chosenIndex.getIndexName(), chosenIndex.getKind(), datasetDecl.getName(), retainInput, requiresBroadcast);
@@ -346,11 +344,9 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         
         UnnestMapOperator secondaryIndexUnnestOp = AccessMethodUtils.createSecondaryIndexUnnestMap(datasetDecl,
                 recordType, chosenIndex, inputOp, jobGenParams, context, true, retainInput);
-        List<LogicalVariable> primaryIndexVars = dataSourceScan.getVariables();
-        // Generate the rest of the upstream plan which feeds the search results
-        // into the primary index.
-        UnnestMapOperator primaryIndexUnnestOp = AccessMethodUtils.createPrimaryIndexUnnestMap(datasetDecl, recordType,
-                primaryIndexVars, secondaryIndexUnnestOp, context, true, retainInput, false);
+        // Generate the rest of the upstream plan which feeds the search results into the primary index.
+        UnnestMapOperator primaryIndexUnnestOp = AccessMethodUtils.createPrimaryIndexUnnestMap(dataSourceScan,
+                datasetDecl, recordType, secondaryIndexUnnestOp, context, true, retainInput, false);
         return primaryIndexUnnestOp;
     }
     
