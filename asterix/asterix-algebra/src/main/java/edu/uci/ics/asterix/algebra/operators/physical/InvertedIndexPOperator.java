@@ -110,13 +110,7 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
             IAlgebricksConstantValue similarityThreshold) throws AlgebricksException {
         IAObject simThresh = ((AsterixConstantValue)similarityThreshold).getObject();
         String itemTypeName = datasetDecl.getItemTypeName();
-        IAType itemType;
-        try {
-            itemType = metadata.findType(itemTypeName);
-        } catch (Exception e) {
-            throw new AlgebricksException(e);
-        }
-
+        IAType itemType = metadata.findType(itemTypeName);
         int numPrimaryKeys = DatasetUtils.getPartitioningFunctions(datasetDecl).size();
         AqlCompiledIndexDecl index = DatasetUtils.findSecondaryIndexByName(datasetDecl, indexName);
         if (index == null) {
@@ -129,7 +123,7 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
             throw new AlgebricksException(
                     "Cannot use "
                             + numSecondaryKeys
-                            + " fields as a key for the R-tree index. There can be only one field as a key for the R-tree index.");
+                            + " fields as a key for an inverted index. There can be only one field as a key for the inverted index index.");
         }
         if (itemType.getTypeTag() != ATypeTag.RECORD) {
             throw new AlgebricksException("Only record types can be indexed.");
@@ -151,7 +145,7 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
         
         IVariableTypeEnvironment typeEnv = context.getTypeEnvironment(unnestMap);
         List<LogicalVariable> outputVars = unnestMap.getVariables();
-        RecordDescriptor outputRecDesc = JobGenHelper.mkRecordDescriptor(unnestMap, opSchema, context);
+        RecordDescriptor outputRecDesc = JobGenHelper.mkRecordDescriptor(typeEnv, opSchema, context);
         
         int start = outputRecDesc.getFieldCount() - numPrimaryKeys;
         IBinaryComparatorFactory[] invListsComparatorFactories = JobGenHelper.variablesToAscBinaryComparatorFactories(outputVars, start, numPrimaryKeys, typeEnv, context);

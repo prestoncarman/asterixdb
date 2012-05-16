@@ -68,9 +68,9 @@ public class BTreeSearchPOperator extends IndexSearchPOperator {
             throw new AlgebricksException("Trying to run btree search over external dataset ("
                     + jobGenParams.getDatasetName() + ").");
         }
-        IVariableTypeEnvironment typeEnv = context.getTypeEnvironment(unnestMap);
+        IVariableTypeEnvironment typeEnv = context.getTypeEnvironment(op);
         Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> btreeSearch = AqlMetadataProvider.buildBtreeRuntime(
-                metadata, context, builder.getJobSpec(), typeEnv, inputSchemas, jobGenParams.getRetainInput(),
+                builder.getJobSpec(), unnestMap.getVariables(), opSchema, typeEnv, metadata, context, jobGenParams.getRetainInput(),
                 jobGenParams.getDatasetName(), datasetDecl, jobGenParams.getIndexName(), lowKeyIndexes, highKeyIndexes,
                 jobGenParams.isLowKeyInclusive(), jobGenParams.isHighKeyInclusive());
         builder.contributeHyracksOperator(unnestMap, btreeSearch.first);
