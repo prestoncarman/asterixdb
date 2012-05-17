@@ -21,6 +21,7 @@ public class InvertedIndexJobGenParams extends AccessMethodJobGenParams {
     protected IAlgebricksConstantValue similarityThreshold;
     protected ATypeTag searchKeyType;
     protected List<LogicalVariable> keyVarList;
+    protected List<LogicalVariable> nonKeyVarList;
     
     public InvertedIndexJobGenParams() {
     }
@@ -55,6 +56,10 @@ public class InvertedIndexJobGenParams extends AccessMethodJobGenParams {
         funcArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createInt32Constant(searchKeyType.ordinal())));
         // Write key var list.
         writeVarList(keyVarList, funcArgs);
+        // Write non-key var list.
+        if (nonKeyVarList != null) {
+            writeVarList(nonKeyVarList, funcArgs);
+        }
     }
     
     public void readFromFuncArgs(List<Mutable<ILogicalExpression>> funcArgs) {
@@ -71,6 +76,9 @@ public class InvertedIndexJobGenParams extends AccessMethodJobGenParams {
         // Read key var list.
         keyVarList = new ArrayList<LogicalVariable>();
         readVarList(funcArgs, index + 3, keyVarList);
+        // TODO: We could possibly simplify things if we did read the non-key var list here.
+        // We don't need to read the non-key var list.
+        nonKeyVarList = null;
     }
     
     public SearchModifierType getSearchModifierType() {
@@ -87,5 +95,9 @@ public class InvertedIndexJobGenParams extends AccessMethodJobGenParams {
     
     public List<LogicalVariable> getKeyVarList() {
         return keyVarList;
+    }
+    
+    public List<LogicalVariable> getNonKeyVarList() {
+        return nonKeyVarList;
     }
 }

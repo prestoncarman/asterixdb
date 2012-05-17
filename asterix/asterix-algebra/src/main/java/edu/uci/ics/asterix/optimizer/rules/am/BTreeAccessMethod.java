@@ -245,7 +245,7 @@ public class BTreeAccessMethod implements IAccessMethod {
             List<Object> primaryIndexOutputTypes = new ArrayList<Object>();
             AccessMethodUtils.appendPrimaryIndexTypes(datasetDecl, recordType, primaryIndexOutputTypes);
             primaryIndexUnnestOp = new UnnestMapOperator(dataSourceScan.getVariables(),
-                    secondaryIndexUnnestOp.getExpressionRef(), primaryIndexOutputTypes);
+                    secondaryIndexUnnestOp.getExpressionRef(), primaryIndexOutputTypes, false);
             primaryIndexUnnestOp.getInputs().add(new MutableObject<ILogicalOperator>(assignSearchKeys));
         }
 
