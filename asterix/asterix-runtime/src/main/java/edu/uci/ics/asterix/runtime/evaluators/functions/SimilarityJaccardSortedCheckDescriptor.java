@@ -1,6 +1,8 @@
 package edu.uci.ics.asterix.runtime.evaluators.functions;
 
 import edu.uci.ics.asterix.common.functions.FunctionConstants;
+import edu.uci.ics.asterix.om.functions.IFunctionDescriptor;
+import edu.uci.ics.asterix.om.functions.IFunctionDescriptorFactory;
 import edu.uci.ics.asterix.runtime.evaluators.base.AbstractScalarFunctionDynamicDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.common.SimilarityJaccardSortedCheckEvaluator;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
@@ -15,7 +17,12 @@ public class SimilarityJaccardSortedCheckDescriptor extends AbstractScalarFuncti
     private static final long serialVersionUID = 1L;
     private final static FunctionIdentifier FID = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "similarity-jaccard-sorted-check", 3, true);
-
+    public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
+        public IFunctionDescriptor createFunctionDescriptor() {
+            return new SimilarityJaccardSortedCheckDescriptor();
+        }
+    };
+    
     @Override
     public IEvaluatorFactory createEvaluatorFactory(final IEvaluatorFactory[] args) throws AlgebricksException {
         return new IEvaluatorFactory() {
