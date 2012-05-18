@@ -104,14 +104,15 @@ public final class MetadataRecordTypes {
 	public static final int INTERNAL_DETAILS_ARECORD_PARTITIONKEY_FIELD_INDEX = 2;
 	public static final int INTERNAL_DETAILS_ARECORD_PRIMARYKEY_FIELD_INDEX = 3;
 	public static final int INTERNAL_DETAILS_ARECORD_GROUPNAME_FIELD_INDEX = 4;
+	public static final int INTERNAL_DETAILS_ARECORD_WITHKEYSERVICE_FIELD_INDEX = 5;
 
 	private static final ARecordType createInternalDetailsRecordType() {
 		AOrderedListType olType = new AOrderedListType(BuiltinType.ASTRING,
 				null);
 		String[] fieldNames = { "FileStructure", "PartitioningStrategy",
-				"PartitioningKey", "PrimaryKey", "GroupName" };
+				"PartitioningKey", "PrimaryKey", "GroupName", "KeyService" };
 		IAType[] fieldTypes = { BuiltinType.ASTRING, BuiltinType.ASTRING,
-				olType, olType, BuiltinType.ASTRING };
+				olType, olType, BuiltinType.ASTRING, BuiltinType.ABOOLEAN };
 		return new ARecordType(null, fieldNames, fieldTypes, true);
 	}
 

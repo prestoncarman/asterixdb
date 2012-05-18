@@ -18,10 +18,9 @@ import java.util.HashMap;
 import java.util.Map;
 
 import edu.uci.ics.asterix.external.data.adapter.api.IDatasourceAdapter;
-import edu.uci.ics.asterix.external.data.parser.IDataParser;
 import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.asterix.om.types.IAType;
-import edu.uci.ics.hyracks.algebricks.core.api.constraints.AlgebricksPartitionConstraint;
+import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksPartitionConstraint;
 import edu.uci.ics.hyracks.api.context.IHyracksTaskContext;
 import edu.uci.ics.hyracks.dataflow.common.data.parsers.DoubleParserFactory;
 import edu.uci.ics.hyracks.dataflow.common.data.parsers.FloatParserFactory;
@@ -40,13 +39,11 @@ public abstract class AbstractDatasourceAdapter implements IDatasourceAdapter {
 
     protected Map<String, String> configuration;
 
-    protected AlgebricksPartitionConstraint partitionConstraint;
+    protected transient AlgebricksPartitionConstraint partitionConstraint;
 
     protected IAType atype;
 
     protected IHyracksTaskContext ctx;
-
-    protected IDataParser dataParser;
 
     protected static final HashMap<ATypeTag, IValueParserFactory> typeToValueParserFactMap = new HashMap<ATypeTag, IValueParserFactory>();
 
@@ -94,14 +91,6 @@ public abstract class AbstractDatasourceAdapter implements IDatasourceAdapter {
 
     public void setAdapterProperty(String property, String value) {
         configuration.put(property, value);
-    }
-
-    public IDataParser getParser() {
-        return dataParser;
-    }
-
-    public void setParser(IDataParser dataParser) {
-        this.dataParser = dataParser;
     }
 
     public String getAdapterProperty(String attribute) {

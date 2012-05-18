@@ -42,14 +42,14 @@ import edu.uci.ics.asterix.metadata.entities.InternalDatasetDetails;
 import edu.uci.ics.asterix.metadata.entities.NodeGroup;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.IAType;
-import edu.uci.ics.hyracks.algebricks.core.algebra.data.IAWriterFactory;
+import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksAbsolutePartitionConstraint;
+import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksPartitionConstraint;
+import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
+import edu.uci.ics.hyracks.algebricks.common.utils.Pair;
+import edu.uci.ics.hyracks.algebricks.common.utils.Triple;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluatorFactory;
-import edu.uci.ics.hyracks.algebricks.core.api.constraints.AlgebricksAbsolutePartitionConstraint;
-import edu.uci.ics.hyracks.algebricks.core.api.constraints.AlgebricksPartitionConstraint;
-import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
-import edu.uci.ics.hyracks.algebricks.core.utils.Pair;
-import edu.uci.ics.hyracks.algebricks.core.utils.Triple;
+import edu.uci.ics.hyracks.algebricks.data.IAWriterFactory;
+import edu.uci.ics.hyracks.algebricks.runtime.base.IEvaluatorFactory;
 import edu.uci.ics.hyracks.api.io.FileReference;
 import edu.uci.ics.hyracks.dataflow.std.file.ConstantFileSplitProvider;
 import edu.uci.ics.hyracks.dataflow.std.file.FileSplit;
@@ -187,6 +187,7 @@ public class AqlCompiledMetadataDeclarations {
                     String typeName = datasetRecord.getDatatypeName();
                     InternalDatasetDetails id = (InternalDatasetDetails) datasetRecord.getDatasetDetails();
                     ARecordType recType = (ARecordType) findType(typeName);
+                    boolean withKeyService = id.getKeyService();
                     List<Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType>> partitioningEvalFactories = computePartitioningEvaluatorFactories(
                             id.getPartitioningKey(), recType);
                     List<Index> indexRecord = this.metadataManager.getDatasetIndexes(mdTxnCtx, dataverseName,
@@ -207,7 +208,7 @@ public class AqlCompiledMetadataDeclarations {
 
                     if (datasetRecord.getType() == DatasetType.INTERNAL) {
                         acdd = new AqlCompiledInternalDatasetDetails(id.getPartitioningKey(),
-                                partitioningEvalFactories, id.getNodeGroupName(), primaryIndex, secondaryIndexes);
+                                partitioningEvalFactories, id.getNodeGroupName(), primaryIndex, secondaryIndexes, withKeyService);
                     } else {
                         acdd = new AqlCompiledFeedDatasetDetails(id.getPartitioningKey(), partitioningEvalFactories,
                                 id.getNodeGroupName(), primaryIndex, secondaryIndexes,
@@ -255,7 +256,7 @@ public class AqlCompiledMetadataDeclarations {
         return evalFactories;
     }
 
-    public Pair<IFileSplitProvider, AlgebricksPartitionConstraint> splitProviderAndPartitionConstraintsForInternalOrFeedDataset(
+	public Pair<IFileSplitProvider, AlgebricksPartitionConstraint> splitProviderAndPartitionConstraintsForInternalOrFeedDataset(
             String datasetName, String targetIdxName) throws AlgebricksException, MetadataException {
         FileSplit[] splits = splitsForInternalOrFeedDataset(datasetName, targetIdxName);
         IFileSplitProvider splitProvider = new ConstantFileSplitProvider(splits);

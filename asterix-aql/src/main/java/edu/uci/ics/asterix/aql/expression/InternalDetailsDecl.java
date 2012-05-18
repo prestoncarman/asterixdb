@@ -22,6 +22,7 @@ import edu.uci.ics.asterix.metadata.bootstrap.MetadataConstants;
 public class InternalDetailsDecl implements IDatasetDetailsDecl {
     private Identifier nodegroupName = new Identifier(MetadataConstants.METADATA_DEFAULT_NODEGROUP_NAME);
     private List<String> partitioningExprs = new ArrayList<String>();
+    private boolean keyServiceFlag = false;
 
     public void addPartitioningExpr(String pe) {
         this.partitioningExprs.add(pe);
@@ -41,5 +42,13 @@ public class InternalDetailsDecl implements IDatasetDetailsDecl {
 
     public Identifier getNodegroupName() {
         return nodegroupName;
+    }
+    
+    public boolean getKeyServiceFlag(){
+    	return keyServiceFlag;
+    }
+    
+    public void setKeyServiceFlag(boolean b){
+    	keyServiceFlag = b;
     }
 }

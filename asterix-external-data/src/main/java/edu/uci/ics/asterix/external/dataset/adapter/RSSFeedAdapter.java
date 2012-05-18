@@ -31,7 +31,7 @@ import edu.uci.ics.asterix.feed.managed.adapter.IManagedFeedAdapter;
 import edu.uci.ics.asterix.feed.managed.adapter.IMutableFeedAdapter;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.IAType;
-import edu.uci.ics.hyracks.algebricks.core.api.constraints.AlgebricksCountPartitionConstraint;
+import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksCountPartitionConstraint;
 import edu.uci.ics.hyracks.api.context.IHyracksTaskContext;
 
 public class RSSFeedAdapter extends AbstractDatasourceAdapter implements IDatasourceAdapter, IManagedFeedAdapter,
@@ -56,14 +56,13 @@ public class RSSFeedAdapter extends AbstractDatasourceAdapter implements IDataso
 
     @Override
     public IDataParser getDataParser(int partition) throws Exception {
-        if (dataParser == null) {
-            dataParser = new ManagedDelimitedDataStreamParser();
-            ((IManagedDataParser) dataParser).setAdapter(this);
-            dataParser.initialize((ARecordType) atype, ctx);
-            IFeedClient feedClient = new RSSFeedClient(this, feedURLs.get(partition), id_prefix);
-            FeedStream feedStream = new FeedStream(feedClient, ctx);
-            ((IDataStreamParser) dataParser).setInputStream(feedStream);
-        }
+        IDataParser dataParser = new ManagedDelimitedDataStreamParser();
+        ((IManagedDataParser) dataParser).setAdapter(this);
+        dataParser.configure(configuration);
+        dataParser.initialize((ARecordType) atype, ctx);
+        IFeedClient feedClient = new RSSFeedClient(this, feedURLs.get(partition), id_prefix);
+        FeedStream feedStream = new FeedStream(feedClient, ctx);
+        ((IDataStreamParser) dataParser).setInputStream(feedStream);
         return dataParser;
     }
 

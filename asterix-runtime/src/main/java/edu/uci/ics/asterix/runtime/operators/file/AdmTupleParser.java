@@ -76,6 +76,7 @@ public class AdmTupleParser extends AbstractTupleParser  {
 	@Override
 	public void parse(InputStream in, IFrameWriter writer)
 			throws HyracksDataException {
+		System.out.println(">>>>> Inside Parse ");
 		admLexer = new AdmLexer(in);
 		appender.reset(frame, true);
 		int tupleNum = 0;
@@ -96,6 +97,7 @@ public class AdmTupleParser extends AbstractTupleParser  {
 					}
 				}
 				tupleNum++;
+				
 			}
 			if (appender.getTupleCount() > 0) {
 				FrameUtils.flushFrame(frame, writer);

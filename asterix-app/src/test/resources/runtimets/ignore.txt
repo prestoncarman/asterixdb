@@ -14,3 +14,5 @@ dapd/q3.aql
 fuzzyjoin/events-users-aqlplus_1.aql
 fuzzyjoin
 failure/q1_pricing_summary_report_failure.aql
+open-closed
+dml/load-from-hdfs.aql

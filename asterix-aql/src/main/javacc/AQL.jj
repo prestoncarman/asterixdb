@@ -571,6 +571,7 @@ DatasetDecl DatasetDeclaration(DatasetType datasetType) throws ParseException :
   Identifier itemTypeName = null;
   boolean ifNotExists = false;
   IDatasetDetailsDecl idd = null;
+  
 }
 {
   < IDENTIFIER >
@@ -633,6 +634,12 @@ InternalDetailsDecl InternalDatasetDeclaration() throws ParseException :
   "on" < IDENTIFIER >
     {
     	idd.setNodegroupName(new Identifier(token.image));
+    }
+  )?
+  (
+  "with keyservice"
+    {
+    	idd.setKeyServiceFlag(true);
     }
   )?
   ";"

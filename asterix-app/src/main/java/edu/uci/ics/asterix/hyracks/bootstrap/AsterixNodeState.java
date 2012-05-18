@@ -21,6 +21,7 @@ public class AsterixNodeState implements Serializable {
     private static final long serialVersionUID = 1L;
 
     private int apiNodeDataServerPort;
+    private int kvServicePort;
 
     public int getAPINodeDataServerPort() {
         return apiNodeDataServerPort;
@@ -28,6 +29,14 @@ public class AsterixNodeState implements Serializable {
 
     public void setAPINodeDataServerPort(int port) {
         this.apiNodeDataServerPort = port;
+    }
+    
+    public int getKvServicePort() {
+        return kvServicePort;
+    }
+
+    public void setKvServicePort(int port) {
+        this.kvServicePort = port;
     }
 
 }

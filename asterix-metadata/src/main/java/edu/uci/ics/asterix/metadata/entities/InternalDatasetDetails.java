@@ -26,10 +26,12 @@ import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
 import edu.uci.ics.asterix.formats.nontagged.AqlSerializerDeserializerProvider;
 import edu.uci.ics.asterix.metadata.IDatasetDetails;
 import edu.uci.ics.asterix.metadata.bootstrap.MetadataRecordTypes;
+import edu.uci.ics.asterix.om.base.ABoolean;
 import edu.uci.ics.asterix.om.base.AMutableString;
 import edu.uci.ics.asterix.om.base.AString;
 import edu.uci.ics.asterix.om.types.AOrderedListType;
 import edu.uci.ics.asterix.om.types.BuiltinType;
+import edu.uci.ics.asterix.runtime.evaluators.constructors.ABooleanConstructorDescriptor;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.ArrayBackedValueStorage;
@@ -51,7 +53,8 @@ public class InternalDatasetDetails implements IDatasetDetails {
     protected final List<String> partitioningKey;
     protected final List<String> primaryKey;
     protected final String groupName;
-
+    protected final boolean withKeyService;
+    
     public InternalDatasetDetails(FileStructure fileStructure, PartitioningStrategy partitioningStrategy,
             List<String> partitioningKey, List<String> primaryKey, String groupName) {
         this.fileStructure = fileStructure;
@@ -59,6 +62,17 @@ public class InternalDatasetDetails implements IDatasetDetails {
         this.partitioningKey = partitioningKey;
         this.primaryKey = primaryKey;
         this.groupName = groupName;
+        this.withKeyService = false;
+    }
+    
+    public InternalDatasetDetails(FileStructure fileStructure, PartitioningStrategy partitioningStrategy,
+            List<String> partitioningKey, List<String> primaryKey, String groupName, boolean withKeyService) {
+        this.fileStructure = fileStructure;
+        this.partitioningStrategy = partitioningStrategy;
+        this.partitioningKey = partitioningKey;
+        this.primaryKey = primaryKey;
+        this.groupName = groupName;
+        this.withKeyService = withKeyService;
     }
 
     public String getNodeGroupName() {
@@ -80,6 +94,10 @@ public class InternalDatasetDetails implements IDatasetDetails {
     public PartitioningStrategy getPartitioningStrategy() {
         return partitioningStrategy;
     }
+    
+    public boolean getKeyService(){
+    	return withKeyService;
+    }
 
     @Override
     public DatasetType getDatasetType() {
@@ -97,6 +115,7 @@ public class InternalDatasetDetails implements IDatasetDetails {
         AMutableString aString = new AMutableString("");
         ISerializerDeserializer<AString> stringSerde = AqlSerializerDeserializerProvider.INSTANCE
                 .getSerializerDeserializer(BuiltinType.ASTRING);
+        ISerializerDeserializer<ABoolean> booleanSerde = AqlSerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.ABOOLEAN);
 
         // write field 0
         fieldValue.reset();
@@ -144,6 +163,12 @@ public class InternalDatasetDetails implements IDatasetDetails {
         aString.setValue(getNodeGroupName());
         stringSerde.serialize(aString, fieldValue.getDataOutput());
         internalRecordBuilder.addField(MetadataRecordTypes.INTERNAL_DETAILS_ARECORD_GROUPNAME_FIELD_INDEX, fieldValue);
+        
+        // write field 5
+        fieldValue.reset();
+        ABoolean b = getKeyService() ? ABoolean.TRUE : ABoolean.FALSE;
+        booleanSerde.serialize(b, fieldValue.getDataOutput());
+        internalRecordBuilder.addField(MetadataRecordTypes.INTERNAL_DETAILS_ARECORD_WITHKEYSERVICE_FIELD_INDEX, fieldValue);
 
         try {
             internalRecordBuilder.write(out, true);

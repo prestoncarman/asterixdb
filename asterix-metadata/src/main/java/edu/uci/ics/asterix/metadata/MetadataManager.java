@@ -241,7 +241,7 @@ public class MetadataManager implements IMetadataManager {
         if (ctx.getDataverse(dataverseName) != null) {
             // This transaction has dropped and subsequently created the same
             // dataverse.
-            return null;
+        	return null;
         }
         dataset = cache.getDataset(dataverseName, datasetName);
         if (dataset != null) {

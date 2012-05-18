@@ -11,8 +11,8 @@ import org.apache.commons.lang3.mutable.MutableObject;
 
 import edu.uci.ics.asterix.aql.base.Clause;
 import edu.uci.ics.asterix.aql.base.Expression;
-import edu.uci.ics.asterix.aql.base.Statement;
 import edu.uci.ics.asterix.aql.base.Expression.Kind;
+import edu.uci.ics.asterix.aql.base.Statement;
 import edu.uci.ics.asterix.aql.expression.BeginFeedStatement;
 import edu.uci.ics.asterix.aql.expression.CallExpr;
 import edu.uci.ics.asterix.aql.expression.ControlFeedStatement;
@@ -41,6 +41,7 @@ import edu.uci.ics.asterix.aql.expression.InsertStatement;
 import edu.uci.ics.asterix.aql.expression.LetClause;
 import edu.uci.ics.asterix.aql.expression.LimitClause;
 import edu.uci.ics.asterix.aql.expression.ListConstructor;
+import edu.uci.ics.asterix.aql.expression.ListConstructor.Type;
 import edu.uci.ics.asterix.aql.expression.LiteralExpr;
 import edu.uci.ics.asterix.aql.expression.LoadFromFileStatement;
 import edu.uci.ics.asterix.aql.expression.NodeGroupDropStatement;
@@ -48,8 +49,10 @@ import edu.uci.ics.asterix.aql.expression.NodegroupDecl;
 import edu.uci.ics.asterix.aql.expression.OperatorExpr;
 import edu.uci.ics.asterix.aql.expression.OperatorType;
 import edu.uci.ics.asterix.aql.expression.OrderbyClause;
+import edu.uci.ics.asterix.aql.expression.OrderbyClause.OrderModifier;
 import edu.uci.ics.asterix.aql.expression.OrderedListTypeDefinition;
 import edu.uci.ics.asterix.aql.expression.QuantifiedExpression;
+import edu.uci.ics.asterix.aql.expression.QuantifiedExpression.Quantifier;
 import edu.uci.ics.asterix.aql.expression.QuantifiedPair;
 import edu.uci.ics.asterix.aql.expression.Query;
 import edu.uci.ics.asterix.aql.expression.RecordConstructor;
@@ -59,6 +62,7 @@ import edu.uci.ics.asterix.aql.expression.TypeDecl;
 import edu.uci.ics.asterix.aql.expression.TypeDropStatement;
 import edu.uci.ics.asterix.aql.expression.TypeReferenceExpression;
 import edu.uci.ics.asterix.aql.expression.UnaryExpr;
+import edu.uci.ics.asterix.aql.expression.UnaryExpr.Sign;
 import edu.uci.ics.asterix.aql.expression.UnionExpr;
 import edu.uci.ics.asterix.aql.expression.UnorderedListTypeDefinition;
 import edu.uci.ics.asterix.aql.expression.UpdateClause;
@@ -67,10 +71,6 @@ import edu.uci.ics.asterix.aql.expression.VariableExpr;
 import edu.uci.ics.asterix.aql.expression.WhereClause;
 import edu.uci.ics.asterix.aql.expression.WriteFromQueryResultStatement;
 import edu.uci.ics.asterix.aql.expression.WriteStatement;
-import edu.uci.ics.asterix.aql.expression.ListConstructor.Type;
-import edu.uci.ics.asterix.aql.expression.OrderbyClause.OrderModifier;
-import edu.uci.ics.asterix.aql.expression.QuantifiedExpression.Quantifier;
-import edu.uci.ics.asterix.aql.expression.UnaryExpr.Sign;
 import edu.uci.ics.asterix.aql.expression.visitor.IAqlExpressionVisitor;
 import edu.uci.ics.asterix.aql.util.FunctionUtils;
 import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
@@ -81,6 +81,7 @@ import edu.uci.ics.asterix.metadata.MetadataException;
 import edu.uci.ics.asterix.metadata.MetadataTransactionContext;
 import edu.uci.ics.asterix.metadata.bootstrap.AsterixProperties;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledDatasetDecl;
+import edu.uci.ics.asterix.metadata.declared.AqlCompiledInternalDatasetDetails;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
 import edu.uci.ics.asterix.metadata.declared.AqlDataSource;
 import edu.uci.ics.asterix.metadata.declared.AqlLogicalPlanAndMetadataImpl;
@@ -88,7 +89,6 @@ import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
 import edu.uci.ics.asterix.metadata.declared.AqlSourceId;
 import edu.uci.ics.asterix.metadata.declared.FileSplitDataSink;
 import edu.uci.ics.asterix.metadata.declared.FileSplitSinkId;
-import edu.uci.ics.asterix.metadata.utils.DatasetUtils;
 import edu.uci.ics.asterix.om.base.AInt32;
 import edu.uci.ics.asterix.om.base.AString;
 import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
@@ -97,6 +97,10 @@ import edu.uci.ics.asterix.om.functions.AsterixFunction;
 import edu.uci.ics.asterix.om.functions.AsterixFunctionInfo;
 import edu.uci.ics.asterix.om.types.BuiltinType;
 import edu.uci.ics.asterix.om.types.IAType;
+import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
+import edu.uci.ics.hyracks.algebricks.common.exceptions.NotImplementedException;
+import edu.uci.ics.hyracks.algebricks.common.utils.Pair;
+import edu.uci.ics.hyracks.algebricks.common.utils.Triple;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.Counter;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
@@ -106,14 +110,14 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalOperatorTag;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.OperatorAnnotations;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
+import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression.FunctionKind;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AggregateFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.BroadcastExpressionAnnotation;
+import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.BroadcastExpressionAnnotation.BroadcastSide;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.UnnestingFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
-import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression.FunctionKind;
-import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.BroadcastExpressionAnnotation.BroadcastSide;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.AlgebricksBuiltinFunctions;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.IFunctionInfo;
@@ -128,6 +132,7 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.InsertDelet
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.LimitOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.NestedTupleSourceOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.OrderOperator;
+import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.ProjectOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.SinkOperator;
@@ -136,13 +141,7 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.UnionAllOpe
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.UnnestOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.WriteOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.WriteResultOperator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder;
 import edu.uci.ics.hyracks.algebricks.core.algebra.plan.ALogicalPlanImpl;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluatorFactory;
-import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
-import edu.uci.ics.hyracks.algebricks.core.api.exceptions.NotImplementedException;
-import edu.uci.ics.hyracks.algebricks.core.utils.Pair;
-import edu.uci.ics.hyracks.algebricks.core.utils.Triple;
 import edu.uci.ics.hyracks.api.io.FileReference;
 import edu.uci.ics.hyracks.dataflow.std.file.FileSplit;
 
@@ -150,10 +149,9 @@ import edu.uci.ics.hyracks.dataflow.std.file.FileSplit;
  * Each visit returns a pair of an operator and a variable. The variable
  * corresponds to the new column, if any, added to the tuple flow. E.g., for
  * Unnest, the column is the variable bound to the elements in the list, for
- * Subplan it is null.
- * The first argument of a visit method is the expression which is translated.
- * The second argument of a visit method is the tuple source for the current
- * subtree.
+ * Subplan it is null. The first argument of a visit method is the expression
+ * which is translated. The second argument of a visit method is the tuple
+ * source for the current subtree.
  */
 
 public class AqlExpressionToPlanTranslator extends AbstractAqlTranslator implements
@@ -236,9 +234,18 @@ public class AqlExpressionToPlanTranslator extends AbstractAqlTranslator impleme
             ArrayList<LogicalVariable> vars = new ArrayList<LogicalVariable>();
             ArrayList<Mutable<ILogicalExpression>> exprs = new ArrayList<Mutable<ILogicalExpression>>();
             List<Mutable<ILogicalExpression>> varRefsForLoading = new ArrayList<Mutable<ILogicalExpression>>();
-            for (Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType> partitioner : DatasetUtils
-                    .getPartitioningFunctions(adecl)) {
-                AbstractFunctionCallExpression f = partitioner.second.cloneExpression();
+
+            AqlCompiledInternalDatasetDetails datasetDetails = (AqlCompiledInternalDatasetDetails) adecl
+                    .getAqlCompiledDatasetDetails();
+            List<String> partitionKeys = datasetDetails.getPartitioningExprs();
+            for (String keyFieldName : partitionKeys) {
+                IFunctionInfo finfoAccess = AsterixBuiltinFunctions
+                        .getAsterixFunctionInfo(AsterixBuiltinFunctions.FIELD_ACCESS_BY_NAME);
+                @SuppressWarnings("unchecked")
+                ScalarFunctionCallExpression f = new ScalarFunctionCallExpression(finfoAccess,
+                        new MutableObject<ILogicalExpression>(new VariableReferenceExpression(METADATA_DUMMY_VAR)),
+                        new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(new AString(
+                                keyFieldName)))));
                 f.substituteVar(METADATA_DUMMY_VAR, resVar);
                 exprs.add(new MutableObject<ILogicalExpression>(f));
                 LogicalVariable v = context.newVar();
@@ -401,8 +408,8 @@ public class AqlExpressionToPlanTranslator extends AbstractAqlTranslator impleme
             Mutable<ILogicalOperator> tupSource) throws AsterixException {
         Pair<ILogicalExpression, Mutable<ILogicalOperator>> p = aqlExprToAlgExpression(fa.getExpr(), tupSource);
         LogicalVariable v = context.newVar();
-        AbstractFunctionCallExpression fldAccess = new ScalarFunctionCallExpression(FunctionUtils
-                .getFunctionInfo(AsterixBuiltinFunctions.FIELD_ACCESS_BY_NAME));
+        AbstractFunctionCallExpression fldAccess = new ScalarFunctionCallExpression(
+                FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.FIELD_ACCESS_BY_NAME));
         fldAccess.getArguments().add(new MutableObject<ILogicalExpression>(p.first));
         ILogicalExpression faExpr = new ConstantExpression(new AsterixConstantValue(new AString(fa.getIdent()
                 .getValue())));
@@ -421,8 +428,8 @@ public class AqlExpressionToPlanTranslator extends AbstractAqlTranslator impleme
         AbstractFunctionCallExpression f;
         int i = ia.getIndex();
         if (i == IndexAccessor.ANY) {
-            f = new ScalarFunctionCallExpression(FunctionUtils
-                    .getFunctionInfo(AsterixBuiltinFunctions.ANY_COLLECTION_MEMBER));
+            f = new ScalarFunctionCallExpression(
+                    FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.ANY_COLLECTION_MEMBER));
             f.getArguments().add(new MutableObject<ILogicalExpression>(p.first));
         } else {
             f = new ScalarFunctionCallExpression(FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.GET_ITEM));
@@ -469,7 +476,8 @@ public class AqlExpressionToPlanTranslator extends AbstractAqlTranslator impleme
             }
         }
 
-        FunctionIdentifier fi = new FunctionIdentifier(AlgebricksBuiltinFunctions.ALGEBRICKS_NS, fid.getFunctionName(), false);
+        FunctionIdentifier fi = new FunctionIdentifier(AlgebricksBuiltinFunctions.ALGEBRICKS_NS, fid.getFunctionName(),
+                false);
         AsterixFunctionInfo afi = AsterixBuiltinFunctions.lookupFunction(fi);
         FunctionIdentifier builtinAquafi = afi == null ? null : afi.getFunctionIdentifier();
 
@@ -486,8 +494,8 @@ public class AqlExpressionToPlanTranslator extends AbstractAqlTranslator impleme
         if (AsterixBuiltinFunctions.isBuiltinAggregateFunction(fi)) {
             f = AsterixBuiltinFunctions.makeAggregateFunctionExpression(fi, args);
         } else if (AsterixBuiltinFunctions.isBuiltinUnnestingFunction(fi)) {
-            UnnestingFunctionCallExpression ufce = new UnnestingFunctionCallExpression(FunctionUtils
-                    .getFunctionInfo(fi), args);
+            UnnestingFunctionCallExpression ufce = new UnnestingFunctionCallExpression(
+                    FunctionUtils.getFunctionInfo(fi), args);
             ufce.setReturnsUniqueValues(AsterixBuiltinFunctions.returnsUniqueValues(fi));
             f = ufce;
         } else {
@@ -590,9 +598,9 @@ public class AqlExpressionToPlanTranslator extends AbstractAqlTranslator impleme
         sel1.getInputs().add(new MutableObject<ILogicalOperator>(pThen.first));
 
         Pair<ILogicalOperator, LogicalVariable> pElse = ifexpr.getElseExpr().accept(this, nestedSource);
-        AbstractFunctionCallExpression notVarCond = new ScalarFunctionCallExpression(FunctionUtils
-                .getFunctionInfo(AlgebricksBuiltinFunctions.NOT), new MutableObject<ILogicalExpression>(
-                new VariableReferenceExpression(varCond)));
+        AbstractFunctionCallExpression notVarCond = new ScalarFunctionCallExpression(
+                FunctionUtils.getFunctionInfo(AlgebricksBuiltinFunctions.NOT), new MutableObject<ILogicalExpression>(
+                        new VariableReferenceExpression(varCond)));
         SelectOperator sel2 = new SelectOperator(new MutableObject<ILogicalExpression>(notVarCond));
         sel2.getInputs().add(new MutableObject<ILogicalOperator>(pElse.first));
 
@@ -605,10 +613,10 @@ public class AqlExpressionToPlanTranslator extends AbstractAqlTranslator impleme
         sp.getInputs().add(opCondRef);
 
         LogicalVariable resV = context.newVar();
-        AbstractFunctionCallExpression concatNonNull = new ScalarFunctionCallExpression(FunctionUtils
-                .getFunctionInfo(AsterixBuiltinFunctions.CONCAT_NON_NULL), new MutableObject<ILogicalExpression>(
-                new VariableReferenceExpression(pThen.second)), new MutableObject<ILogicalExpression>(
-                new VariableReferenceExpression(pElse.second)));
+        AbstractFunctionCallExpression concatNonNull = new ScalarFunctionCallExpression(
+                FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.CONCAT_NON_NULL),
+                new MutableObject<ILogicalExpression>(new VariableReferenceExpression(pThen.second)),
+                new MutableObject<ILogicalExpression>(new VariableReferenceExpression(pElse.second)));
         AssignOperator a = new AssignOperator(resV, new MutableObject<ILogicalExpression>(concatNonNull));
         a.getInputs().add(new MutableObject<ILogicalOperator>(sp));
 
@@ -716,9 +724,8 @@ public class AqlExpressionToPlanTranslator extends AbstractAqlTranslator impleme
             OrderModifier m = modifIter.next();
             OrderOperator.IOrder comp = (m == OrderModifier.ASC) ? OrderOperator.ASC_ORDER : OrderOperator.DESC_ORDER;
             ord.getOrderExpressions()
-                    .add(
-                            new Pair<IOrder, Mutable<ILogicalExpression>>(comp, new MutableObject<ILogicalExpression>(
-                                    p.first)));
+                    .add(new Pair<IOrder, Mutable<ILogicalExpression>>(comp, new MutableObject<ILogicalExpression>(
+                            p.first)));
             topOp = p.second;
         }
         ord.getInputs().add(topOp);
@@ -772,8 +779,8 @@ public class AqlExpressionToPlanTranslator extends AbstractAqlTranslator impleme
         } else { // EVERY
             List<Mutable<ILogicalExpression>> satExprList = new ArrayList<Mutable<ILogicalExpression>>(1);
             satExprList.add(new MutableObject<ILogicalExpression>(eo2.first));
-            s = new SelectOperator(new MutableObject<ILogicalExpression>(new ScalarFunctionCallExpression(FunctionUtils
-                    .getFunctionInfo(AlgebricksBuiltinFunctions.NOT), satExprList)));
+            s = new SelectOperator(new MutableObject<ILogicalExpression>(new ScalarFunctionCallExpression(
+                    FunctionUtils.getFunctionInfo(AlgebricksBuiltinFunctions.NOT), satExprList)));
             s.getInputs().add(eo2.second);
             fAgg = AsterixBuiltinFunctions.makeAggregateFunctionExpression(AsterixBuiltinFunctions.EMPTY_STREAM,
                     new ArrayList<Mutable<ILogicalExpression>>());
@@ -794,8 +801,8 @@ public class AqlExpressionToPlanTranslator extends AbstractAqlTranslator impleme
     @Override
     public Pair<ILogicalOperator, LogicalVariable> visitRecordConstructor(RecordConstructor rc,
             Mutable<ILogicalOperator> tupSource) throws AsterixException {
-        AbstractFunctionCallExpression f = new ScalarFunctionCallExpression(FunctionUtils
-                .getFunctionInfo(AsterixBuiltinFunctions.OPEN_RECORD_CONSTRUCTOR));
+        AbstractFunctionCallExpression f = new ScalarFunctionCallExpression(
+                FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.OPEN_RECORD_CONSTRUCTOR));
         LogicalVariable v1 = context.newVar();
         AssignOperator a = new AssignOperator(v1, new MutableObject<ILogicalExpression>(f));
         Mutable<ILogicalOperator> topOp = tupSource;
@@ -839,8 +846,8 @@ public class AqlExpressionToPlanTranslator extends AbstractAqlTranslator impleme
         if (u.getSign() == Sign.POSITIVE) {
             a = new AssignOperator(v1, new MutableObject<ILogicalExpression>(eo.first));
         } else {
-            AbstractFunctionCallExpression m = new ScalarFunctionCallExpression(FunctionUtils
-                    .getFunctionInfo(AsterixBuiltinFunctions.NUMERIC_UNARY_MINUS));
+            AbstractFunctionCallExpression m = new ScalarFunctionCallExpression(
+                    FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.NUMERIC_UNARY_MINUS));
             m.getArguments().add(new MutableObject<ILogicalExpression>(eo.first));
             a = new AssignOperator(v1, new MutableObject<ILogicalExpression>(m));
         }
@@ -1263,8 +1270,8 @@ public class AqlExpressionToPlanTranslator extends AbstractAqlTranslator impleme
     private ILogicalExpression makeUnnestExpression(ILogicalExpression expr) {
         switch (expr.getExpressionTag()) {
             case VARIABLE: {
-                return new UnnestingFunctionCallExpression(FunctionUtils
-                        .getFunctionInfo(AsterixBuiltinFunctions.SCAN_COLLECTION),
+                return new UnnestingFunctionCallExpression(
+                        FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.SCAN_COLLECTION),
                         new MutableObject<ILogicalExpression>(expr));
             }
             case FUNCTION_CALL: {
@@ -1272,8 +1279,8 @@ public class AqlExpressionToPlanTranslator extends AbstractAqlTranslator impleme
                 if (fce.getKind() == FunctionKind.UNNEST) {
                     return expr;
                 } else {
-                    return new UnnestingFunctionCallExpression(FunctionUtils
-                            .getFunctionInfo(AsterixBuiltinFunctions.SCAN_COLLECTION),
+                    return new UnnestingFunctionCallExpression(
+                            FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.SCAN_COLLECTION),
                             new MutableObject<ILogicalExpression>(expr));
                 }
             }
