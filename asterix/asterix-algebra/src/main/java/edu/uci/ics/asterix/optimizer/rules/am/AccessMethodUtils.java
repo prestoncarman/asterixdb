@@ -121,7 +121,8 @@ public class AccessMethodUtils {
                 return indexDecl.getFieldExprs().size();
             }
             case RTREE: {
-                IAType keyType = AqlCompiledIndexDecl.keyFieldType(indexDecl.getFieldExprs().get(0), recordType);
+            	Pair<IAType, Boolean> keyPairType = AqlCompiledIndexDecl.getNonNullableKeyFieldType(indexDecl.getFieldExprs().get(0), recordType);
+                IAType keyType = keyPairType.first;
                 int numDimensions = NonTaggedFormatUtil.getNumDimensions(keyType.getTypeTag());
                 return numDimensions * 2;
             }
@@ -142,12 +143,14 @@ public class AccessMethodUtils {
                 case WORD_INVIX:
                 case NGRAM_INVIX: {
                     for (String sk : indexDecl.getFieldExprs()) {
-                        dest.add(AqlCompiledIndexDecl.keyFieldType(sk, recordType));
+                    	Pair<IAType, Boolean> keyPairType = AqlCompiledIndexDecl.getNonNullableKeyFieldType(sk, recordType);
+                        dest.add(keyPairType.first);
                     }
                     break;
                 }
                 case RTREE: {
-                    IAType keyType = AqlCompiledIndexDecl.keyFieldType(indexDecl.getFieldExprs().get(0), recordType);
+                	Pair<IAType, Boolean> keyPairType = AqlCompiledIndexDecl.getNonNullableKeyFieldType(indexDecl.getFieldExprs().get(0), recordType);
+                    IAType keyType = keyPairType.first;
                     IAType nestedKeyType = NonTaggedFormatUtil.getNestedSpatialType(keyType.getTypeTag());
                     int numKeys = getNumSecondaryKeys(datasetDecl, indexDecl, recordType);
                     for (int i = 0; i < numKeys; i++) {

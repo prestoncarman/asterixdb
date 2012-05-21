@@ -275,10 +275,6 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
                 // Set the fieldName in the corresponding matched function expression, and remember matching subtree.
                 optFuncExpr.setFieldName(funcVarIndex, fieldName);
                 optFuncExpr.setOptimizableSubTree(funcVarIndex, subTree);
-                // TODO: Don't just ignore open record types.
-                if (subTree.recordType.isOpen()) {
-                    continue;
-                }
                 fillIndexExprs(fieldName, optFuncExprIndex, subTree.datasetDecl, analysisCtx);
             }
         }

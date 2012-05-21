@@ -131,7 +131,8 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
             throw new AlgebricksException("Only record types can be indexed.");
         }
         ARecordType recordType = (ARecordType) itemType;
-        IAType secondaryKeyType = AqlCompiledIndexDecl.keyFieldType(secondaryKeyFields.get(0), recordType);
+        Pair<IAType, Boolean> keyPairType = AqlCompiledIndexDecl.getNonNullableKeyFieldType(secondaryKeyFields.get(0), recordType);
+        IAType secondaryKeyType = keyPairType.first;
         if (secondaryKeyType == null) {
             throw new AlgebricksException("Could not find field " + secondaryKeyFields.get(0) + " in the schema.");
         }
