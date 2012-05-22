@@ -2,10 +2,8 @@ package edu.uci.ics.asterix.kvs;
 
 import java.nio.ByteBuffer;
 import java.util.List;
-import java.util.Timer;
 import java.util.concurrent.LinkedBlockingQueue;
 
-import edu.uci.ics.asterix.formats.nontagged.AqlSerializerDeserializerProvider;
 import edu.uci.ics.asterix.om.base.AInt32;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.IAType;
@@ -17,6 +15,7 @@ import edu.uci.ics.hyracks.dataflow.common.comm.util.FrameUtils;
 import edu.uci.ics.hyracks.dataflow.std.base.AbstractUnaryOutputSourceOperatorNodePushable;
 
 public class KVRequestDispatcherOperatorNodePushable extends AbstractUnaryOutputSourceOperatorNodePushable implements ITriggeredFlushOperator {
+	private final int INVALID = -1;
 	
 	private final KVCallParser callParser;
 	private final int pId;
@@ -24,12 +23,15 @@ public class KVRequestDispatcherOperatorNodePushable extends AbstractUnaryOutput
 	private FrameTupleAppender appender;
 	private ByteBuffer frame;
 	
-	private final long flushPeriod;
-	private final Timer timer;
+	private final long maxWaitTime;
 	private final TimeTrigger trigger;
+	private final Thread triggerThread;
+	private final Object signal;
+	private final LinkedBlockingQueue<Object> signalChannel;
+	private long scheduledTime;
 
 	
-	public KVRequestDispatcherOperatorNodePushable(IHyracksTaskContext ctx, int partition, IAType[] keyType, KVServiceID sId, ARecordType record, List<String> partitionKeys, long flushPeriod, RecordDescriptor onlyValueRDesc){
+	public KVRequestDispatcherOperatorNodePushable(IHyracksTaskContext ctx, int partition, IAType[] keyType, KVServiceID sId, ARecordType record, List<String> partitionKeys, long maxWaitTime, RecordDescriptor onlyValueRDesc){
 		pId = partition;
 		queue = new LinkedBlockingQueue<IKVCall>();
 		callParser = new KVCallParser(ctx, this, keyType, pId, partitionKeys, record, onlyValueRDesc);
@@ -38,16 +40,19 @@ public class KVRequestDispatcherOperatorNodePushable extends AbstractUnaryOutput
         appender.reset(frame, true);
         //String ncId = ctx.getJobletContext().getApplicationContext().getNodeId(); //<<< How to get nodeId
         KVServiceProvider.INSTANCE.registerQueryQueue(sId, queue, record);
-        timer = new Timer();
-        trigger = new TimeTrigger(this);
-        this.flushPeriod = flushPeriod;
+        this.maxWaitTime = maxWaitTime;
+        signal = new Object();
+        signalChannel = new LinkedBlockingQueue<Object>();
+        trigger = new TimeTrigger(this, signalChannel);
+        triggerThread = new Thread( trigger );
+        scheduledTime = INVALID;
 	}
 	
 	@Override
     public void initialize() throws HyracksDataException {
 		try {
 			writer.open();
-			startTriggers();
+			startTrigger();
 			while(true){
 				IKVCall call = queue.take();
 				System.out.println(">>> A new call of type "+call.getType()+" received from query queue in partition "+pId);
@@ -68,20 +73,62 @@ public class KVRequestDispatcherOperatorNodePushable extends AbstractUnaryOutput
 		} catch (Exception e) {
 			throw new HyracksDataException(e);
 		} finally {
-			timer.cancel();
+			if(trigger.isRunning()){
+				trigger.stop();
+				triggerThread.interrupt();
+			}
             writer.close();
         }
     }
 	
 	public void addTuples(int[] fieldSlots, byte[] bytes, int offset, int length) throws HyracksDataException{
-		synchronized(frame){
-			if ( !appender.append(fieldSlots, bytes, offset, length) ) {
-				flush();
-				if (!appender.append(fieldSlots, bytes, offset, length) ) {
-					throw new IllegalStateException();
+		//synchronized(frame){
+			while ( !appender.append(fieldSlots, bytes, offset, length) ) {
+				flush(false);
+			}
+			if(scheduledTime == INVALID){
+				try {
+					scheduledTime = maxWaitTime;
+					trigger.setParams(scheduledTime, 0);
+					signalChannel.put(signal);
+				} catch (InterruptedException e) {
+					throw new HyracksDataException(e);
 				}
 			}
+		//}
+	}
+	
+	
+	
+	public void flush(boolean fromTrigger) throws HyracksDataException{ 
+		synchronized (frame) {
+			if(appender.getTupleCount() > 0){
+				System.out.println("Flushing "+appender.getTupleCount()+" Tuples");
+				FrameUtils.flushFrame(frame, writer);
+				appender.reset(frame, true);
+			}
+			if(!fromTrigger){
+				trigger.setParams(INVALID, INVALID);
+				triggerThread.interrupt();
+			}
+			scheduledTime = INVALID;
 		}
+	}
+	
+	public KVCallParser getKVManager(){
+		return callParser;
+	}
+
+
+	@Override
+	public void startTrigger() {
+		triggerThread.start();
+		
+	}
+
+	@Override
+	public void triggeredFlush(int arg) throws HyracksDataException {
+		flush(true);
 	}
 	
 	public void reportMissingKeysError(int queryId, List<String> missedColumns) throws InterruptedException{
@@ -96,30 +143,5 @@ public class KVRequestDispatcherOperatorNodePushable extends AbstractUnaryOutput
 		}
 		errorMessage[3] = st.toString();
 		outputQueue.put(errorMessage);
-	}
-	
-	public void flush() throws HyracksDataException{ 
-		synchronized (frame) {
-			if(appender.getTupleCount() > 0){
-				System.out.println("Flushing "+appender.getTupleCount()+" Tuples");
-				FrameUtils.flushFrame(frame, writer);
-				appender.reset(frame, true);
-			}
-		}
-	}
-	
-	public KVCallParser getKVManager(){
-		return callParser;
-	}
-
-	@Override
-	public void startTriggers() {
-		timer.scheduleAtFixedRate(trigger, 0, flushPeriod);
-		
-	}
-
-	@Override
-	public void triggeredFlush() throws HyracksDataException {
-		flush();
 	}
 }

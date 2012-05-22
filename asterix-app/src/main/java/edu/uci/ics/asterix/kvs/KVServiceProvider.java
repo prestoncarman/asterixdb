@@ -33,8 +33,11 @@ public class KVServiceProvider {
 	
 	public void registerQueryQueue(KVServiceID serviceId, LinkedBlockingQueue<IKVCall> queue, ARecordType schema) throws IllegalStateException{
 		if(getQueryQueue(serviceId) != null){
-			throw new IllegalStateException("Service Queue already exists for "+serviceId.toString());		//TODO Revise Exception Type
+			//throw new IllegalStateException("Service Queue already exists for "+serviceId.toString());		//TODO Revise Exception Type
+			System.out.println("<!><!><!><!><!> Service Queue already exists for "+serviceId.toString());
+			return;
 		}
+		System.out.println("Query Queue Registered for service "+serviceId);
 		serviceMap.put(serviceId, queue);
 		schemaMap.put(serviceId, schema);
 	}

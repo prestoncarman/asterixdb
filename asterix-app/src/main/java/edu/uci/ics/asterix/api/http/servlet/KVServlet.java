@@ -253,7 +253,7 @@ public class KVServlet extends HttpServlet {
         			r += ", ";
         		}
         		r += "\n";
-        		System.out.println("Got the result back for query "+queryId+" in doPost()");
+        		System.out.println("Got the result back for query "+queryId+" in doPut()");
         	} catch (Exception e) {
         		e.printStackTrace();
         	}

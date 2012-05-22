@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.util.Timer;
+import java.util.concurrent.LinkedBlockingQueue;
 
 import edu.uci.ics.asterix.formats.nontagged.AqlSerializerDeserializerProvider;
 import edu.uci.ics.asterix.kvs.IKVCall.KVCallType;
@@ -39,11 +40,9 @@ import edu.uci.ics.hyracks.storage.am.common.dataflow.TreeIndexDataflowHelper;
 import edu.uci.ics.hyracks.storage.am.common.ophelpers.MultiComparator;
 
 public class KVRequestHandlerOperatorNodePushable extends AbstractUnaryInputUnaryOutputOperatorNodePushable implements ITriggeredFlushOperator{
+	private final int INVALID = -1;
 	
 	private final KVCallType[] callTypes;		//TODO You may want to replace it with a better technique
-	private final long flushPeriod;
-	private final Timer timer;
-	private final TimeTrigger trigger;
 	TreeIndexDataflowHelper treeIndexHelper;
 	private BTreeCallHandler kvsCallHandler;
 	RecordDescriptor recDesc;
@@ -58,21 +57,33 @@ public class KVRequestHandlerOperatorNodePushable extends AbstractUnaryInputUnar
 	
 	boolean init;
 	
-	public KVRequestHandlerOperatorNodePushable(AbstractTreeIndexOperatorDescriptor opDesc, IHyracksTaskContext ctx, int partition, IRecordDescriptorProvider recordDescProvider, int numOfKeys, long flushPeriod){
+	private final long maxWaitTime;
+	private final TimeTrigger trigger;
+	private final Thread triggerThread;
+	private final Object signal;
+	private final LinkedBlockingQueue<Object> signalChannel;
+	private long scheduledTime;
+	
+	public KVRequestHandlerOperatorNodePushable(AbstractTreeIndexOperatorDescriptor opDesc, IHyracksTaskContext ctx, int partition, IRecordDescriptorProvider recordDescProvider, int numOfKeys, long maxWaitTime){
 		this.numOfKeys = numOfKeys;
 		this.opDesc = opDesc;
 		this.ctx = ctx;
 		init = false;
 		callTypes = KVCallType.values();
-		this.flushPeriod = flushPeriod;
-		this.timer = new Timer();
-		this.trigger = new TimeTrigger(this);
 		recDesc = recordDescProvider.getInputRecordDescriptor(opDesc.getOperatorId(), 0);
 		this.partition = partition;
+		
+		this.maxWaitTime = maxWaitTime;
+		signal = new Object();
+		signalChannel = new LinkedBlockingQueue<Object>();
+		trigger = new TimeTrigger(this, signalChannel);
+		triggerThread = new Thread( trigger );
+		scheduledTime = INVALID;
 	}
 	
 	@Override
 	public void open() throws HyracksDataException {
+		startTrigger();
 	}
 
 	@Override
@@ -114,7 +125,6 @@ public class KVRequestHandlerOperatorNodePushable extends AbstractUnaryInputUnar
         appender.reset(writeBuffer, true);
 		tr = new FrameTupleReference();
 		kvsCallHandler.init(treeIndexHelper);
-		startTriggers();
 		init = true;
 	}
 	
@@ -150,38 +160,58 @@ public class KVRequestHandlerOperatorNodePushable extends AbstractUnaryInputUnar
 	@Override
 	public void close() throws HyracksDataException {
 		if(appender.getTupleCount()>0){
-			flush();
+			flush(false);
 		}
 		kvsCallHandler.close();
-		timer.cancel();
+		if(trigger.isRunning()){
+			trigger.stop();
+			triggerThread.interrupt();
+		}
 		writer.close();
 	}
 	
 	public void appendToResults( ArrayTupleBuilder tb, int[] fieldSlots, byte[] bytes, int offset, int length) throws HyracksDataException{
-		if (!appender.append(tb.getFieldEndOffsets(), tb.getByteArray(), 0, tb.getSize())) {
-            flush();
-            if (!appender.append(tb.getFieldEndOffsets(), tb.getByteArray(), 0, tb.getSize())) {
-                throw new IllegalStateException();
-            }
-        }
+		//synchronized (writeBuffer) {
+			while (!appender.append(tb.getFieldEndOffsets(), tb.getByteArray(), 0, tb.getSize())) {
+	            flush(false);
+	        }
+			if(scheduledTime == INVALID){
+				try {
+					scheduledTime = maxWaitTime;
+					trigger.setParams(scheduledTime, 0);
+					signalChannel.put(signal);
+				} catch (InterruptedException e) {
+					throw new HyracksDataException(e);
+				}
+			}
+		//}
+		
 	}
 	
-	private void flush() throws HyracksDataException{
-		if(appender.getTupleCount()>0){
-			FrameUtils.flushFrame(writeBuffer, writer);
-	        appender.reset(writeBuffer, true);
+	private void flush(boolean fromTrigger) throws HyracksDataException{
+		synchronized(writeBuffer){
+			if(appender.getTupleCount()>0){
+				FrameUtils.flushFrame(writeBuffer, writer);
+		        appender.reset(writeBuffer, true);
+			}
+			if(!fromTrigger){
+				trigger.setParams(INVALID, INVALID);
+				triggerThread.interrupt();
+			}
+			scheduledTime = INVALID;
 		}
 	}
 
+
 	@Override
-	public void startTriggers() {
-		timer.scheduleAtFixedRate(trigger, 0, flushPeriod);
+	public void startTrigger() {
+		triggerThread.start();
 		
 	}
 
 	@Override
-	public void triggeredFlush() throws HyracksDataException {
-		flush();
+	public void triggeredFlush(int arg) throws HyracksDataException {
+		flush(true);
 	}
 }
 

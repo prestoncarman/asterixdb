@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.concurrent.LinkedBlockingQueue;
 
 import edu.uci.ics.hyracks.api.comm.IFrameWriter;
 import edu.uci.ics.hyracks.api.comm.IPartitionWriterFactory;
@@ -14,7 +15,9 @@ import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 import edu.uci.ics.hyracks.dataflow.common.comm.io.FrameTupleAccessor;
 import edu.uci.ics.hyracks.dataflow.common.comm.io.FrameTupleAppender;
 
-public class TimeTriggeredPartitionDataWriter implements IFrameWriter {
+public class TimeTriggeredPartitionDataWriter implements ITriggeredFlushOperator, IFrameWriter {
+	private final int INVALID = -1;
+	private final long maxWaitTime;
 	
 	private final int consumerPartitionCount;
     private final IFrameWriter[] pWriters;
@@ -22,14 +25,19 @@ public class TimeTriggeredPartitionDataWriter implements IFrameWriter {
     private final FrameTupleAccessor tupleAccessor;
     private final ITuplePartitionComputer tpc;
 	
-	private final Timer timer;
-	private TimerTask[] triggers;
-	private final long flushPeriod;
+	private final Object signal;
+	private final LinkedBlockingQueue<Object> signalChannel;
+	private TimeTrigger trigger;
+	private Thread triggerThread;
 	
+	private long[] timeTable;
+	private int[] next;
+	private int[] prev;
+	private int tail;
 
 	public TimeTriggeredPartitionDataWriter(IHyracksTaskContext ctx,
 												int consumerPartitionCount, IPartitionWriterFactory pwFactory,
-													RecordDescriptor recordDescriptor, ITuplePartitionComputer tpc, long flushPeriod) throws HyracksDataException {
+													RecordDescriptor recordDescriptor, ITuplePartitionComputer tpc, long flushTreshold) throws HyracksDataException {
 		
 		this.consumerPartitionCount = consumerPartitionCount;
         pWriters = new IFrameWriter[consumerPartitionCount];
@@ -46,9 +54,11 @@ public class TimeTriggeredPartitionDataWriter implements IFrameWriter {
         tupleAccessor = new FrameTupleAccessor(ctx.getFrameSize(), recordDescriptor);
         this.tpc = tpc;
 		
-		timer = new Timer();
-		triggers = new Trigger[consumerPartitionCount];
-		this.flushPeriod = flushPeriod;
+		this.maxWaitTime = flushTreshold;
+		signal = new Object();
+		signalChannel = new LinkedBlockingQueue<Object>();
+		trigger = new TimeTrigger(this, signalChannel);
+		triggerThread = new Thread( trigger );
 	}
 	
 	
@@ -59,42 +69,34 @@ public class TimeTriggeredPartitionDataWriter implements IFrameWriter {
             appenders[i].reset(appenders[i].getBuffer(), true);
         }
 		
+		timeTable = new long[consumerPartitionCount];
+		next = new int[consumerPartitionCount];
+		prev = new int[consumerPartitionCount];
 		for(int i=0; i<consumerPartitionCount; i++){
-			triggers[i] = new Trigger(this, i);
-			timer.scheduleAtFixedRate(triggers[i], 0, flushPeriod);
-			System.out.println(">>>>>> (Inside TimeTriggeredConnector) - Task for writer "+i+" scheduled for interval "+triggers[i].scheduledExecutionTime());
+			timeTable[i] = INVALID;
+			next[i] = INVALID;
+			prev[i] = INVALID;
 		}
+		tail = INVALID;
+		
+		startTrigger();
+	}
+	
+	@Override
+	public void startTrigger() {
+		triggerThread.start();
 	}
 	
 	@Override
     public void close() throws HyracksDataException {
 		for (int i = 0; i < pWriters.length; ++i) {
             if (appenders[i].getTupleCount() > 0) {
-                flushFrame(appenders[i].getBuffer(), pWriters[i]);
+                flushFrameContent(appenders[i].getBuffer(), pWriters[i]);
             }
             pWriters[i].close();
         }
-		
-		timer.cancel();
-		triggers = null;
-	}
-	
-	protected void flushFrame(ByteBuffer buffer, IFrameWriter frameWriter) throws HyracksDataException {
-        buffer.position(0);
-        buffer.limit(buffer.capacity());
-        frameWriter.nextFrame(buffer);
-    }
-	
-	protected void triggeredFlush(int bufferIx) throws HyracksDataException{
-		if (appenders[bufferIx].getTupleCount() > 0) {
-            try {
-            	ByteBuffer buff = appenders[bufferIx].getBuffer();
-				flushFrame(buff, pWriters[bufferIx]);
-				appenders[bufferIx].reset(buff, true);
-			} catch (HyracksDataException e) {
-				throw new HyracksDataException(e); 
-			}
-        }
+		trigger.stop();
+		triggerThread.interrupt();
 	}
 
 	@Override
@@ -102,6 +104,8 @@ public class TimeTriggeredPartitionDataWriter implements IFrameWriter {
 		for (int i = 0; i < appenders.length; ++i) {
 			pWriters[i].fail();
 		}
+		trigger.stop();
+		triggerThread.interrupt();
 	}
 
 
@@ -109,38 +113,116 @@ public class TimeTriggeredPartitionDataWriter implements IFrameWriter {
 	public void nextFrame(ByteBuffer buffer) throws HyracksDataException {
 		tupleAccessor.reset(buffer);
         int tupleCount = tupleAccessor.getTupleCount();
-        for (int i = 0; i < tupleCount; ++i) {
-            int h = tpc.partition(tupleAccessor, i, consumerPartitionCount);
-            FrameTupleAppender appender = appenders[h];
-            if (!appender.append(tupleAccessor, i)) {
-                ByteBuffer appenderBuffer = appender.getBuffer();
-                flushFrame(appenderBuffer, pWriters[h]);
-                appender.reset(appenderBuffer, true);
-                if (!appender.append(tupleAccessor, i)) {
-                    throw new IllegalStateException();
-                }
-            }
-        }
-	}
-}
-
-class Trigger extends TimerTask {
-	
-	private final TimeTriggeredPartitionDataWriter pdWriter;
-	private final int bufferIx;
-	
-	public Trigger(TimeTriggeredPartitionDataWriter pdw, int bIx){
-		pdWriter = pdw;
-		bufferIx = bIx;
-	}
-
-	@Override
-	public void run() {
-		try {
-			pdWriter.triggeredFlush(bufferIx);
-		} catch (HyracksDataException e) {
-			System.err.println("Problem in triggered flushing into PartitionWriter "+bufferIx);
-			e.printStackTrace();
+        try {
+			for (int i = 0; i < tupleCount; ++i) {
+			    int h = tpc.partition(tupleAccessor, i, consumerPartitionCount);
+			    while(!addToFrame(h, i)){
+			    	flush(h, false);
+			    }
+			}
+		} catch (InterruptedException e) {
+			throw new HyracksDataException(e);
 		}
 	}
+	
+	private boolean addToFrame(int fIx, int tIx) throws InterruptedException{
+        FrameTupleAppender appender = appenders[fIx];
+        if (!appender.append(tupleAccessor, tIx)) {
+        	return false;
+        }
+        if(timeTable[fIx] != INVALID){	//Some older tuple is in the frame
+        	return true;
+        }
+        timeTable[fIx] = System.currentTimeMillis();	//first tuple in this buffer
+        prev[fIx] = tail;
+        next[fIx] = INVALID;
+        if(tail == INVALID){	//No task already scheduled
+        	trigger.setParams(maxWaitTime, fIx);
+        	tail = fIx;
+        	signalChannel.put(signal);
+        }
+        else{	//(Some task already scheduled) Append to the end of list
+        	next[tail] = fIx;
+        	tail = fIx;
+        }
+        return true;
+	}
+	
+	private void followChain(int start) throws InterruptedException, HyracksDataException{
+		if(start != INVALID ){
+			long w = System.currentTimeMillis() - timeTable[start]; 
+			if( w < maxWaitTime){
+				trigger.setParams((maxWaitTime - w), start);
+				signalChannel.put(signal);
+				return;
+			}
+			else{
+				int n = next[start];
+				flushFrame(start);
+				followChain(n);
+			}
+		}
+		else{
+			tail = INVALID;		//It was the last
+		}
+	}
+	
+	@Override
+	public void triggeredFlush(int fIx) throws HyracksDataException{
+		flush(fIx, true);
+	}
+	
+	
+	public void flush(int fIx, boolean fromTrigger) throws HyracksDataException{
+		try {
+			int n = next[fIx];
+			int p = prev[fIx];
+			flushFrame(fIx);
+			if(p == INVALID){	//it was the scheduled task
+				if(!fromTrigger){
+					trigger.setParams(INVALID, INVALID);
+					triggerThread.interrupt();
+				}
+				followChain(n);
+			}
+			else{		//It was in the middle of chain
+				next[p] = n;
+				if(n != INVALID){
+					prev[n] = p;
+				}
+				else{	//It was the very last in the chain
+					tail = p;
+				}
+			}
+		}  catch (InterruptedException e) {
+			throw new HyracksDataException(e);
+		}
+	}
+	
+	private void flushFrame(int ix) throws HyracksDataException {
+		if (appenders[ix].getTupleCount() > 0) {
+            try {
+            	ByteBuffer buff = appenders[ix].getBuffer();
+            	synchronized(buff){
+            		flushFrameContent(buff, pWriters[ix]);
+    				appenders[ix].reset(buff, true);
+    				timeTable[ix] = INVALID;
+    				next[ix] = INVALID;
+    				prev[ix] = INVALID;
+            	}
+			} catch (HyracksDataException e) {
+				throw new HyracksDataException(e); 
+			}
+        }
+		
+	}
+	
+	
+	private void flushFrameContent(ByteBuffer buffer, IFrameWriter frameWriter) throws HyracksDataException {
+        buffer.position(0);
+        buffer.limit(buffer.capacity());
+        frameWriter.nextFrame(buffer);
+    }
+	
+	
 }

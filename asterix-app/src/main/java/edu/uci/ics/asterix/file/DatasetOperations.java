@@ -404,7 +404,7 @@ public class DatasetOperations {
 		
 		JobSpecification spec = new JobSpecification();
 		KVRequestDispatcherOperatorDescriptor reqDisp = 
-			new KVRequestDispatcherOperatorDescriptor(spec, keyType, dvName, dsName, record, partitioningKeys, 3000);
+			new KVRequestDispatcherOperatorDescriptor(spec, keyType, dvName, dsName, record, partitioningKeys, 1);
 		
 		IStorageManagerInterface storageManager = AsterixStorageManagerInterface.INSTANCE;
 		IIndexRegistryProvider<IIndex> indexRegistryProvider = AsterixIndexRegistryProvider.INSTANCE;
@@ -425,7 +425,7 @@ public class DatasetOperations {
 				new KVRequestHandlerOperatorDescriptor(spec, kvRespRecDesc, 
 						storageManager, indexRegistryProvider, fileSplitProvider, 
 							/*interiorFrameFactory, leafFrameFactory,*/ typeTraits, 
-								comparatorFactories, new BTreeDataflowHelperFactory(), keyType.length, 3000);
+								comparatorFactories, new BTreeDataflowHelperFactory(), keyType.length, 1);
 		
 		
 		KVSResponseDispatcherOperatorDescriptor respDisp = new KVSResponseDispatcherOperatorDescriptor(spec);
@@ -443,11 +443,11 @@ public class DatasetOperations {
 			hashFactories1[i] = AqlBinaryHashFunctionFactoryProvider.INSTANCE.getBinaryHashFunctionFactory(keyType[i] );	
 		}
 		ITuplePartitionComputerFactory tpcf1 = new FieldHashPartitionComputerFactory(keysIx, hashFactories1);
-		IConnectorDescriptor con1 = new MToNPartitioningTimeTriggeredConnectorDescriptor(spec, tpcf1, 7000);
+		IConnectorDescriptor con1 = new MToNPartitioningTimeTriggeredConnectorDescriptor(spec, tpcf1, 1);
 		
 		IBinaryHashFunctionFactory[] hashFactories2 = new IBinaryHashFunctionFactory[]{AqlBinaryHashFunctionFactoryProvider.INSTANCE.getBinaryHashFunctionFactory(BuiltinType.AINT32)};	
 		ITuplePartitionComputerFactory tpcf2 = new FieldHashPartitionComputerFactory(new int[]{0}, hashFactories2);
-		IConnectorDescriptor con2 = new MToNPartitioningTimeTriggeredConnectorDescriptor(spec, tpcf2, 3000);
+		IConnectorDescriptor con2 = new MToNPartitioningTimeTriggeredConnectorDescriptor(spec, tpcf2, 1);
 		
 		spec.connect(con1, reqDisp, 0, reqHandler, 0);
 	    spec.connect(con2, reqHandler, 0, respDisp, 0);
