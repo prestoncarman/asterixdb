@@ -16,6 +16,7 @@ package edu.uci.ics.asterix.file;
 
 import java.rmi.RemoteException;
 import java.util.List;
+import java.util.Map;
 import java.util.logging.Logger;
 
 import edu.uci.ics.asterix.api.common.Job;
@@ -194,17 +195,29 @@ public class DatasetOperations {
             return spec;
     }
     
-    public static JobSpecification createKeyValueServiceJobSpec(String datasetName, AqlCompiledMetadataDeclarations metadata) throws Exception{
-    	 AqlCompiledDatasetDecl compiledDatasetDecl = metadata.findDataset(datasetName);
-    	 if (compiledDatasetDecl == null) {
-             throw new AsterixException("Could not find dataset " + datasetName + " for keyservice registration");
-         }
-         if (compiledDatasetDecl.getDatasetType() != DatasetType.INTERNAL
-                 && compiledDatasetDecl.getDatasetType() != DatasetType.FEED) {
-             throw new AsterixException("Cannot register  dataset  (" + datasetName + ")" + "of type "
-                     + compiledDatasetDecl.getDatasetType() + " for keyservice");
-         }
-         
+    public static JobSpecification createKeyValueServiceJobSpec(String datasetName, Map<String, String> keyServiceParams, AqlCompiledMetadataDeclarations metadata) throws Exception{
+    	 
+    	
+    	 
+    	AqlCompiledDatasetDecl compiledDatasetDecl = metadata.findDataset(datasetName);
+    	if (compiledDatasetDecl == null) {
+    		throw new AsterixException("Could not find dataset " + datasetName + " for keyservice registration");
+    	}
+    	if (compiledDatasetDecl.getDatasetType() != DatasetType.INTERNAL
+    			&& compiledDatasetDecl.getDatasetType() != DatasetType.FEED) {
+    		throw new AsterixException("Cannot register  dataset  (" + datasetName + ")" + "of type "
+    				+ compiledDatasetDecl.getDatasetType() + " for keyservice");
+    	}
+
+
+    	long delay = KVUtils.DEFAULT_DELAY;
+    	if(keyServiceParams != null){
+    		String d = keyServiceParams.get(KVUtils.DELAY_PARAM_TAG);
+    		if(d != null){
+    			delay = Long.parseLong( d ); 
+    		}
+    	} 
+
         AqlCompiledInternalDatasetDetails acidd = (AqlCompiledInternalDatasetDetails) compiledDatasetDecl.getAqlCompiledDatasetDetails();
  		List<Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType>> pfList = acidd.getPartitioningFunctions();
  		
@@ -257,7 +270,7 @@ public class DatasetOperations {
 		
 		String dataverseName = metadata.getDataverseName();
 		
-		JobSpecification spec = generateKeyServiceJobSpec(dataverseName, datasetName, keyTypes, tt, bcf, fs, isd, record, partitionKeys, partConst);
+		JobSpecification spec = generateKeyServiceJobSpec(dataverseName, datasetName, keyTypes, tt, bcf, fs, isd, record, partitionKeys, partConst, delay);
 		return spec;
     }
     
@@ -400,11 +413,11 @@ public class DatasetOperations {
         return new RecordDescriptor(recordFields);
     }
     
-    private static JobSpecification generateKeyServiceJobSpec(String dvName, String dsName, IAType[] keyType, ITypeTraits[] typeTraits, IBinaryComparatorFactory[] comparatorFactories, IFileSplitProvider fileSplitProvider, ISerializerDeserializer[] res, ARecordType record, List<String> partitioningKeys, AlgebricksAbsolutePartitionConstraint parts) throws Exception{
+    private static JobSpecification generateKeyServiceJobSpec(String dvName, String dsName, IAType[] keyType, ITypeTraits[] typeTraits, IBinaryComparatorFactory[] comparatorFactories, IFileSplitProvider fileSplitProvider, ISerializerDeserializer[] res, ARecordType record, List<String> partitioningKeys, AlgebricksAbsolutePartitionConstraint parts, long delay) throws Exception{
 		
 		JobSpecification spec = new JobSpecification();
 		KVRequestDispatcherOperatorDescriptor reqDisp = 
-			new KVRequestDispatcherOperatorDescriptor(spec, keyType, dvName, dsName, record, partitioningKeys, 1);
+			new KVRequestDispatcherOperatorDescriptor(spec, keyType, dvName, dsName, record, partitioningKeys, delay);
 		
 		IStorageManagerInterface storageManager = AsterixStorageManagerInterface.INSTANCE;
 		IIndexRegistryProvider<IIndex> indexRegistryProvider = AsterixIndexRegistryProvider.INSTANCE;
@@ -425,7 +438,7 @@ public class DatasetOperations {
 				new KVRequestHandlerOperatorDescriptor(spec, kvRespRecDesc, 
 						storageManager, indexRegistryProvider, fileSplitProvider, 
 							/*interiorFrameFactory, leafFrameFactory,*/ typeTraits, 
-								comparatorFactories, new BTreeDataflowHelperFactory(), keyType.length, 1);
+								comparatorFactories, new BTreeDataflowHelperFactory(), keyType.length, delay);
 		
 		
 		KVSResponseDispatcherOperatorDescriptor respDisp = new KVSResponseDispatcherOperatorDescriptor(spec);
@@ -443,11 +456,11 @@ public class DatasetOperations {
 			hashFactories1[i] = AqlBinaryHashFunctionFactoryProvider.INSTANCE.getBinaryHashFunctionFactory(keyType[i] );	
 		}
 		ITuplePartitionComputerFactory tpcf1 = new FieldHashPartitionComputerFactory(keysIx, hashFactories1);
-		IConnectorDescriptor con1 = new MToNPartitioningTimeTriggeredConnectorDescriptor(spec, tpcf1, 1);
+		IConnectorDescriptor con1 = new MToNPartitioningTimeTriggeredConnectorDescriptor(spec, tpcf1, delay);
 		
 		IBinaryHashFunctionFactory[] hashFactories2 = new IBinaryHashFunctionFactory[]{AqlBinaryHashFunctionFactoryProvider.INSTANCE.getBinaryHashFunctionFactory(BuiltinType.AINT32)};	
 		ITuplePartitionComputerFactory tpcf2 = new FieldHashPartitionComputerFactory(new int[]{0}, hashFactories2);
-		IConnectorDescriptor con2 = new MToNPartitioningTimeTriggeredConnectorDescriptor(spec, tpcf2, 1);
+		IConnectorDescriptor con2 = new MToNPartitioningTimeTriggeredConnectorDescriptor(spec, tpcf2, delay);
 		
 		spec.connect(con1, reqDisp, 0, reqHandler, 0);
 	    spec.connect(con2, reqHandler, 0, respDisp, 0);

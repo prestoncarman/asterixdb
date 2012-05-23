@@ -181,9 +181,10 @@ public class DdlTranslator extends AbstractAqlTranslator {
                             String ngName = ((InternalDetailsDecl) dd.getDatasetDetailsDecl()).getNodegroupName()
                                     .getValue();
                             boolean keyServiceFlag = ((InternalDetailsDecl) dd.getDatasetDetailsDecl()).getKeyServiceFlag();
+                            Map<String, String> keyServiceParams = ((InternalDetailsDecl) dd.getDatasetDetailsDecl()).getKeyServiceParams();
                             datasetDetails = new InternalDatasetDetails(InternalDatasetDetails.FileStructure.BTREE,
                                     InternalDatasetDetails.PartitioningStrategy.HASH, partitioningExprs,
-                                    partitioningExprs, ngName, keyServiceFlag);
+                                    partitioningExprs, ngName, keyServiceFlag, keyServiceParams);
                             break;
                         }
                         case EXTERNAL: {
@@ -221,7 +222,8 @@ public class DdlTranslator extends AbstractAqlTranslator {
                         runCreateDatasetJob(hcc, datasetName);
                         boolean needKeyService = ((InternalDatasetDetails) datasetDetails).getKeyService();
                     	if(needKeyService){
-                    		initiateKeyService(hcc, mdTxnCtx.getTxnId(), datasetName);
+                    		Map<String, String> keyServiceParams = ((InternalDatasetDetails) datasetDetails).getKeyServiceParams();
+                    		initiateKeyService(hcc, mdTxnCtx.getTxnId(), datasetName, keyServiceParams);
                     	}
                     }
                     break;
@@ -535,9 +537,9 @@ public class DdlTranslator extends AbstractAqlTranslator {
 
     
     
-    private void initiateKeyService(IHyracksClientConnection hcc, long txnId, String datasetName)
+    private void initiateKeyService(IHyracksClientConnection hcc, long txnId, String datasetName, Map<String, String> keyServiceParams)
     throws Exception {
-    	JobSpecification jobSpec = DatasetOperations.createKeyValueServiceJobSpec(datasetName, compiledDeclarations);
+    	JobSpecification jobSpec = DatasetOperations.createKeyValueServiceJobSpec(datasetName, keyServiceParams, compiledDeclarations);
     	System.out.println(jobSpec.toString());
     	jobSpec.setMaxReattempts(0);
         JobId jobId = hcc.createJob(GlobalConfig.HYRACKS_APP_NAME, jobSpec);

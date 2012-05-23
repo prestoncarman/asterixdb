@@ -38,7 +38,8 @@ import edu.uci.ics.hyracks.storage.am.common.api.ITreeIndexFrameFactory;
 import edu.uci.ics.hyracks.algebricks.runtime.base.IEvaluatorFactory;
 
 public class KVUtils {
-	
+	public static final String DELAY_PARAM_TAG = "delay";
+	public static final long DEFAULT_DELAY = 250;
 	
 	public static AqlCompiledMetadataDeclarations generateACMD(MetadataTransactionContext mdTxnCtx, String dataverseName) throws MetadataException, AlgebricksException{
 		List<TypeDecl> typeDeclarations = new ArrayList<TypeDecl>();

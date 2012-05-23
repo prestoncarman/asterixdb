@@ -16,6 +16,7 @@ package edu.uci.ics.asterix.aql.expression;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import edu.uci.ics.asterix.metadata.bootstrap.MetadataConstants;
 
@@ -23,6 +24,7 @@ public class InternalDetailsDecl implements IDatasetDetailsDecl {
     private Identifier nodegroupName = new Identifier(MetadataConstants.METADATA_DEFAULT_NODEGROUP_NAME);
     private List<String> partitioningExprs = new ArrayList<String>();
     private boolean keyServiceFlag = false;
+    private Map<String, String> keyServiceParams = null;
 
     public void addPartitioningExpr(String pe) {
         this.partitioningExprs.add(pe);
@@ -50,5 +52,17 @@ public class InternalDetailsDecl implements IDatasetDetailsDecl {
     
     public void setKeyServiceFlag(boolean b){
     	keyServiceFlag = b;
+    }
+    
+    public Map<String, String> getKeyServiceParams(){
+    	return keyServiceParams;
+    }
+    
+    public void setKeyServiceParams(Map<String, String> params){
+    	keyServiceParams = params;
+    	System.out.println("Parameters set for KeyService");
+    	for(String s : params.keySet()){
+    		System.out.println(s+" -> "+keyServiceParams.get(s));
+    	}
     }
 }

@@ -641,6 +641,14 @@ InternalDetailsDecl InternalDatasetDeclaration() throws ParseException :
     {
     	idd.setKeyServiceFlag(true);
     }
+    (
+     "set"
+   	{ 
+   	Map < String, String > params;
+   	params = getConfiguration();
+   	idd.setKeyServiceParams(params);
+   	}
+    )?
   )?
   ";"
   {

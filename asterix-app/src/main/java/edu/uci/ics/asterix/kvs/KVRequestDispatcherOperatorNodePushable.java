@@ -46,6 +46,8 @@ public class KVRequestDispatcherOperatorNodePushable extends AbstractUnaryOutput
         trigger = new TimeTrigger(this, signalChannel);
         triggerThread = new Thread( trigger );
         scheduledTime = INVALID;
+        
+        System.out.println(">>>> Request Dispatcher created with delay "+maxWaitTime);
 	}
 	
 	@Override

@@ -17,6 +17,7 @@ package edu.uci.ics.asterix.metadata.entities;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 
 import edu.uci.ics.asterix.builders.IAOrderedListBuilder;
 import edu.uci.ics.asterix.builders.IARecordBuilder;
@@ -31,7 +32,6 @@ import edu.uci.ics.asterix.om.base.AMutableString;
 import edu.uci.ics.asterix.om.base.AString;
 import edu.uci.ics.asterix.om.types.AOrderedListType;
 import edu.uci.ics.asterix.om.types.BuiltinType;
-import edu.uci.ics.asterix.runtime.evaluators.constructors.ABooleanConstructorDescriptor;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.ArrayBackedValueStorage;
@@ -53,7 +53,9 @@ public class InternalDatasetDetails implements IDatasetDetails {
     protected final List<String> partitioningKey;
     protected final List<String> primaryKey;
     protected final String groupName;
+    
     protected final boolean withKeyService;
+    protected final Map<String, String> keyServiceParams;
     
     public InternalDatasetDetails(FileStructure fileStructure, PartitioningStrategy partitioningStrategy,
             List<String> partitioningKey, List<String> primaryKey, String groupName) {
@@ -63,16 +65,18 @@ public class InternalDatasetDetails implements IDatasetDetails {
         this.primaryKey = primaryKey;
         this.groupName = groupName;
         this.withKeyService = false;
+        this.keyServiceParams = null;
     }
     
     public InternalDatasetDetails(FileStructure fileStructure, PartitioningStrategy partitioningStrategy,
-            List<String> partitioningKey, List<String> primaryKey, String groupName, boolean withKeyService) {
+            List<String> partitioningKey, List<String> primaryKey, String groupName, boolean withKeyService, Map<String, String> keyServiceParams) {
         this.fileStructure = fileStructure;
         this.partitioningStrategy = partitioningStrategy;
         this.partitioningKey = partitioningKey;
         this.primaryKey = primaryKey;
         this.groupName = groupName;
         this.withKeyService = withKeyService;
+        this.keyServiceParams = keyServiceParams;
     }
 
     public String getNodeGroupName() {
@@ -97,6 +101,10 @@ public class InternalDatasetDetails implements IDatasetDetails {
     
     public boolean getKeyService(){
     	return withKeyService;
+    }
+    
+    public Map<String, String> getKeyServiceParams(){
+    	return keyServiceParams;
     }
 
     @Override

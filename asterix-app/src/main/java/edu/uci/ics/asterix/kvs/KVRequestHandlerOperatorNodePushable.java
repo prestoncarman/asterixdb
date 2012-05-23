@@ -79,6 +79,8 @@ public class KVRequestHandlerOperatorNodePushable extends AbstractUnaryInputUnar
 		trigger = new TimeTrigger(this, signalChannel);
 		triggerThread = new Thread( trigger );
 		scheduledTime = INVALID;
+		
+		System.out.println(">>>> RequestHandler created with delay "+maxWaitTime);
 	}
 	
 	@Override
@@ -313,24 +315,33 @@ class BTreeCallHandler implements Serializable{
 	
 	private void writeSearchResults(int queryPId, int queryId) throws Exception{
 		System.out.println(">>>>>>> Writting Results for "+queryId+", cursor has next is "+cursor.hasNext());
-		while (cursor.hasNext()) {
-            tb.reset();
-            cursor.next();
-            	//Adding Query-PID
-            AqlSerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.AINT32).serialize(new AInt32(queryPId), dos);
-            tb.addFieldEndOffset();
-            	//Adding Query-ID
-			AqlSerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.AINT32).serialize(new AInt32(queryId), dos);
-            tb.addFieldEndOffset();
-            
-				//Adding Actual Result
-            ITupleReference tuple = cursor.getTuple();
+		tb.reset();
+      
+        	//Adding Query-PID
+        AqlSerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.AINT32).serialize(new AInt32(queryPId), dos);
+        tb.addFieldEndOffset();
+        	//Adding Query-ID
+		AqlSerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.AINT32).serialize(new AInt32(queryId), dos);
+        tb.addFieldEndOffset();
+        
+		if (cursor.hasNext()) {		//Results size is 1, as it is PK lookup
+        		//Adding Actual Result
+			cursor.next();
+			ITupleReference tuple = cursor.getTuple();
             for (int i = 0; i < tuple.getFieldCount(); i++) {
                 dos.write(tuple.getFieldData(i), tuple.getFieldStart(i), tuple.getFieldLength(i));
                 tb.addFieldEndOffset();
             }
             caller.appendToResults(tb, tb.getFieldEndOffsets(), tb.getByteArray(), 0, tb.getSize());
+           
         }
+		else{	//Empty result set (Key does not exist)
+			int fc = cursor.getTuple().getFieldCount();
+			for(int i=0; i<fc; i++){
+				tb.addFieldEndOffset();
+			}
+			caller.appendToResults(tb, tb.getFieldEndOffsets(), tb.getByteArray(), 0, tb.getSize());
+		}
 	}
 	
 	private void writeInsertResults(int queryPId, int queryId) throws IOException{

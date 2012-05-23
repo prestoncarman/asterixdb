@@ -59,6 +59,8 @@ public class TimeTriggeredPartitionDataWriter implements ITriggeredFlushOperator
 		signalChannel = new LinkedBlockingQueue<Object>();
 		trigger = new TimeTrigger(this, signalChannel);
 		triggerThread = new Thread( trigger );
+		
+		System.out.println(">>>> TriggeredDataWriter created with delay "+maxWaitTime);
 	}
 	
 	
