@@ -14,13 +14,10 @@
  */
 package edu.uci.ics.asterix.algebra.operators.logical;
 
-import java.util.List;
-
-import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractExtensibleLogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
+import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.IOperatorExtension;
 import edu.uci.ics.hyracks.algebricks.core.algebra.visitors.ILogicalExpressionReferenceTransform;
-import edu.uci.ics.hyracks.algebricks.core.algebra.visitors.ILogicalOperatorVisitor;
 import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
 
 /**
@@ -45,20 +42,8 @@ public class StatisticsOperator extends AbstractExtensibleLogicalOperator {
     }
 
     @Override
-    public <R, T> R accept(ILogicalOperatorVisitor<R, T> visitor, T arg) throws AlgebricksException {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public AbstractExtensibleLogicalOperator newInstance() {
-        // TODO Auto-generated method stub
+    public IOperatorExtension newInstance() {
         return new StatisticsOperator();
-    }
-
-    @Override
-    public void setSchema(List<LogicalVariable> schema) {
-        this.schema = schema;
     }
 
 }
