@@ -211,10 +211,15 @@ public class DatasetOperations {
 
 
     	long delay = KVUtils.DEFAULT_DELAY;
+    	int sizeLimit = KVUtils.DEFAULT_LIMIT;
     	if(keyServiceParams != null){
     		String d = keyServiceParams.get(KVUtils.DELAY_PARAM_TAG);
+    		String l = keyServiceParams.get(KVUtils.LIMIT_PARAM_TAG);
     		if(d != null){
     			delay = Long.parseLong( d ); 
+    		}
+    		if(l != null){
+    			sizeLimit = Integer.parseInt( l );
     		}
     	} 
 
@@ -270,7 +275,7 @@ public class DatasetOperations {
 		
 		String dataverseName = metadata.getDataverseName();
 		
-		JobSpecification spec = generateKeyServiceJobSpec(dataverseName, datasetName, keyTypes, tt, bcf, fs, isd, record, partitionKeys, partConst, delay);
+		JobSpecification spec = generateKeyServiceJobSpec(dataverseName, datasetName, keyTypes, tt, bcf, fs, isd, record, partitionKeys, partConst, delay, sizeLimit);
 		return spec;
     }
     
@@ -413,23 +418,24 @@ public class DatasetOperations {
         return new RecordDescriptor(recordFields);
     }
     
-    private static JobSpecification generateKeyServiceJobSpec(String dvName, String dsName, IAType[] keyType, ITypeTraits[] typeTraits, IBinaryComparatorFactory[] comparatorFactories, IFileSplitProvider fileSplitProvider, ISerializerDeserializer[] res, ARecordType record, List<String> partitioningKeys, AlgebricksAbsolutePartitionConstraint parts, long delay) throws Exception{
+    private static JobSpecification generateKeyServiceJobSpec(String dvName, String dsName, IAType[] keyType, ITypeTraits[] typeTraits, IBinaryComparatorFactory[] comparatorFactories, IFileSplitProvider fileSplitProvider, ISerializerDeserializer[] res, ARecordType record, List<String> partitioningKeys, AlgebricksAbsolutePartitionConstraint parts, long delay, int sizeLimit) throws Exception{
 		
+    	delay = delay/4;	//We have four level of buffering, and we divide this desired delay equally among them
+    	
 		JobSpecification spec = new JobSpecification();
 		KVRequestDispatcherOperatorDescriptor reqDisp = 
-			new KVRequestDispatcherOperatorDescriptor(spec, keyType, dvName, dsName, record, partitioningKeys, delay);
+			new KVRequestDispatcherOperatorDescriptor(spec, keyType, dvName, dsName, record, partitioningKeys, delay, sizeLimit);
 		
 		IStorageManagerInterface storageManager = AsterixStorageManagerInterface.INSTANCE;
 		IIndexRegistryProvider<IIndex> indexRegistryProvider = AsterixIndexRegistryProvider.INSTANCE;
 		
-		//ITreeIndexFrameFactory interiorFrameFactory = KVUtils.getInteriorFrameFactory(typeTraits); 
-	    //ITreeIndexFrameFactory leafFrameFactory = KVUtils.getLeafFrameFactory(typeTraits); 
 	    
-	    ISerializerDeserializer[] kvRespSerDe = new ISerializerDeserializer[res.length + 2];
+	    ISerializerDeserializer[] kvRespSerDe = new ISerializerDeserializer[res.length + 3];	//PID, QID, RespType fields added
 	    kvRespSerDe[0] = AqlSerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.AINT32);
 	    kvRespSerDe[1] = AqlSerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.AINT32);
-	    for(int i=2; i<kvRespSerDe.length; i++){
-	    	kvRespSerDe[i] = res[i-2];
+	    kvRespSerDe[2] = AqlSerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.AINT32);
+	    for(int i=3; i<kvRespSerDe.length; i++){
+	    	kvRespSerDe[i] = res[i-3];
 	    }
 	    RecordDescriptor kvRespRecDesc = new RecordDescriptor(kvRespSerDe);
 	    
@@ -437,8 +443,8 @@ public class DatasetOperations {
 		KVRequestHandlerOperatorDescriptor reqHandler = 
 				new KVRequestHandlerOperatorDescriptor(spec, kvRespRecDesc, 
 						storageManager, indexRegistryProvider, fileSplitProvider, 
-							/*interiorFrameFactory, leafFrameFactory,*/ typeTraits, 
-								comparatorFactories, new BTreeDataflowHelperFactory(), keyType.length, delay);
+							 typeTraits, 
+								comparatorFactories, new BTreeDataflowHelperFactory(), keyType.length, delay, sizeLimit);
 		
 		
 		KVSResponseDispatcherOperatorDescriptor respDisp = new KVSResponseDispatcherOperatorDescriptor(spec);
@@ -456,11 +462,11 @@ public class DatasetOperations {
 			hashFactories1[i] = AqlBinaryHashFunctionFactoryProvider.INSTANCE.getBinaryHashFunctionFactory(keyType[i] );	
 		}
 		ITuplePartitionComputerFactory tpcf1 = new FieldHashPartitionComputerFactory(keysIx, hashFactories1);
-		IConnectorDescriptor con1 = new MToNPartitioningTimeTriggeredConnectorDescriptor(spec, tpcf1, delay);
+		IConnectorDescriptor con1 = new MToNPartitioningTimeTriggeredConnectorDescriptor(spec, tpcf1, delay, sizeLimit);
 		
 		IBinaryHashFunctionFactory[] hashFactories2 = new IBinaryHashFunctionFactory[]{AqlBinaryHashFunctionFactoryProvider.INSTANCE.getBinaryHashFunctionFactory(BuiltinType.AINT32)};	
 		ITuplePartitionComputerFactory tpcf2 = new FieldHashPartitionComputerFactory(new int[]{0}, hashFactories2);
-		IConnectorDescriptor con2 = new MToNPartitioningTimeTriggeredConnectorDescriptor(spec, tpcf2, delay);
+		IConnectorDescriptor con2 = new MToNPartitioningTimeTriggeredConnectorDescriptor(spec, tpcf2, delay, sizeLimit);
 		
 		spec.connect(con1, reqDisp, 0, reqHandler, 0);
 	    spec.connect(con2, reqHandler, 0, respDisp, 0);

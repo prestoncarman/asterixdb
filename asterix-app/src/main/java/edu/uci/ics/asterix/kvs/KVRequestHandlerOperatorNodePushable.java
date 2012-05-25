@@ -25,6 +25,7 @@ import edu.uci.ics.hyracks.dataflow.common.data.accessors.FrameTupleReference;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.ITupleReference;
 import edu.uci.ics.hyracks.dataflow.std.base.AbstractUnaryInputUnaryOutputOperatorNodePushable;
 import edu.uci.ics.hyracks.storage.am.btree.api.IBTreeLeafFrame;
+import edu.uci.ics.hyracks.storage.am.btree.exceptions.BTreeDuplicateKeyException;
 import edu.uci.ics.hyracks.storage.am.btree.impls.BTree;
 import edu.uci.ics.hyracks.storage.am.btree.impls.BTreeRangeSearchCursor;
 import edu.uci.ics.hyracks.storage.am.btree.impls.RangePredicate;
@@ -34,6 +35,7 @@ import edu.uci.ics.hyracks.storage.am.common.api.ITreeIndex;
 import edu.uci.ics.hyracks.storage.am.common.api.ITreeIndexAccessor;
 import edu.uci.ics.hyracks.storage.am.common.api.ITreeIndexCursor;
 import edu.uci.ics.hyracks.storage.am.common.api.ITreeIndexFrame;
+import edu.uci.ics.hyracks.storage.am.common.api.IndexException;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.AbstractTreeIndexOperatorDescriptor;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.PermutingFrameTupleReference;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.TreeIndexDataflowHelper;
@@ -41,6 +43,8 @@ import edu.uci.ics.hyracks.storage.am.common.ophelpers.MultiComparator;
 
 public class KVRequestHandlerOperatorNodePushable extends AbstractUnaryInputUnaryOutputOperatorNodePushable implements ITriggeredFlushOperator{
 	private final int INVALID = -1;
+	
+	
 	
 	private final KVCallType[] callTypes;		//TODO You may want to replace it with a better technique
 	TreeIndexDataflowHelper treeIndexHelper;
@@ -58,13 +62,14 @@ public class KVRequestHandlerOperatorNodePushable extends AbstractUnaryInputUnar
 	boolean init;
 	
 	private final long maxWaitTime;
+	private final int minFlushSize;
 	private final TimeTrigger trigger;
 	private final Thread triggerThread;
 	private final Object signal;
 	private final LinkedBlockingQueue<Object> signalChannel;
 	private long scheduledTime;
 	
-	public KVRequestHandlerOperatorNodePushable(AbstractTreeIndexOperatorDescriptor opDesc, IHyracksTaskContext ctx, int partition, IRecordDescriptorProvider recordDescProvider, int numOfKeys, long maxWaitTime){
+	public KVRequestHandlerOperatorNodePushable(AbstractTreeIndexOperatorDescriptor opDesc, IHyracksTaskContext ctx, int partition, IRecordDescriptorProvider recordDescProvider, int numOfKeys, long maxWaitTime, int minFlushSize){
 		this.numOfKeys = numOfKeys;
 		this.opDesc = opDesc;
 		this.ctx = ctx;
@@ -74,6 +79,7 @@ public class KVRequestHandlerOperatorNodePushable extends AbstractUnaryInputUnar
 		this.partition = partition;
 		
 		this.maxWaitTime = maxWaitTime;
+		this.minFlushSize = minFlushSize;
 		signal = new Object();
 		signalChannel = new LinkedBlockingQueue<Object>();
 		trigger = new TimeTrigger(this, signalChannel);
@@ -119,7 +125,7 @@ public class KVRequestHandlerOperatorNodePushable extends AbstractUnaryInputUnar
 	private void init() throws HyracksDataException{
 		treeIndexHelper = (TreeIndexDataflowHelper) opDesc.getIndexDataflowHelperFactory().createIndexDataflowHelper(opDesc, ctx, partition);
 		treeIndexHelper.init(false);
-		kvsCallHandler = new BTreeCallHandler(opDesc, this, partition, numOfKeys);
+		kvsCallHandler = new BTreeCallHandler(/*opDesc,*/ this, partition, numOfKeys);
 		writeBuffer = treeIndexHelper.getHyracksTaskContext().allocateFrame();
 		writer.open();
 		accessor = new FrameTupleAccessor(treeIndexHelper.getHyracksTaskContext().getFrameSize(), recDesc);
@@ -174,9 +180,25 @@ public class KVRequestHandlerOperatorNodePushable extends AbstractUnaryInputUnar
 	
 	public void appendToResults( ArrayTupleBuilder tb, int[] fieldSlots, byte[] bytes, int offset, int length) throws HyracksDataException{
 		//synchronized (writeBuffer) {
+			if(maxWaitTime == 0){
+				if(!appender.append(fieldSlots, bytes, offset, length)){
+					throw new IllegalStateException();
+				}
+				FrameUtils.flushFrame(writeBuffer, writer);
+				appender.reset(writeBuffer, true);
+				return;
+			}
+			
 			while (!appender.append(tb.getFieldEndOffsets(), tb.getByteArray(), 0, tb.getSize())) {
 	            flush(false);
 	        }
+			
+			if( (minFlushSize > 0) && (appender.getTupleCount() >= minFlushSize) ){
+				System.out.println("Size based flush with "+appender.getTupleCount()+" tuples in reqHandler");
+				flush(false);
+				return;
+			}
+			
 			if(scheduledTime == INVALID){
 				try {
 					scheduledTime = maxWaitTime;
@@ -219,8 +241,12 @@ public class KVRequestHandlerOperatorNodePushable extends AbstractUnaryInputUnar
 
 	
 class BTreeCallHandler implements Serializable{
+	private final int REGULAR_RESULT = KVUtils.KVResponseType.REGULAR.ordinal();
+	private final int EMPTY_RESULT = KVUtils.KVResponseType.EMPTY.ordinal();
+	private final int MESSAGE_AS_RESULT = KVUtils.KVResponseType.MESSAGE.ordinal();
+	
 	private static final long serialVersionUID = 1L;
-	final private AbstractTreeIndexOperatorDescriptor opDesc;
+	//final private AbstractTreeIndexOperatorDescriptor opDesc;
 	final private KVRequestHandlerOperatorNodePushable caller;
 	final private int[] keysIndex;
 	final private int partitionId;	//Added for debug, remove ultimately
@@ -240,8 +266,8 @@ class BTreeCallHandler implements Serializable{
 	private int[] putPermutation;
 	
 	
-	public BTreeCallHandler(AbstractTreeIndexOperatorDescriptor opDesc, KVRequestHandlerOperatorNodePushable caller, int pid, int numOfKeys){
-		this.opDesc = opDesc;
+	public BTreeCallHandler(/*AbstractTreeIndexOperatorDescriptor opDesc,*/ KVRequestHandlerOperatorNodePushable caller, int pid, int numOfKeys){
+		//this.opDesc = opDesc;
 		this.partitionId = pid;
 		this.keysIndex = new int[numOfKeys];
 		this.putPermutation = new int[numOfKeys + 1];
@@ -269,7 +295,7 @@ class BTreeCallHandler implements Serializable{
         //rangePred = new RangePredicate(true, null, null, true, true, lowKeySearchCmp, highKeySearchCmp);
         rangePred = new RangePredicate(lowKey, highKey, true, true, lowKeySearchCmp, highKeySearchCmp);
     	System.out.println("BTree Field Count:\t"+btree.getFieldCount());
-        tb = new ArrayTupleBuilder(2 + btree.getFieldCount());	//We add query-pid and query-id for returned results
+        tb = new ArrayTupleBuilder(3 + btree.getFieldCount());	//We add query-pid and query-id and resp type for returned results
         dos = tb.getDataOutput();
         putTuple = new PermutingFrameTupleReference();
 		putTuple.setFieldPermutation(putPermutation);
@@ -302,13 +328,22 @@ class BTreeCallHandler implements Serializable{
 		}
 	}
 	
-	public void insert(int queryPId, int queryId, IFrameTupleAccessor fta, int tupleIx){
+	public void insert(int queryPId, int queryId, IFrameTupleAccessor fta, int tupleIx) {
 		System.out.println(">>>>> Putting (QID:\t"+queryId+") in partition "+partitionId);
 		putTuple.reset(fta, tupleIx);
+		boolean emptyRes = false;
 		try {
 			insertIndexAccessor.insert(putTuple);
-			writeInsertResults(queryPId, queryId);
-		} catch (Exception e) {
+		} catch(BTreeDuplicateKeyException e){
+			e.printStackTrace();
+			emptyRes = true;
+		} 
+		catch (Exception e1) {
+			e1.printStackTrace();
+		} 
+		try {
+			writeInsertResults(queryPId, queryId, emptyRes);
+		} catch (IOException e) {
 			e.printStackTrace();
 		} 
 	}
@@ -326,25 +361,31 @@ class BTreeCallHandler implements Serializable{
         
 		if (cursor.hasNext()) {		//Results size is 1, as it is PK lookup
         		//Adding Actual Result
+			AqlSerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.AINT32).serialize(new AInt32(REGULAR_RESULT), dos);
+	        tb.addFieldEndOffset();
+			
 			cursor.next();
 			ITupleReference tuple = cursor.getTuple();
             for (int i = 0; i < tuple.getFieldCount(); i++) {
                 dos.write(tuple.getFieldData(i), tuple.getFieldStart(i), tuple.getFieldLength(i));
                 tb.addFieldEndOffset();
             }
-            caller.appendToResults(tb, tb.getFieldEndOffsets(), tb.getByteArray(), 0, tb.getSize());
-           
         }
 		else{	//Empty result set (Key does not exist)
+			AqlSerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.AINT32).serialize(new AInt32(EMPTY_RESULT), dos);
+	        tb.addFieldEndOffset();
+	        
+	        /*
 			int fc = cursor.getTuple().getFieldCount();
 			for(int i=0; i<fc; i++){
 				tb.addFieldEndOffset();
 			}
-			caller.appendToResults(tb, tb.getFieldEndOffsets(), tb.getByteArray(), 0, tb.getSize());
+			*/
 		}
+		caller.appendToResults(tb, tb.getFieldEndOffsets(), tb.getByteArray(), 0, tb.getSize());
 	}
 	
-	private void writeInsertResults(int queryPId, int queryId) throws IOException{
+	private void writeInsertResults(int queryPId, int queryId, boolean emptyResult) throws IOException{
 		System.out.println(">>>>>>> Writting Insert Results for "+queryId);
 		tb.reset();
 			//Adding Query-PID
@@ -353,12 +394,20 @@ class BTreeCallHandler implements Serializable{
         	//Adding Query-ID
 		AqlSerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.AINT32).serialize(new AInt32(queryId), dos);
         tb.addFieldEndOffset();
-        
-        for (int i = 0; i < putTuple.getFieldCount(); i++) {
-            dos.write(putTuple.getFieldData(i), putTuple.getFieldStart(i), putTuple.getFieldLength(i));
+        	//Adding Response Type
+        if(emptyResult){
+        	AqlSerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.AINT32).serialize(new AInt32(EMPTY_RESULT), dos);
             tb.addFieldEndOffset();
         }
-        
+        else{
+        	AqlSerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.AINT32).serialize(new AInt32(REGULAR_RESULT), dos);
+            tb.addFieldEndOffset();
+            
+            for (int i = 0; i < putTuple.getFieldCount(); i++) {
+                dos.write(putTuple.getFieldData(i), putTuple.getFieldStart(i), putTuple.getFieldLength(i));
+                tb.addFieldEndOffset();
+            }
+        }
         caller.appendToResults(tb, tb.getFieldEndOffsets(), tb.getByteArray(), 0, tb.getSize());
 	}
 	

@@ -60,9 +60,5 @@ public class InternalDetailsDecl implements IDatasetDetailsDecl {
     
     public void setKeyServiceParams(Map<String, String> params){
     	keyServiceParams = params;
-    	System.out.println("Parameters set for KeyService");
-    	for(String s : params.keySet()){
-    		System.out.println(s+" -> "+keyServiceParams.get(s));
-    	}
     }
 }

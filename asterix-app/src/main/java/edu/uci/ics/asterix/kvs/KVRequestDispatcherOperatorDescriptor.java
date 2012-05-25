@@ -34,14 +34,16 @@ public class KVRequestDispatcherOperatorDescriptor extends AbstractSingleActivit
 	final KVServiceID sId;
 	final ARecordType record;
 	final long flushPeriod;
+	final int flushSize;
 	
-	public KVRequestDispatcherOperatorDescriptor(JobSpecification spec, IAType[] keyType, String dvName, String dsName, ARecordType record, List<String> partitionKeys, long flushPeriod) {
+	public KVRequestDispatcherOperatorDescriptor(JobSpecification spec, IAType[] keyType, String dvName, String dsName, ARecordType record, List<String> partitionKeys, long flushPeriod, int flushSize) {
 		super(spec, 0, 1);
 		this.keyType = keyType;
 		this.partitionKeys = partitionKeys;
 		this.record = record;
 		this.sId = new KVServiceID(dvName, dsName);
 		this.flushPeriod = flushPeriod;
+		this.flushSize = flushSize;
 		try {
 			recordDescriptors[0] = computeKVSQueryRecordDesc();
 		} catch (HyracksDataException e) {
@@ -54,7 +56,7 @@ public class KVRequestDispatcherOperatorDescriptor extends AbstractSingleActivit
 	public IOperatorNodePushable createPushRuntime(IHyracksTaskContext ctx,
 										IRecordDescriptorProvider recordDescProvider, int partition, int nPartitions) throws HyracksDataException {
 		
-		return new KVRequestDispatcherOperatorNodePushable(ctx, partition, keyType, sId, record, partitionKeys, flushPeriod, getOnlyValueRecordDescriptor());
+		return new KVRequestDispatcherOperatorNodePushable(ctx, partition, keyType, sId, record, partitionKeys, flushPeriod, flushSize, getOnlyValueRecordDescriptor());
 	}
 	
 	

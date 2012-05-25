@@ -39,7 +39,15 @@ import edu.uci.ics.hyracks.algebricks.runtime.base.IEvaluatorFactory;
 
 public class KVUtils {
 	public static final String DELAY_PARAM_TAG = "delay";
-	public static final long DEFAULT_DELAY = 250;
+	public static final String LIMIT_PARAM_TAG = "limit";
+	public static final long DEFAULT_DELAY = 1000;
+	public static final int DEFAULT_LIMIT = -1;
+	
+	public enum KVResponseType{
+		REGULAR,
+		EMPTY,
+		MESSAGE
+	}
 	
 	public static AqlCompiledMetadataDeclarations generateACMD(MetadataTransactionContext mdTxnCtx, String dataverseName) throws MetadataException, AlgebricksException{
 		List<TypeDecl> typeDeclarations = new ArrayList<TypeDecl>();

@@ -16,6 +16,7 @@ import edu.uci.ics.hyracks.dataflow.std.base.AbstractUnaryOutputSourceOperatorNo
 
 public class KVRequestDispatcherOperatorNodePushable extends AbstractUnaryOutputSourceOperatorNodePushable implements ITriggeredFlushOperator {
 	private final int INVALID = -1;
+	private final int MESSAGE_AS_RESULT = KVUtils.KVResponseType.MESSAGE.ordinal();
 	
 	private final KVCallParser callParser;
 	private final int pId;
@@ -24,6 +25,7 @@ public class KVRequestDispatcherOperatorNodePushable extends AbstractUnaryOutput
 	private ByteBuffer frame;
 	
 	private final long maxWaitTime;
+	private final int minFlushSize;
 	private final TimeTrigger trigger;
 	private final Thread triggerThread;
 	private final Object signal;
@@ -31,7 +33,7 @@ public class KVRequestDispatcherOperatorNodePushable extends AbstractUnaryOutput
 	private long scheduledTime;
 
 	
-	public KVRequestDispatcherOperatorNodePushable(IHyracksTaskContext ctx, int partition, IAType[] keyType, KVServiceID sId, ARecordType record, List<String> partitionKeys, long maxWaitTime, RecordDescriptor onlyValueRDesc){
+	public KVRequestDispatcherOperatorNodePushable(IHyracksTaskContext ctx, int partition, IAType[] keyType, KVServiceID sId, ARecordType record, List<String> partitionKeys, long maxWaitTime, int flushSize, RecordDescriptor onlyValueRDesc){
 		pId = partition;
 		queue = new LinkedBlockingQueue<IKVCall>();
 		callParser = new KVCallParser(ctx, this, keyType, pId, partitionKeys, record, onlyValueRDesc);
@@ -41,6 +43,7 @@ public class KVRequestDispatcherOperatorNodePushable extends AbstractUnaryOutput
         //String ncId = ctx.getJobletContext().getApplicationContext().getNodeId(); //<<< How to get nodeId
         KVServiceProvider.INSTANCE.registerQueryQueue(sId, queue, record);
         this.maxWaitTime = maxWaitTime;
+        this.minFlushSize = flushSize;
         signal = new Object();
         signalChannel = new LinkedBlockingQueue<Object>();
         trigger = new TimeTrigger(this, signalChannel);
@@ -85,9 +88,25 @@ public class KVRequestDispatcherOperatorNodePushable extends AbstractUnaryOutput
 	
 	public void addTuples(int[] fieldSlots, byte[] bytes, int offset, int length) throws HyracksDataException{
 		//synchronized(frame){
+			if(maxWaitTime == 0){
+				if(!appender.append(fieldSlots, bytes, offset, length)){
+					throw new IllegalStateException();
+				}
+				FrameUtils.flushFrame(frame, writer);
+				appender.reset(frame, true);
+				return;
+			}
+		
 			while ( !appender.append(fieldSlots, bytes, offset, length) ) {
 				flush(false);
 			}
+			
+			if( (minFlushSize > 0) && (appender.getTupleCount() >= minFlushSize) ){
+				System.out.println("Size based flush with "+appender.getTupleCount()+" tuples in reqDispatcher");
+				flush(false);
+				return;
+			}
+			
 			if(scheduledTime == INVALID){
 				try {
 					scheduledTime = maxWaitTime;
@@ -135,11 +154,12 @@ public class KVRequestDispatcherOperatorNodePushable extends AbstractUnaryOutput
 	
 	public void reportMissingKeysError(int queryId, List<String> missedColumns) throws InterruptedException{
 		LinkedBlockingQueue<Object[]> outputQueue = KVServiceProvider.INSTANCE.getOutputQueue(queryId);
-		Object[] errorMessage = new Object[3];
+		Object[] errorMessage = new Object[4];
 		errorMessage[0] = new AInt32(pId);
 		errorMessage[1] = new AInt32(queryId);
+		errorMessage[2] = new AInt32(MESSAGE_AS_RESULT);
 		StringBuffer st = new StringBuffer();
-		st.append("Value missed for key fields:\t");
+		st.append("Value missed for key field(s):\t");
 		for(String s : missedColumns){
 			st.append(s+", ");
 		}

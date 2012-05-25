@@ -20,12 +20,14 @@ public class MToNPartitioningTimeTriggeredConnectorDescriptor extends AbstractMT
 	private static final long serialVersionUID = 1L;
 	private ITuplePartitionComputerFactory tpcf;
 	private final long flushPeriod;
+	private final int flushSize;
 	
 	public MToNPartitioningTimeTriggeredConnectorDescriptor(
-			JobSpecification spec, ITuplePartitionComputerFactory tpcf, long flushPeriod) {
+			JobSpecification spec, ITuplePartitionComputerFactory tpcf, long flushPeriod, int flushSize) {
 		super(spec);
 		this.tpcf = tpcf;
 		this.flushPeriod = flushPeriod;
+		this.flushSize = flushSize;
 	}
 	
 	@Override
@@ -33,7 +35,7 @@ public class MToNPartitioningTimeTriggeredConnectorDescriptor extends AbstractMT
             IPartitionWriterFactory edwFactory, int index, int nProducerPartitions, int nConsumerPartitions)
             throws HyracksDataException {
         final TimeTriggeredPartitionDataWriter hashWriter = new TimeTriggeredPartitionDataWriter(ctx, nConsumerPartitions, edwFactory,
-                recordDesc, tpcf.createPartitioner(), flushPeriod);
+                recordDesc, tpcf.createPartitioner(), flushPeriod, flushSize);
         return hashWriter;
     }
 

@@ -18,6 +18,7 @@ import edu.uci.ics.hyracks.dataflow.common.comm.io.FrameTupleAppender;
 public class TimeTriggeredPartitionDataWriter implements ITriggeredFlushOperator, IFrameWriter {
 	private final int INVALID = -1;
 	private final long maxWaitTime;
+	private final int minFlushSize;
 	
 	private final int consumerPartitionCount;
     private final IFrameWriter[] pWriters;
@@ -37,7 +38,7 @@ public class TimeTriggeredPartitionDataWriter implements ITriggeredFlushOperator
 
 	public TimeTriggeredPartitionDataWriter(IHyracksTaskContext ctx,
 												int consumerPartitionCount, IPartitionWriterFactory pwFactory,
-													RecordDescriptor recordDescriptor, ITuplePartitionComputer tpc, long flushTreshold) throws HyracksDataException {
+													RecordDescriptor recordDescriptor, ITuplePartitionComputer tpc, long flushTimeTreshold, int flushSizeThreshold) throws HyracksDataException {
 		
 		this.consumerPartitionCount = consumerPartitionCount;
         pWriters = new IFrameWriter[consumerPartitionCount];
@@ -54,7 +55,8 @@ public class TimeTriggeredPartitionDataWriter implements ITriggeredFlushOperator
         tupleAccessor = new FrameTupleAccessor(ctx.getFrameSize(), recordDescriptor);
         this.tpc = tpc;
 		
-		this.maxWaitTime = flushTreshold;
+		this.maxWaitTime = flushTimeTreshold;
+		this.minFlushSize = flushSizeThreshold;
 		signal = new Object();
 		signalChannel = new LinkedBlockingQueue<Object>();
 		trigger = new TimeTrigger(this, signalChannel);
@@ -118,7 +120,18 @@ public class TimeTriggeredPartitionDataWriter implements ITriggeredFlushOperator
         try {
 			for (int i = 0; i < tupleCount; ++i) {
 			    int h = tpc.partition(tupleAccessor, i, consumerPartitionCount);
+			    
+			    if(maxWaitTime == 0){		//Added for 0 delay case
+			    	noDelayProcess(h, i);
+			    	return;
+			    }
+			    
 			    while(!addToFrame(h, i)){
+			    	flush(h, false);
+			    }
+			    
+			    if( (minFlushSize > 0) && (getCurrentSize(h) >= minFlushSize) ){
+			    	System.out.println("Size based flush with "+appenders[h].getTupleCount()+" tuples in connector");
 			    	flush(h, false);
 			    }
 			}
@@ -126,6 +139,8 @@ public class TimeTriggeredPartitionDataWriter implements ITriggeredFlushOperator
 			throw new HyracksDataException(e);
 		}
 	}
+	
+	
 	
 	private boolean addToFrame(int fIx, int tIx) throws InterruptedException{
         FrameTupleAppender appender = appenders[fIx];
@@ -225,6 +240,22 @@ public class TimeTriggeredPartitionDataWriter implements ITriggeredFlushOperator
         buffer.limit(buffer.capacity());
         frameWriter.nextFrame(buffer);
     }
+	
+	private int getCurrentSize(int ix){
+		return appenders[ix].getTupleCount();
+	}
+	
+	
+	private void noDelayProcess(int fIx, int tIx) throws HyracksDataException{
+		FrameTupleAppender appender = appenders[fIx];
+		if (!appender.append(tupleAccessor, tIx)) {
+			throw new IllegalStateException();
+		}
+		ByteBuffer buff = appender.getBuffer();
+		flushFrameContent(buff, pWriters[fIx]);
+		appender.reset(buff, true);
+	}
+	
 	
 	
 }

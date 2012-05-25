@@ -25,23 +25,23 @@ public class KVRequestHandlerOperatorDescriptor extends AbstractTreeIndexOperato
 	private static final long serialVersionUID = 1L;
 	private final int numOfKeys;
 	private final long flushPeriod;
+	private final int flushSize;
 	
 	public KVRequestHandlerOperatorDescriptor(JobSpecification spec, RecordDescriptor recDesc,
 			IStorageManagerInterface storageManager, IIndexRegistryProvider<IIndex> indexRegistryProvider,
-            IFileSplitProvider fileSplitProvider, /*ITreeIndexFrameFactory interiorFrameFactory,
-            ITreeIndexFrameFactory leafFrameFactory,*/ ITypeTraits[] typeTraits,
-            IBinaryComparatorFactory[] comparatorFactories, IIndexDataflowHelperFactory dataflowHelperFactory, int numOfKeys, long flushPeriod) {
+            IFileSplitProvider fileSplitProvider, ITypeTraits[] typeTraits,
+            IBinaryComparatorFactory[] comparatorFactories, IIndexDataflowHelperFactory dataflowHelperFactory, int numOfKeys, long flushPeriod, int flushSize) {
 		
-		super(spec, 1, 1, recDesc, storageManager, indexRegistryProvider, fileSplitProvider, /*interiorFrameFactory,
-                leafFrameFactory,*/ typeTraits, comparatorFactories, dataflowHelperFactory, NoOpOperationCallbackProvider.INSTANCE);
+		super(spec, 1, 1, recDesc, storageManager, indexRegistryProvider, fileSplitProvider, typeTraits, comparatorFactories, dataflowHelperFactory, NoOpOperationCallbackProvider.INSTANCE);
 		this.numOfKeys = numOfKeys;
 		this.flushPeriod = flushPeriod;
+		this.flushSize = flushSize;
 	}
 	
 	@Override
 	public IOperatorNodePushable createPushRuntime(IHyracksTaskContext ctx, IRecordDescriptorProvider recordDescProvider, int partition, int nPartitions) throws HyracksDataException {
 		
-		return new KVRequestHandlerOperatorNodePushable(this, ctx, partition, recordDescProvider, numOfKeys, flushPeriod);
+		return new KVRequestHandlerOperatorNodePushable(this, ctx, partition, recordDescProvider, numOfKeys, flushPeriod, flushSize);
 	}
 
 }
