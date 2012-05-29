@@ -153,7 +153,7 @@ public class KVCallParser implements Serializable {
         	//Adding Value (Which is empty in case of GET)
         tb.addFieldEndOffset();
         
-        System.out.println(">> Processing GET call in kvmgr in partition "+partitionId);
+        //System.out.println(">> Processing GET call in kvmgr in partition "+partitionId);
         
         op.addTuples(tb.getFieldEndOffsets(),tb.getByteArray(), 0, tb.getSize());
 	}
@@ -195,7 +195,7 @@ public class KVCallParser implements Serializable {
         
         valueParser.parseOneRecord(new ByteArrayInputStream(admQuery.getBytes())/*new ValueStream(admQuery)*/, tb, dos);	//TODO Resue the already serialized from above
         op.addTuples(tb.getFieldEndOffsets(),tb.getByteArray(), 0, tb.getSize());
-        System.out.println("Put call added to tuples in callParser in partition "+partitionId);
+       // System.out.println("Put call added to tuples in callParser in partition "+partitionId);
 	}
 	
 	public int getPartitionId(){
@@ -250,7 +250,7 @@ public class KVCallParser implements Serializable {
         FrameTupleAppender appender = new FrameTupleAppender(ctx.getFrameSize());
         appender.reset(frame, true);
         if ( !appender.append(tb.getFieldEndOffsets(),tb.getByteArray(), 0, tb.getSize()) ) {
-        	System.err.println(">>>>>> !!!!!! PROBLEM IN APPENDING ");
+        	System.err.println(">>>>>> !!!!!! PROBLEM IN APPENDING in extractRecord()");
         }
         FrameTupleAccessor accessor = new FrameTupleAccessor(ctx.getFrameSize(), onlyValueRecDesc);
         FrameUtils.makeReadable(frame);

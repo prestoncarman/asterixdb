@@ -280,10 +280,7 @@ class KVCallProcessor{
 		KVUtils.KVResponseType tag = tags[ ix.getIntegerValue().intValue() ];	//TODO Revise direct index access
 		switch(tag){
 		case REGULAR:
-    		//for (int i = 3; i < result.length; ++i) {
-    			r.append( StringSerializationUtils.toString(result[result.length - 1]) );
-    			//r.append(", ");
-    		//}
+    		r.append( StringSerializationUtils.toString(result[result.length - 1]) );
     		return r.append("\n").toString();
 		case EMPTY:
 			return r.append("Empty Result\n").toString();

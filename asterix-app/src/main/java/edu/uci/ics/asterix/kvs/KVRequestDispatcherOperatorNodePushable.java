@@ -50,7 +50,7 @@ public class KVRequestDispatcherOperatorNodePushable extends AbstractUnaryOutput
         triggerThread = new Thread( trigger );
         scheduledTime = INVALID;
         
-        System.out.println(">>>> Request Dispatcher created with delay "+maxWaitTime);
+        //System.out.println(">>>> Request Dispatcher created with delay "+maxWaitTime);
 	}
 	
 	@Override
@@ -60,7 +60,7 @@ public class KVRequestDispatcherOperatorNodePushable extends AbstractUnaryOutput
 			startTrigger();
 			while(true){
 				IKVCall call = queue.take();
-				System.out.println(">>> A new call of type "+call.getType()+" received from query queue in partition "+pId);
+				//System.out.println(">>> A new call of type "+call.getType()+" received from query queue in partition "+pId);
 				
 				switch(call.getType() ){
 				case GET:
@@ -102,7 +102,7 @@ public class KVRequestDispatcherOperatorNodePushable extends AbstractUnaryOutput
 			}
 			
 			if( (minFlushSize > 0) && (appender.getTupleCount() >= minFlushSize) ){
-				System.out.println("Size based flush with "+appender.getTupleCount()+" tuples in reqDispatcher");
+				//System.out.println("Size based flush with "+appender.getTupleCount()+" tuples in reqDispatcher");
 				flush(false);
 				return;
 			}
@@ -124,7 +124,7 @@ public class KVRequestDispatcherOperatorNodePushable extends AbstractUnaryOutput
 	public void flush(boolean fromTrigger) throws HyracksDataException{ 
 		synchronized (frame) {
 			if(appender.getTupleCount() > 0){
-				System.out.println("Flushing "+appender.getTupleCount()+" Tuples");
+				//System.out.println("Flushing "+appender.getTupleCount()+" Tuples");
 				FrameUtils.flushFrame(frame, writer);
 				appender.reset(frame, true);
 			}

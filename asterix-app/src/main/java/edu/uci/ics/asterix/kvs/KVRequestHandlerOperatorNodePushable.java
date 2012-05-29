@@ -86,7 +86,7 @@ public class KVRequestHandlerOperatorNodePushable extends AbstractUnaryInputUnar
 		triggerThread = new Thread( trigger );
 		scheduledTime = INVALID;
 		
-		System.out.println(">>>> RequestHandler created with delay "+maxWaitTime);
+		//System.out.println(">>>> RequestHandler created with delay "+maxWaitTime);
 	}
 	
 	@Override
@@ -101,21 +101,21 @@ public class KVRequestHandlerOperatorNodePushable extends AbstractUnaryInputUnar
 		}
 		accessor.reset(buffer);
 		int tupleCount = accessor.getTupleCount();
-		System.out.println(">>>> ReqHandler received a frame with "+tupleCount+" tuples in partition "+partition);
+		//System.out.println(">>>> ReqHandler received a frame with "+tupleCount+" tuples in partition "+partition);
 		for(int i=0; i<tupleCount; i++){
 			int qPid = readQueryPid(i);
-			System.out.println(">>>> Inside ReqHandler queryPid is "+qPid);
+			//System.out.println(">>>> Inside ReqHandler queryPid is "+qPid);
 			int qId = readQueryId(i);
-			System.out.println(">>>> Inside ReqHandler queryId is "+qId);
+			//System.out.println(">>>> Inside ReqHandler queryId is "+qId);
 			KVCallType type = readCallType(i);
-			System.out.println(">>>> Inside ReqHandler queryType is "+type);
+			//System.out.println(">>>> Inside ReqHandler queryType is "+type);
 			switch(type){
 			case PUT:
-				System.out.println(">>> It is a putCall in reqHandler");
+				//System.out.println(">>> It is a putCall in reqHandler");
 				kvsCallHandler.insert(qPid, qId, accessor, i);
 				break;
 			case GET:
-				System.out.println(">>> It is a getCall in reqHandler");
+				//System.out.println(">>> It is a getCall in reqHandler");
 				kvsCallHandler.searchTree(qPid, qId, accessor, i);
 				break;
 			}
@@ -194,7 +194,7 @@ public class KVRequestHandlerOperatorNodePushable extends AbstractUnaryInputUnar
 	        }
 			
 			if( (minFlushSize > 0) && (appender.getTupleCount() >= minFlushSize) ){
-				System.out.println("Size based flush with "+appender.getTupleCount()+" tuples in reqHandler");
+				//System.out.println("Size based flush with "+appender.getTupleCount()+" tuples in reqHandler");
 				flush(false);
 				return;
 			}
@@ -294,7 +294,7 @@ class BTreeCallHandler implements Serializable{
     	MultiComparator highKeySearchCmp = BTreeUtils.getSearchMultiComparator(treeIndex.getComparatorFactories(), highKey);;
         //rangePred = new RangePredicate(true, null, null, true, true, lowKeySearchCmp, highKeySearchCmp);
         rangePred = new RangePredicate(lowKey, highKey, true, true, lowKeySearchCmp, highKeySearchCmp);
-    	System.out.println("BTree Field Count:\t"+btree.getFieldCount());
+    	//System.out.println("BTree Field Count:\t"+btree.getFieldCount());
         tb = new ArrayTupleBuilder(3 + btree.getFieldCount());	//We add query-pid and query-id and resp type for returned results
         dos = tb.getDataOutput();
         putTuple = new PermutingFrameTupleReference();
@@ -313,7 +313,7 @@ class BTreeCallHandler implements Serializable{
 	
 	public void searchTree(int queryPId, int queryId, IFrameTupleAccessor fta, int tupleIx) throws HyracksDataException {
 		try {
-			System.out.println("Searching (QID:\t"+queryId+") in partition "+partitionId);
+			//System.out.println("Searching (QID:\t"+queryId+") in partition "+partitionId);
 			lowKey.reset(fta, tupleIx);
 			highKey.reset(fta, tupleIx);
 			rangePred.setLowKey(lowKey, true);
@@ -329,7 +329,7 @@ class BTreeCallHandler implements Serializable{
 	}
 	
 	public void insert(int queryPId, int queryId, IFrameTupleAccessor fta, int tupleIx) {
-		System.out.println(">>>>> Putting (QID:\t"+queryId+") in partition "+partitionId);
+		//System.out.println(">>>>> Putting (QID:\t"+queryId+") in partition "+partitionId);
 		putTuple.reset(fta, tupleIx);
 		boolean emptyRes = false;
 		try {
@@ -349,7 +349,7 @@ class BTreeCallHandler implements Serializable{
 	}
 	
 	private void writeSearchResults(int queryPId, int queryId) throws Exception{
-		System.out.println(">>>>>>> Writting Results for "+queryId+", cursor has next is "+cursor.hasNext());
+		//System.out.println(">>>>>>> Writting Results for "+queryId+", cursor has next is "+cursor.hasNext());
 		tb.reset();
       
         	//Adding Query-PID
@@ -386,7 +386,7 @@ class BTreeCallHandler implements Serializable{
 	}
 	
 	private void writeInsertResults(int queryPId, int queryId, boolean emptyResult) throws IOException{
-		System.out.println(">>>>>>> Writting Insert Results for "+queryId);
+		//System.out.println(">>>>>>> Writting Insert Results for "+queryId);
 		tb.reset();
 			//Adding Query-PID
         AqlSerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.AINT32).serialize(new AInt32(queryPId), dos);

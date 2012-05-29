@@ -62,7 +62,7 @@ public class TimeTriggeredPartitionDataWriter implements ITriggeredFlushOperator
 		trigger = new TimeTrigger(this, signalChannel);
 		triggerThread = new Thread( trigger );
 		
-		System.out.println(">>>> TriggeredDataWriter created with delay "+maxWaitTime);
+		//System.out.println(">>>> TriggeredDataWriter created with delay "+maxWaitTime);
 	}
 	
 	
@@ -131,7 +131,7 @@ public class TimeTriggeredPartitionDataWriter implements ITriggeredFlushOperator
 			    }
 			    
 			    if( (minFlushSize > 0) && (getCurrentSize(h) >= minFlushSize) ){
-			    	System.out.println("Size based flush with "+appenders[h].getTupleCount()+" tuples in connector");
+			    	//System.out.println("Size based flush with "+appenders[h].getTupleCount()+" tuples in connector");
 			    	flush(h, false);
 			    }
 			}

@@ -37,7 +37,7 @@ public class KVServiceProvider {
 			System.out.println("<!><!><!><!><!> Service Queue already exists for "+serviceId.toString());
 			return;
 		}
-		System.out.println("Query Queue Registered for service "+serviceId);
+		//System.out.println("Query Queue Registered for service "+serviceId);
 		serviceMap.put(serviceId, queue);
 		schemaMap.put(serviceId, schema);
 	}
@@ -51,7 +51,7 @@ public class KVServiceProvider {
 	
 	public void removeOutputQueue(int queryId){
 		outputmap.remove(queryId);
-		System.out.println(">>>> Removing Output Queue for query "+queryId);
+		//System.out.println(">>>> Removing Output Queue for query "+queryId);
 	}
 	
 	public List<KVServiceID> listAllRegisteredServices(){
