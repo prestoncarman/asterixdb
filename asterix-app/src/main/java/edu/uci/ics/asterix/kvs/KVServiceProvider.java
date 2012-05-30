@@ -16,6 +16,8 @@ public class KVServiceProvider {
 	private static final HashMap<Integer, LinkedBlockingQueue<Object[]>> outputmap = new HashMap<Integer, LinkedBlockingQueue<Object[]>>();
 	private static final HashMap<KVServiceID, ARecordType> schemaMap = new HashMap<KVServiceID, ARecordType>();
 	
+	private static final HashMap<Integer, Long> rttMap = new HashMap<Integer, Long>();		//TODO Used for benchmarking - should be dropped eventually 
+	
 	private KVServiceProvider(){
 	}
 	
@@ -51,6 +53,7 @@ public class KVServiceProvider {
 	
 	public void removeOutputQueue(int queryId){
 		outputmap.remove(queryId);
+		rttMap.remove(queryId);
 		//System.out.println(">>>> Removing Output Queue for query "+queryId);
 	}
 	
@@ -76,4 +79,16 @@ public class KVServiceProvider {
 	public ARecordType getServiceSchema(KVServiceID serviceId){
 		return schemaMap.get(serviceId);
 	}
+	
+	public void storeStartTime(int qid, long time){
+		if(rttMap.containsKey(qid)){
+			throw new IllegalStateException("Start Time already exists for "+qid);
+		}
+		rttMap.put(qid, time);
+	}
+	
+	public long getStartTime(int qid){
+		return rttMap.get(qid);
+	}
+	
 }

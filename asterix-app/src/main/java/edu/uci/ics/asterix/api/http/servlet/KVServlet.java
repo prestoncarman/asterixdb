@@ -1,5 +1,6 @@
 package edu.uci.ics.asterix.api.http.servlet;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.LinkedList;
@@ -78,17 +79,57 @@ import edu.uci.ics.hyracks.storage.common.IStorageManagerInterface;
 public class KVServlet extends HttpServlet {
 	private static final long serialVersionUID = 1L;
 	
+	private static long queryArrivalTime = -1;			//TODO used for benchmarking - Should be removed eventually
+	private static long prevQueryDepartureTime = -1;	//TODO used for benchmarking - Should be removed eventually
+	private PrintWriter queryPw;
+	private String qDumpPathPrefix;
+	int qDumpId;
+	int qCounter = 0;
+	private PrintWriter waitPw;
+	private String wDumpPathPrefix;
+	int wDumpId;
+	int wCounter = 0;
+	private final int pace = 500;
+	
+	
 	KVServiceID sId;
     KVCallProcessor p;
     
     
-    public KVServlet(){
+    public KVServlet() throws FileNotFoundException{
     	sId = new KVServiceID();
     	p = new KVCallProcessor();
+    	
+    	qDumpPathPrefix = "/data/pouria/dump/q/qd-"; //"/home/pouria/dump/q/qd-";
+    	qDumpId = 0;
+    	queryPw = new PrintWriter(qDumpPathPrefix+(qDumpId++) );
+    	wDumpPathPrefix = "/data/pouria/dump/w/wd-"; //"/home/pouria/dump/w/wd-";
+    	wDumpId = 0;
+    	waitPw = new PrintWriter(wDumpPathPrefix+(wDumpId++));
+    	
     }
     
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         
+    	//-------
+    	long t = System.currentTimeMillis();
+    	if(queryArrivalTime != -1){
+    		throw new ServletException("Rewritting query arival time");
+    	}
+    
+    	if(prevQueryDepartureTime != -1){
+    		waitPw.println( (t-prevQueryDepartureTime) );
+    		wCounter++;
+    		if(wCounter % pace == 0){
+    			waitPw.close();
+    			waitPw = new PrintWriter(wDumpPathPrefix+(wDumpId++));
+    		}
+    	}
+    	prevQueryDepartureTime = -1;
+    	queryArrivalTime = t;
+    	//-------
+    	
+    	
     	PrintWriter out = resp.getWriter();
     	
     	String uri = req.getRequestURI();
@@ -169,9 +210,21 @@ public class KVServlet extends HttpServlet {
     	try {
     		LinkedBlockingQueue<Object[]> outputQueue = new LinkedBlockingQueue<Object[]>();
     		KVServiceProvider.INSTANCE.registerOutputQueue(queryId, outputQueue);
+    		KVServiceProvider.INSTANCE.storeStartTime(queryId, queryArrivalTime);
     		p.processGet(keyFields,/* hcc,*/ queryId, dvName, dsName);
     		Object[] result = outputQueue.take();
+    		long e = System.currentTimeMillis();
+    		long b = KVServiceProvider.INSTANCE.getStartTime(queryId);
     		r = p.interpretResult(result);
+    		
+    		queryPw.println( (e - b) );
+    		qCounter++;
+    		if(qCounter % pace == 0){
+    			queryPw.close();
+    			queryPw = new PrintWriter(qDumpPathPrefix+(qDumpId++) );
+    		}
+    		
+    		
 
     	} catch (ACIDException e) {
     		r = "\nException in doGet() in KVS Servlet\n";
@@ -188,6 +241,10 @@ public class KVServlet extends HttpServlet {
 
     	KVServiceProvider.INSTANCE.removeOutputQueue(queryId);
     	out.println(r);
+    	
+    	
+    	queryArrivalTime = -1;
+    	prevQueryDepartureTime = System.currentTimeMillis();
     }
 
     protected void doPut(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
