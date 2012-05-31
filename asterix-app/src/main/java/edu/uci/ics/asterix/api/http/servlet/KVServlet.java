@@ -90,6 +90,7 @@ public class KVServlet extends HttpServlet {
 	int wDumpId;
 	int wCounter = 0;
 	private final int pace = 500;
+	private long firstQueryTime = -1;
 	
 	
 	KVServiceID sId;
@@ -127,6 +128,11 @@ public class KVServlet extends HttpServlet {
     	}
     	prevQueryDepartureTime = -1;
     	queryArrivalTime = t;
+    	
+    	if(firstQueryTime == -1){
+            firstQueryTime = t;
+    	}
+
     	//-------
     	
     	
@@ -245,6 +251,12 @@ public class KVServlet extends HttpServlet {
     	
     	queryArrivalTime = -1;
     	prevQueryDepartureTime = System.currentTimeMillis();
+    	if(qCounter % 10000 == 0){
+            double totalTime = System.currentTimeMillis() - firstQueryTime;
+            double thr = ((double) qCounter) / totalTime;
+            System.out.println("\n>>>>>\nTotal Time\t"+totalTime+"\nTotal opr\t"+qCounter+"\nThroughput\t"+(thr*1000)+"\n\n" );
+    	}
+
     }
 
     protected void doPut(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
@@ -284,11 +296,11 @@ public class KVServlet extends HttpServlet {
         else{
         	try {
         		String value = m.keySet().iterator().next();
-        		System.out.println(">>>>>>>> Value is "+value);
+        		//System.out.println(">>>>>>>> Value is "+value);
         		p.processPut(value, queryId, dvName, dsName);
         		result = outputQueue.take();
         		r = p.interpretResult(result);
-        		System.out.println("Got the result back for query "+queryId+" in doPut()");
+        		//System.out.println("Got the result back for query "+queryId+" in doPut()");
         	} catch (Exception e) {
         		e.printStackTrace();
         	}
