@@ -245,6 +245,11 @@ public class LogicalOperatorDeepCopyVisitor implements ILogicalOperatorVisitor<I
     }
 
     @Override
+    public ILogicalOperator visitGroupJoinOperator(GroupJoinOperator op, ILogicalOperator arg) {
+        throw new UnsupportedOperationException();
+    }
+    
+    @Override
     public ILogicalOperator visitInnerJoinOperator(InnerJoinOperator op, ILogicalOperator arg)
             throws AlgebricksException {
         InnerJoinOperator opCopy = new InnerJoinOperator(exprDeepCopyVisitor.deepCopyExpressionReference(op

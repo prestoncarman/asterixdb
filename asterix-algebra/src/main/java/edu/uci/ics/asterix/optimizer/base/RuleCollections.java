@@ -42,6 +42,7 @@ import edu.uci.ics.asterix.optimizer.rules.PushFieldAccessRule;
 import edu.uci.ics.asterix.optimizer.rules.PushGroupByThroughProduct;
 import edu.uci.ics.asterix.optimizer.rules.PushProperJoinThroughProduct;
 import edu.uci.ics.asterix.optimizer.rules.RemoveRedundantListifyRule;
+import edu.uci.ics.asterix.optimizer.rules.ReplaceJoinGroupWithGroupJoinRule;
 import edu.uci.ics.asterix.optimizer.rules.SetAsterixPhysicalOperatorsRule;
 import edu.uci.ics.asterix.optimizer.rules.SetClosedRecordConstructorsRule;
 import edu.uci.ics.asterix.optimizer.rules.UnnestToDataScanRule;
@@ -132,6 +133,7 @@ public final class RuleCollections {
         condPushDownAndJoinInference.add(new PushProperJoinThroughProduct());
         condPushDownAndJoinInference.add(new PushGroupByThroughProduct());
         condPushDownAndJoinInference.add(new NestGroupByRule());
+        condPushDownAndJoinInference.add(new ReplaceJoinGroupWithGroupJoinRule());
 
         return condPushDownAndJoinInference;
     }
