@@ -82,8 +82,8 @@ public class SimilarityJaccardEvaluator implements IEvaluator {
         if (!checkArgTypes(firstTypeTag, secondTypeTag)) {
             return;
         }
-        if (prepareLists(argOut.getBytes(), firstStart, secondStart, firstTypeTag)) {
-            jaccSim = computeResult(argOut.getBytes(), firstStart, secondStart, firstTypeTag);
+        if (prepareLists(argOut.getByteArray(), firstStart, secondStart, firstTypeTag)) {
+            jaccSim = computeResult(argOut.getByteArray(), firstStart, secondStart, firstTypeTag);
         } else {
             jaccSim = 0.0f;
         }
@@ -102,8 +102,8 @@ public class SimilarityJaccardEvaluator implements IEvaluator {
         secondStart = argOut.getLength();
         secondOrdListEval.evaluate(tuple);
 
-        firstTypeTag = EnumDeserializer.ATYPETAGDESERIALIZER.deserialize(argOut.getBytes()[firstStart]);
-        secondTypeTag = EnumDeserializer.ATYPETAGDESERIALIZER.deserialize(argOut.getBytes()[secondStart]);
+        firstTypeTag = EnumDeserializer.ATYPETAGDESERIALIZER.deserialize(argOut.getByteArray()[firstStart]);
+        secondTypeTag = EnumDeserializer.ATYPETAGDESERIALIZER.deserialize(argOut.getByteArray()[secondStart]);
     }
 
     protected boolean prepareLists(byte[] bytes, int firstStart, int secondStart, ATypeTag argType) throws AlgebricksException {

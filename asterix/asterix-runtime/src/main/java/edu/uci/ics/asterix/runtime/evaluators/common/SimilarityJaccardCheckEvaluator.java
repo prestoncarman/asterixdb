@@ -44,7 +44,7 @@ public class SimilarityJaccardCheckEvaluator extends SimilarityJaccardEvaluator 
         super.runArgEvals(tuple);
         int jaccThreshStart = argOut.getLength();
         jaccThreshEval.evaluate(tuple);
-        jaccThresh = (float) AFloatSerializerDeserializer.getFloat(argOut.getBytes(), jaccThreshStart
+        jaccThresh = (float) AFloatSerializerDeserializer.getFloat(argOut.getByteArray(), jaccThreshStart
                 + TYPE_INDICATOR_SIZE);
     }
 
