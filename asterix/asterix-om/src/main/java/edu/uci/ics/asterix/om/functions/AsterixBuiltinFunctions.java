@@ -254,6 +254,8 @@ public class AsterixBuiltinFunctions {
             "edit-distance", 2, true);
     public final static FunctionIdentifier EDIT_DISTANCE_CHECK = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "edit-distance-check", 3, true);
+    public final static FunctionIdentifier EDIT_DISTANCE_STRING_IS_FILTERABLE = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "edit-distance-string-is-filterable", 4, true);
 
     // tokenizers:
     public final static FunctionIdentifier WORD_TOKENS = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
@@ -423,6 +425,7 @@ public class AsterixBuiltinFunctions {
         add(DURATION_CONSTRUCTOR, OptionalADurationTypeComputer.INSTANCE);
         add(EDIT_DISTANCE, AInt32TypeComputer.INSTANCE);
         add(EDIT_DISTANCE_CHECK, OrderedListOfAnyTypeComputer.INSTANCE);
+        add(EDIT_DISTANCE_STRING_IS_FILTERABLE, ABooleanTypeComputer.INSTANCE);
         add(EMBED_TYPE, new IResultTypeComputer() {
             @Override
             public IAType computeType(ILogicalExpression expression, IVariableTypeEnvironment env,
