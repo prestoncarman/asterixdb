@@ -3,6 +3,8 @@ package edu.uci.ics.asterix.runtime.evaluators.functions;
 import java.io.IOException;
 
 import edu.uci.ics.asterix.common.functions.FunctionConstants;
+import edu.uci.ics.asterix.dataflow.data.nontagged.serde.AOrderedListSerializerDeserializer;
+import edu.uci.ics.asterix.dataflow.data.nontagged.serde.AUnorderedListSerializerDeserializer;
 import edu.uci.ics.asterix.formats.nontagged.AqlSerializerDeserializerProvider;
 import edu.uci.ics.asterix.om.base.ABoolean;
 import edu.uci.ics.asterix.om.functions.IFunctionDescriptor;
@@ -16,28 +18,26 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import edu.uci.ics.hyracks.algebricks.runtime.base.IEvaluator;
 import edu.uci.ics.hyracks.algebricks.runtime.base.IEvaluatorFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
-import edu.uci.ics.hyracks.data.std.primitive.UTF8StringPointable;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.ArrayBackedValueStorage;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.IDataOutputProvider;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.IFrameTupleReference;
-import edu.uci.ics.hyracks.dataflow.common.data.marshalling.BooleanSerializerDeserializer;
 import edu.uci.ics.hyracks.dataflow.common.data.marshalling.IntegerSerializerDeserializer;
 
 /**
- * Checks whether a string with an edit distance threshold can be filtered with a lower bounding on number of common grams.
- * This function returns 'true' if the lower bound on the number of common grams is positive, 'false' otherwise.
+ * Checks whether a list with an edit distance threshold can be filtered with a lower bounding on the number of common list elements.
+ * This function returns 'true' if the lower bound on the number of common elements is positive, 'false' otherwise.
  * For example, this function is used during an indexed nested-loop join based on edit distance. We partition the tuples of the probing
  * dataset into those that are filterable and those that are not. Those that are filterable are forwarded to the index. The others are
  * are fed into a (non indexed) nested-loop join.
  */
-public class EditDistanceStringIsFilterable extends AbstractScalarFunctionDynamicDescriptor {
+public class EditDistanceListIsFilterable extends AbstractScalarFunctionDynamicDescriptor {
 
     private static final long serialVersionUID = 1L;
     private final static FunctionIdentifier FID = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
-            "edit-distance-string-is-filterable", 4, true);
+            "edit-distance-list-is-filterable", 2, true);
     public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
         public IFunctionDescriptor createFunctionDescriptor() {
-            return new EditDistanceStringIsFilterable();
+            return new EditDistanceListIsFilterable();
         }
     };
 
@@ -48,7 +48,7 @@ public class EditDistanceStringIsFilterable extends AbstractScalarFunctionDynami
 
             @Override
             public IEvaluator createEvaluator(IDataOutputProvider output) throws AlgebricksException {
-                return new EditDistanceStringIsFilterableEvaluator(args, output);
+                return new EditDistanceListIsFilterableEvaluator(args, output);
             }
         };
     }
@@ -58,27 +58,23 @@ public class EditDistanceStringIsFilterable extends AbstractScalarFunctionDynami
         return FID;
     }
 
-    private static class EditDistanceStringIsFilterableEvaluator implements IEvaluator {
+    private static class EditDistanceListIsFilterableEvaluator implements IEvaluator {
     	
         protected final ArrayBackedValueStorage argBuf = new ArrayBackedValueStorage();
         protected final IDataOutputProvider output;
         
-        protected final IEvaluator stringEval;
+        protected final IEvaluator listEval;
         protected final IEvaluator edThreshEval;
-        protected final IEvaluator gramLenEval;
-        protected final IEvaluator usePrePostEval;        
     	
         @SuppressWarnings("unchecked")
         private final ISerializerDeserializer<ABoolean> booleanSerde = AqlSerializerDeserializerProvider.INSTANCE
                 .getSerializerDeserializer(BuiltinType.ABOOLEAN);
 
-        public EditDistanceStringIsFilterableEvaluator(IEvaluatorFactory[] args, IDataOutputProvider output)
+        public EditDistanceListIsFilterableEvaluator(IEvaluatorFactory[] args, IDataOutputProvider output)
                 throws AlgebricksException {
             this.output = output;
-            stringEval = args[0].createEvaluator(argBuf);
+            listEval = args[0].createEvaluator(argBuf);
         	edThreshEval = args[1].createEvaluator(argBuf);
-        	gramLenEval = args[2].createEvaluator(argBuf);
-        	usePrePostEval = args[3].createEvaluator(argBuf);
         }
 
 		@Override
@@ -87,19 +83,24 @@ public class EditDistanceStringIsFilterable extends AbstractScalarFunctionDynami
 			
 			// Check type and compute string length.
 			argBuf.reset();
-			stringEval.evaluate(tuple);
+			listEval.evaluate(tuple);
 			typeTag = EnumDeserializer.ATYPETAGDESERIALIZER.deserialize(argBuf.getByteArray()[0]);
-			if (!typeTag.equals(ATypeTag.STRING)) {
-				throw new AlgebricksException("Expected type 'STRING' as first argument. Encountered '" + typeTag.toString() + "'.");
+			int listLen = 0;
+			switch (typeTag) {
+			    case UNORDEREDLIST: {
+			        listLen = AUnorderedListSerializerDeserializer.getNumberOfItems(argBuf.getByteArray(), 0);
+			        break;
+			    }
+			    case ORDEREDLIST: {
+			        listLen = AOrderedListSerializerDeserializer.getNumberOfItems(argBuf.getByteArray(), 0);
+			        break;
+			    }
+			    default: {
+			        throw new AlgebricksException("Expected type 'ORDEREDLIST' or 'UNORDEREDLIST' as first argument. Encountered '" + typeTag.toString() + "'.");
+			    }
 			}
-			int utf8Length = UTF8StringPointable.getUTFLen(argBuf.getByteArray(), 1); 
-			int pos = 3;
-			int strLen = 0;	        
-	        int end = pos + utf8Length;
-	        while (pos < end) {
-	        	strLen++;
-	            pos += UTF8StringPointable.charSize(argBuf.getByteArray(), pos);
-	        }
+			
+			System.out.println("LISTLEN: " + listLen);
 			
 	        // Check type and extract edit-distance threshold.
 	        argBuf.reset();
@@ -110,29 +111,10 @@ public class EditDistanceStringIsFilterable extends AbstractScalarFunctionDynami
 			}
 			int edThresh = IntegerSerializerDeserializer.getInt(argBuf.getByteArray(), 1);
 			
-	        // Check type and extract gram length.
-			argBuf.reset();
-			gramLenEval.evaluate(tuple);
-			typeTag = EnumDeserializer.ATYPETAGDESERIALIZER.deserialize(argBuf.getByteArray()[0]);
-			if (!typeTag.equals(ATypeTag.INT32)) {
-				throw new AlgebricksException("Expected type 'INT32' as third argument. Encountered '" + typeTag.toString() + "'.");
-			}
-			int gramLen = IntegerSerializerDeserializer.getInt(argBuf.getByteArray(), 1);
-			
-			// Check type and extract usePrePost flag.
-			argBuf.reset();
-			usePrePostEval.evaluate(tuple);
-			typeTag = EnumDeserializer.ATYPETAGDESERIALIZER.deserialize(argBuf.getByteArray()[0]);
-			if (!typeTag.equals(ATypeTag.BOOLEAN)) {
-				throw new AlgebricksException("Expected type 'BOOLEAN' as fourth argument. Encountered '" + typeTag.toString() + "'.");
-			}
-			boolean usePrePost = BooleanSerializerDeserializer.getBoolean(argBuf.getByteArray(), 1);
-			
-			// Compute result.			
-            int numGrams = (usePrePost) ? strLen + gramLen - 1 : strLen - gramLen + 1;
-            int lowerBound = numGrams - edThresh * gramLen;
+			// Compute result.
+            int lowerBound = listLen - edThresh;
             try {
-                if (lowerBound <= 0 || strLen == 0) {
+                if (lowerBound <= 0) {
                     booleanSerde.serialize(ABoolean.FALSE, output.getDataOutput());
                 } else {
                     booleanSerde.serialize(ABoolean.TRUE, output.getDataOutput());
