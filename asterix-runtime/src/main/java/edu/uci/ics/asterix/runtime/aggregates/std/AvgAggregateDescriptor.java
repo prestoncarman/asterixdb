@@ -34,10 +34,10 @@ import edu.uci.ics.asterix.runtime.evaluators.common.ClosedRecordConstructorEval
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.NotImplementedException;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
-import edu.uci.ics.hyracks.algebricks.runtime.base.IAggregateFunction;
-import edu.uci.ics.hyracks.algebricks.runtime.base.IAggregateFunctionFactory;
-import edu.uci.ics.hyracks.algebricks.runtime.base.IEvaluator;
-import edu.uci.ics.hyracks.algebricks.runtime.base.IEvaluatorFactory;
+import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyAggregateFunction;
+import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyAggregateFunctionFactory;
+import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluator;
+import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluatorFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
 import edu.uci.ics.hyracks.dataflow.common.comm.io.ByteArrayAccessibleOutputStream;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.ArrayBackedValueStorage;
@@ -61,7 +61,7 @@ public class AvgAggregateDescriptor extends AbstractAggregateFunctionDynamicDesc
     }
 
     @Override
-    public IAggregateFunctionFactory createAggregateFunctionFactory(final IEvaluatorFactory[] args)
+    public ICopyAggregateFunctionFactory createAggregateFunctionFactory(final ICopyEvaluatorFactory[] args)
             throws AlgebricksException {
         List<IAType> unionList = new ArrayList<IAType>();
         unionList.add(BuiltinType.ANULL);
@@ -69,18 +69,18 @@ public class AvgAggregateDescriptor extends AbstractAggregateFunctionDynamicDesc
         final ARecordType recType = new ARecordType(null, new String[] { "sum", "count" }, new IAType[] {
                 new AUnionType(unionList, "OptionalDouble"), BuiltinType.AINT32 }, true);
 
-        return new IAggregateFunctionFactory() {
+        return new ICopyAggregateFunctionFactory() {
             private static final long serialVersionUID = 1L;
 
             @Override
-            public IAggregateFunction createAggregateFunction(final IDataOutputProvider provider)
+            public ICopyAggregateFunction createAggregateFunction(final IDataOutputProvider provider)
                     throws AlgebricksException {
 
-                return new IAggregateFunction() {
+                return new ICopyAggregateFunction() {
 
                     private DataOutput out = provider.getDataOutput();
                     private ArrayBackedValueStorage inputVal = new ArrayBackedValueStorage();
-                    private IEvaluator eval = args[0].createEvaluator(inputVal);
+                    private ICopyEvaluator eval = args[0].createEvaluator(inputVal);
                     private double sum;
                     private int count;
                     private AMutableDouble aDouble = new AMutableDouble(0);
@@ -91,10 +91,10 @@ public class AvgAggregateDescriptor extends AbstractAggregateFunctionDynamicDesc
                     private DataOutput sumBytesOutput = new DataOutputStream(sumBytes);
                     private ByteArrayAccessibleOutputStream countBytes = new ByteArrayAccessibleOutputStream();
                     private DataOutput countBytesOutput = new DataOutputStream(countBytes);
-                    private IEvaluator evalSum = new AccessibleByteArrayEval(avgBytes.getDataOutput(), sumBytes);
-                    private IEvaluator evalCount = new AccessibleByteArrayEval(avgBytes.getDataOutput(), countBytes);
+                    private ICopyEvaluator evalSum = new AccessibleByteArrayEval(avgBytes.getDataOutput(), sumBytes);
+                    private ICopyEvaluator evalCount = new AccessibleByteArrayEval(avgBytes.getDataOutput(), countBytes);
                     private ClosedRecordConstructorEval recordEval = new ClosedRecordConstructorEval(recType,
-                            new IEvaluator[] { evalSum, evalCount }, avgBytes, out);
+                            new ICopyEvaluator[] { evalSum, evalCount }, avgBytes, out);
 
                     @SuppressWarnings("unchecked")
                     private ISerializerDeserializer<ADouble> doubleSerde = AqlSerializerDeserializerProvider.INSTANCE
