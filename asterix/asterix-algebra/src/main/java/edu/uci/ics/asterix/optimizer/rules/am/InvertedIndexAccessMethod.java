@@ -32,11 +32,13 @@ import edu.uci.ics.asterix.om.types.AUnorderedListType;
 import edu.uci.ics.asterix.om.types.AbstractCollectionType;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
+import edu.uci.ics.hyracks.algebricks.common.utils.Triple;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.Counter;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IOptimizationContext;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalExpressionTag;
+import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalOperatorTag;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
@@ -48,10 +50,11 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractLog
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.DataSourceScanOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.InnerJoinOperator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.PartitioningSplitOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.ReplicateOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
+import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.UnionAllOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOperator;
+import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.visitors.VariableUtilities;
 import edu.uci.ics.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.ITypeTraits;
 import edu.uci.ics.hyracks.storage.am.invertedindex.api.IInvertedIndexSearchModifierFactory;
@@ -378,23 +381,69 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
             indexSubTree = rightSubTree;
             probeSubTree = leftSubTree;
         }
-        
         IOptimizableFuncExpr optFuncExpr = chooseOptFuncExpr(chosenIndex, analysisCtx);
-        UnnestMapOperator primaryIndexUnnestMap = createSecondaryToPrimaryPlan(joinRef, indexSubTree, probeSubTree, chosenIndex, optFuncExpr, true, true, context);
-     
-        if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.EDIT_DISTANCE_CHECK) {
-            Mutable<ILogicalOperator> copyJoinRef = new MutableObject<ILogicalOperator>(joinRef.getValue());
-            createPanicNestedLoopJoinPlan(copyJoinRef, indexSubTree, probeSubTree, optFuncExpr, context);
-        }
         
+        // Clone the original join condition because we may have to modify it (and we also need the original).
+        InnerJoinOperator join = (InnerJoinOperator) joinRef.getValue();
+        ILogicalExpression joinCond = join.getCondition().getValue().cloneExpression();
+        
+        // Create "panic" (non indexed) nested-loop join path if necessary.
+        Mutable<ILogicalOperator> panicJoinRef = null;
+        if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.EDIT_DISTANCE_CHECK) {
+            panicJoinRef = new MutableObject<ILogicalOperator>(joinRef.getValue());
+            ILogicalOperator newProbeRoot = createPanicNestedLoopJoinPlan(panicJoinRef, indexSubTree, probeSubTree, optFuncExpr, context);
+            probeSubTree.rootRef.setValue(newProbeRoot);
+            probeSubTree.root = newProbeRoot;
+        }
+        // Create regular indexed-nested loop join path.
+        UnnestMapOperator primaryIndexUnnestMap = createSecondaryToPrimaryPlan(joinRef, indexSubTree, probeSubTree, chosenIndex, optFuncExpr, true, true, context);
         indexSubTree.dataSourceScanRef.setValue(primaryIndexUnnestMap);
         
         // Change join into a select with the same condition.
-        InnerJoinOperator join = (InnerJoinOperator) joinRef.getValue();
-        SelectOperator topSelect = new SelectOperator(join.getCondition());
+        SelectOperator topSelect = new SelectOperator(new MutableObject<ILogicalExpression>(joinCond));
         topSelect.getInputs().add(indexSubTree.rootRef);
         joinRef.setValue(topSelect);
         context.computeAndSetTypeEnvironmentForOperator(topSelect);
+        
+        // Hook up the indexed-nested loop join path with the "panic" (non indexed) nested-loop join path by putting a union all on top.
+        if (panicJoinRef != null) {
+        	List<LogicalVariable> secondaryIndexProducedVars = new ArrayList<LogicalVariable>();
+        	AbstractLogicalOperator secondaryIndexOp = (AbstractLogicalOperator) indexSubTree.dataSourceScanRef.getValue().getInputs().get(0).getValue();
+        	// The secondary index unnest may be directly under the primary index unnest, but there may also be an order op in between.
+        	if (secondaryIndexOp.getOperatorTag() != LogicalOperatorTag.UNNEST_MAP) {
+        		secondaryIndexOp = (AbstractLogicalOperator) secondaryIndexOp.getInputs().get(0).getValue();
+        	}
+        	VariableUtilities.getProducedVariables(secondaryIndexOp, secondaryIndexProducedVars);
+        	
+        	List<LogicalVariable> huhu = new ArrayList<LogicalVariable>();
+        	VariableUtilities.getProducedVariables(indexSubTree.root, huhu);
+        	
+        	List<LogicalVariable> v1 = new ArrayList<LogicalVariable>();
+        	VariableUtilities.getLiveVariables(joinRef.getValue(), v1);
+        	// Remove the output vars of the secondary index search.
+        	v1.removeAll(secondaryIndexProducedVars);
+        	
+        	List<LogicalVariable> v2 = new ArrayList<LogicalVariable>();
+        	VariableUtilities.getLiveVariables(panicJoinRef.getValue(), v2);
+        	
+        	// HARDCODED MAPPING FOR NOW
+			List<Triple<LogicalVariable, LogicalVariable, LogicalVariable>> varMap = new ArrayList<Triple<LogicalVariable, LogicalVariable, LogicalVariable>>();
+        	varMap.add(new Triple<LogicalVariable, LogicalVariable, LogicalVariable>(v1.get(0), v2.get(0), v1.get(0)));
+        	varMap.add(new Triple<LogicalVariable, LogicalVariable, LogicalVariable>(v1.get(1), v2.get(1), v1.get(1)));
+        	varMap.add(new Triple<LogicalVariable, LogicalVariable, LogicalVariable>(v1.get(2), v2.get(2), v1.get(2)));
+        	varMap.add(new Triple<LogicalVariable, LogicalVariable, LogicalVariable>(v1.get(4), v2.get(3), v1.get(4)));
+        	varMap.add(new Triple<LogicalVariable, LogicalVariable, LogicalVariable>(v1.get(5), v2.get(4), v1.get(5)));
+			
+        	UnionAllOperator unionAllOp = new UnionAllOperator(varMap);
+        	unionAllOp.getInputs().add(new MutableObject<ILogicalOperator>(joinRef.getValue()));
+        	unionAllOp.getInputs().add(panicJoinRef);
+        	context.computeAndSetTypeEnvironmentForOperator(unionAllOp);
+        	
+        	List<LogicalVariable> usedVars = new ArrayList<LogicalVariable>();
+        	VariableUtilities.getUsedVariables(unionAllOp, usedVars);
+        	
+        	joinRef.setValue(unionAllOp);
+        }
         
         return true;
     }
@@ -411,18 +460,22 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         // TODO: This code can be factored out, since we are using it multiple times.
         // We are optimizing a join. Add the input variable to the secondaryIndexFuncArgs.
         LogicalVariable inputSearchVariable = null;
+        LogicalVariable joinCondReplaceVar = null;
         if (optFuncExpr.getOperatorSubTree(0) == indexSubTree) {
             // If the index is on a dataset in subtree 0, then subtree 1 will feed.
             inputSearchVariable = optFuncExpr.getLogicalVar(1);
+            joinCondReplaceVar = optFuncExpr.getLogicalVar(0);
         } else {
             // If the index is on a dataset in subtree 1, then subtree 0 will feed.
             inputSearchVariable = optFuncExpr.getLogicalVar(0);
+            joinCondReplaceVar = optFuncExpr.getLogicalVar(1);
         }
         
         // TODO: Temporarily we are replicating the probe stream, and adding selections to partitioning the stream.
         // What we really want is a partitioning split operator.
         ILogicalOperator replicateOp = new ReplicateOperator(2);
         replicateOp.getInputs().add(new MutableObject<ILogicalOperator>(probeSubTree.root));
+        context.computeAndSetTypeEnvironmentForOperator(replicateOp);
         
         // Select operator for removing tuples that are not filterable.
         List<Mutable<ILogicalExpression>> isFilterableArgs = new ArrayList<Mutable<ILogicalExpression>>();
@@ -430,6 +483,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         ILogicalExpression isFilterableExpr = new ScalarFunctionCallExpression(FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.EDIT_DISTANCE_STRING_IS_FILTERABLE), isFilterableArgs);        
         SelectOperator isFilterableSelectOp = new SelectOperator(new MutableObject<ILogicalExpression>(isFilterableExpr));
         isFilterableSelectOp.getInputs().add(new MutableObject<ILogicalOperator>(replicateOp));
+        context.computeAndSetTypeEnvironmentForOperator(isFilterableSelectOp);
         
         // Select operator for removing tuples that are filterable.
         List<Mutable<ILogicalExpression>> isNotFilterableArgs = new ArrayList<Mutable<ILogicalExpression>>();
@@ -437,21 +491,34 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         ILogicalExpression isNotFilterableExpr = new ScalarFunctionCallExpression(FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.NOT), isNotFilterableArgs);
         SelectOperator isNotFilterableSelectOp = new SelectOperator(new MutableObject<ILogicalExpression>(isNotFilterableExpr));
         isNotFilterableSelectOp.getInputs().add(new MutableObject<ILogicalOperator>(replicateOp));
+        context.computeAndSetTypeEnvironmentForOperator(isNotFilterableSelectOp);
+        
+        List<LogicalVariable> originalLiveVars = new ArrayList<LogicalVariable>();
+        VariableUtilities.getLiveVariables(indexSubTree.root, originalLiveVars);
+        int joinCondOrigVarPos = originalLiveVars.indexOf(joinCondReplaceVar);
         
         // Copy the scan subtree in indexSubTree.
         Counter counter = new Counter(context.getVarCounter());
         LogicalOperatorDeepCopyVisitor deepCopyVisitor = new LogicalOperatorDeepCopyVisitor(counter);
         ILogicalOperator scanSubTree = deepCopyVisitor.deepCopy(indexSubTree.root, null);
-        context.setVarCounter(counter.get());
+        context.setVarCounter(counter.get());        
         
-        ILogicalOperator joinOp = joinRef.getValue();
+        List<LogicalVariable> copyLiveVars = new ArrayList<LogicalVariable>();
+        VariableUtilities.getLiveVariables(scanSubTree, copyLiveVars);
+        LogicalVariable joinCondNewVar = copyLiveVars.get(joinCondOrigVarPos);
+        
+		// Replace the inputs of the given join op, and replace variables in its
+		// condition since we deep-copied one of the scanner subtrees which
+		// changed variables. 
+        InnerJoinOperator joinOp = (InnerJoinOperator) joinRef.getValue();
+        joinOp.getCondition().getValue().substituteVar(joinCondReplaceVar, joinCondNewVar);
         joinOp.getInputs().clear();
         joinOp.getInputs().add(new MutableObject<ILogicalOperator>(isNotFilterableSelectOp));
         joinOp.getInputs().add(new MutableObject<ILogicalOperator>(scanSubTree));
+        context.computeAndSetTypeEnvironmentForOperator(joinOp);
         
-        
-        
-        return joinOp;
+        // Return the new root of the probeSubTree.
+        return isFilterableSelectOp;
     }
     
     private void addSearchKeyType(IOptimizableFuncExpr optFuncExpr, OptimizableOperatorSubTree indexSubTree, IOptimizationContext context, InvertedIndexJobGenParams jobGenParams) throws AlgebricksException {
