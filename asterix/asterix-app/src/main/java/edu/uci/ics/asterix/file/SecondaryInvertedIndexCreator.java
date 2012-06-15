@@ -16,7 +16,7 @@ import edu.uci.ics.hyracks.algebricks.core.jobgen.impl.ConnectorPolicyAssignment
 import edu.uci.ics.hyracks.algebricks.core.rewriter.base.PhysicalOptimizationConfig;
 import edu.uci.ics.hyracks.algebricks.data.ISerializerDeserializerProvider;
 import edu.uci.ics.hyracks.algebricks.data.ITypeTraitProvider;
-import edu.uci.ics.hyracks.algebricks.runtime.base.IEvaluatorFactory;
+import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluatorFactory;
 import edu.uci.ics.hyracks.algebricks.runtime.operators.meta.AlgebricksMetaOperatorDescriptor;
 import edu.uci.ics.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
@@ -65,7 +65,7 @@ public class SecondaryInvertedIndexCreator extends SecondaryIndexCreator {
         }        
         // Prepare record descriptor used in the assign op, and the optional select op.
         List<String> secondaryKeyFields = createIndexStmt.getKeyFields();
-        secondaryFieldAccessEvalFactories = new IEvaluatorFactory[numSecondaryKeys];
+        secondaryFieldAccessEvalFactories = new ICopyEvaluatorFactory[numSecondaryKeys];
         ISerializerDeserializer[] secondaryRecFields = new ISerializerDeserializer[numPrimaryKeys + numSecondaryKeys];
         ITypeTraits[] secondaryTypeTraits = new ITypeTraits[numSecondaryKeys + numPrimaryKeys];
         ISerializerDeserializerProvider serdeProvider = metadata.getFormat().getSerdeProvider();

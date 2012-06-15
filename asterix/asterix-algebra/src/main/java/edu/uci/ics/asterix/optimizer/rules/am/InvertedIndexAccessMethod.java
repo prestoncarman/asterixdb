@@ -295,14 +295,9 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
     }
 
     private UnnestMapOperator createSecondaryToPrimaryPlan(Mutable<ILogicalOperator> selectOrJoinRef, OptimizableOperatorSubTree indexSubTree, OptimizableOperatorSubTree probeSubTree, 
-            AqlCompiledIndexDecl chosenIndex, boolean retainInput, boolean requiresBroadcast, AccessMethodAnalysisContext analysisCtx, IOptimizationContext context) throws AlgebricksException {
+            AqlCompiledIndexDecl chosenIndex, IOptimizableFuncExpr optFuncExpr, boolean retainInput, boolean requiresBroadcast, IOptimizationContext context) throws AlgebricksException {
         AqlCompiledDatasetDecl datasetDecl = indexSubTree.datasetDecl;
         ARecordType recordType = indexSubTree.recordType;
-        // TODO: We can probably do something smarter here based on selectivity.
-        // Pick the first expr optimizable by this index.
-        List<Integer> indexExprs = analysisCtx.getIndexExprs(chosenIndex);
-        int firstExprIndex = indexExprs.get(0);
-        IOptimizableFuncExpr optFuncExpr = analysisCtx.matchedFuncExprs.get(firstExprIndex);
         DataSourceScanOperator dataSourceScan = indexSubTree.dataSourceScan;
         
         InvertedIndexJobGenParams jobGenParams = new InvertedIndexJobGenParams(chosenIndex.getIndexName(), chosenIndex.getKind(), datasetDecl.getName(), retainInput, requiresBroadcast);
@@ -353,7 +348,8 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
     public boolean applySelectPlanTransformation(Mutable<ILogicalOperator> selectRef, OptimizableOperatorSubTree subTree,
             AqlCompiledIndexDecl chosenIndex, AccessMethodAnalysisContext analysisCtx, IOptimizationContext context)
             throws AlgebricksException {
-        UnnestMapOperator primaryIndexUnnestMap = createSecondaryToPrimaryPlan(selectRef, subTree, null, chosenIndex, false, false, analysisCtx, context);
+        IOptimizableFuncExpr optFuncExpr = chooseOptFuncExpr(chosenIndex, analysisCtx);
+        UnnestMapOperator primaryIndexUnnestMap = createSecondaryToPrimaryPlan(selectRef, subTree, null, chosenIndex, optFuncExpr, false, false, context);
         // Replace the datasource scan with the new plan rooted at primaryIndexUnnestMap.
         subTree.dataSourceScanRef.setValue(primaryIndexUnnestMap);
         return true;
@@ -366,10 +362,9 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
             throws AlgebricksException {
         // Figure out if the index is applicable on the left or right side (if both, we arbitrarily prefer the left side).
         AqlCompiledDatasetDecl dataset = analysisCtx.indexDatasetMap.get(chosenIndex);
+        // Determine probe and index subtrees based on chosen index.
         OptimizableOperatorSubTree indexSubTree = null;
         OptimizableOperatorSubTree probeSubTree = null;
-        // TODO: We want object-reference equality here,
-        // but AqlCompiledMetadataDeclarations.findDataset() always gives us a new object.
         if (dataset.getName().equals(leftSubTree.datasetDecl.getName())) {
             indexSubTree = leftSubTree;
             probeSubTree = rightSubTree;
@@ -378,7 +373,8 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
             probeSubTree = leftSubTree;
         }
         
-        UnnestMapOperator primaryIndexUnnestMap = createSecondaryToPrimaryPlan(joinRef, indexSubTree, probeSubTree, chosenIndex, true, true, analysisCtx, context);
+        IOptimizableFuncExpr optFuncExpr = chooseOptFuncExpr(chosenIndex, analysisCtx);
+        UnnestMapOperator primaryIndexUnnestMap = createSecondaryToPrimaryPlan(joinRef, indexSubTree, probeSubTree, chosenIndex, optFuncExpr, true, true, context);
         indexSubTree.dataSourceScanRef.setValue(primaryIndexUnnestMap);
         
         // Change join into a select with the same condition.
@@ -389,6 +385,14 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         context.computeAndSetTypeEnvironmentForOperator(topSelect);
         
         return true;
+    }
+    
+    private IOptimizableFuncExpr chooseOptFuncExpr(AqlCompiledIndexDecl chosenIndex, AccessMethodAnalysisContext analysisCtx) {
+        // TODO: We can probably do something smarter here based on selectivity.
+        // Pick the first expr optimizable by this index.
+        List<Integer> indexExprs = analysisCtx.getIndexExprs(chosenIndex);
+        int firstExprIndex = indexExprs.get(0);
+        return analysisCtx.matchedFuncExprs.get(firstExprIndex);
     }
     
     private void addSearchKeyType(IOptimizableFuncExpr optFuncExpr, OptimizableOperatorSubTree indexSubTree, IOptimizationContext context, InvertedIndexJobGenParams jobGenParams) throws AlgebricksException {

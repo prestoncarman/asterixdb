@@ -11,8 +11,8 @@ import edu.uci.ics.asterix.om.types.AOrderedListType;
 import edu.uci.ics.asterix.om.types.BuiltinType;
 import edu.uci.ics.asterix.runtime.evaluators.functions.BinaryHashMap.BinaryEntry;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
-import edu.uci.ics.hyracks.algebricks.runtime.base.IEvaluator;
-import edu.uci.ics.hyracks.algebricks.runtime.base.IEvaluatorFactory;
+import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluator;
+import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluatorFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
 import edu.uci.ics.hyracks.data.std.primitive.IntegerPointable;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.ArrayBackedValueStorage;
@@ -21,7 +21,7 @@ import edu.uci.ics.hyracks.dataflow.common.data.accessors.IFrameTupleReference;
 
 public class SimilarityJaccardCheckEvaluator extends SimilarityJaccardEvaluator {
 
-    protected final IEvaluator jaccThreshEval;
+    protected final ICopyEvaluator jaccThreshEval;
     protected float jaccThresh = -1f;
 
     protected IAOrderedListBuilder listBuilder;
@@ -31,7 +31,7 @@ public class SimilarityJaccardCheckEvaluator extends SimilarityJaccardEvaluator 
             .getSerializerDeserializer(BuiltinType.ABOOLEAN);
     protected final AOrderedListType listType = new AOrderedListType(BuiltinType.ANY, "list");
 
-    public SimilarityJaccardCheckEvaluator(IEvaluatorFactory[] args, IDataOutputProvider output)
+    public SimilarityJaccardCheckEvaluator(ICopyEvaluatorFactory[] args, IDataOutputProvider output)
             throws AlgebricksException {
         super(args, output);
         jaccThreshEval = args[2].createEvaluator(argOut);

@@ -15,8 +15,8 @@ import edu.uci.ics.asterix.om.types.EnumDeserializer;
 import edu.uci.ics.asterix.runtime.evaluators.functions.BinaryHashMap;
 import edu.uci.ics.asterix.runtime.evaluators.functions.BinaryHashMap.BinaryEntry;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
-import edu.uci.ics.hyracks.algebricks.runtime.base.IEvaluator;
-import edu.uci.ics.hyracks.algebricks.runtime.base.IEvaluatorFactory;
+import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluator;
+import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluatorFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.IBinaryComparator;
 import edu.uci.ics.hyracks.api.dataflow.value.IBinaryHashFunction;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
@@ -26,7 +26,7 @@ import edu.uci.ics.hyracks.dataflow.common.data.accessors.ArrayBackedValueStorag
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.IDataOutputProvider;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.IFrameTupleReference;
 
-public class SimilarityJaccardEvaluator implements IEvaluator {
+public class SimilarityJaccardEvaluator implements ICopyEvaluator {
 
     // Parameters for hash table.
 	protected final int TABLE_SIZE = 100;
@@ -37,8 +37,8 @@ public class SimilarityJaccardEvaluator implements IEvaluator {
 
     protected final DataOutput out;
     protected final ArrayBackedValueStorage argOut = new ArrayBackedValueStorage();
-    protected final IEvaluator firstOrdListEval;
-    protected final IEvaluator secondOrdListEval;
+    protected final ICopyEvaluator firstOrdListEval;
+    protected final ICopyEvaluator secondOrdListEval;
 
     protected final AsterixOrderedListIterator fstOrdListIter = new AsterixOrderedListIterator();
     protected final AsterixOrderedListIterator sndOrdListIter = new AsterixOrderedListIterator();
@@ -67,7 +67,7 @@ public class SimilarityJaccardEvaluator implements IEvaluator {
     // Ignore case for strings. Defaults to true.
     protected final boolean ignoreCase = true;
     
-    public SimilarityJaccardEvaluator(IEvaluatorFactory[] args, IDataOutputProvider output) throws AlgebricksException {
+    public SimilarityJaccardEvaluator(ICopyEvaluatorFactory[] args, IDataOutputProvider output) throws AlgebricksException {
         out = output.getDataOutput();
         firstOrdListEval = args[0].createEvaluator(argOut);
         secondOrdListEval = args[1].createEvaluator(argOut);

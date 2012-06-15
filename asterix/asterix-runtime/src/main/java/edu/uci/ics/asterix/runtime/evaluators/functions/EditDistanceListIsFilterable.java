@@ -15,8 +15,8 @@ import edu.uci.ics.asterix.om.types.EnumDeserializer;
 import edu.uci.ics.asterix.runtime.evaluators.base.AbstractScalarFunctionDynamicDescriptor;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
-import edu.uci.ics.hyracks.algebricks.runtime.base.IEvaluator;
-import edu.uci.ics.hyracks.algebricks.runtime.base.IEvaluatorFactory;
+import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluator;
+import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluatorFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.ArrayBackedValueStorage;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.IDataOutputProvider;
@@ -42,12 +42,12 @@ public class EditDistanceListIsFilterable extends AbstractScalarFunctionDynamicD
     };
 
     @Override
-    public IEvaluatorFactory createEvaluatorFactory(final IEvaluatorFactory[] args) throws AlgebricksException {
-        return new IEvaluatorFactory() {
+    public ICopyEvaluatorFactory createEvaluatorFactory(final ICopyEvaluatorFactory[] args) throws AlgebricksException {
+        return new ICopyEvaluatorFactory() {
             private static final long serialVersionUID = 1L;
 
             @Override
-            public IEvaluator createEvaluator(IDataOutputProvider output) throws AlgebricksException {
+            public ICopyEvaluator createEvaluator(IDataOutputProvider output) throws AlgebricksException {
                 return new EditDistanceListIsFilterableEvaluator(args, output);
             }
         };
@@ -58,19 +58,19 @@ public class EditDistanceListIsFilterable extends AbstractScalarFunctionDynamicD
         return FID;
     }
 
-    private static class EditDistanceListIsFilterableEvaluator implements IEvaluator {
+    private static class EditDistanceListIsFilterableEvaluator implements ICopyEvaluator {
     	
         protected final ArrayBackedValueStorage argBuf = new ArrayBackedValueStorage();
         protected final IDataOutputProvider output;
         
-        protected final IEvaluator listEval;
-        protected final IEvaluator edThreshEval;
+        protected final ICopyEvaluator listEval;
+        protected final ICopyEvaluator edThreshEval;
     	
         @SuppressWarnings("unchecked")
         private final ISerializerDeserializer<ABoolean> booleanSerde = AqlSerializerDeserializerProvider.INSTANCE
                 .getSerializerDeserializer(BuiltinType.ABOOLEAN);
 
-        public EditDistanceListIsFilterableEvaluator(IEvaluatorFactory[] args, IDataOutputProvider output)
+        public EditDistanceListIsFilterableEvaluator(ICopyEvaluatorFactory[] args, IDataOutputProvider output)
                 throws AlgebricksException {
             this.output = output;
             listEval = args[0].createEvaluator(argBuf);

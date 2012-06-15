@@ -3,14 +3,14 @@ package edu.uci.ics.asterix.runtime.evaluators.common;
 import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.fuzzyjoin.similarity.SimilarityMetricJaccard;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
-import edu.uci.ics.hyracks.algebricks.runtime.base.IEvaluatorFactory;
+import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluatorFactory;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.IDataOutputProvider;
 
 public class SimilarityJaccardSortedCheckEvaluator extends SimilarityJaccardCheckEvaluator {
 
     protected final SimilarityMetricJaccard jaccard = new SimilarityMetricJaccard();
     
-    public SimilarityJaccardSortedCheckEvaluator(IEvaluatorFactory[] args, IDataOutputProvider output)
+    public SimilarityJaccardSortedCheckEvaluator(ICopyEvaluatorFactory[] args, IDataOutputProvider output)
             throws AlgebricksException {
         super(args, output);
     }
