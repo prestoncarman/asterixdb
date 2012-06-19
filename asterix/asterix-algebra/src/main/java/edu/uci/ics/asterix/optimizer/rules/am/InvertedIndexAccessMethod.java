@@ -54,6 +54,7 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.ReplicateOp
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.UnionAllOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOperator;
+import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator.ExecutionMode;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.visitors.VariableUtilities;
 import edu.uci.ics.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.ITypeTraits;
@@ -391,7 +392,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         Mutable<ILogicalOperator> panicJoinRef = null;
         if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.EDIT_DISTANCE_CHECK) {
             panicJoinRef = new MutableObject<ILogicalOperator>(joinRef.getValue());
-            ILogicalOperator newProbeRoot = createPanicNestedLoopJoinPlan(panicJoinRef, indexSubTree, probeSubTree, optFuncExpr, context);
+            ILogicalOperator newProbeRoot = createPanicNestedLoopJoinPlan(panicJoinRef, indexSubTree, probeSubTree, optFuncExpr, chosenIndex, context);
             probeSubTree.rootRef.setValue(newProbeRoot);
             probeSubTree.root = newProbeRoot;
         }
@@ -456,7 +457,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         return analysisCtx.matchedFuncExprs.get(firstExprIndex);
     }
 
-    private ILogicalOperator createPanicNestedLoopJoinPlan(Mutable<ILogicalOperator> joinRef, OptimizableOperatorSubTree indexSubTree, OptimizableOperatorSubTree probeSubTree, IOptimizableFuncExpr optFuncExpr, IOptimizationContext context) throws AlgebricksException {
+    private ILogicalOperator createPanicNestedLoopJoinPlan(Mutable<ILogicalOperator> joinRef, OptimizableOperatorSubTree indexSubTree, OptimizableOperatorSubTree probeSubTree, IOptimizableFuncExpr optFuncExpr, AqlCompiledIndexDecl chosenIndex, IOptimizationContext context) throws AlgebricksException {
         // TODO: This code can be factored out, since we are using it multiple times.
         // We are optimizing a join. Add the input variable to the secondaryIndexFuncArgs.
         LogicalVariable inputSearchVariable = null;
@@ -473,13 +474,19 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         
         // TODO: Temporarily we are replicating the probe stream, and adding selections to partitioning the stream.
         // What we really want is a partitioning split operator.
-        ILogicalOperator replicateOp = new ReplicateOperator(2);
+        AbstractLogicalOperator replicateOp = new ReplicateOperator(2);
         replicateOp.getInputs().add(new MutableObject<ILogicalOperator>(probeSubTree.root));
+        replicateOp.setExecutionMode(ExecutionMode.LOCAL);
         context.computeAndSetTypeEnvironmentForOperator(replicateOp);
         
         // Select operator for removing tuples that are not filterable.
         List<Mutable<ILogicalExpression>> isFilterableArgs = new ArrayList<Mutable<ILogicalExpression>>();
         isFilterableArgs.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(inputSearchVariable)));
+        // Since we are optimizing a join, the similarity threshold should be the only constant in the optimizable function expression.
+        isFilterableArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(optFuncExpr.getConstantVal(0))));
+        isFilterableArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createInt32Constant(chosenIndex.getGramLength())));
+        // TODO: Currently usePrePost is hardcoded to be true.
+        isFilterableArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createBooleanConstant(true)));
         ILogicalExpression isFilterableExpr = new ScalarFunctionCallExpression(FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.EDIT_DISTANCE_STRING_IS_FILTERABLE), isFilterableArgs);        
         SelectOperator isFilterableSelectOp = new SelectOperator(new MutableObject<ILogicalExpression>(isFilterableExpr));
         isFilterableSelectOp.getInputs().add(new MutableObject<ILogicalOperator>(replicateOp));
@@ -513,8 +520,10 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         InnerJoinOperator joinOp = (InnerJoinOperator) joinRef.getValue();
         joinOp.getCondition().getValue().substituteVar(joinCondReplaceVar, joinCondNewVar);
         joinOp.getInputs().clear();
-        joinOp.getInputs().add(new MutableObject<ILogicalOperator>(isNotFilterableSelectOp));
         joinOp.getInputs().add(new MutableObject<ILogicalOperator>(scanSubTree));
+        // Make sure that the build input (which may be materialized causing blocking) comes from 
+        // the split+select, otherwise the plan will have a deadlock.
+        joinOp.getInputs().add(new MutableObject<ILogicalOperator>(isNotFilterableSelectOp));
         context.computeAndSetTypeEnvironmentForOperator(joinOp);
         
         // Return the new root of the probeSubTree.

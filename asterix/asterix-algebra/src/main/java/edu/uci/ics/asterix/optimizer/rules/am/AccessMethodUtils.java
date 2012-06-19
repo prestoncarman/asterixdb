@@ -234,7 +234,7 @@ public class AccessMethodUtils {
             }
             // The secondary-index search feeds into the sort.
             order.getInputs().add(new MutableObject<ILogicalOperator>(inputOp));
-            order.setExecutionMode(ExecutionMode.LOCAL);           
+            order.setExecutionMode(ExecutionMode.LOCAL);
             context.computeAndSetTypeEnvironmentForOperator(order);
         }
         // The job gen parameters are transferred to the actual job gen via the UnnestMapOperator's function arguments. 
