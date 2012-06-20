@@ -32,29 +32,31 @@ import edu.uci.ics.asterix.om.types.AUnorderedListType;
 import edu.uci.ics.asterix.om.types.AbstractCollectionType;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
+import edu.uci.ics.hyracks.algebricks.common.utils.Pair;
 import edu.uci.ics.hyracks.algebricks.common.utils.Triple;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.Counter;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IOptimizationContext;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalExpressionTag;
-import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalOperatorTag;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IAlgebricksConstantValue;
+import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IVariableTypeEnvironment;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
+import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator.ExecutionMode;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.DataSourceScanOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.InnerJoinOperator;
+import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.ProjectOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.ReplicateOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.UnionAllOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOperator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator.ExecutionMode;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.visitors.VariableUtilities;
 import edu.uci.ics.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.ITypeTraits;
@@ -304,7 +306,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         return false;
     }
 
-    private UnnestMapOperator createSecondaryToPrimaryPlan(Mutable<ILogicalOperator> selectOrJoinRef, OptimizableOperatorSubTree indexSubTree, OptimizableOperatorSubTree probeSubTree, 
+    private ILogicalOperator createSecondaryToPrimaryPlan(OptimizableOperatorSubTree indexSubTree, OptimizableOperatorSubTree probeSubTree, 
             AqlCompiledIndexDecl chosenIndex, IOptimizableFuncExpr optFuncExpr, boolean retainInput, boolean requiresBroadcast, IOptimizationContext context) throws AlgebricksException {
         AqlCompiledDatasetDecl datasetDecl = indexSubTree.datasetDecl;
         ARecordType recordType = indexSubTree.recordType;
@@ -359,9 +361,9 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
             AqlCompiledIndexDecl chosenIndex, AccessMethodAnalysisContext analysisCtx, IOptimizationContext context)
             throws AlgebricksException {
         IOptimizableFuncExpr optFuncExpr = chooseOptFuncExpr(chosenIndex, analysisCtx);
-        UnnestMapOperator primaryIndexUnnestMap = createSecondaryToPrimaryPlan(selectRef, subTree, null, chosenIndex, optFuncExpr, false, false, context);
+        ILogicalOperator indexPlanRootOp = createSecondaryToPrimaryPlan(subTree, null, chosenIndex, optFuncExpr, false, false, context);
         // Replace the datasource scan with the new plan rooted at primaryIndexUnnestMap.
-        subTree.dataSourceScanRef.setValue(primaryIndexUnnestMap);
+        subTree.dataSourceScanRef.setValue(indexPlanRootOp);
         return true;
     }
     
@@ -388,64 +390,54 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         InnerJoinOperator join = (InnerJoinOperator) joinRef.getValue();
         ILogicalExpression joinCond = join.getCondition().getValue().cloneExpression();
         
+        // Remember original live variables to make sure our new index-based plan returns exactly those vars as well.
+        List<LogicalVariable> originalLiveVars = new ArrayList<LogicalVariable>();
+        VariableUtilities.getLiveVariables(join, originalLiveVars);
+        
         // Create "panic" (non indexed) nested-loop join path if necessary.
         Mutable<ILogicalOperator> panicJoinRef = null;
         if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.EDIT_DISTANCE_CHECK) {
             panicJoinRef = new MutableObject<ILogicalOperator>(joinRef.getValue());
-            ILogicalOperator newProbeRoot = createPanicNestedLoopJoinPlan(panicJoinRef, indexSubTree, probeSubTree, optFuncExpr, chosenIndex, context);
-            probeSubTree.rootRef.setValue(newProbeRoot);
-            probeSubTree.root = newProbeRoot;
+            Mutable<ILogicalOperator> newProbeRootRef = createPanicNestedLoopJoinPlan(panicJoinRef, indexSubTree, probeSubTree, optFuncExpr, chosenIndex, context);
+            probeSubTree.rootRef.setValue(newProbeRootRef.getValue());
+            probeSubTree.root = newProbeRootRef.getValue();
         }
         // Create regular indexed-nested loop join path.
-        UnnestMapOperator primaryIndexUnnestMap = createSecondaryToPrimaryPlan(joinRef, indexSubTree, probeSubTree, chosenIndex, optFuncExpr, true, true, context);
-        indexSubTree.dataSourceScanRef.setValue(primaryIndexUnnestMap);
+        ILogicalOperator indexPlanRootOp = createSecondaryToPrimaryPlan(indexSubTree, probeSubTree, chosenIndex, optFuncExpr, true, true, context);        
+        indexSubTree.dataSourceScanRef.setValue(indexPlanRootOp);
         
         // Change join into a select with the same condition.
         SelectOperator topSelect = new SelectOperator(new MutableObject<ILogicalExpression>(joinCond));
         topSelect.getInputs().add(indexSubTree.rootRef);
-        joinRef.setValue(topSelect);
         context.computeAndSetTypeEnvironmentForOperator(topSelect);
+        
+        // Add a project operator on top to guarantee that our new index-based plan returns exactly the same variables as the original plan.
+        ProjectOperator projectOp = new ProjectOperator(originalLiveVars);
+        projectOp.getInputs().add(new MutableObject<ILogicalOperator>(topSelect));
+        context.computeAndSetTypeEnvironmentForOperator(projectOp);
+        joinRef.setValue(projectOp);
         
         // Hook up the indexed-nested loop join path with the "panic" (non indexed) nested-loop join path by putting a union all on top.
         if (panicJoinRef != null) {
-        	List<LogicalVariable> secondaryIndexProducedVars = new ArrayList<LogicalVariable>();
-        	AbstractLogicalOperator secondaryIndexOp = (AbstractLogicalOperator) indexSubTree.dataSourceScanRef.getValue().getInputs().get(0).getValue();
-        	// The secondary index unnest may be directly under the primary index unnest, but there may also be an order op in between.
-        	if (secondaryIndexOp.getOperatorTag() != LogicalOperatorTag.UNNEST_MAP) {
-        		secondaryIndexOp = (AbstractLogicalOperator) secondaryIndexOp.getInputs().get(0).getValue();
+            // Gather live variables from the index plan and the panic plan.
+            List<LogicalVariable> indexPlanLiveVars = new ArrayList<LogicalVariable>();
+        	VariableUtilities.getLiveVariables(joinRef.getValue(), indexPlanLiveVars);
+        	List<LogicalVariable> panicPlanLiveVars = new ArrayList<LogicalVariable>();
+        	VariableUtilities.getLiveVariables(panicJoinRef.getValue(), panicPlanLiveVars);
+        	if (indexPlanLiveVars.size() != panicPlanLiveVars.size()) {
+        	    throw new AlgebricksException("Unequal number of variables returned from index plan and panic plan.");
         	}
-        	VariableUtilities.getProducedVariables(secondaryIndexOp, secondaryIndexProducedVars);
-        	
-        	List<LogicalVariable> huhu = new ArrayList<LogicalVariable>();
-        	VariableUtilities.getProducedVariables(indexSubTree.root, huhu);
-        	
-        	List<LogicalVariable> v1 = new ArrayList<LogicalVariable>();
-        	VariableUtilities.getLiveVariables(joinRef.getValue(), v1);
-        	// Remove the output vars of the secondary index search.
-        	v1.removeAll(secondaryIndexProducedVars);
-        	
-        	List<LogicalVariable> v2 = new ArrayList<LogicalVariable>();
-        	VariableUtilities.getLiveVariables(panicJoinRef.getValue(), v2);
-        	
-        	// HARDCODED MAPPING FOR NOW
-			List<Triple<LogicalVariable, LogicalVariable, LogicalVariable>> varMap = new ArrayList<Triple<LogicalVariable, LogicalVariable, LogicalVariable>>();
-        	varMap.add(new Triple<LogicalVariable, LogicalVariable, LogicalVariable>(v1.get(0), v2.get(0), v1.get(0)));
-        	varMap.add(new Triple<LogicalVariable, LogicalVariable, LogicalVariable>(v1.get(1), v2.get(1), v1.get(1)));
-        	varMap.add(new Triple<LogicalVariable, LogicalVariable, LogicalVariable>(v1.get(2), v2.get(2), v1.get(2)));
-        	varMap.add(new Triple<LogicalVariable, LogicalVariable, LogicalVariable>(v1.get(4), v2.get(3), v1.get(4)));
-        	varMap.add(new Triple<LogicalVariable, LogicalVariable, LogicalVariable>(v1.get(5), v2.get(4), v1.get(5)));
-			
+        	// Create variable mapping for union all operator.
+        	List<Triple<LogicalVariable, LogicalVariable, LogicalVariable>> varMap = new ArrayList<Triple<LogicalVariable, LogicalVariable, LogicalVariable>>();
+        	for (int i = 0; i < indexPlanLiveVars.size(); i++) {
+        	    varMap.add(new Triple<LogicalVariable, LogicalVariable, LogicalVariable>(indexPlanLiveVars.get(i), panicPlanLiveVars.get(i), indexPlanLiveVars.get(i)));
+        	}
         	UnionAllOperator unionAllOp = new UnionAllOperator(varMap);
         	unionAllOp.getInputs().add(new MutableObject<ILogicalOperator>(joinRef.getValue()));
         	unionAllOp.getInputs().add(panicJoinRef);
         	context.computeAndSetTypeEnvironmentForOperator(unionAllOp);
-        	
-        	List<LogicalVariable> usedVars = new ArrayList<LogicalVariable>();
-        	VariableUtilities.getUsedVariables(unionAllOp, usedVars);
-        	
         	joinRef.setValue(unionAllOp);
         }
-        
         return true;
     }
     
@@ -457,48 +449,37 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         return analysisCtx.matchedFuncExprs.get(firstExprIndex);
     }
 
-    private ILogicalOperator createPanicNestedLoopJoinPlan(Mutable<ILogicalOperator> joinRef, OptimizableOperatorSubTree indexSubTree, OptimizableOperatorSubTree probeSubTree, IOptimizableFuncExpr optFuncExpr, AqlCompiledIndexDecl chosenIndex, IOptimizationContext context) throws AlgebricksException {
-        // TODO: This code can be factored out, since we are using it multiple times.
+    private Mutable<ILogicalOperator> createPanicNestedLoopJoinPlan(Mutable<ILogicalOperator> joinRef, OptimizableOperatorSubTree indexSubTree, OptimizableOperatorSubTree probeSubTree, IOptimizableFuncExpr optFuncExpr, AqlCompiledIndexDecl chosenIndex, IOptimizationContext context) throws AlgebricksException {
+        List<LogicalVariable> joinLiveVars = new ArrayList<LogicalVariable>();
+        VariableUtilities.getLiveVariables(joinRef.getValue(), joinLiveVars);
+        
         // We are optimizing a join. Add the input variable to the secondaryIndexFuncArgs.
-        LogicalVariable inputSearchVariable = null;
+        LogicalVariable inputSearchVar = null;
+        // This variable will be replaced in the original join. 
         LogicalVariable joinCondReplaceVar = null;
         if (optFuncExpr.getOperatorSubTree(0) == indexSubTree) {
             // If the index is on a dataset in subtree 0, then subtree 1 will feed.
-            inputSearchVariable = optFuncExpr.getLogicalVar(1);
+            inputSearchVar = optFuncExpr.getLogicalVar(1);
             joinCondReplaceVar = optFuncExpr.getLogicalVar(0);
         } else {
             // If the index is on a dataset in subtree 1, then subtree 0 will feed.
-            inputSearchVariable = optFuncExpr.getLogicalVar(0);
+            inputSearchVar = optFuncExpr.getLogicalVar(0);
             joinCondReplaceVar = optFuncExpr.getLogicalVar(1);
         }
         
-        // TODO: Temporarily we are replicating the probe stream, and adding selections to partitioning the stream.
-        // What we really want is a partitioning split operator.
+        // We split the plan into two "branches", and add selections on each side.
         AbstractLogicalOperator replicateOp = new ReplicateOperator(2);
         replicateOp.getInputs().add(new MutableObject<ILogicalOperator>(probeSubTree.root));
         replicateOp.setExecutionMode(ExecutionMode.LOCAL);
-        context.computeAndSetTypeEnvironmentForOperator(replicateOp);
+        context.computeAndSetTypeEnvironmentForOperator(replicateOp);        
         
-        // Select operator for removing tuples that are not filterable.
-        List<Mutable<ILogicalExpression>> isFilterableArgs = new ArrayList<Mutable<ILogicalExpression>>();
-        isFilterableArgs.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(inputSearchVariable)));
-        // Since we are optimizing a join, the similarity threshold should be the only constant in the optimizable function expression.
-        isFilterableArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(optFuncExpr.getConstantVal(0))));
-        isFilterableArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createInt32Constant(chosenIndex.getGramLength())));
-        // TODO: Currently usePrePost is hardcoded to be true.
-        isFilterableArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createBooleanConstant(true)));
-        ILogicalExpression isFilterableExpr = new ScalarFunctionCallExpression(FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.EDIT_DISTANCE_STRING_IS_FILTERABLE), isFilterableArgs);        
-        SelectOperator isFilterableSelectOp = new SelectOperator(new MutableObject<ILogicalExpression>(isFilterableExpr));
-        isFilterableSelectOp.getInputs().add(new MutableObject<ILogicalOperator>(replicateOp));
-        context.computeAndSetTypeEnvironmentForOperator(isFilterableSelectOp);
-        
-        // Select operator for removing tuples that are filterable.
-        List<Mutable<ILogicalExpression>> isNotFilterableArgs = new ArrayList<Mutable<ILogicalExpression>>();
-        isNotFilterableArgs.add(new MutableObject<ILogicalExpression>(isFilterableExpr));
-        ILogicalExpression isNotFilterableExpr = new ScalarFunctionCallExpression(FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.NOT), isNotFilterableArgs);
-        SelectOperator isNotFilterableSelectOp = new SelectOperator(new MutableObject<ILogicalExpression>(isNotFilterableExpr));
-        isNotFilterableSelectOp.getInputs().add(new MutableObject<ILogicalOperator>(replicateOp));
-        context.computeAndSetTypeEnvironmentForOperator(isNotFilterableSelectOp);
+        // Create select ops for removing tuples that are filterable and not filterable, respectively.
+        IVariableTypeEnvironment topTypeEnv = context.getOutputTypeEnvironment(joinRef.getValue());
+        IAType inputSearchVarType = (IAType) topTypeEnv.getVarType(inputSearchVar);
+        Mutable<ILogicalOperator> isFilterableSelectOpRef = new MutableObject<ILogicalOperator>();
+        Mutable<ILogicalOperator> isNotFilterableSelectOpRef = new MutableObject<ILogicalOperator>();
+        createIsFilterableSelectOps(replicateOp, inputSearchVar, inputSearchVarType, optFuncExpr, chosenIndex, context,
+                isFilterableSelectOpRef, isNotFilterableSelectOpRef);
         
         List<LogicalVariable> originalLiveVars = new ArrayList<LogicalVariable>();
         VariableUtilities.getLiveVariables(indexSubTree.root, originalLiveVars);
@@ -523,11 +504,53 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         joinOp.getInputs().add(new MutableObject<ILogicalOperator>(scanSubTree));
         // Make sure that the build input (which may be materialized causing blocking) comes from 
         // the split+select, otherwise the plan will have a deadlock.
-        joinOp.getInputs().add(new MutableObject<ILogicalOperator>(isNotFilterableSelectOp));
+        joinOp.getInputs().add(isNotFilterableSelectOpRef);
         context.computeAndSetTypeEnvironmentForOperator(joinOp);
         
         // Return the new root of the probeSubTree.
-        return isFilterableSelectOp;
+        return isFilterableSelectOpRef;
+    }
+    
+    private void createIsFilterableSelectOps(ILogicalOperator inputOp, LogicalVariable inputSearchVar, IAType inputSearchVarType, IOptimizableFuncExpr optFuncExpr, AqlCompiledIndexDecl chosenIndex, IOptimizationContext context, Mutable<ILogicalOperator> isFilterableSelectOpRef, Mutable<ILogicalOperator> isNotFilterableSelectOpRef) throws AlgebricksException {        
+        // Create select operator for removing tuples that are not filterable.
+        // First determine the proper filter function and args based on the type of the input search var.
+        ILogicalExpression isFilterableExpr = null;
+        switch (inputSearchVarType.getTypeTag()) {
+            case STRING: {
+                List<Mutable<ILogicalExpression>> isFilterableArgs = new ArrayList<Mutable<ILogicalExpression>>(4);
+                isFilterableArgs.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(inputSearchVar)));
+                // Since we are optimizing a join, the similarity threshold should be the only constant in the optimizable function expression.
+                isFilterableArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(optFuncExpr.getConstantVal(0))));
+                isFilterableArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createInt32Constant(chosenIndex.getGramLength())));
+                // TODO: Currently usePrePost is hardcoded to be true.
+                isFilterableArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createBooleanConstant(true)));
+                isFilterableExpr = new ScalarFunctionCallExpression(FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.EDIT_DISTANCE_STRING_IS_FILTERABLE), isFilterableArgs);        
+                break;
+            }
+            case UNORDEREDLIST:
+            case ORDEREDLIST: {
+                List<Mutable<ILogicalExpression>> isFilterableArgs = new ArrayList<Mutable<ILogicalExpression>>(2);
+                isFilterableArgs.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(inputSearchVar)));
+                // Since we are optimizing a join, the similarity threshold should be the only constant in the optimizable function expression.
+                isFilterableArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(optFuncExpr.getConstantVal(0))));
+                isFilterableExpr = new ScalarFunctionCallExpression(FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.EDIT_DISTANCE_LIST_IS_FILTERABLE), isFilterableArgs);        
+                break;
+            }
+            default: {
+            }
+        }
+        SelectOperator isFilterableSelectOp = new SelectOperator(new MutableObject<ILogicalExpression>(isFilterableExpr));
+        
+        // Select operator for removing tuples that are filterable.
+        List<Mutable<ILogicalExpression>> isNotFilterableArgs = new ArrayList<Mutable<ILogicalExpression>>();
+        isNotFilterableArgs.add(new MutableObject<ILogicalExpression>(isFilterableExpr));
+        ILogicalExpression isNotFilterableExpr = new ScalarFunctionCallExpression(FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.NOT), isNotFilterableArgs);
+        SelectOperator isNotFilterableSelectOp = new SelectOperator(new MutableObject<ILogicalExpression>(isNotFilterableExpr));
+        isNotFilterableSelectOp.getInputs().add(new MutableObject<ILogicalOperator>(inputOp));
+        context.computeAndSetTypeEnvironmentForOperator(isNotFilterableSelectOp);
+        
+        isFilterableSelectOpRef.setValue(isFilterableSelectOp);
+        isNotFilterableSelectOpRef.setValue(isNotFilterableSelectOp);
     }
     
     private void addSearchKeyType(IOptimizableFuncExpr optFuncExpr, OptimizableOperatorSubTree indexSubTree, IOptimizationContext context, InvertedIndexJobGenParams jobGenParams) throws AlgebricksException {
