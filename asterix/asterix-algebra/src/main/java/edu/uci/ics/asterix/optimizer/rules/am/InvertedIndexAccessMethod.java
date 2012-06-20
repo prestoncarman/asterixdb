@@ -450,21 +450,15 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
     }
 
     private Mutable<ILogicalOperator> createPanicNestedLoopJoinPlan(Mutable<ILogicalOperator> joinRef, OptimizableOperatorSubTree indexSubTree, OptimizableOperatorSubTree probeSubTree, IOptimizableFuncExpr optFuncExpr, AqlCompiledIndexDecl chosenIndex, IOptimizationContext context) throws AlgebricksException {
-        List<LogicalVariable> joinLiveVars = new ArrayList<LogicalVariable>();
-        VariableUtilities.getLiveVariables(joinRef.getValue(), joinLiveVars);
-        
         // We are optimizing a join. Add the input variable to the secondaryIndexFuncArgs.
         LogicalVariable inputSearchVar = null;
-        // This variable will be replaced in the original join. 
-        LogicalVariable joinCondReplaceVar = null;
+        // TODO: Factor out this code.
         if (optFuncExpr.getOperatorSubTree(0) == indexSubTree) {
             // If the index is on a dataset in subtree 0, then subtree 1 will feed.
             inputSearchVar = optFuncExpr.getLogicalVar(1);
-            joinCondReplaceVar = optFuncExpr.getLogicalVar(0);
         } else {
             // If the index is on a dataset in subtree 1, then subtree 0 will feed.
             inputSearchVar = optFuncExpr.getLogicalVar(0);
-            joinCondReplaceVar = optFuncExpr.getLogicalVar(1);
         }
         
         // We split the plan into two "branches", and add selections on each side.
@@ -483,23 +477,30 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         
         List<LogicalVariable> originalLiveVars = new ArrayList<LogicalVariable>();
         VariableUtilities.getLiveVariables(indexSubTree.root, originalLiveVars);
-        int joinCondOrigVarPos = originalLiveVars.indexOf(joinCondReplaceVar);
         
         // Copy the scan subtree in indexSubTree.
         Counter counter = new Counter(context.getVarCounter());
         LogicalOperatorDeepCopyVisitor deepCopyVisitor = new LogicalOperatorDeepCopyVisitor(counter);
-        ILogicalOperator scanSubTree = deepCopyVisitor.deepCopy(indexSubTree.root, null);
-        context.setVarCounter(counter.get());        
+        ILogicalOperator scanSubTree = deepCopyVisitor.deepCopy(indexSubTree.root, null);        
+        context.setVarCounter(counter.get());
+        //context.computeAndSetTypeEnvironmentForOperator(scanSubTree);
         
         List<LogicalVariable> copyLiveVars = new ArrayList<LogicalVariable>();
         VariableUtilities.getLiveVariables(scanSubTree, copyLiveVars);
-        LogicalVariable joinCondNewVar = copyLiveVars.get(joinCondOrigVarPos);
         
 		// Replace the inputs of the given join op, and replace variables in its
 		// condition since we deep-copied one of the scanner subtrees which
 		// changed variables. 
         InnerJoinOperator joinOp = (InnerJoinOperator) joinRef.getValue();
-        joinOp.getCondition().getValue().substituteVar(joinCondReplaceVar, joinCondNewVar);
+        // Substitute vars in the join condition due to copying of the scanSubTree.
+        List<LogicalVariable> joinCondUsedVars = new ArrayList<LogicalVariable>();
+        VariableUtilities.getUsedVariables(joinOp, joinCondUsedVars);
+        for (int i = 0; i < joinCondUsedVars.size(); i++) {
+            int ix = originalLiveVars.indexOf(joinCondUsedVars.get(i));
+            if (ix >= 0) {
+                joinOp.getCondition().getValue().substituteVar(originalLiveVars.get(ix), copyLiveVars.get(ix));
+            }        
+        }    
         joinOp.getInputs().clear();
         joinOp.getInputs().add(new MutableObject<ILogicalOperator>(scanSubTree));
         // Make sure that the build input (which may be materialized causing blocking) comes from 
@@ -540,6 +541,8 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
             }
         }
         SelectOperator isFilterableSelectOp = new SelectOperator(new MutableObject<ILogicalExpression>(isFilterableExpr));
+        isFilterableSelectOp.getInputs().add(new MutableObject<ILogicalOperator>(inputOp));
+        context.computeAndSetTypeEnvironmentForOperator(isFilterableSelectOp);
         
         // Select operator for removing tuples that are filterable.
         List<Mutable<ILogicalExpression>> isNotFilterableArgs = new ArrayList<Mutable<ILogicalExpression>>();
