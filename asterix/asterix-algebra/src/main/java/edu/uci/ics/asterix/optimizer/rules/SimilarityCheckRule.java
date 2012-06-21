@@ -41,7 +41,7 @@ public class SimilarityCheckRule implements IAlgebraicRewriteRule {
 
     @Override
     public boolean rewritePost(Mutable<ILogicalOperator> opRef, IOptimizationContext context) throws AlgebricksException {
-        AbstractLogicalOperator op = (AbstractLogicalOperator) opRef.getValue();
+    	AbstractLogicalOperator op = (AbstractLogicalOperator) opRef.getValue();
         // Look for select.
         if (op.getOperatorTag() != LogicalOperatorTag.SELECT) {
             return false;
@@ -59,7 +59,7 @@ public class SimilarityCheckRule implements IAlgebraicRewriteRule {
         return replaceSelectConditionExprs(condExpr, assigns, context);
     }
 
-    private boolean replaceSelectConditionExprs(Mutable<ILogicalExpression> expRef, List<AssignOperator> assigns, IOptimizationContext context) {
+    private boolean replaceSelectConditionExprs(Mutable<ILogicalExpression> expRef, List<AssignOperator> assigns, IOptimizationContext context) throws AlgebricksException {
         ILogicalExpression expr = expRef.getValue();
         if (expr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
             return false;
@@ -120,9 +120,9 @@ public class SimilarityCheckRule implements IAlgebraicRewriteRule {
     }
     
     private boolean replaceWithVariableArg(Mutable<ILogicalExpression> expRef, FunctionIdentifier normFuncIdent,
-    		AsterixConstantValue constVal, VariableReferenceExpression varRefExpr, List<AssignOperator> assigns, IOptimizationContext context) {
+    		AsterixConstantValue constVal, VariableReferenceExpression varRefExpr, List<AssignOperator> assigns, IOptimizationContext context) throws AlgebricksException {
     	
-    	// Find variable in assigns to detetmine its originating function.    	
+    	// Find variable in assigns to determine its originating function.    	
     	LogicalVariable var = varRefExpr.getVariableReference();
     	Mutable<ILogicalExpression> simFuncExprRef = null;
     	ScalarFunctionCallExpression simCheckFuncExpr = null;
@@ -156,7 +156,7 @@ public class SimilarityCheckRule implements IAlgebraicRewriteRule {
     		AssignOperator newAssign = new AssignOperator(newVar, new MutableObject<ILogicalExpression>(simCheckFuncExpr));
     		// Hook up inputs. 
     		newAssign.getInputs().add(new MutableObject<ILogicalOperator>(matchingAssign.getInputs().get(0).getValue()));
-    		matchingAssign.getInputs().get(0).setValue(newAssign);
+    		matchingAssign.getInputs().get(0).setValue(newAssign);    		
     		
     		// Replace select condition with a get-item on newVar.
             List<Mutable<ILogicalExpression>> selectGetItemArgs = new ArrayList<Mutable<ILogicalExpression>>();
@@ -178,6 +178,9 @@ public class SimilarityCheckRule implements IAlgebraicRewriteRule {
             // Replace the original assign expr with the get-item expr.
             simFuncExprRef.setValue(assignGetItemExpr);
     		
+            context.computeAndSetTypeEnvironmentForOperator(newAssign);
+            context.computeAndSetTypeEnvironmentForOperator(matchingAssign);
+            
     		return true;
     	}
     	
