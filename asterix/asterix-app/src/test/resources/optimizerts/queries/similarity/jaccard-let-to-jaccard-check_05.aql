@@ -1,3 +1,11 @@
+/*
+ * Description    : Tests that the SimilarityCheckRule rewrites the similarity-jaccard function with a threshold 
+ *                  into similarity-jaccard-check-check if possible.
+ *                  Tests that the optimizer drills through the let clause.
+ *                  Replacement should *not* happen because of a "<=" condition on the similarity.
+ * Success        : Yes
+ */
+
 drop dataverse test if exists;
 create dataverse test;
 use dataverse test;
@@ -10,10 +18,7 @@ create type DBLPType as closed {
   misc: string
 }
 
-create nodegroup group1 if not exists on nc1, nc2;
-
-create dataset DBLP(DBLPType) 
-  partitioned by key id on group1;
+create dataset DBLP(DBLPType) partitioned by key id;
 
 load dataset DBLP 
 using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
