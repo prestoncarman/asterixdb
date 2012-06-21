@@ -52,6 +52,7 @@ printf "MetadataNode=nc1\nNewUniverse=true\n" > $CONFIG_DIR/$CONFIG_NAME
 for ((i=1;i<=$numnc;i++)); do
     echo "nc$i.stores=/tmp/nc$i/" >> $CONFIG_DIR/$CONFIG_NAME
 done
+echo "OutputDir=/tmp/asterix_output/" >> $CONFIG_DIR/$CONFIG_NAME
 
 # point to the config file and give java some extra memory
 export CLASSPATH_PREFIX=$CONFIG_DIR

@@ -16,15 +16,15 @@
 package edu.uci.ics.asterix.metadata.declared;
 
 import java.io.File;
-import java.rmi.RemoteException;
 import java.util.List;
 
 import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
 import edu.uci.ics.asterix.common.config.GlobalConfig;
+import edu.uci.ics.asterix.common.dataflow.IAsterixApplicationContextInfo;
 import edu.uci.ics.asterix.common.parse.IParseFileSplitsDecl;
-import edu.uci.ics.asterix.dataflow.base.IAsterixApplicationContextInfo;
 import edu.uci.ics.asterix.dataflow.data.nontagged.valueproviders.AqlPrimitiveValueProviderFactory;
 import edu.uci.ics.asterix.external.data.adapter.api.IDatasourceAdapter;
+import edu.uci.ics.asterix.external.data.adapter.api.IDatasourceReadAdapter;
 import edu.uci.ics.asterix.external.data.operator.ExternalDataScanOperatorDescriptor;
 import edu.uci.ics.asterix.feed.comm.IFeedMessage;
 import edu.uci.ics.asterix.feed.mgmt.FeedId;
@@ -34,32 +34,37 @@ import edu.uci.ics.asterix.formats.base.IDataFormat;
 import edu.uci.ics.asterix.formats.nontagged.AqlBinaryComparatorFactoryProvider;
 import edu.uci.ics.asterix.formats.nontagged.AqlSerializerDeserializerProvider;
 import edu.uci.ics.asterix.formats.nontagged.AqlTypeTraitProvider;
-import edu.uci.ics.asterix.metadata.MetadataException;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl.IndexKind;
 import edu.uci.ics.asterix.metadata.utils.DatasetUtils;
+import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.asterix.om.util.NonTaggedFormatUtil;
+import edu.uci.ics.asterix.runtime.base.AsterixTupleFilterFactory;
 import edu.uci.ics.asterix.runtime.transaction.TreeIndexInsertUpdateDeleteOperatorDescriptor;
+import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksAbsolutePartitionConstraint;
+import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksPartitionConstraint;
+import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
+import edu.uci.ics.hyracks.algebricks.common.utils.Pair;
+import edu.uci.ics.hyracks.algebricks.common.utils.Triple;
+import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
-import edu.uci.ics.hyracks.algebricks.core.algebra.data.IPrinterFactory;
+import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ILogicalExpressionJobGen;
+import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IVariableTypeEnvironment;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
+import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
+import edu.uci.ics.hyracks.algebricks.core.algebra.functions.IFunctionInfo;
 import edu.uci.ics.hyracks.algebricks.core.algebra.metadata.IDataSink;
 import edu.uci.ics.hyracks.algebricks.core.algebra.metadata.IDataSource;
 import edu.uci.ics.hyracks.algebricks.core.algebra.metadata.IDataSourceIndex;
 import edu.uci.ics.hyracks.algebricks.core.algebra.metadata.IMetadataProvider;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.IOperatorSchema;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder.OrderKind;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluatorFactory;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IPushRuntimeFactory;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.jobgen.impl.JobGenContext;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.operators.std.SinkWriterRuntimeFactory;
-import edu.uci.ics.hyracks.algebricks.core.api.constraints.AlgebricksAbsolutePartitionConstraint;
-import edu.uci.ics.hyracks.algebricks.core.api.constraints.AlgebricksPartitionConstraint;
-import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
-import edu.uci.ics.hyracks.algebricks.core.utils.Pair;
-import edu.uci.ics.hyracks.algebricks.core.utils.Triple;
+import edu.uci.ics.hyracks.algebricks.core.jobgen.impl.JobGenContext;
+import edu.uci.ics.hyracks.algebricks.data.IPrinterFactory;
+import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluatorFactory;
+import edu.uci.ics.hyracks.algebricks.runtime.base.IPushRuntimeFactory;
+import edu.uci.ics.hyracks.algebricks.runtime.operators.std.SinkWriterRuntimeFactory;
 import edu.uci.ics.hyracks.api.dataflow.IOperatorDescriptor;
 import edu.uci.ics.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
@@ -75,19 +80,14 @@ import edu.uci.ics.hyracks.storage.am.btree.dataflow.BTreeDataflowHelperFactory;
 import edu.uci.ics.hyracks.storage.am.btree.dataflow.BTreeSearchOperatorDescriptor;
 import edu.uci.ics.hyracks.storage.am.btree.frames.BTreeNSMInteriorFrameFactory;
 import edu.uci.ics.hyracks.storage.am.btree.frames.BTreeNSMLeafFrameFactory;
-import edu.uci.ics.hyracks.storage.am.common.api.IIndexIdProvider;
-import edu.uci.ics.hyracks.storage.am.common.api.IOperationCallbackProvider;
 import edu.uci.ics.hyracks.storage.am.common.api.IPrimitiveValueProviderFactory;
 import edu.uci.ics.hyracks.storage.am.common.api.ITreeIndexFrameFactory;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.TreeIndexBulkLoadOperatorDescriptor;
-import edu.uci.ics.hyracks.storage.am.common.impls.IndexIdProvider;
+import edu.uci.ics.hyracks.storage.am.common.impls.NoOpOperationCallbackProvider;
 import edu.uci.ics.hyracks.storage.am.common.ophelpers.IndexOp;
 import edu.uci.ics.hyracks.storage.am.common.tuples.TypeAwareTupleWriterFactory;
 import edu.uci.ics.hyracks.storage.am.rtree.dataflow.RTreeDataflowHelperFactory;
 import edu.uci.ics.hyracks.storage.am.rtree.dataflow.RTreeSearchOperatorDescriptor;
-import edu.uci.ics.hyracks.storage.am.rtree.frames.RTreeNSMInteriorFrameFactory;
-import edu.uci.ics.hyracks.storage.am.rtree.frames.RTreeNSMLeafFrameFactory;
-import edu.uci.ics.hyracks.storage.am.rtree.tuples.RTreeTypeAwareTupleWriterFactory;
 
 public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, String> {
     private final long txnId;
@@ -119,44 +119,48 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
             IDataSource<AqlSourceId> dataSource, List<LogicalVariable> scanVariables,
             List<LogicalVariable> projectVariables, boolean projectPushed, JobGenContext context,
             JobSpecification jobSpec) throws AlgebricksException {
-        AqlSourceId asid = dataSource.getId();
-        String datasetName = asid.getDatasetName();
-        AqlCompiledDatasetDecl adecl = metadata.findDataset(datasetName);
+        AqlCompiledDatasetDecl adecl = metadata.findDataset(dataSource.getId().getDatasetName());
         if (adecl == null) {
-            throw new AlgebricksException("Unknown dataset " + datasetName);
+            throw new AlgebricksException("Unknown dataset " + dataSource.getId().getDatasetName());
         }
         switch (adecl.getDatasetType()) {
             case FEED:
-            case INTERNAL: {
-                String indexName = DatasetUtils.getPrimaryIndex(adecl).getIndexName();
-                try {
-                    return buildBtreeRuntime(metadata, context, jobSpec, datasetName, adecl, indexName, null, null,
-                            true, true);
-                } catch (AlgebricksException e) {
-                    throw new AlgebricksException(e);
+                if (dataSource instanceof ExternalFeedDataSource) {
+                    return buildExternalDatasetScan(jobSpec, adecl, dataSource);
+                } else {
+                    return buildInternalDatasetScan(jobSpec, adecl, dataSource, context);
                 }
+
+            case INTERNAL: {
+                return buildInternalDatasetScan(jobSpec, adecl, dataSource, context);
             }
+
             case EXTERNAL: {
-                return buildExternalDatasetScan(jobSpec, adecl);
+                return buildExternalDatasetScan(jobSpec, adecl, dataSource);
             }
+
             default: {
                 throw new IllegalArgumentException();
             }
         }
     }
 
-    /*
-     * private Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>
-     * buildFileSplitSetScan(JobSpecification jobSpec, AqlCompiledDatasetDecl
-     * acedl) throws AlgebricksException { String itemTypeName =
-     * acedl.getItemTypeName(); IAType itemType =
-     * metadata.findType(itemTypeName); return buildScannerRuntime(jobSpec,
-     * itemType, acedl.getAqlCompiledExternalDatasetDetails(),
-     * metadata.getFormat()); }
-     */
+    private Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> buildInternalDatasetScan(JobSpecification jobSpec,
+            AqlCompiledDatasetDecl acedl, IDataSource<AqlSourceId> dataSource, JobGenContext context)
+            throws AlgebricksException {
+        AqlSourceId asid = dataSource.getId();
+        String datasetName = asid.getDatasetName();
+        String indexName = DatasetUtils.getPrimaryIndex(acedl).getIndexName();
+
+        try {
+            return buildBtreeRuntime(metadata, context, jobSpec, datasetName, acedl, indexName, null, null, true, true);
+        } catch (AlgebricksException e) {
+            throw new AlgebricksException(e);
+        }
+    }
 
     private Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> buildExternalDatasetScan(JobSpecification jobSpec,
-            AqlCompiledDatasetDecl acedl) throws AlgebricksException {
+            AqlCompiledDatasetDecl acedl, IDataSource<AqlSourceId> dataSource) throws AlgebricksException {
         String itemTypeName = acedl.getItemTypeName();
         IAType itemType;
         try {
@@ -164,8 +168,17 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         } catch (Exception e) {
             throw new AlgebricksException(e);
         }
-        return buildExternalDataScannerRuntime(jobSpec, itemType,
-                (AqlCompiledExternalDatasetDetails) acedl.getAqlCompiledDatasetDetails(), metadata.getFormat());
+
+        if (dataSource instanceof ExternalFeedDataSource) {
+            AqlCompiledFeedDatasetDetails acfdd = (AqlCompiledFeedDatasetDetails) ((ExternalFeedDataSource) dataSource)
+                    .getCompiledDatasetDecl().getAqlCompiledDatasetDetails();
+
+            return buildFeedIntakeRuntime(jobSpec, metadata.getDataverseName(), acedl.getName(), itemType, acfdd,
+                    metadata.getFormat());
+        } else {
+            return buildExternalDataScannerRuntime(jobSpec, itemType,
+                    (AqlCompiledExternalDatasetDetails) acedl.getAqlCompiledDatasetDetails(), metadata.getFormat());
+        }
     }
 
     @SuppressWarnings("rawtypes")
@@ -176,9 +189,9 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
             throw new AlgebricksException("Can only scan datasets of records.");
         }
 
-        IDatasourceAdapter adapter;
+        IDatasourceReadAdapter adapter;
         try {
-            adapter = (IDatasourceAdapter) Class.forName(decl.getAdapter()).newInstance();
+            adapter = (IDatasourceReadAdapter) Class.forName(decl.getAdapter()).newInstance();
         } catch (Exception e) {
             e.printStackTrace();
             throw new AlgebricksException("unable to load the adapter class " + e);
@@ -186,9 +199,10 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
 
         if (!(adapter.getAdapterType().equals(IDatasourceAdapter.AdapterType.READ) || adapter.getAdapterType().equals(
                 IDatasourceAdapter.AdapterType.READ_WRITE))) {
-            throw new AlgebricksException("external dataset does not support read");
+            throw new AlgebricksException("external dataset adapter does not support read operation");
         }
         ARecordType rt = (ARecordType) itemType;
+
         try {
             adapter.configure(decl.getProperties(), itemType);
         } catch (Exception e) {
@@ -201,6 +215,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
 
         ExternalDataScanOperatorDescriptor dataScanner = new ExternalDataScanOperatorDescriptor(jobSpec,
                 decl.getAdapter(), decl.getProperties(), rt, scannerDesc);
+        dataScanner.setDatasourceAdapter(adapter);
         AlgebricksPartitionConstraint constraint = adapter.getPartitionConstraint();
         return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(dataScanner, constraint);
     }
@@ -324,12 +339,14 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
             }
             ARecordType recType = (ARecordType) itemType;
             for (i = 0; i < numSecondaryKeys; i++) {
-                IAType keyType = AqlCompiledIndexDecl.keyFieldType(secondaryKeyFields.get(i), recType);
+                Pair<IAType, Boolean> keyTypePair = AqlCompiledIndexDecl.getNonNullableKeyFieldType(
+                        secondaryKeyFields.get(i), recType);
+                IAType keyType = keyTypePair.first;
                 ISerializerDeserializer keySerde = metadata.getFormat().getSerdeProvider()
                         .getSerializerDeserializer(keyType);
                 recordFields[i] = keySerde;
                 comparatorFactories[i] = AqlBinaryComparatorFactoryProvider.INSTANCE.getBinaryComparatorFactory(
-                        keyType, OrderKind.ASC);
+                        keyType, true);
                 typeTraits[i] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(keyType);
             }
         } else {
@@ -342,7 +359,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
             typeTraits[numPrimaryKeys] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(itemType);
         }
 
-        for (Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType> evalFactoryAndType : DatasetUtils
+        for (Triple<ICopyEvaluatorFactory, ScalarFunctionCallExpression, IAType> evalFactoryAndType : DatasetUtils
                 .getPartitioningFunctions(ddecl)) {
             IAType keyType = evalFactoryAndType.third;
             ISerializerDeserializer keySerde = metadata.getFormat().getSerdeProvider()
@@ -350,7 +367,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
             recordFields[i] = keySerde;
             // if (!isSecondary) {
             comparatorFactories[i] = AqlBinaryComparatorFactoryProvider.INSTANCE.getBinaryComparatorFactory(keyType,
-                    OrderKind.ASC);
+                    true);
             // }
             typeTraits[i] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(keyType);
             ++i;
@@ -365,27 +382,11 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         } catch (Exception e) {
             throw new AlgebricksException(e);
         }
-        
-        //create OperationCallbackProvider 
-        //TODO modify appropriately
-        IOperationCallbackProvider opCallbackProvider = null;
-
-        //create IndexIdProvider
-        IIndexIdProvider indexIdProvider;
-        try {
-            indexIdProvider = new IndexIdProvider(metadata.findResourceId(metadata.getDataverseName(),
-                    datasetName, indexName));
-        } catch (MetadataException e) {
-            throw new AlgebricksException(e);
-        } catch (RemoteException e) {
-            throw new AlgebricksException(e);
-        }
 
         BTreeSearchOperatorDescriptor btreeSearchOp = new BTreeSearchOperatorDescriptor(jobSpec, recDesc,
-                appContext.getStorageManagerInterface(), appContext.getTreeRegisterProvider(), spPc.first, typeTraits,
+                appContext.getStorageManagerInterface(), appContext.getIndexRegistryProvider(), spPc.first, typeTraits,
                 comparatorFactories, lowKeyFields, highKeyFields, lowKeyInclusive, highKeyInclusive,
-                new BTreeDataflowHelperFactory(), opCallbackProvider, indexIdProvider);
-
+                new BTreeDataflowHelperFactory(), NoOpOperationCallbackProvider.INSTANCE);
         return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(btreeSearchOp, spPc.second);
     }
 
@@ -437,7 +438,9 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
             }
             ARecordType recType = (ARecordType) itemType;
 
-            IAType keyType = AqlCompiledIndexDecl.keyFieldType(secondaryKeyFields.get(0), recType);
+            Pair<IAType, Boolean> keyTypePair = AqlCompiledIndexDecl.getNonNullableKeyFieldType(
+                    secondaryKeyFields.get(0), recType);
+            IAType keyType = keyTypePair.first;
             if (keyType == null) {
                 throw new AlgebricksException("Could not find field " + secondaryKeyFields.get(0) + " in the schema.");
             }
@@ -457,7 +460,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
                         .getSerializerDeserializer(nestedKeyType);
                 recordFields[i] = keySerde;
                 comparatorFactories[i] = AqlBinaryComparatorFactoryProvider.INSTANCE.getBinaryComparatorFactory(
-                        nestedKeyType, OrderKind.ASC);
+                        nestedKeyType, true);
                 typeTraits[i] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(nestedKeyType);
                 valueProviderFactories[i] = AqlPrimitiveValueProviderFactory.INSTANCE;
             }
@@ -465,7 +468,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
             throw new AlgebricksException("R-tree can only be used as a secondary index");
         }
 
-        for (Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType> evalFactoryAndType : DatasetUtils
+        for (Triple<ICopyEvaluatorFactory, ScalarFunctionCallExpression, IAType> evalFactoryAndType : DatasetUtils
                 .getPartitioningFunctions(ddecl)) {
             IAType keyType = evalFactoryAndType.third;
             ISerializerDeserializer keySerde = AqlSerializerDeserializerProvider.INSTANCE
@@ -475,12 +478,6 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
             ++i;
         }
 
-        /*
-                ITreeIndexFrameFactory interiorFrameFactory = JobGenHelper.createRTreeNSMInteriorFrameFactory(typeTraits,
-                        numNestedSecondaryKeyFields);
-                ITreeIndexFrameFactory leafFrameFactory = JobGenHelper.createRTreeNSMLeafFrameFactory(typeTraits,
-                        numNestedSecondaryKeyFields);
-        */
         IAsterixApplicationContextInfo appContext = (IAsterixApplicationContextInfo) context.getAppContext();
         RecordDescriptor recDesc = new RecordDescriptor(recordFields);
 
@@ -490,25 +487,11 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         } catch (Exception e) {
             throw new AlgebricksException(e);
         }
-        
-        //create OperationCallbackProvider 
-        //TODO modify appropriately
-        IOperationCallbackProvider opCallbackProvider = null;
-
-        //create IndexIdProvider
-        IIndexIdProvider indexIdProvider;
-        try {
-            indexIdProvider = new IndexIdProvider(metadata.findResourceId(metadata.getDataverseName(),
-                    datasetName, indexName));
-        } catch (MetadataException e) {
-            throw new AlgebricksException(e);
-        } catch (RemoteException e) {
-            throw new AlgebricksException(e);
-        }
 
         RTreeSearchOperatorDescriptor rtreeSearchOp = new RTreeSearchOperatorDescriptor(jobSpec, recDesc,
-                appContext.getStorageManagerInterface(), appContext.getTreeRegisterProvider(), spPc.first, typeTraits,
-                comparatorFactories, keyFields, new RTreeDataflowHelperFactory(valueProviderFactories), opCallbackProvider, indexIdProvider);
+                appContext.getStorageManagerInterface(), appContext.getIndexRegistryProvider(), spPc.first, typeTraits,
+                comparatorFactories, keyFields, new RTreeDataflowHelperFactory(valueProviderFactories),
+                NoOpOperationCallbackProvider.INSTANCE);
 
         return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(rtreeSearchOp, spPc.second);
     }
@@ -620,26 +603,11 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
             throw new AlgebricksException(e);
         }
 
-        //create OperationCallbackProvider 
-        //TODO modify appropriately
-        IOperationCallbackProvider opCallbackProvider = null;
-
-        //create IndexIdProvider
-        IIndexIdProvider indexIdProvider;
-        try {
-            indexIdProvider = new IndexIdProvider(metadata.findResourceId(metadata.getDataverseName(),
-                    datasetName, indexName));
-        } catch (MetadataException e) {
-            throw new AlgebricksException(e);
-        } catch (RemoteException e) {
-            throw new AlgebricksException(e);
-        }
-
         TreeIndexBulkLoadOperatorDescriptor btreeBulkLoad = new TreeIndexBulkLoadOperatorDescriptor(spec,
-                appContext.getStorageManagerInterface(), appContext.getTreeRegisterProvider(),
+                appContext.getStorageManagerInterface(), appContext.getIndexRegistryProvider(),
                 splitsAndConstraint.first, typeTraits, comparatorFactories, fieldPermutation,
-                GlobalConfig.DEFAULT_BTREE_FILL_FACTOR, new BTreeDataflowHelperFactory(), opCallbackProvider,
-                indexIdProvider);
+                GlobalConfig.DEFAULT_BTREE_FILL_FACTOR, new BTreeDataflowHelperFactory(),
+                NoOpOperationCallbackProvider.INSTANCE);
         return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(btreeBulkLoad, splitsAndConstraint.second);
     }
 
@@ -669,8 +637,6 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
 
         ITypeTraits[] typeTraits = DatasetUtils.computeTupleTypeTraits(compiledDatasetDecl, metadata);
 
-        ITreeIndexFrameFactory interiorFrameFactory = createBTreeNSMInteriorFrameFactory(typeTraits);
-        ITreeIndexFrameFactory leafFrameFactory = createBTreeNSMLeafFrameFactory(typeTraits);
         IAsterixApplicationContextInfo appContext = (IAsterixApplicationContextInfo) context.getAppContext();
 
         IBinaryComparatorFactory[] comparatorFactories = DatasetUtils.computeKeysBinaryComparatorFactories(
@@ -684,26 +650,10 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
             throw new AlgebricksException(e);
         }
 
-        //create OperationCallbackProvider 
-        //TODO modify appropriately
-        IOperationCallbackProvider opCallbackProvider = null;
-
-        //create IndexIdProvider
-        IIndexIdProvider indexIdProvider;
-        try {
-            indexIdProvider = new IndexIdProvider(metadata.findResourceId(dataSource.getId().getDataverseName(),
-                    datasetName, indexName));
-        } catch (MetadataException e) {
-            throw new AlgebricksException(e);
-        } catch (RemoteException e) {
-            throw new AlgebricksException(e);
-        }
-
         TreeIndexInsertUpdateDeleteOperatorDescriptor btreeBulkLoad = new TreeIndexInsertUpdateDeleteOperatorDescriptor(
-                opCallbackProvider, spec, recordDesc, appContext.getStorageManagerInterface(),
-                appContext.getTreeRegisterProvider(), splitsAndConstraint.first, interiorFrameFactory,
-                leafFrameFactory, typeTraits, comparatorFactories, new BTreeDataflowHelperFactory(), fieldPermutation,
-                IndexOp.INSERT, txnId, indexIdProvider);
+                spec, recordDesc, appContext.getStorageManagerInterface(), appContext.getIndexRegistryProvider(),
+                splitsAndConstraint.first, typeTraits, comparatorFactories, fieldPermutation, IndexOp.INSERT,
+                new BTreeDataflowHelperFactory(), null, NoOpOperationCallbackProvider.INSTANCE, txnId);
         return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(btreeBulkLoad, splitsAndConstraint.second);
     }
 
@@ -733,8 +683,6 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
 
         ITypeTraits[] typeTraits = DatasetUtils.computeTupleTypeTraits(compiledDatasetDecl, metadata);
 
-        ITreeIndexFrameFactory interiorFrameFactory = createBTreeNSMInteriorFrameFactory(typeTraits);
-        ITreeIndexFrameFactory leafFrameFactory = createBTreeNSMLeafFrameFactory(typeTraits);
         IAsterixApplicationContextInfo appContext = (IAsterixApplicationContextInfo) context.getAppContext();
 
         IBinaryComparatorFactory[] comparatorFactories = DatasetUtils.computeKeysBinaryComparatorFactories(
@@ -748,76 +696,76 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
             throw new AlgebricksException(e);
         }
 
-        //create OperationCallbackProvider 
-        //TODO modify appropriately
-        IOperationCallbackProvider opCallbackProvider = null;
-
-        //create IndexIdProvider
-        IIndexIdProvider indexIdProvider;
-        try {
-            indexIdProvider = new IndexIdProvider(metadata.findResourceId(dataSource.getId().getDataverseName(),
-                    datasetName, indexName));
-        } catch (MetadataException e) {
-            throw new AlgebricksException(e);
-        } catch (RemoteException e) {
-            throw new AlgebricksException(e);
-        }
-
         TreeIndexInsertUpdateDeleteOperatorDescriptor btreeBulkLoad = new TreeIndexInsertUpdateDeleteOperatorDescriptor(
-                opCallbackProvider, spec, recordDesc, appContext.getStorageManagerInterface(),
-                appContext.getTreeRegisterProvider(), splitsAndConstraint.first, interiorFrameFactory,
-                leafFrameFactory, typeTraits, comparatorFactories, new BTreeDataflowHelperFactory(), fieldPermutation,
-                IndexOp.DELETE, txnId, indexIdProvider);
+                spec, recordDesc, appContext.getStorageManagerInterface(), appContext.getIndexRegistryProvider(),
+                splitsAndConstraint.first, typeTraits, comparatorFactories, fieldPermutation, IndexOp.DELETE,
+                new BTreeDataflowHelperFactory(), null, NoOpOperationCallbackProvider.INSTANCE, txnId);
         return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(btreeBulkLoad, splitsAndConstraint.second);
     }
 
     @Override
     public Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> getIndexInsertRuntime(
             IDataSourceIndex<String, AqlSourceId> dataSourceIndex, IOperatorSchema propagatedSchema,
-            List<LogicalVariable> primaryKeys, List<LogicalVariable> secondaryKeys, RecordDescriptor recordDesc,
+            IOperatorSchema[] inputSchemas, IVariableTypeEnvironment typeEnv, List<LogicalVariable> primaryKeys,
+            List<LogicalVariable> secondaryKeys, ILogicalExpression filterExpr, RecordDescriptor recordDesc,
             JobGenContext context, JobSpecification spec) throws AlgebricksException {
         String indexName = dataSourceIndex.getId();
         String datasetName = dataSourceIndex.getDataSource().getId().getDatasetName();
-        String dataverseName = dataSourceIndex.getDataSource().getId().getDataverseName();
         AqlCompiledDatasetDecl compiledDatasetDecl = metadata.findDataset(datasetName);
         if (compiledDatasetDecl == null) {
             throw new AlgebricksException("Unknown dataset " + datasetName);
         }
         AqlCompiledIndexDecl cid = DatasetUtils.findSecondaryIndexByName(compiledDatasetDecl, indexName);
-
-        if (cid.getKind() == IndexKind.LSM_BTREE)
-            return getBTreeDmlRuntime(dataverseName, datasetName, indexName, propagatedSchema, primaryKeys,
-                    secondaryKeys, recordDesc, context, spec, IndexOp.INSERT);
-        else
-            return getRTreeDmlRuntime(dataverseName, datasetName, indexName, propagatedSchema, primaryKeys,
-                    secondaryKeys, recordDesc, context, spec, IndexOp.INSERT);
+        AsterixTupleFilterFactory filterFactory = createTupleFilterFactory(inputSchemas, typeEnv, filterExpr, context);
+        if (cid.getKind() == IndexKind.BTREE) {
+            return getBTreeDmlRuntime(datasetName, indexName, propagatedSchema, primaryKeys, secondaryKeys,
+                    filterFactory, recordDesc, context, spec, IndexOp.INSERT);
+        } else {
+            return getRTreeDmlRuntime(datasetName, indexName, propagatedSchema, primaryKeys, secondaryKeys,
+                    filterFactory, recordDesc, context, spec, IndexOp.INSERT);
+        }
     }
 
     @Override
     public Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> getIndexDeleteRuntime(
             IDataSourceIndex<String, AqlSourceId> dataSourceIndex, IOperatorSchema propagatedSchema,
-            List<LogicalVariable> primaryKeys, List<LogicalVariable> secondaryKeys, RecordDescriptor recordDesc,
+            IOperatorSchema[] inputSchemas, IVariableTypeEnvironment typeEnv, List<LogicalVariable> primaryKeys,
+            List<LogicalVariable> secondaryKeys, ILogicalExpression filterExpr, RecordDescriptor recordDesc,
             JobGenContext context, JobSpecification spec) throws AlgebricksException {
         String indexName = dataSourceIndex.getId();
         String datasetName = dataSourceIndex.getDataSource().getId().getDatasetName();
-        String dataverseName = dataSourceIndex.getDataSource().getId().getDataverseName();
         AqlCompiledDatasetDecl compiledDatasetDecl = metadata.findDataset(datasetName);
         if (compiledDatasetDecl == null) {
             throw new AlgebricksException("Unknown dataset " + datasetName);
         }
         AqlCompiledIndexDecl cid = DatasetUtils.findSecondaryIndexByName(compiledDatasetDecl, indexName);
-        if (cid.getKind() == IndexKind.LSM_BTREE)
-            return getBTreeDmlRuntime(dataverseName, datasetName, indexName, propagatedSchema, primaryKeys,
-                    secondaryKeys, recordDesc, context, spec, IndexOp.DELETE);
-        else
-            return getRTreeDmlRuntime(dataverseName, datasetName, indexName, propagatedSchema, primaryKeys,
-                    secondaryKeys, recordDesc, context, spec, IndexOp.DELETE);
+        AsterixTupleFilterFactory filterFactory = createTupleFilterFactory(inputSchemas, typeEnv, filterExpr, context);
+        if (cid.getKind() == IndexKind.BTREE) {
+            return getBTreeDmlRuntime(datasetName, indexName, propagatedSchema, primaryKeys, secondaryKeys,
+                    filterFactory, recordDesc, context, spec, IndexOp.DELETE);
+        } else {
+            return getRTreeDmlRuntime(datasetName, indexName, propagatedSchema, primaryKeys, secondaryKeys,
+                    filterFactory, recordDesc, context, spec, IndexOp.DELETE);
+        }
     }
 
-    private Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> getBTreeDmlRuntime(String dataverseName,
-            String datasetName, String indexName, IOperatorSchema propagatedSchema, List<LogicalVariable> primaryKeys,
-            List<LogicalVariable> secondaryKeys, RecordDescriptor recordDesc, JobGenContext context,
-            JobSpecification spec, IndexOp indexOp) throws AlgebricksException {
+    private AsterixTupleFilterFactory createTupleFilterFactory(IOperatorSchema[] inputSchemas,
+            IVariableTypeEnvironment typeEnv, ILogicalExpression filterExpr, JobGenContext context)
+            throws AlgebricksException {
+        // No filtering condition.
+        if (filterExpr == null) {
+            return null;
+        }
+        ILogicalExpressionJobGen exprJobGen = context.getExpressionJobGen();
+        ICopyEvaluatorFactory filterEvalFactory = exprJobGen.createEvaluatorFactory(filterExpr, typeEnv, inputSchemas,
+                context);
+        return new AsterixTupleFilterFactory(filterEvalFactory, context.getBinaryBooleanInspector());
+    }
+
+    private Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> getBTreeDmlRuntime(String datasetName,
+            String indexName, IOperatorSchema propagatedSchema, List<LogicalVariable> primaryKeys,
+            List<LogicalVariable> secondaryKeys, AsterixTupleFilterFactory filterFactory, RecordDescriptor recordDesc,
+            JobGenContext context, JobSpecification spec, IndexOp indexOp) throws AlgebricksException {
         int numKeys = primaryKeys.size() + secondaryKeys.size();
         // generate field permutations
         int[] fieldPermutation = new int[numKeys];
@@ -858,20 +806,18 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         for (i = 0; i < secondaryKeys.size(); ++i) {
             IAType keyType = AqlCompiledIndexDecl.keyFieldType(secondaryKeyExprs.get(i).toString(), recType);
             comparatorFactories[i] = AqlBinaryComparatorFactoryProvider.INSTANCE.getBinaryComparatorFactory(keyType,
-                    OrderKind.ASC);
+                    true);
             typeTraits[i] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(keyType);
         }
-        for (Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType> evalFactoryAndType : DatasetUtils
+        for (Triple<ICopyEvaluatorFactory, ScalarFunctionCallExpression, IAType> evalFactoryAndType : DatasetUtils
                 .getPartitioningFunctions(compiledDatasetDecl)) {
             IAType keyType = evalFactoryAndType.third;
             comparatorFactories[i] = AqlBinaryComparatorFactoryProvider.INSTANCE.getBinaryComparatorFactory(keyType,
-                    OrderKind.ASC);
+                    true);
             typeTraits[i] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(keyType);
             ++i;
         }
 
-        ITreeIndexFrameFactory interiorFrameFactory = createBTreeNSMInteriorFrameFactory(typeTraits);
-        ITreeIndexFrameFactory leafFrameFactory = createBTreeNSMLeafFrameFactory(typeTraits);
         IAsterixApplicationContextInfo appContext = (IAsterixApplicationContextInfo) context.getAppContext();
         Pair<IFileSplitProvider, AlgebricksPartitionConstraint> splitsAndConstraint;
         try {
@@ -880,33 +826,17 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         } catch (Exception e) {
             throw new AlgebricksException(e);
         }
-
-        //create OperationCallbackProvider 
-        //TODO modify appropriately
-        IOperationCallbackProvider opCallbackProvider = null;
-
-        //create IndexIdProvider
-        IIndexIdProvider indexIdProvider;
-        try {
-            indexIdProvider = new IndexIdProvider(metadata.findResourceId(dataverseName, datasetName, indexName));
-        } catch (MetadataException e) {
-            throw new AlgebricksException(e);
-        } catch (RemoteException e) {
-            throw new AlgebricksException(e);
-        }
-
         TreeIndexInsertUpdateDeleteOperatorDescriptor btreeBulkLoad = new TreeIndexInsertUpdateDeleteOperatorDescriptor(
-                opCallbackProvider, spec, recordDesc, appContext.getStorageManagerInterface(),
-                appContext.getTreeRegisterProvider(), splitsAndConstraint.first, interiorFrameFactory,
-                leafFrameFactory, typeTraits, comparatorFactories, new BTreeDataflowHelperFactory(), fieldPermutation,
-                indexOp, txnId, indexIdProvider);
+                spec, recordDesc, appContext.getStorageManagerInterface(), appContext.getIndexRegistryProvider(),
+                splitsAndConstraint.first, typeTraits, comparatorFactories, fieldPermutation, indexOp,
+                new BTreeDataflowHelperFactory(), filterFactory, NoOpOperationCallbackProvider.INSTANCE, txnId);
         return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(btreeBulkLoad, splitsAndConstraint.second);
     }
 
-    private Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> getRTreeDmlRuntime(String dataverseName,
-            String datasetName, String indexName, IOperatorSchema propagatedSchema, List<LogicalVariable> primaryKeys,
-            List<LogicalVariable> secondaryKeys, RecordDescriptor recordDesc, JobGenContext context,
-            JobSpecification spec, IndexOp indexOp) throws AlgebricksException {
+    private Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> getRTreeDmlRuntime(String datasetName,
+            String indexName, IOperatorSchema propagatedSchema, List<LogicalVariable> primaryKeys,
+            List<LogicalVariable> secondaryKeys, AsterixTupleFilterFactory filterFactory, RecordDescriptor recordDesc,
+            JobGenContext context, JobSpecification spec, IndexOp indexOp) throws AlgebricksException {
         AqlCompiledDatasetDecl compiledDatasetDecl = metadata.findDataset(datasetName);
         String itemTypeName = compiledDatasetDecl.getItemTypeName();
         IAType itemType;
@@ -921,7 +851,9 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         ARecordType recType = (ARecordType) itemType;
         AqlCompiledIndexDecl cid = DatasetUtils.findSecondaryIndexByName(compiledDatasetDecl, indexName);
         List<String> secondaryKeyExprs = cid.getFieldExprs();
-        IAType spatialType = AqlCompiledIndexDecl.keyFieldType(secondaryKeyExprs.get(0).toString(), recType);
+        Pair<IAType, Boolean> keyPairType = AqlCompiledIndexDecl.getNonNullableKeyFieldType(secondaryKeyExprs.get(0),
+                recType);
+        IAType spatialType = keyPairType.first;
         int dimension = NonTaggedFormatUtil.getNumDimensions(spatialType.getTypeTag());
         int numSecondaryKeys = dimension * 2;
         int numPrimaryKeys = primaryKeys.size();
@@ -947,30 +879,18 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
             ISerializerDeserializer keySerde = AqlSerializerDeserializerProvider.INSTANCE
                     .getSerializerDeserializer(nestedKeyType);
             comparatorFactories[i] = AqlBinaryComparatorFactoryProvider.INSTANCE.getBinaryComparatorFactory(
-                    nestedKeyType, OrderKind.ASC);
+                    nestedKeyType, true);
             typeTraits[i] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(nestedKeyType);
             valueProviderFactories[i] = AqlPrimitiveValueProviderFactory.INSTANCE;
         }
-        for (Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType> evalFactoryAndType : DatasetUtils
+        for (Triple<ICopyEvaluatorFactory, ScalarFunctionCallExpression, IAType> evalFactoryAndType : DatasetUtils
                 .getPartitioningFunctions(compiledDatasetDecl)) {
             IAType keyType = evalFactoryAndType.third;
             comparatorFactories[i] = AqlBinaryComparatorFactoryProvider.INSTANCE.getBinaryComparatorFactory(keyType,
-                    OrderKind.ASC);
+                    true);
             typeTraits[i] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(keyType);
             ++i;
         }
-
-        ITreeIndexFrameFactory interiorFrameFactory = new RTreeNSMInteriorFrameFactory(
-                new RTreeTypeAwareTupleWriterFactory(typeTraits), valueProviderFactories);
-        ITreeIndexFrameFactory leafFrameFactory = new RTreeNSMLeafFrameFactory(new RTreeTypeAwareTupleWriterFactory(
-                typeTraits), valueProviderFactories);
-
-        /*
-        ITreeIndexFrameFactory interiorFrameFactory = JobGenHelper.createRTreeNSMInteriorFrameFactory(typeTraits,
-                numSecondaryKeys);
-        ITreeIndexFrameFactory leafFrameFactory = JobGenHelper.createRTreeNSMLeafFrameFactory(typeTraits,
-                numSecondaryKeys);
-        */
 
         IAsterixApplicationContextInfo appContext = (IAsterixApplicationContextInfo) context.getAppContext();
         Pair<IFileSplitProvider, AlgebricksPartitionConstraint> splitsAndConstraint;
@@ -980,26 +900,11 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         } catch (Exception e) {
             throw new AlgebricksException(e);
         }
-
-        //create OperationCallbackProvider 
-        //TODO modify appropriately
-        IOperationCallbackProvider opCallbackProvider = null;
-
-        //create IndexIdProvider
-        IIndexIdProvider indexIdProvider;
-        try {
-            indexIdProvider = new IndexIdProvider(metadata.findResourceId(dataverseName, datasetName, indexName));
-        } catch (MetadataException e) {
-            throw new AlgebricksException(e);
-        } catch (RemoteException e) {
-            throw new AlgebricksException(e);
-        }
-
         TreeIndexInsertUpdateDeleteOperatorDescriptor rtreeUpdate = new TreeIndexInsertUpdateDeleteOperatorDescriptor(
-                opCallbackProvider, spec, recordDesc, appContext.getStorageManagerInterface(),
-                appContext.getTreeRegisterProvider(), splitsAndConstraint.first, interiorFrameFactory,
-                leafFrameFactory, typeTraits, comparatorFactories, new RTreeDataflowHelperFactory(
-                        valueProviderFactories), fieldPermutation, indexOp, txnId, indexIdProvider);
+                spec, recordDesc, appContext.getStorageManagerInterface(), appContext.getIndexRegistryProvider(),
+                splitsAndConstraint.first, typeTraits, comparatorFactories, fieldPermutation, indexOp,
+                new RTreeDataflowHelperFactory(valueProviderFactories), filterFactory,
+                NoOpOperationCallbackProvider.INSTANCE, txnId);
         return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(rtreeUpdate, splitsAndConstraint.second);
     }
 
@@ -1015,4 +920,8 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         return new BTreeNSMLeafFrameFactory(new TypeAwareTupleWriterFactory(typeTraits));
     }
 
+    @Override
+    public IFunctionInfo lookupFunction(FunctionIdentifier fid) {
+        return AsterixBuiltinFunctions.lookupFunction(fid);
+    }
 }

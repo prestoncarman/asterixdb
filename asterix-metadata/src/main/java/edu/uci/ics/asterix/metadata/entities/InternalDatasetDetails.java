@@ -39,7 +39,7 @@ public class InternalDatasetDetails implements IDatasetDetails {
     private static final long serialVersionUID = 1L;
 
     public enum FileStructure {
-        LSM_BTREE
+        BTREE
     };
 
     public enum PartitioningStrategy {

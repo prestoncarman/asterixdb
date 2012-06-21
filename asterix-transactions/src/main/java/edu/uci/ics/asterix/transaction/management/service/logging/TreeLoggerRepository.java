@@ -18,28 +18,25 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 
-import edu.uci.ics.asterix.transaction.management.resource.TransactionalResourceRepository;
+import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionProvider;
 import edu.uci.ics.hyracks.storage.am.common.api.ITreeIndex;
-import edu.uci.ics.hyracks.storage.am.common.api.ITreeIndexTupleWriter;
 
 public class TreeLoggerRepository {
 
     private final Map<ByteBuffer, TreeLogger> loggers = new HashMap<ByteBuffer, TreeLogger>();
+    private final TransactionProvider provider;
 
-    private final TransactionalResourceRepository resourceRepository;
-
-    public TreeLoggerRepository(TransactionalResourceRepository resourceRepository) {
-        this.resourceRepository = resourceRepository;
+    public TreeLoggerRepository(TransactionProvider provider) {
+        this.provider = provider;
     }
 
     public synchronized TreeLogger getTreeLogger(byte[] resourceIdBytes) {
         ByteBuffer resourceId = ByteBuffer.wrap(resourceIdBytes);
         TreeLogger logger = loggers.get(resourceId);
         if (logger == null) {
-            ITreeIndex treeIndex = (ITreeIndex) resourceRepository.getTransactionalResource(resourceIdBytes);
-            ITreeIndexTupleWriter tupleWriter = treeIndex.getLeafFrameFactory().getTupleWriterFactory()
-                    .createTupleWriter();
-            logger = new TreeLogger(resourceIdBytes, tupleWriter);
+            ITreeIndex treeIndex = (ITreeIndex) provider.getTransactionalResourceRepository().getTransactionalResource(
+                    resourceIdBytes);
+            logger = new TreeLogger(resourceIdBytes, treeIndex);
             loggers.put(resourceId, logger);
         }
         return logger;

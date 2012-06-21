@@ -16,7 +16,6 @@ package edu.uci.ics.asterix.external.data.parser;
 
 import java.io.InputStream;
 import java.util.HashMap;
-import java.util.Map;
 
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.ATypeTag;
@@ -33,6 +32,8 @@ import edu.uci.ics.hyracks.dataflow.std.file.ITupleParser;
 
 public abstract class AbstractStreamDataParser implements IDataStreamParser {
 
+    public static final String KEY_DELIMITER = "delimiter";
+    
     protected static final HashMap<ATypeTag, IValueParserFactory> typeToValueParserFactMap = new HashMap<ATypeTag, IValueParserFactory>();
 
     static {
@@ -48,7 +49,7 @@ public abstract class AbstractStreamDataParser implements IDataStreamParser {
     protected InputStream inputStream;
 
     @Override
-    public abstract void initialize(ARecordType atype, Map<String, String> configuration, IHyracksTaskContext ctx);
+    public abstract void initialize(ARecordType recordType, IHyracksTaskContext ctx);
 
     @Override
     public abstract void parse(IFrameWriter frameWriter) throws HyracksDataException;

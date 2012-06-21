@@ -28,43 +28,38 @@ import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 import edu.uci.ics.hyracks.api.job.JobSpecification;
 import edu.uci.ics.hyracks.dataflow.std.base.AbstractSingleActivityOperatorDescriptor;
 
-public class FeedIntakeOperatorDescriptor extends
-		AbstractSingleActivityOperatorDescriptor {
-	private static final long serialVersionUID = 1L;
+public class FeedIntakeOperatorDescriptor extends AbstractSingleActivityOperatorDescriptor {
+    private static final long serialVersionUID = 1L;
 
-	private final String adapter;
-	private final Map<String, String> adapterConfiguration;
-	private final IAType atype;
-	private FeedId feedId;
+    private final String adapter;
+    private final Map<String, String> adapterConfiguration;
+    private final IAType atype;
+    private final FeedId feedId;
 
-	private transient IDatasourceReadAdapter datasourceReadAdapter;
+    private transient IDatasourceReadAdapter datasourceReadAdapter;
 
-	public FeedIntakeOperatorDescriptor(JobSpecification spec, FeedId feedId,
-			String adapter, Map<String, String> arguments, ARecordType atype,
-			RecordDescriptor rDesc) {
-		super(spec, 0, 1);
-		recordDescriptors[0] = rDesc;
-		this.adapter = adapter;
-		this.adapterConfiguration = arguments;
-		this.atype = atype;
-		this.feedId = feedId;
-	}
+    public FeedIntakeOperatorDescriptor(JobSpecification spec, FeedId feedId, String adapter,
+            Map<String, String> arguments, ARecordType atype, RecordDescriptor rDesc) {
+        super(spec, 1, 1);
+        recordDescriptors[0] = rDesc;
+        this.adapter = adapter;
+        this.adapterConfiguration = arguments;
+        this.atype = atype;
+        this.feedId = feedId;
+    }
 
-	public IOperatorNodePushable createPushRuntime(IHyracksTaskContext ctx,
-			IRecordDescriptorProvider recordDescProvider, final int partition,
-			int nPartitions) throws HyracksDataException {
+    public IOperatorNodePushable createPushRuntime(IHyracksTaskContext ctx,
+            IRecordDescriptorProvider recordDescProvider, final int partition, int nPartitions)
+            throws HyracksDataException {
 
-		try {
-			datasourceReadAdapter = (IDatasourceReadAdapter) Class.forName(
-					adapter).newInstance();
-			datasourceReadAdapter.configure(adapterConfiguration, atype);
-			datasourceReadAdapter.initialize(ctx);
+        try {
+            datasourceReadAdapter = (IDatasourceReadAdapter) Class.forName(adapter).newInstance();
+            datasourceReadAdapter.configure(adapterConfiguration, atype);
+            datasourceReadAdapter.initialize(ctx);
 
-		} catch (Exception e) {
-			throw new HyracksDataException("initialization of adapter failed",
-					e);
-		}
-		return new FeedIntakeOperatorNodePushable(feedId,
-				datasourceReadAdapter, partition);
-	}
+        } catch (Exception e) {
+            throw new HyracksDataException("initialization of adapter failed", e);
+        }
+        return new FeedIntakeOperatorNodePushable(feedId, datasourceReadAdapter, partition);
+    }
 }

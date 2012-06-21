@@ -17,10 +17,8 @@ create type TOKENSRANKEDADMType as closed {
   rank: int32
 }
 
-create nodegroup group1  if not exists on nc1, nc2;
-
-create dataset DBLP(DBLPType) partitioned by key id on group1;
-create dataset TOKENSRANKEDADM(TOKENSRANKEDADMType) partitioned by key rank on group1;
+create dataset DBLP(DBLPType) partitioned by key id;
+create dataset TOKENSRANKEDADM(TOKENSRANKEDADMType) partitioned by key rank;
 
 load dataset DBLP 
 using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
@@ -28,7 +26,7 @@ using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
 
 load dataset TOKENSRANKEDADM 
 using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
-(("path"="nc1://data/pub-small/tokensranked.adm"),("format"="json"));
+(("path"="nc1://data/pub-small/tokensranked.adm"),("format"="adm"));
 
 write output to nc1:'rttest/fuzzyjoin_dblp-2.2.adm';
 

@@ -21,54 +21,28 @@ import java.io.InputStream;
 import java.util.Map;
 
 import edu.uci.ics.asterix.external.data.adapter.api.IDatasourceReadAdapter;
-import edu.uci.ics.asterix.external.data.parser.ADMStreamParser;
-import edu.uci.ics.asterix.external.data.parser.DelimitedDataStreamParser;
 import edu.uci.ics.asterix.external.data.parser.IDataParser;
 import edu.uci.ics.asterix.external.data.parser.IDataStreamParser;
 import edu.uci.ics.asterix.om.types.ARecordType;
-import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.asterix.om.types.IAType;
-import edu.uci.ics.hyracks.algebricks.core.api.constraints.AlgebricksAbsolutePartitionConstraint;
-import edu.uci.ics.hyracks.algebricks.core.api.exceptions.NotImplementedException;
+import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksAbsolutePartitionConstraint;
 import edu.uci.ics.hyracks.api.context.IHyracksTaskContext;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 import edu.uci.ics.hyracks.api.io.FileReference;
-import edu.uci.ics.hyracks.dataflow.common.data.parsers.IValueParserFactory;
 import edu.uci.ics.hyracks.dataflow.std.file.FileSplit;
 
 public class NCFileSystemAdapter extends AbstractDatasourceAdapter implements IDatasourceReadAdapter {
 
     private static final long serialVersionUID = -4154256369973615710L;
-    private Character delimiter;
-    private boolean isDelimited;
     private FileSplit[] fileSplits;
-    private IDataParser tupleParser;
+    private String parserClass;
 
     public class Constants {
         public static final String KEY_SPLITS = "path";
         public static final String KEY_FORMAT = "format";
         public static final String KEY_PARSER = "parser";
-        public static final String KEY_DELIMITER = "delimiter";
         public static final String FORMAT_DELIMITED_TEXT = "delimited-text";
         public static final String FORMAT_ADM = "adm";
-    }
-
-    private IDataParser createDataParser(ARecordType recType) {
-        if (isDelimited) {
-            int n = recType.getFieldTypes().length;
-            IValueParserFactory[] fieldParserFactories = new IValueParserFactory[n];
-            for (int i = 0; i < n; i++) {
-                ATypeTag tag = recType.getFieldTypes()[i].getTypeTag();
-                IValueParserFactory vpf = typeToValueParserFactMap.get(tag);
-                if (vpf == null) {
-                    throw new NotImplementedException("No value parser factory for delimited fields of type " + tag);
-                }
-                fieldParserFactories[i] = vpf;
-            }
-            return new DelimitedDataStreamParser(delimiter);
-        } else {
-            return new ADMStreamParser();
-        }
     }
 
     @Override
@@ -96,8 +70,6 @@ public class NCFileSystemAdapter extends AbstractDatasourceAdapter implements ID
     @Override
     public void initialize(IHyracksTaskContext ctx) throws Exception {
         this.ctx = ctx;
-        tupleParser = createDataParser((ARecordType) atype);
-        tupleParser.initialize((ARecordType) atype, configuration, ctx);
     }
 
     @Override
@@ -120,51 +92,44 @@ public class NCFileSystemAdapter extends AbstractDatasourceAdapter implements ID
         } catch (FileNotFoundException e) {
             throw new HyracksDataException(e);
         }
-        if(tupleParser instanceof IDataStreamParser){
-            ((IDataStreamParser)tupleParser).setInputStream(in);
+
+        IDataParser dataParser = (IDataParser) Class.forName(parserClass).newInstance();
+        if (dataParser instanceof IDataStreamParser) {
+            ((IDataStreamParser) dataParser).setInputStream(in);
         } else {
             throw new IllegalArgumentException(" parser not compatible");
         }
-        return tupleParser;
+        dataParser.configure(configuration);
+        dataParser.initialize((ARecordType) atype, ctx);
+        return dataParser;
     }
 
     private void configureFileSplits(String[] splits) {
-        fileSplits = new FileSplit[splits.length];
-        String nodeName;
-        String nodeLocalPath;
-        int count = 0;
-        for (String splitPath : splits) {
-            nodeName = splitPath.split(":")[0];
-            nodeLocalPath = splitPath.split("://")[1];
-            FileSplit fileSplit = new FileSplit(nodeName, new FileReference(new File(nodeLocalPath)));
-            fileSplits[count++] = fileSplit;
+        if (fileSplits == null) {
+            fileSplits = new FileSplit[splits.length];
+            String nodeName;
+            String nodeLocalPath;
+            int count = 0;
+            for (String splitPath : splits) {
+                nodeName = splitPath.split(":")[0];
+                nodeLocalPath = splitPath.split("://")[1];
+                FileSplit fileSplit = new FileSplit(nodeName, new FileReference(new File(nodeLocalPath)));
+                fileSplits[count++] = fileSplit;
+            }
         }
     }
 
-    private void configureFormat() throws Exception {
-        isDelimited = false;
-        delimiter = null;
-        String parserClass = configuration.get(Constants.KEY_PARSER);
+    protected void configureFormat() throws Exception {
+        parserClass = configuration.get(Constants.KEY_PARSER);
         if (parserClass == null) {
             if (Constants.FORMAT_DELIMITED_TEXT.equalsIgnoreCase(configuration.get(KEY_FORMAT))) {
-                isDelimited = true;
-                String delimiterArg = configuration.get(KEY_DELIMITER);
-                if (delimiterArg != null) {
-                    delimiter = delimiterArg.charAt(0);
-                } else {
-                    delimiter = '\n';
-                }
                 parserClass = formatToParserMap.get(FORMAT_DELIMITED_TEXT);
             } else if (Constants.FORMAT_ADM.equalsIgnoreCase(configuration.get(Constants.KEY_FORMAT))) {
-                isDelimited = false;
-                delimiter = null;
                 parserClass = formatToParserMap.get(Constants.FORMAT_ADM);
             } else {
                 throw new IllegalArgumentException(" format " + configuration.get(KEY_FORMAT) + " not supported");
             }
         }
-
-        dataParser = (IDataParser) Class.forName(parserClass).newInstance();
 
     }
 

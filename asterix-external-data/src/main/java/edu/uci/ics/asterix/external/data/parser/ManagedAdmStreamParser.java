@@ -20,16 +20,27 @@ import edu.uci.ics.asterix.feed.managed.adapter.IManagedFeedAdapter;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.hyracks.api.context.IHyracksTaskContext;
 
-public class ManagedAdmStreamParser extends ADMStreamParser {
+public class ManagedAdmStreamParser extends ADMStreamParser implements IManagedDataParser{
 
-    private IManagedFeedAdapter adapter;
+    private  IManagedFeedAdapter adapter;
 
-    public ManagedAdmStreamParser(IManagedFeedAdapter adapter) {
-        this.adapter = adapter;
+    @Override
+    public void initialize(ARecordType atype, IHyracksTaskContext ctx) {
+        tupleParser = new ManagedAdmRecordParserFactory(atype, adapter).createTupleParser(ctx);
     }
 
     @Override
-    public void initialize(ARecordType atype, Map<String, String> configuration, IHyracksTaskContext ctx) {
-        tupleParser = new ManagedAdmRecordParserFactory(atype, adapter).createTupleParser(ctx);
+    public void configure(Map<String, String> configuration) {
+
+    }
+
+    @Override
+    public IManagedTupleParser getManagedTupleParser() {
+         return (IManagedTupleParser)tupleParser;
+    }
+
+    @Override
+    public void setAdapter(IManagedFeedAdapter adapter) {
+        this.adapter = adapter;        
     }
 }

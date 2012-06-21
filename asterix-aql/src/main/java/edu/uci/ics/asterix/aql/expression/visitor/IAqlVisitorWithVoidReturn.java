@@ -1,5 +1,6 @@
 package edu.uci.ics.asterix.aql.expression.visitor;
 
+import edu.uci.ics.asterix.aql.expression.BeginFeedStatement;
 import edu.uci.ics.asterix.aql.expression.CallExpr;
 import edu.uci.ics.asterix.aql.expression.ControlFeedStatement;
 import edu.uci.ics.asterix.aql.expression.CreateDataverseStatement;
@@ -142,6 +143,8 @@ public interface IAqlVisitorWithVoidReturn<T> {
     void visit(DataverseDropStatement stmtDel, T arg) throws AsterixException;
 
     void visit(TypeDropStatement stmtDel, T arg) throws AsterixException;
+    
+    void visit(BeginFeedStatement stmtDel, T arg) throws AsterixException;
 
     void visit(ControlFeedStatement stmtDel, T arg) throws AsterixException;
 

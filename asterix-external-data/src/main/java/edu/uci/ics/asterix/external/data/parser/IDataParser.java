@@ -28,19 +28,25 @@ import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 public interface IDataParser {
 
     /**
-     * Initializes the instance. An implementation may use the passed-in
-     * configuration parameters, the output record type to initialize itself so
-     * that it can parse an input stream to form records of the given type.
-     * 
      * @param atype
      *            The record type associated with each record output by the
      *            parser
      * @param configuration
      *            Any configuration parameters for the parser
+     */
+    public void configure(Map<String, String> configuration);
+
+    /**
+     * Initializes the instance. An implementation may use the passed-in
+     * configuration parameters, the output record type to initialize itself so
+     * that it can parse an input stream to form records of the given type.
+     * 
+     * @param configuration
+     *            Any configuration parameters for the parser
      * @param ctx
      *            The runtime HyracksStageletContext.
      */
-    public void initialize(ARecordType atype, Map<String, String> configuration, IHyracksTaskContext ctx);
+    public void initialize(ARecordType recordType, IHyracksTaskContext ctx);
 
     /**
      * Parses the input stream to produce records of the configured type and

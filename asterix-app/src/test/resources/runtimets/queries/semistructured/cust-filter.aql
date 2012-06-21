@@ -18,12 +18,9 @@ create type CustomerType as open {
   children: [ { name: string, age: int32? } ]
 }
 
-
-create nodegroup group1 if not exists on nc1;
-
 create external dataset Customers(CustomerType) 
 using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
-(("path"="nc1://data/spatial/spatialData.json"),("format"="adm"));
+(("path"="nc1://data/semistructured/tiny01/customer.adm"),("format"="adm"));
 
 write output to nc1:"rttest/semistructured_cust-filter.adm";
 

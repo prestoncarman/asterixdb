@@ -9,15 +9,17 @@ import edu.uci.ics.asterix.dataflow.data.nontagged.serde.ACircleSerializerDeseri
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.ADoubleSerializerDeserializer;
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.AInt16SerializerDeserializer;
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.ARectangleSerializerDeserializer;
+import edu.uci.ics.asterix.om.functions.IFunctionDescriptor;
+import edu.uci.ics.asterix.om.functions.IFunctionDescriptorFactory;
 import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.asterix.om.types.EnumDeserializer;
 import edu.uci.ics.asterix.runtime.evaluators.base.AbstractScalarFunctionDynamicDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.common.SpatialUtils;
+import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
+import edu.uci.ics.hyracks.algebricks.common.exceptions.NotImplementedException;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluatorFactory;
-import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
-import edu.uci.ics.hyracks.algebricks.core.api.exceptions.NotImplementedException;
+import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluator;
+import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluatorFactory;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.ArrayBackedValueStorage;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.IDataOutputProvider;
@@ -28,19 +30,24 @@ public class SpatialAreaDescriptor extends AbstractScalarFunctionDynamicDescript
     private static final long serialVersionUID = 1L;
     public final static FunctionIdentifier FID = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "spatial-area",
             1, true);
+    public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
+        public IFunctionDescriptor createFunctionDescriptor() {
+            return new SpatialAreaDescriptor();
+        }
+    };
 
     @Override
-    public IEvaluatorFactory createEvaluatorFactory(final IEvaluatorFactory[] args) throws AlgebricksException {
-        return new IEvaluatorFactory() {
+    public ICopyEvaluatorFactory createEvaluatorFactory(final ICopyEvaluatorFactory[] args) throws AlgebricksException {
+        return new ICopyEvaluatorFactory() {
             private static final long serialVersionUID = 1L;
 
             @Override
-            public IEvaluator createEvaluator(final IDataOutputProvider output) throws AlgebricksException {
-                return new IEvaluator() {
+            public ICopyEvaluator createEvaluator(final IDataOutputProvider output) throws AlgebricksException {
+                return new ICopyEvaluator() {
 
                     private DataOutput out = output.getDataOutput();
                     private ArrayBackedValueStorage argOut = new ArrayBackedValueStorage();
-                    private IEvaluator eval = args[0].createEvaluator(argOut);
+                    private ICopyEvaluator eval = args[0].createEvaluator(argOut);
 
                     @Override
                     public void evaluate(IFrameTupleReference tuple) throws AlgebricksException {
@@ -48,36 +55,36 @@ public class SpatialAreaDescriptor extends AbstractScalarFunctionDynamicDescript
                         eval.evaluate(tuple);
 
                         try {
-                            byte[] bytes = argOut.getBytes();
+                            byte[] bytes = argOut.getByteArray();
                             ATypeTag tag = EnumDeserializer.ATYPETAGDESERIALIZER.deserialize(bytes[0]);
                             double area = 0.0;
 
                             switch (tag) {
                                 case POLYGON:
-                                    int numOfPoints = AInt16SerializerDeserializer.getShort(argOut.getBytes(), 1);
+                                    int numOfPoints = AInt16SerializerDeserializer.getShort(argOut.getByteArray(), 1);
 
                                     if (numOfPoints < 3) {
                                         throw new AlgebricksException("Polygon must have at least 3 points");
                                     }
-                                    area = Math.abs(SpatialUtils.polygonArea(argOut.getBytes(), numOfPoints));
+                                    area = Math.abs(SpatialUtils.polygonArea(argOut.getByteArray(), numOfPoints));
                                     break;
                                 case CIRCLE:
-                                    double radius = ADoubleSerializerDeserializer.getDouble(argOut.getBytes(),
+                                    double radius = ADoubleSerializerDeserializer.getDouble(argOut.getByteArray(),
                                             ACircleSerializerDeserializer.getRadiusOffset());
                                     area = SpatialUtils.pi() * radius * radius;
                                     break;
                                 case RECTANGLE:
-                                    double x1 = ADoubleSerializerDeserializer.getDouble(argOut.getBytes(),
+                                    double x1 = ADoubleSerializerDeserializer.getDouble(argOut.getByteArray(),
                                             ARectangleSerializerDeserializer
                                                     .getBottomLeftCoordinateOffset(Coordinate.X));
-                                    double y1 = ADoubleSerializerDeserializer.getDouble(argOut.getBytes(),
+                                    double y1 = ADoubleSerializerDeserializer.getDouble(argOut.getByteArray(),
                                             ARectangleSerializerDeserializer
                                                     .getBottomLeftCoordinateOffset(Coordinate.Y));
 
-                                    double x2 = ADoubleSerializerDeserializer.getDouble(argOut.getBytes(),
+                                    double x2 = ADoubleSerializerDeserializer.getDouble(argOut.getByteArray(),
                                             ARectangleSerializerDeserializer
                                                     .getUpperRightCoordinateOffset(Coordinate.X));
-                                    double y2 = ADoubleSerializerDeserializer.getDouble(argOut.getBytes(),
+                                    double y2 = ADoubleSerializerDeserializer.getDouble(argOut.getByteArray(),
                                             ARectangleSerializerDeserializer
                                                     .getUpperRightCoordinateOffset(Coordinate.Y));
                                     area = (x2 - x1) * (y2 - y1);

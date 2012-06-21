@@ -36,6 +36,7 @@ import edu.uci.ics.hyracks.api.dataflow.value.IBinaryHashFunctionFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
 import edu.uci.ics.hyracks.api.dataflow.value.ITypeTraits;
 import edu.uci.ics.hyracks.api.dataflow.value.RecordDescriptor;
+import edu.uci.ics.hyracks.storage.am.common.api.ITreeIndex;
 
 /**
  * Descriptor for a primary or secondary index on metadata datasets.
@@ -64,12 +65,12 @@ public final class MetadataIndex implements IMetadataIndex {
     // Identifier of file BufferCache backing this metadata btree index.
     protected int fileId;
     // Resource id of this index for use in transactions.
-    protected final byte[] resourceId;
+    protected byte[] indexResourceId;
     // Logger for tree indexes.
     private TreeLogger treeLogger;
 
     public MetadataIndex(String datasetName, String indexName, int numFields, IAType[] keyTypes, String[] keyNames,
-            ARecordType payloadType, int resourceId) throws AsterixRuntimeException {
+            ARecordType payloadType) throws AsterixRuntimeException {
         // Sanity checks.
         if (keyTypes.length != keyNames.length) {
             throw new AsterixRuntimeException("Unequal number of key types and names given.");
@@ -116,15 +117,13 @@ public final class MetadataIndex implements IMetadataIndex {
         bcfs = new IBinaryComparatorFactory[keyTypes.length];
         for (int i = 0; i < keyTypes.length; i++) {
             bcfs[i] = AqlBinaryComparatorFactoryProvider.INSTANCE
-                    .getBinaryComparatorFactory(keyTypes[i], OrderKind.ASC);
+                    .getBinaryComparatorFactory(keyTypes[i], true);
         }
         // Create binary hash function factories.
         bhffs = new IBinaryHashFunctionFactory[keyTypes.length];
         for (int i = 0; i < keyTypes.length; i++) {
             bhffs[i] = AqlBinaryHashFunctionFactoryProvider.INSTANCE.getBinaryHashFunctionFactory(keyTypes[i]);
         }
-        
-        this.resourceId = DataUtil.intToByteArray(resourceId);
     }
 
     @Override
@@ -192,18 +191,19 @@ public final class MetadataIndex implements IMetadataIndex {
     }
 
     @Override
-    public String getFileRelativePath() {
+    public String getFileNameRelativePath() {
         return getDataverseName() + File.separator + getIndexedDatasetName() + "_idx_" + getIndexName();
     }
 
     @Override
     public void setFileId(int fileId) {
         this.fileId = fileId;
+        this.indexResourceId = DataUtil.intToByteArray(fileId);
     }
 
     @Override
-    public void setTreeLogger(TreeLogger treeLogger) throws ACIDException {
-        this.treeLogger = treeLogger;
+    public void initTreeLogger(ITreeIndex treeIndex) throws ACIDException {
+        this.treeLogger = new TreeLogger(indexResourceId, treeIndex);
     }
 
     @Override
@@ -218,7 +218,7 @@ public final class MetadataIndex implements IMetadataIndex {
 
     @Override
     public byte[] getResourceId() {
-        return resourceId;
+        return indexResourceId;
     }
 
     public TreeLogger getTreeLogger() {

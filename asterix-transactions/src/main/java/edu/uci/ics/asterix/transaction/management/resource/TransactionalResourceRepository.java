@@ -26,26 +26,25 @@ import edu.uci.ics.asterix.transaction.management.service.transaction.IResourceM
  * transaction eco-system. Operations on a resource require acquiring
  * appropriate locks (for isolation) and writing logs (durability). Every
  * resource is managed by an associated resource manager that contains the logic
- * to interpret the logs and take the necessary action(s) during rollback and
- * recovery. An example of resource is a {@link ITreeIndex} that is managed by a
- * resource manager {@link TreeResourceManager}.
+ * to interpret the logs and take necessary action(s) during roll back or
+ * recovery. An example of resource is a @see ITreeIndex that is managed by a
+ * resource manager @see TreeResourceManager
  */
 public class TransactionalResourceRepository {
 
-    // Maps resource IDs to resource instances
-    private Map<ByteBuffer, Object> resourceRepository = new HashMap<ByteBuffer, Object>();
+    private Map<ByteBuffer, Object> resourceRepository = new HashMap<ByteBuffer, Object>(); // repository
 
-    // Maps resource manager IDs to resource manager instances
-    private Map<Byte, IResourceManager> resourceMgrRepository = new HashMap<Byte, IResourceManager>();
+    private Map<Byte, IResourceManager> resourceMgrRepository = new HashMap<Byte, IResourceManager>(); // repository
 
     public void registerTransactionalResource(byte[] resourceBytes, Object resource) {
-        // need to convert to ByteBuffer so that a byte[] can be used as a key in a hash map.
-        ByteBuffer resourceId = ByteBuffer.wrap(resourceBytes);
+        // convert to ByteBuffer so that a byte[] can be used as a key in a hash map.
+        ByteBuffer resourceId = ByteBuffer.wrap(resourceBytes); // need to
+
         synchronized (resourceRepository) {
             if (resourceRepository.get(resourceId) == null) {
                 resourceRepository.put(resourceId, resource);
-
-                // notify all reader threads that are waiting to retrieve a resource from the repository
+                
+                // wake up threads waiting for the resource
                 resourceRepository.notifyAll();
             }
         }
@@ -55,8 +54,8 @@ public class TransactionalResourceRepository {
         synchronized (resourceMgrRepository) {
             if (resourceMgrRepository.get(id) == null) {
                 resourceMgrRepository.put(id, resourceMgr);
-
-                // notify all reader threads that are waiting to retrieve a resource manager from the repository
+                
+                // wake up threads waiting for the resource manager
                 resourceMgrRepository.notifyAll();
             }
         }
@@ -69,9 +68,9 @@ public class TransactionalResourceRepository {
                 try {
                     resourceRepository.wait();
                 } catch (InterruptedException ie) {
-                    // the thread might be interrupted due to other failures occurring elsewhere
                     ie.printStackTrace();
-                    break;
+                    break; // the thread might be interrupted due to other
+                    // failures occurring elsewhere, break from the loop
                 }
             }
             return resourceRepository.get(buffer);
@@ -80,16 +79,9 @@ public class TransactionalResourceRepository {
 
     public IResourceManager getTransactionalResourceMgr(byte id) {
         synchronized (resourceMgrRepository) {
-            while (resourceMgrRepository.get(id) == null) {
-                try {
-                    resourceMgrRepository.wait();
-                } catch (InterruptedException ie) {
-                    // the thread might be interrupted due to other failures occurring elsewhere
-                    ie.printStackTrace();
-                    break;
-                }
-            }
             return resourceMgrRepository.get(id);
         }
+
     }
+
 }

@@ -16,7 +16,9 @@ package edu.uci.ics.asterix.external.data.parser;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import edu.uci.ics.asterix.adm.parser.nontagged.AdmLexer;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
@@ -33,11 +35,25 @@ public class ManagedAdmTupleParser extends AdmTupleParser implements IManagedTup
 
     private OperationState state;
     private List<OperationState> nextState;
-    private IManagedFeedAdapter adapter;
+    private final IManagedFeedAdapter adapter;
+    private long tupleInterval;
+
+    public static final String TUPLE_INTERVAL_KEY = "tuple-interval";
 
     public ManagedAdmTupleParser(IHyracksTaskContext ctx, ARecordType recType, IManagedFeedAdapter adapter) {
         super(ctx, recType);
+        nextState = new ArrayList<OperationState>();
         this.adapter = adapter;
+        this.tupleInterval = adapter.getAdapterProperty(TUPLE_INTERVAL_KEY) == null ? 0 : Long.parseLong(adapter
+                .getAdapterProperty(TUPLE_INTERVAL_KEY));
+    }
+
+    public ManagedAdmTupleParser(IHyracksTaskContext ctx, ARecordType recType, long tupleInterval,
+            IManagedFeedAdapter adapter) {
+        super(ctx, recType);
+        nextState = new ArrayList<OperationState>();
+        this.adapter = adapter;
+        this.tupleInterval = tupleInterval;
     }
 
     @Override
@@ -53,6 +69,7 @@ public class ManagedAdmTupleParser extends AdmTupleParser implements IManagedTup
                 }
                 tb.addFieldEndOffset();
                 processNextTuple(nextState.isEmpty() ? null : nextState.get(0), writer);
+                Thread.currentThread().sleep(tupleInterval);
                 tupleNum++;
             }
             if (appender.getTupleCount() > 0) {
@@ -62,6 +79,8 @@ public class ManagedAdmTupleParser extends AdmTupleParser implements IManagedTup
             throw new HyracksDataException(ae);
         } catch (IOException ioe) {
             throw new HyracksDataException(ioe);
+        } catch (InterruptedException ie) {
+            throw new HyracksDataException(ie);
         }
     }
 
@@ -121,18 +140,25 @@ public class ManagedAdmTupleParser extends AdmTupleParser implements IManagedTup
 
     @Override
     public void suspend() throws Exception {
-        nextState.add(OperationState.SUSPENDED);        
+        nextState.add(OperationState.SUSPENDED);
     }
 
     @Override
     public void resume() throws Exception {
-        synchronized(this){
+        synchronized (this) {
             this.notifyAll();
-        }           
+        }
     }
 
     @Override
     public void stop() throws Exception {
         nextState.add(OperationState.STOPPED);
+    }
+
+    @Override
+    public void alter(Map<String, String> alterParams) throws Exception {
+        if (alterParams.get(TUPLE_INTERVAL_KEY) != null) {
+            tupleInterval = Long.parseLong(alterParams.get(TUPLE_INTERVAL_KEY));
+        }
     }
 }

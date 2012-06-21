@@ -38,14 +38,15 @@ import edu.uci.ics.asterix.aql.expression.Query;
 import edu.uci.ics.asterix.aql.parser.AQLParser;
 import edu.uci.ics.asterix.aql.parser.ParseException;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
-import edu.uci.ics.asterix.hyracks.bootstrap.APINodeState;
+import edu.uci.ics.asterix.hyracks.bootstrap.AsterixNodeState;
 import edu.uci.ics.asterix.metadata.MetadataManager;
 import edu.uci.ics.asterix.metadata.api.IAsterixStateProxy;
 import edu.uci.ics.asterix.metadata.bootstrap.AsterixProperties;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
-import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
-import edu.uci.ics.hyracks.algebricks.core.utils.Pair;
+import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
+import edu.uci.ics.hyracks.algebricks.common.utils.Pair;
 import edu.uci.ics.hyracks.api.application.ICCApplicationContext;
+import edu.uci.ics.hyracks.api.client.IHyracksClientConnection;
 import edu.uci.ics.hyracks.api.job.JobSpecification;
 
 /**
@@ -61,6 +62,7 @@ public class APIClientThread extends Thread {
 
     private static final int RESULT_BUF_SIZE = 8192;
 
+    private final IHyracksClientConnection hcc;
     private final ICCApplicationContext appContext;
     private final AQLJStream clientStream;
     private final String outputFilePath;
@@ -72,7 +74,9 @@ public class APIClientThread extends Thread {
     private int nodeDataServerPort;
     private String dataverse;
 
-    public APIClientThread(Socket clientSocket, ICCApplicationContext appCtx) throws IOException {
+    public APIClientThread(IHyracksClientConnection hcc, Socket clientSocket, ICCApplicationContext appCtx)
+            throws IOException {
+        this.hcc = hcc;
         clientStream = new AQLJStream(clientSocket);
         this.appContext = appCtx;
 
@@ -89,7 +93,7 @@ public class APIClientThread extends Thread {
 
         // get the port of the node data server that is running on the first nc
         IAsterixStateProxy proxy = (IAsterixStateProxy) appCtx.getDistributedState();
-        nodeDataServerPort = ((APINodeState) proxy.getAsterixNodeState(outputNodeName)).getAPINodeDataServerPort();
+        nodeDataServerPort = ((AsterixNodeState) proxy.getAsterixNodeState(outputNodeName)).getAPINodeDataServerPort();
         nodeDataServerStream = null;
 
         // write the data into the output stores directory of the nc
@@ -111,7 +115,7 @@ public class APIClientThread extends Thread {
                 + outputNodeName
                 + ":\""
                 + outputFilePath
-                + "\" using \"edu.uci.ics.hyracks.algebricks.core.algebra.runtime.writers.SerializedDataWriterFactory\";";
+                + "\" using \"edu.uci.ics.hyracks.algebricks.runtime.writers.SerializedDataWriterFactory\";";
 
     }
 
@@ -228,17 +232,16 @@ public class APIClientThread extends Thread {
 
             MetadataManager.INSTANCE.init();
             if (q != null) {
-                String dataverse = APIFramework.compileDdlStatements(q, out, pc, DisplayFormat.TEXT);
+                String dataverse = APIFramework.compileDdlStatements(hcc, q, out, pc, DisplayFormat.TEXT);
                 Job[] dmlJobs = APIFramework.compileDmlStatements(dataverse, q, out, pc, DisplayFormat.TEXT);
-                APIFramework.executeJobArray(dmlJobs, pc.getPort(), out, DisplayFormat.TEXT);
+                APIFramework.executeJobArray(hcc, dmlJobs, out, DisplayFormat.TEXT);
             }
 
             Pair<AqlCompiledMetadataDeclarations, JobSpecification> metadataAndSpec = APIFramework.compileQuery(
                     dataverse, q, parser.getVarCounter(), null, metadata, pc, out, DisplayFormat.TEXT, null);
             JobSpecification spec = metadataAndSpec.second;
             metadata = metadataAndSpec.first;
-            APIFramework.executeJobArray(new JobSpecification[] { spec },
-                    AsterixHyracksIntegrationUtil.DEFAULT_HYRACKS_CC_CLIENT_PORT, out, DisplayFormat.TEXT);
+            APIFramework.executeJobArray(hcc, new JobSpecification[] { spec }, out, DisplayFormat.TEXT);
         } catch (ParseException e) {
             e.printStackTrace();
             throw new AQLJException(e);

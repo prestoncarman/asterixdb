@@ -18,23 +18,22 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
-
 import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
 import edu.uci.ics.asterix.om.types.IAType;
+import edu.uci.ics.hyracks.algebricks.common.utils.Triple;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluatorFactory;
-import edu.uci.ics.hyracks.algebricks.core.utils.Triple;
+import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluatorFactory;
 
 public class AqlCompiledInternalDatasetDetails implements IAqlCompiledDatasetDetails {
     private final List<String> partitioningExprs;
-    private final List<Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType>> partitionFuns;
+    private final List<Triple<ICopyEvaluatorFactory, ScalarFunctionCallExpression, IAType>> partitionFuns;
     private final String nodegroupName;
     private final List<AqlCompiledIndexDecl> secondaryIndexes;
     private final AqlCompiledIndexDecl primaryIndex;
     private HashMap<String, List<AqlCompiledIndexDecl>> secondaryIndexInvertedList;
 
     public AqlCompiledInternalDatasetDetails(List<String> partitioningExprs,
-            List<Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType>> partitionFuns, String nodegroupName,
+            List<Triple<ICopyEvaluatorFactory, ScalarFunctionCallExpression, IAType>> partitionFuns, String nodegroupName,
             AqlCompiledIndexDecl primaryIndex, List<AqlCompiledIndexDecl> secondaryIndexes) {
         this.partitioningExprs = partitioningExprs;
         this.partitionFuns = partitionFuns;
@@ -53,7 +52,7 @@ public class AqlCompiledInternalDatasetDetails implements IAqlCompiledDatasetDet
         return sb.toString();
     }
 
-    public List<Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType>> getPartitioningFunctions() {
+    public List<Triple<ICopyEvaluatorFactory, ScalarFunctionCallExpression, IAType>> getPartitioningFunctions() {
         return partitionFuns;
     }
 

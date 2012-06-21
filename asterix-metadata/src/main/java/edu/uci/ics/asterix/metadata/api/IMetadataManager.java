@@ -352,79 +352,49 @@ public interface IMetadataManager {
      *             For example, if the node already exists.
      */
     public void addNode(MetadataTransactionContext ctx, Node node) throws MetadataException;
-
+    
     /**
-     * @param mdTxnCtx
-     *            MetadataTransactionContext of an active metadata transaction.
-     * @param function
-     *            An instance of type Function that represents the function
-     *            being added
-     * @throws MetadataException
-     */
-    public void addFunction(MetadataTransactionContext mdTxnCtx, Function function) throws MetadataException;
+	 * 
+	 * @param mdTxnCtx
+	 *            MetadataTransactionContext of an active metadata transaction.
+	 * @param function
+	 *            An instance of type Function that represents the function
+	 *            being added
+	 * @throws MetadataException
+	 */
+	public void addFunction(MetadataTransactionContext mdTxnCtx,
+			Function function) throws MetadataException;
 
-    /**
-     * @param ctx
-     *            MetadataTransactionContext of an active metadata transaction.
-     * @param dataverseName
-     *            the dataverse associated with the function being searched
-     * @param functionName
-     *            name of the function
-     * @param arity
-     *            arity of the function
-     * @return
-     * @throws MetadataException
-     */
-    public Function getFunction(MetadataTransactionContext ctx, String dataverseName, String functionName, int arity)
-            throws MetadataException;
+	/**
+	 * 
+	 * @param ctx
+	 *            MetadataTransactionContext of an active metadata transaction.
+	 * @param dataverseName
+	 *            the dataverse associated with the function being searched
+	 * @param functionName
+	 *            name of the function
+	 * @param arity
+	 *            arity of the function
+	 * @return
+	 * @throws MetadataException
+	 */
+	public Function getFunction(MetadataTransactionContext ctx,
+			String dataverseName, String functionName, int arity)
+			throws MetadataException;
 
-    /**
-     * @param ctx
-     *            MetadataTransactionContext of an active metadata transaction.
-     * @param dataverseName
-     *            the dataverse associated with the function being dropped
-     * @param functionName
-     *            name of the function
-     * @param arity
-     *            arity of the function
-     * @throws MetadataException
-     */
-    public void dropFunction(MetadataTransactionContext ctx, String dataverseName, String functionName, int arity)
-            throws MetadataException;
-
-    /**
-     * Creates resourceIdGenerator and
-     * initialize the value with the given initialValue.
-     * (Simply calls the interface of the IMetadataNode)
-     * 
-     * @param initialValue
-     *            resourceIdSeed is set to this initialValue.
-     * @throws RemoteException
-     */
-    public void createResourceIdGenerator(int initialValue) throws RemoteException;
-
-    /**
-     * Increments atomically the resourceIdSeed value by one and
-     * returns the previous value.
-     * (Simply calls the interface of the IMetadataNode)
-     * 
-     * @return
-     *         returns an unique resourceId.
-     * @throws RemoteException
-     */
-    public int generateResourceId() throws RemoteException;
-
-    /**
-     * Returns resourceId
-     * 
-     * @param ctx
-     * @param dataverseName
-     * @param datasetName
-     * @param indexName
-     * @return
-     * @throws MetadataException
-     * @throws RemoteException
-     */
-    public int getResourceId(MetadataTransactionContext ctx, String dataverseName, String datasetName, String indexName)
-            throws MetadataException, RemoteException;
+	/**
+	 * 
+	 * @param ctx
+	 *            MetadataTransactionContext of an active metadata transaction.
+	 * @param dataverseName
+	 *            the dataverse associated with the function being dropped
+	 * @param functionName
+	 *            name of the function
+	 * @param arity
+	 *            arity of the function
+	 * @throws MetadataException
+	 */
+	public void dropFunction(MetadataTransactionContext ctx,
+			String dataverseName, String functionName, int arity)
+			throws MetadataException;
 }

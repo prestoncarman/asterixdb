@@ -108,23 +108,23 @@ declare dataset PartSupp(PartSuppType)
 
 load dataset Customers 
 using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
-(("path"="asterix-002:///mnt/data/sdb/space/onose/delim_data/hundredgigs/customer.tbl"),("format"="delimited-text"),("delimiter="|")) pre-sorted;
+(("path"="asterix-002:///mnt/data/sdb/space/onose/delim_data/hundredgigs/customer.tbl"),("format"="delimited-text"),("delimiter"="|")) pre-sorted;
 
 load dataset Suppliers 
 using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
-(("path"="asterix-002:///mnt/data/sdb/space/onose/delim_data/hundredgigs/customer.tbl"),("format"="delimited-text"),("delimiter="|")) pre-sorted;
+(("path"="asterix-002:///mnt/data/sdb/space/onose/delim_data/hundredgigs/customer.tbl"),("format"="delimited-text"),("delimiter"="|")) pre-sorted;
 
 load dataset Nations 
 using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
-(("path"="asterix-002:///mnt/data/sdb/space/onose/delim_data/hundredgigs/customer.tbl"),("format"="delimited-text"),("delimiter="|")) pre-sorted;
+(("path"="asterix-002:///mnt/data/sdb/space/onose/delim_data/hundredgigs/customer.tbl"),("format"="delimited-text"),("delimiter"="|")) pre-sorted;
 
 load dataset Regions 
 using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
-(("path"="asterix-002:///mnt/data/sdb/space/onose/delim_data/hundredgigs/customer.tbl"),("format"="delimited-text"),("delimiter="|")) pre-sorted;
+(("path"="asterix-002:///mnt/data/sdb/space/onose/delim_data/hundredgigs/customer.tbl"),("format"="delimited-text"),("delimiter"="|")) pre-sorted;
 
 load dataset Parts 
 using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
-(("path"="asterix-002:///mnt/data/sdb/space/onose/delim_data/hundredgigs/customer.tbl"),("format"="delimited-text"),("delimiter="|")) pre-sorted;
+(("path"="asterix-002:///mnt/data/sdb/space/onose/delim_data/hundredgigs/customer.tbl"),("format"="delimited-text"),("delimiter"="|")) pre-sorted;
 
 load dataset PartSupp 
 using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
@@ -138,7 +138,7 @@ using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
   asterix-008:///mnt/data/sdb/space/onose/splits/partsupp_part07,
   asterix-009:///mnt/data/sdb/space/onose/splits/partsupp_part08,
   asterix-010:///mnt/data/sdb/space/onose/splits/partsupp_part09"),              
-("format"="delimited-text"),("delimiter="|")) pre-sorted;
+("format"="delimited-text"),("delimiter"="|")) pre-sorted;
 
 load dataset Orders 
 using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
@@ -152,7 +152,7 @@ using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
   asterix-008:///mnt/data/sdb/space/onose/splits/orders_part07,
   asterix-009:///mnt/data/sdb/space/onose/splits/orders_part08,
   asterix-010:///mnt/data/sdb/space/onose/splits/orders_part09"),              
-("format"="delimited-text"),("delimiter="|")) pre-sorted;
+("format"="delimited-text"),("delimiter"="|")) pre-sorted;
 
 load dataset LineItems 
 using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
@@ -166,4 +166,4 @@ using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
   asterix-008:///mnt/data/sdb/space/onose/splits/lineitems_part07,
   asterix-009:///mnt/data/sdb/space/onose/splits/lineitems_part08,
   asterix-010:///mnt/data/sdb/space/onose/splits/lineitems_part09"),              
-("format"="delimited-text"),("delimiter="|")) pre-sorted;
+("format"="delimited-text"),("delimiter"="|")) pre-sorted;

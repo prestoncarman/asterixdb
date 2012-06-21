@@ -28,7 +28,7 @@ public interface IManagedFeedAdapter extends IDatasourceReadAdapter {
 		// external world using an adapter that may put data into the dataset.
 		STOPPED, INACTIVE
 	}
-
+	
 	public void beforeSuspend() throws Exception;
 
 	public void beforeResume() throws Exception;

@@ -17,6 +17,8 @@ import edu.uci.ics.asterix.om.base.AInt64;
 import edu.uci.ics.asterix.om.base.AMutableDouble;
 import edu.uci.ics.asterix.om.base.AMutableInt64;
 import edu.uci.ics.asterix.om.base.ANull;
+import edu.uci.ics.asterix.om.functions.IFunctionDescriptor;
+import edu.uci.ics.asterix.om.functions.IFunctionDescriptorFactory;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.asterix.om.types.AUnionType;
@@ -26,12 +28,12 @@ import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.asterix.runtime.aggregates.base.AbstractSerializableAggregateFunctionDynamicDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.common.AccessibleByteArrayEval;
 import edu.uci.ics.asterix.runtime.evaluators.common.ClosedRecordConstructorEvalFactory.ClosedRecordConstructorEval;
+import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluatorFactory;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.ISerializableAggregateFunction;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.ISerializableAggregateFunctionFactory;
-import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
+import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluator;
+import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluatorFactory;
+import edu.uci.ics.hyracks.algebricks.runtime.base.ICopySerializableAggregateFunction;
+import edu.uci.ics.hyracks.algebricks.runtime.base.ICopySerializableAggregateFunctionFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
 import edu.uci.ics.hyracks.dataflow.common.comm.io.ByteArrayAccessibleOutputStream;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.ArrayBackedValueStorage;
@@ -44,6 +46,11 @@ public class SerializableGlobalAvgAggregateDescriptor extends AbstractSerializab
             "global-avg-serial", 1, true);
     private final static byte SER_NULL_TYPE_TAG = ATypeTag.NULL.serialize();
     private final static byte SER_RECORD_TYPE_TAG = ATypeTag.RECORD.serialize();
+    public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
+        public IFunctionDescriptor createFunctionDescriptor() {
+            return new SerializableGlobalAvgAggregateDescriptor();
+        }
+    };
 
     @Override
     public FunctionIdentifier getIdentifier() {
@@ -51,24 +58,24 @@ public class SerializableGlobalAvgAggregateDescriptor extends AbstractSerializab
     }
 
     @Override
-    public ISerializableAggregateFunctionFactory createAggregateFunctionFactory(IEvaluatorFactory[] args)
+    public ICopySerializableAggregateFunctionFactory createAggregateFunctionFactory(ICopyEvaluatorFactory[] args)
             throws AlgebricksException {
-        final IEvaluatorFactory[] evals = args;
+        final ICopyEvaluatorFactory[] evals = args;
         List<IAType> unionList = new ArrayList<IAType>();
         unionList.add(BuiltinType.ANULL);
         unionList.add(BuiltinType.ADOUBLE);
         final ARecordType recType = new ARecordType(null, new String[] { "sum", "count" }, new IAType[] {
                 new AUnionType(unionList, "OptionalDouble"), BuiltinType.AINT64 }, true);
 
-        return new ISerializableAggregateFunctionFactory() {
+        return new ICopySerializableAggregateFunctionFactory() {
             private static final long serialVersionUID = 1L;
 
             @Override
-            public ISerializableAggregateFunction createAggregateFunction() throws AlgebricksException {
+            public ICopySerializableAggregateFunction createAggregateFunction() throws AlgebricksException {
 
-                return new ISerializableAggregateFunction() {
+                return new ICopySerializableAggregateFunction() {
                     private ArrayBackedValueStorage inputVal = new ArrayBackedValueStorage();
-                    private IEvaluator eval = evals[0].createEvaluator(inputVal);
+                    private ICopyEvaluator eval = evals[0].createEvaluator(inputVal);
                     private AMutableDouble aDouble = new AMutableDouble(0);
                     private AMutableInt64 aInt64 = new AMutableInt64(0);
 
@@ -77,8 +84,8 @@ public class SerializableGlobalAvgAggregateDescriptor extends AbstractSerializab
                     private DataOutput sumBytesOutput = new DataOutputStream(sumBytes);
                     private ByteArrayAccessibleOutputStream countBytes = new ByteArrayAccessibleOutputStream();
                     private DataOutput countBytesOutput = new DataOutputStream(countBytes);
-                    private IEvaluator evalSum = new AccessibleByteArrayEval(avgBytes.getDataOutput(), sumBytes);
-                    private IEvaluator evalCount = new AccessibleByteArrayEval(avgBytes.getDataOutput(), countBytes);
+                    private ICopyEvaluator evalSum = new AccessibleByteArrayEval(avgBytes.getDataOutput(), sumBytes);
+                    private ICopyEvaluator evalCount = new AccessibleByteArrayEval(avgBytes.getDataOutput(), countBytes);
                     private ClosedRecordConstructorEval recordEval;
 
                     @SuppressWarnings("unchecked")
@@ -111,7 +118,7 @@ public class SerializableGlobalAvgAggregateDescriptor extends AbstractSerializab
 
                         inputVal.reset();
                         eval.evaluate(tuple);
-                        byte[] serBytes = inputVal.getBytes();
+                        byte[] serBytes = inputVal.getByteArray();
                         if (serBytes[0] == SER_NULL_TYPE_TAG)
                             metNull = true;
                         if (serBytes[0] != SER_RECORD_TYPE_TAG) {
@@ -164,7 +171,7 @@ public class SerializableGlobalAvgAggregateDescriptor extends AbstractSerializab
 
                         if (recordEval == null)
                             recordEval = new ClosedRecordConstructorEval(recType,
-                                    new IEvaluator[] { evalSum, evalCount }, avgBytes, result);
+                                    new ICopyEvaluator[] { evalSum, evalCount }, avgBytes, result);
 
                         if (globalCount == 0) {
                             GlobalConfig.ASTERIX_LOGGER.fine("AVG aggregate ran over empty input.");

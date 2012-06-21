@@ -8,15 +8,17 @@ import edu.uci.ics.asterix.common.functions.FunctionConstants;
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.AFloatSerializerDeserializer;
 import edu.uci.ics.asterix.formats.nontagged.AqlSerializerDeserializerProvider;
 import edu.uci.ics.asterix.om.base.ABoolean;
+import edu.uci.ics.asterix.om.functions.IFunctionDescriptor;
+import edu.uci.ics.asterix.om.functions.IFunctionDescriptorFactory;
 import edu.uci.ics.asterix.om.types.AOrderedListType;
 import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.asterix.om.types.BuiltinType;
 import edu.uci.ics.asterix.runtime.evaluators.base.AbstractScalarFunctionDynamicDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.common.SimilarityJaccardEvaluator;
+import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluatorFactory;
-import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
+import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluator;
+import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluatorFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.ArrayBackedValueStorage;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.IDataOutputProvider;
@@ -29,14 +31,19 @@ public class SimilarityJaccardCheckDescriptor extends AbstractScalarFunctionDyna
     private static final long serialVersionUID = 1L;
     private final static FunctionIdentifier FID = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "similarity-jaccard-check", 3, true);
+    public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
+        public IFunctionDescriptor createFunctionDescriptor() {
+            return new SimilarityJaccardCheckDescriptor();
+        }
+    };
 
     @Override
-    public IEvaluatorFactory createEvaluatorFactory(final IEvaluatorFactory[] args) throws AlgebricksException {
-        return new IEvaluatorFactory() {
+    public ICopyEvaluatorFactory createEvaluatorFactory(final ICopyEvaluatorFactory[] args) throws AlgebricksException {
+        return new ICopyEvaluatorFactory() {
             private static final long serialVersionUID = 1L;
 
             @Override
-            public IEvaluator createEvaluator(IDataOutputProvider output) throws AlgebricksException {
+            public ICopyEvaluator createEvaluator(IDataOutputProvider output) throws AlgebricksException {
                 return new SimilarityJaccardCheckEvaluator(args, output);
             }
         };
@@ -49,7 +56,7 @@ public class SimilarityJaccardCheckDescriptor extends AbstractScalarFunctionDyna
 
     private static class SimilarityJaccardCheckEvaluator extends SimilarityJaccardEvaluator {
 
-        private final IEvaluator jaccThreshEval;
+        private final ICopyEvaluator jaccThreshEval;
         private float jaccThresh = -1f;
 
         private IAOrderedListBuilder listBuilder;
@@ -59,7 +66,7 @@ public class SimilarityJaccardCheckDescriptor extends AbstractScalarFunctionDyna
                 .getSerializerDeserializer(BuiltinType.ABOOLEAN);
         private final AOrderedListType listType = new AOrderedListType(BuiltinType.ANY, "list");
 
-        public SimilarityJaccardCheckEvaluator(IEvaluatorFactory[] args, IDataOutputProvider output)
+        public SimilarityJaccardCheckEvaluator(ICopyEvaluatorFactory[] args, IDataOutputProvider output)
                 throws AlgebricksException {
             super(args, output);
             jaccThreshEval = args[2].createEvaluator(argOut);
@@ -72,7 +79,7 @@ public class SimilarityJaccardCheckDescriptor extends AbstractScalarFunctionDyna
             super.runArgEvals(tuple);
             int jaccThreshStart = argOut.getLength();
             jaccThreshEval.evaluate(tuple);
-            jaccThresh = (float) AFloatSerializerDeserializer.getFloat(argOut.getBytes(), jaccThreshStart
+            jaccThresh = (float) AFloatSerializerDeserializer.getFloat(argOut.getByteArray(), jaccThreshStart
                     + typeIndicatorSize);
         }
 

@@ -13,10 +13,11 @@ import edu.uci.ics.asterix.aql.expression.TypeDecl;
 import edu.uci.ics.asterix.aql.expression.WriteStatement;
 import edu.uci.ics.asterix.metadata.MetadataException;
 import edu.uci.ics.asterix.metadata.MetadataTransactionContext;
+import edu.uci.ics.asterix.metadata.bootstrap.MetadataConstants;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
-import edu.uci.ics.hyracks.algebricks.core.algebra.data.IAWriterFactory;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.writers.PrinterBasedWriterFactory;
-import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
+import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
+import edu.uci.ics.hyracks.algebricks.data.IAWriterFactory;
+import edu.uci.ics.hyracks.algebricks.runtime.writers.PrinterBasedWriterFactory;
 import edu.uci.ics.hyracks.api.io.FileReference;
 import edu.uci.ics.hyracks.dataflow.std.file.FileSplit;
 
@@ -29,7 +30,7 @@ public abstract class AbstractAqlTranslator {
 
         FileSplit outputFile = null;
         IAWriterFactory writerFactory = null;
-        String dataverseName = "Metadata";
+        String dataverseName = MetadataConstants.METADATA_DATAVERSE_NAME;
         for (Statement stmt : statements) {
             switch (stmt.getKind()) {
                 case TYPE_DECL: {
@@ -75,4 +76,15 @@ public abstract class AbstractAqlTranslator {
         return metadataTranslator.computeMetadataDeclarations(online);
     }
 
+    public void validateOperation(AqlCompiledMetadataDeclarations compiledDeclarations, Statement stmt)
+            throws AlgebricksException {
+        if (compiledDeclarations.getDataverseName() != null
+                && compiledDeclarations.getDataverseName().equals(MetadataConstants.METADATA_DATAVERSE_NAME)) {
+            if (stmt.getKind() == Statement.Kind.INSERT || stmt.getKind() == Statement.Kind.UPDATE
+                    || stmt.getKind() == Statement.Kind.DELETE) {
+                throw new AlgebricksException(" Operation  " + stmt.getKind() + " not permitted in system dataverse-"
+                        + MetadataConstants.METADATA_DATAVERSE_NAME);
+            }
+        }
+    }
 }

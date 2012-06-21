@@ -18,12 +18,12 @@ package edu.uci.ics.asterix.metadata;
 import java.rmi.RemoteException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
 import edu.uci.ics.asterix.common.config.DatasetConfig.IndexType;
-import edu.uci.ics.asterix.common.context.INodeApplicationState;
+import edu.uci.ics.asterix.common.context.AsterixAppRuntimeContext;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
+import edu.uci.ics.asterix.formats.nontagged.AqlSerializerDeserializerProvider;
 import edu.uci.ics.asterix.metadata.api.IMetadataIndex;
 import edu.uci.ics.asterix.metadata.api.IMetadataNode;
 import edu.uci.ics.asterix.metadata.api.IValueExtractor;
@@ -49,8 +49,10 @@ import edu.uci.ics.asterix.metadata.valueextractors.DatatypeNameValueExtractor;
 import edu.uci.ics.asterix.metadata.valueextractors.MetadataEntityValueExtractor;
 import edu.uci.ics.asterix.metadata.valueextractors.NestedDatatypeNameValueExtractor;
 import edu.uci.ics.asterix.metadata.valueextractors.TupleCopyValueExtractor;
+import edu.uci.ics.asterix.om.base.AMutableString;
+import edu.uci.ics.asterix.om.base.AString;
+import edu.uci.ics.asterix.om.types.BuiltinType;
 import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
-import edu.uci.ics.asterix.transaction.management.service.logging.DataUtil;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionContext;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionManagementConstants.LockManagerConstants.LockMode;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionProvider;
@@ -58,12 +60,18 @@ import edu.uci.ics.hyracks.api.dataflow.value.IBinaryComparator;
 import edu.uci.ics.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
+import edu.uci.ics.hyracks.dataflow.common.comm.io.ArrayTupleBuilder;
+import edu.uci.ics.hyracks.dataflow.common.comm.io.ArrayTupleReference;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.ITupleReference;
-import edu.uci.ics.hyracks.dataflow.common.data.marshalling.UTF8StringSerializerDeserializer;
-import edu.uci.ics.hyracks.dataflow.common.util.TupleUtils;
+import edu.uci.ics.hyracks.storage.am.btree.api.IBTreeLeafFrame;
+import edu.uci.ics.hyracks.storage.am.btree.exceptions.BTreeDuplicateKeyException;
+import edu.uci.ics.hyracks.storage.am.btree.impls.BTree;
+import edu.uci.ics.hyracks.storage.am.btree.impls.BTreeRangeSearchCursor;
 import edu.uci.ics.hyracks.storage.am.btree.impls.RangePredicate;
-import edu.uci.ics.hyracks.storage.am.common.api.IIndexAccessor;
-import edu.uci.ics.hyracks.storage.am.common.api.IIndexCursor;
+import edu.uci.ics.hyracks.storage.am.common.api.ITreeIndexAccessor;
+import edu.uci.ics.hyracks.storage.am.common.api.ITreeIndexCursor;
+import edu.uci.ics.hyracks.storage.am.common.api.ITreeIndexFrame;
+import edu.uci.ics.hyracks.storage.am.common.api.TreeIndexException;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.IIndex;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.IndexRegistry;
 import edu.uci.ics.hyracks.storage.am.common.ophelpers.IndexOp;
@@ -72,20 +80,21 @@ import edu.uci.ics.hyracks.storage.am.common.ophelpers.MultiComparator;
 public class MetadataNode implements IMetadataNode {
     private static final long serialVersionUID = 1L;
 
-    private static final int METADATANODE_RESOURCE_ID = 0;
-    private static final byte[] metadataResourceId = DataUtil.intToByteArray(METADATANODE_RESOURCE_ID);
+    // TODO: Temporary transactional resource id for metadata.
+    private static final byte[] metadataResourceId = MetadataNode.class.toString().getBytes();
 
-    private final IndexRegistry<IIndex> indexRegistry;
-    private final TransactionProvider transactionProvider;
-    private final AtomicInteger resourceIdGenerator;
+    private IndexRegistry<IIndex> indexRegistry;
+    private TransactionProvider transactionProvider;
 
-    public static MetadataNode INSTANCE;
+    public static final MetadataNode INSTANCE = new MetadataNode();
 
-    public MetadataNode(INodeApplicationState applicationState) {
+    private MetadataNode() {
         super();
-        this.transactionProvider = applicationState.getTransactionProvider();
-        this.indexRegistry = applicationState.getApplicationRuntimeContext().getIndexRegistry();
-        this.resourceIdGenerator = new AtomicInteger();
+    }
+    
+    public void initialize(AsterixAppRuntimeContext runtimeContext) {
+        this.transactionProvider = runtimeContext.getTransactionProvider();
+        this.indexRegistry = runtimeContext.getIndexRegistry();
     }
 
     @Override
@@ -124,18 +133,13 @@ public class MetadataNode implements IMetadataNode {
 
     @Override
     public void addDataverse(long txnId, Dataverse dataverse) throws MetadataException, RemoteException {
-        // TODO: This will become much simpler once the LSM-BTree supports a true 'insert' operation
-        // Check if the dataverse exists already
-        if (getDataverse(txnId, dataverse.getDataverseName()) != null) {
-            throw new MetadataException("A dataverse with this name " + dataverse.getDataverseName()
-                    + " already exists.");
-        }
-
-        // The dataverse does not already exist, so insert the dataverse
         try {
             DataverseTupleTranslator tupleReaderWriter = new DataverseTupleTranslator(true);
             ITupleReference tuple = tupleReaderWriter.getTupleFromMetadataEntity(dataverse);
             insertTupleIntoIndex(txnId, MetadataPrimaryIndexes.DATAVERSE_DATASET, tuple);
+        } catch (BTreeDuplicateKeyException e) {
+            throw new MetadataException("A dataverse with this name " + dataverse.getDataverseName()
+                    + " already exists.", e);
         } catch (Exception e) {
             throw new MetadataException(e);
         }
@@ -143,14 +147,6 @@ public class MetadataNode implements IMetadataNode {
 
     @Override
     public void addDataset(long txnId, Dataset dataset) throws MetadataException, RemoteException {
-        // TODO: This will become much simpler once the LSM-BTree supports a true 'insert' operation
-        // Check if the dataset exists already
-        if (getDataset(txnId, dataset.getDataverseName(), dataset.getDatasetName()) != null) {
-            throw new MetadataException("A dataset with this name " + dataset.getDatasetName()
-                    + " already exists in dataverse '" + dataset.getDataverseName() + "'.");
-        }
-
-        // The dataset does not already exist, so insert the dataset
         try {
             // Insert into the 'dataset' dataset.
             DatasetTupleTranslator tupleReaderWriter = new DatasetTupleTranslator(true);
@@ -160,8 +156,7 @@ public class MetadataNode implements IMetadataNode {
                 // Add the primary index for the dataset.
                 InternalDatasetDetails id = (InternalDatasetDetails) dataset.getDatasetDetails();
                 Index primaryIndex = new Index(dataset.getDataverseName(), dataset.getDatasetName(),
-                        dataset.getDatasetName(), IndexType.LSM_BTREE, id.getPrimaryKey(), true,
-                        MetadataManager.INSTANCE.generateResourceId());
+                        dataset.getDatasetName(), IndexType.BTREE, id.getPrimaryKey(), true);
                 addIndex(txnId, primaryIndex);
                 ITupleReference nodeGroupTuple = createTuple(id.getNodeGroupName(), dataset.getDataverseName(),
                         dataset.getDatasetName());
@@ -171,6 +166,9 @@ public class MetadataNode implements IMetadataNode {
             ITupleReference dataTypeTuple = createTuple(dataset.getDataverseName(), dataset.getDatatypeName(),
                     dataset.getDatasetName());
             insertTupleIntoIndex(txnId, MetadataSecondaryIndexes.DATATYPENAME_ON_DATASET_INDEX, dataTypeTuple);
+        } catch (BTreeDuplicateKeyException e) {
+            throw new MetadataException("A dataset with this name " + dataset.getDatasetName()
+                    + " already exists in dataverse '" + dataset.getDataverseName() + "'.", e);
         } catch (Exception e) {
             throw new MetadataException(e);
         }
@@ -178,17 +176,12 @@ public class MetadataNode implements IMetadataNode {
 
     @Override
     public void addIndex(long txnId, Index index) throws MetadataException, RemoteException {
-        // TODO: This will become much simpler once the LSM-BTree supports a true 'insert' operation
-        // Check if the index exists already
-        if (getIndex(txnId, index.getDataverseName(), index.getDatasetName(), index.getIndexName()) != null) {
-            throw new MetadataException("An index with name '" + index.getIndexName() + "' already exists.");
-        }
-
-        // The index does not already exist, so insert the index
         try {
             IndexTupleTranslator tupleWriter = new IndexTupleTranslator(true);
             ITupleReference tuple = tupleWriter.getTupleFromMetadataEntity(index);
             insertTupleIntoIndex(txnId, MetadataPrimaryIndexes.INDEX_DATASET, tuple);
+        } catch (BTreeDuplicateKeyException e) {
+            throw new MetadataException("An index with name '" + index.getIndexName() + "' already exists.", e);
         } catch (Exception e) {
             throw new MetadataException(e);
         }
@@ -196,17 +189,12 @@ public class MetadataNode implements IMetadataNode {
 
     @Override
     public void addNode(long txnId, Node node) throws MetadataException, RemoteException {
-        // TODO: This will become much simpler once the LSM-BTree supports a true 'insert' operation
-        // Check if the node exists already
-        if (getNode(txnId, node.getNodeName()) != null) {
-            throw new MetadataException("A node with name '" + node.getNodeName() + "' already exists.");
-        }
-
-        // The node does not already exist, so insert the node
         try {
             NodeTupleTranslator tupleReaderWriter = new NodeTupleTranslator(true);
             ITupleReference tuple = tupleReaderWriter.getTupleFromMetadataEntity(node);
             insertTupleIntoIndex(txnId, MetadataPrimaryIndexes.NODE_DATASET, tuple);
+        } catch (BTreeDuplicateKeyException e) {
+            throw new MetadataException("A node with name '" + node.getNodeName() + "' already exists.", e);
         } catch (Exception e) {
             throw new MetadataException(e);
         }
@@ -214,17 +202,13 @@ public class MetadataNode implements IMetadataNode {
 
     @Override
     public void addNodeGroup(long txnId, NodeGroup nodeGroup) throws MetadataException, RemoteException {
-        // TODO: This will become much simpler once the LSM-BTree supports a true 'insert' operation
-        // Check if the nodegroup exists already
-        if (getNodeGroup(txnId, nodeGroup.getNodeGroupName()) != null) {
-            throw new MetadataException("A nodegroup with name '" + nodeGroup.getNodeGroupName() + "' already exists.");
-        }
-
-        // The nodegroup does not already exist, so insert the nodegroup
         try {
             NodeGroupTupleTranslator tupleReaderWriter = new NodeGroupTupleTranslator(true);
             ITupleReference tuple = tupleReaderWriter.getTupleFromMetadataEntity(nodeGroup);
             insertTupleIntoIndex(txnId, MetadataPrimaryIndexes.NODEGROUP_DATASET, tuple);
+        } catch (BTreeDuplicateKeyException e) {
+            throw new MetadataException("A nodegroup with name '" + nodeGroup.getNodeGroupName() + "' already exists.",
+                    e);
         } catch (Exception e) {
             throw new MetadataException(e);
         }
@@ -232,17 +216,12 @@ public class MetadataNode implements IMetadataNode {
 
     @Override
     public void addDatatype(long txnId, Datatype datatype) throws MetadataException, RemoteException {
-        // TODO: This will become much simpler once the LSM-BTree supports a true 'insert' operation
-        // Check if the datatype exists already
-        if (getDatatype(txnId, datatype.getDataverseName(), datatype.getDatatypeName()) != null) {
-            throw new MetadataException("A datatype with name '" + datatype.getDatatypeName() + "' already exists.");
-        }
-
-        // The datatype does not already exist, so insert the datatype
         try {
             DatatypeTupleTranslator tupleReaderWriter = new DatatypeTupleTranslator(txnId, this, true);
             ITupleReference tuple = tupleReaderWriter.getTupleFromMetadataEntity(datatype);
             insertTupleIntoIndex(txnId, MetadataPrimaryIndexes.DATATYPE_DATASET, tuple);
+        } catch (BTreeDuplicateKeyException e) {
+            throw new MetadataException("A datatype with name '" + datatype.getDatatypeName() + "' already exists.", e);
         } catch (Exception e) {
             throw new MetadataException(e);
         }
@@ -250,20 +229,16 @@ public class MetadataNode implements IMetadataNode {
 
     @Override
     public void addFunction(long txnId, Function function) throws MetadataException, RemoteException {
-        // TODO: This will become much simpler once the LSM-BTree supports a true 'insert' operation
-        // Check if the function exists already
-        if (getFunction(txnId, function.getDataverseName(), function.getFunctionName(), function.getFunctionArity()) != null) {
-            throw new MetadataException("A dataset with this name " + function.getFunctionName() + " and arity "
-                    + function.getFunctionArity() + " already exists in dataverse '" + function.getDataverseName()
-                    + "'.");
-        }
-
-        // The function does not already exist, so insert the function
         try {
             // Insert into the 'function' dataset.
             FunctionTupleTranslator tupleReaderWriter = new FunctionTupleTranslator(true);
             ITupleReference functionTuple = tupleReaderWriter.getTupleFromMetadataEntity(function);
             insertTupleIntoIndex(txnId, MetadataPrimaryIndexes.FUNCTION_DATASET, functionTuple);
+
+        } catch (BTreeDuplicateKeyException e) {
+            throw new MetadataException("A dataset with this name " + function.getFunctionName() + " and arity "
+                    + function.getFunctionArity() + " already exists in dataverse '" + function.getDataverseName()
+                    + "'.", e);
         } catch (Exception e) {
             throw new MetadataException(e);
         }
@@ -277,26 +252,18 @@ public class MetadataNode implements IMetadataNode {
 
     private void insertTupleIntoIndex(long txnId, IMetadataIndex index, ITupleReference tuple) throws Exception {
         int fileId = index.getFileId();
-        IIndex physicalIndex = indexRegistry.get(DataUtil.byteArrayToInt(index.getResourceId(), 0));
-        physicalIndex.open(fileId);
-        IIndexAccessor indexAccessor = physicalIndex.createAccessor();
-
+        BTree btree = (BTree) indexRegistry.get(fileId);
+        btree.open(fileId);
+        ITreeIndexAccessor indexAccessor = btree.createAccessor();
         TransactionContext txnCtx = transactionProvider.getTransactionManager().getTransactionContext(txnId);
         transactionProvider.getLockManager().lock(txnCtx, index.getResourceId(), LockMode.EXCLUSIVE);
-
+        // TODO: fix exceptions once new BTree exception model is in hyracks.
         indexAccessor.insert(tuple);
         index.getTreeLogger().generateLogRecord(transactionProvider, txnCtx, IndexOp.INSERT, tuple);
     }
 
     @Override
     public void dropDataverse(long txnId, String dataverseName) throws MetadataException, RemoteException {
-        // TODO: This will become much simpler once the LSM-BTree supports a true 'delete' operation
-        // Check if the dataverse exists
-        if (getDataverse(txnId, dataverseName) == null) {
-            throw new MetadataException("Cannot drop dataverse '" + dataverseName + "' because it doesn't exist.");
-        }
-
-        // The dataverse exists, so drop it
         try {
             List<Dataset> dataverseDatasets;
             // As a side effect, acquires an S lock on the 'dataset' dataset
@@ -324,6 +291,10 @@ public class MetadataNode implements IMetadataNode {
             // on behalf of txnId.
             ITupleReference tuple = getTupleToBeDeleted(txnId, MetadataPrimaryIndexes.DATAVERSE_DATASET, searchKey);
             deleteTupleFromIndex(txnId, MetadataPrimaryIndexes.DATAVERSE_DATASET, tuple);
+            // TODO: Change this to be a BTree specific exception, e.g.,
+            // BTreeKeyDoesNotExistException.
+        } catch (TreeIndexException e) {
+            throw new MetadataException("Cannot drop dataverse '" + dataverseName + "' because it doesn't exist.", e);
         } catch (Exception e) {
             throw new MetadataException(e);
         }
@@ -332,15 +303,15 @@ public class MetadataNode implements IMetadataNode {
     @Override
     public void dropDataset(long txnId, String dataverseName, String datasetName) throws MetadataException,
             RemoteException {
-        // TODO: This will become much simpler once the LSM-BTree supports a true 'delete' operation
-        // Check if the dataset exists already
         Dataset dataset;
-        dataset = getDataset(txnId, dataverseName, datasetName);
+        try {
+            dataset = getDataset(txnId, dataverseName, datasetName);
+        } catch (Exception e) {
+            throw new MetadataException(e);
+        }
         if (dataset == null) {
             throw new MetadataException("Cannot drop dataset '" + datasetName + "' because it doesn't exist.");
         }
-
-        // The dataset exists, so drop it
         try {
             // Delete entry from the 'datasets' dataset.
             ITupleReference searchKey = createTuple(dataverseName, datasetName);
@@ -372,6 +343,10 @@ public class MetadataNode implements IMetadataNode {
                     dropIndex(txnId, dataverseName, datasetName, index.getIndexName());
                 }
             }
+            // TODO: Change this to be a BTree specific exception, e.g.,
+            // BTreeKeyDoesNotExistException.
+        } catch (TreeIndexException e) {
+            throw new MetadataException("Cannot drop dataset '" + datasetName + "' because it doesn't exist.", e);
         } catch (Exception e) {
             throw new MetadataException(e);
         }
@@ -380,20 +355,17 @@ public class MetadataNode implements IMetadataNode {
     @Override
     public void dropIndex(long txnId, String dataverseName, String datasetName, String indexName)
             throws MetadataException, RemoteException {
-        // TODO: This will become much simpler once the LSM-BTree supports a true 'delete' operation
-        // Check if the index exists already
-        if (getIndex(txnId, dataverseName, datasetName, indexName) == null) {
-            throw new MetadataException("Cannot drop index '" + datasetName + "." + indexName
-                    + "' because it doesn't exist.");
-        }
-
-        // The index exists, so drop it
         try {
             ITupleReference searchKey = createTuple(dataverseName, datasetName, indexName);
             // Searches the index for the tuple to be deleted. Acquires an S
             // lock on the 'index' dataset.
             ITupleReference tuple = getTupleToBeDeleted(txnId, MetadataPrimaryIndexes.INDEX_DATASET, searchKey);
             deleteTupleFromIndex(txnId, MetadataPrimaryIndexes.INDEX_DATASET, tuple);
+            // TODO: Change this to be a BTree specific exception, e.g.,
+            // BTreeKeyDoesNotExistException.
+        } catch (TreeIndexException e) {
+            throw new MetadataException("Cannot drop index '" + datasetName + "." + indexName
+                    + "' because it doesn't exist.", e);
         } catch (Exception e) {
             throw new MetadataException(e);
         }
@@ -401,13 +373,6 @@ public class MetadataNode implements IMetadataNode {
 
     @Override
     public void dropNodegroup(long txnId, String nodeGroupName) throws MetadataException, RemoteException {
-        // TODO: This will become much simpler once the LSM-BTree supports a true 'delete' operation
-        // Check if the nodegroup exists already
-        if (getNodeGroup(txnId, nodeGroupName) == null) {
-            throw new MetadataException("Cannot drop nodegroup '" + nodeGroupName + "' because it doesn't exist");
-        }
-
-        // Check if any datasets are partitioned on this nodegroup
         List<String> datasetNames;
         try {
             datasetNames = getDatasetNamesPartitionedOnThisNodeGroup(txnId, nodeGroupName);
@@ -422,14 +387,16 @@ public class MetadataNode implements IMetadataNode {
                 sb.append("\n" + (i + 1) + "- " + datasetNames.get(i) + ".");
             throw new MetadataException(sb.toString());
         }
-
-        // The nodegroup exists, so drop it
         try {
             ITupleReference searchKey = createTuple(nodeGroupName);
             // Searches the index for the tuple to be deleted. Acquires an S
             // lock on the 'nodegroup' dataset.
             ITupleReference tuple = getTupleToBeDeleted(txnId, MetadataPrimaryIndexes.NODEGROUP_DATASET, searchKey);
             deleteTupleFromIndex(txnId, MetadataPrimaryIndexes.NODEGROUP_DATASET, tuple);
+            // TODO: Change this to be a BTree specific exception, e.g.,
+            // BTreeKeyDoesNotExistException.
+        } catch (TreeIndexException e) {
+            throw new MetadataException("Cannot drop nodegroup '" + nodeGroupName + "' because it doesn't exist", e);
         } catch (Exception e) {
             throw new MetadataException(e);
         }
@@ -438,12 +405,6 @@ public class MetadataNode implements IMetadataNode {
     @Override
     public void dropDatatype(long txnId, String dataverseName, String datatypeName) throws MetadataException,
             RemoteException {
-        // TODO: This will become much simpler once the LSM-BTree supports a true 'delete' operation
-        // Check if the datatype exists already
-        if (getDatatype(txnId, dataverseName, datatypeName) == null) {
-            throw new MetadataException("Cannot drop type '" + datatypeName + "' because it doesn't exist");
-        }
-
         List<String> datasetNames;
         List<String> usedDatatypes;
         try {
@@ -468,7 +429,7 @@ public class MetadataNode implements IMetadataNode {
                 sb.append("\n" + (i + 1) + "- " + usedDatatypes.get(i) + ".");
             throw new MetadataException(sb.toString());
         }
-        // The datatype exists, so delete the datatype entry, including all it's nested types.
+        // Delete the datatype entry, including all it's nested types.
         try {
             ITupleReference searchKey = createTuple(dataverseName, datatypeName);
             // Searches the index for the tuple to be deleted. Acquires an S
@@ -483,28 +444,10 @@ public class MetadataNode implements IMetadataNode {
                     dropDatatype(txnId, dataverseName, dt.getDatatypeName());
                 }
             }
-        } catch (Exception e) {
-            throw new MetadataException(e);
-        }
-    }
-
-    @Override
-    public void dropFunction(long txnId, String dataverseName, String functionName, int arity)
-            throws MetadataException, RemoteException {
-        // TODO: This will become much simpler once the LSM-BTree supports a true 'delete' operation
-        // Check if the function exists already
-        if (getFunction(txnId, dataverseName, functionName, arity) == null) {
-            throw new MetadataException("Cannot drop function '" + functionName + " and arity " + arity
-                    + "' because it doesn't exist.");
-        }
-        try {
-            // Delete entry from the 'function' dataset.
-            ITupleReference searchKey = createTuple(dataverseName, functionName, "" + arity);
-            // Searches the index for the tuple to be deleted. Acquires an S
-            // lock on the 'function' dataset.
-            ITupleReference datasetTuple = getTupleToBeDeleted(txnId, MetadataPrimaryIndexes.FUNCTION_DATASET,
-                    searchKey);
-            deleteTupleFromIndex(txnId, MetadataPrimaryIndexes.FUNCTION_DATASET, datasetTuple);
+            // TODO: Change this to be a BTree specific exception, e.g.,
+            // BTreeKeyDoesNotExistException.
+        } catch (TreeIndexException e) {
+            throw new MetadataException("Cannot drop type '" + datatypeName + "' because it doesn't exist", e);
         } catch (Exception e) {
             throw new MetadataException(e);
         }
@@ -518,6 +461,10 @@ public class MetadataNode implements IMetadataNode {
             ITupleReference tuple = getTupleToBeDeleted(txnId, MetadataPrimaryIndexes.DATATYPE_DATASET, searchKey);
             deleteTupleFromIndex(txnId, MetadataPrimaryIndexes.DATATYPE_DATASET, tuple);
             deleteFromDatatypeSecondaryIndex(txnId, dataverseName, datatypeName);
+            // TODO: Change this to be a BTree specific exception, e.g.,
+            // BTreeKeyDoesNotExistException.
+        } catch (TreeIndexException e) {
+            throw new AsterixException("Cannot drop type '" + datatypeName + "' because it doesn't exist", e);
         } catch (AsterixException e) {
             throw e;
         } catch (Exception e) {
@@ -537,6 +484,10 @@ public class MetadataNode implements IMetadataNode {
                         MetadataSecondaryIndexes.DATATYPENAME_ON_DATATYPE_INDEX, searchKey);
                 deleteTupleFromIndex(txnId, MetadataSecondaryIndexes.DATATYPENAME_ON_DATATYPE_INDEX, tuple);
             }
+            // TODO: Change this to be a BTree specific exception, e.g.,
+            // BTreeKeyDoesNotExistException.
+        } catch (TreeIndexException e) {
+            throw new AsterixException("Cannot drop type '" + datatypeName + "' because it doesn't exist", e);
         } catch (AsterixException e) {
             throw e;
         } catch (Exception e) {
@@ -546,9 +497,10 @@ public class MetadataNode implements IMetadataNode {
 
     private void deleteTupleFromIndex(long txnId, IMetadataIndex index, ITupleReference tuple) throws Exception {
         int fileId = index.getFileId();
-        IIndex physicalIndex = indexRegistry.get(DataUtil.byteArrayToInt(index.getResourceId(), 0));
-        physicalIndex.open(fileId);
-        IIndexAccessor indexAccessor = physicalIndex.createAccessor();
+        BTree btree = (BTree) indexRegistry.get(fileId);
+        btree.open(fileId);
+
+        ITreeIndexAccessor indexAccessor = btree.createAccessor();
         TransactionContext txnCtx = transactionProvider.getTransactionManager().getTransactionContext(txnId);
         // This lock is actually an upgrade, because a deletion must be preceded
         // by a search, in order to be able to undo an aborted deletion.
@@ -731,22 +683,6 @@ public class MetadataNode implements IMetadataNode {
         }
     }
 
-    private Node getNode(long txnId, String nodeName) throws MetadataException {
-        try {
-            ITupleReference searchKey = createTuple(nodeName);
-            NodeTupleTranslator tupleReaderWriter = new NodeTupleTranslator(false);
-            IValueExtractor<Node> valueExtractor = new MetadataEntityValueExtractor<Node>(tupleReaderWriter);
-            List<Node> results = new ArrayList<Node>();
-            searchIndex(txnId, MetadataPrimaryIndexes.NODE_DATASET, searchKey, valueExtractor, results);
-            if (results.isEmpty()) {
-                return null;
-            }
-            return results.get(0);
-        } catch (Exception e) {
-            throw new MetadataException(e);
-        }
-    }
-
     @Override
     public NodeGroup getNodeGroup(long txnId, String nodeGroupName) throws MetadataException, RemoteException {
         try {
@@ -782,13 +718,47 @@ public class MetadataNode implements IMetadataNode {
         }
     }
 
+    @Override
+    public void dropFunction(long txnId, String dataverseName, String functionName, int arity)
+            throws MetadataException, RemoteException {
+        Function function;
+        try {
+            function = getFunction(txnId, dataverseName, functionName, arity);
+        } catch (Exception e) {
+            throw new MetadataException(e);
+        }
+        if (function == null) {
+            throw new MetadataException("Cannot drop function '" + functionName + " and arity " + arity
+                    + "' because it doesn't exist.");
+        }
+        try {
+            // Delete entry from the 'function' dataset.
+            ITupleReference searchKey = createTuple(dataverseName, functionName, "" + arity);
+            // Searches the index for the tuple to be deleted. Acquires an S
+            // lock on the 'function' dataset.
+            ITupleReference datasetTuple = getTupleToBeDeleted(txnId, MetadataPrimaryIndexes.FUNCTION_DATASET,
+                    searchKey);
+            deleteTupleFromIndex(txnId, MetadataPrimaryIndexes.FUNCTION_DATASET, datasetTuple);
+
+            // TODO: Change this to be a BTree specific exception, e.g.,
+            // BTreeKeyDoesNotExistException.
+        } catch (TreeIndexException e) {
+            throw new MetadataException("Cannot drop function '" + functionName + " and arity " + arity
+                    + "' because it doesn't exist.", e);
+        } catch (Exception e) {
+            throw new MetadataException(e);
+        }
+    }
+
     private ITupleReference getTupleToBeDeleted(long txnId, IMetadataIndex metadataIndex, ITupleReference searchKey)
             throws Exception {
         IValueExtractor<ITupleReference> valueExtractor = new TupleCopyValueExtractor(metadataIndex.getTypeTraits());
         List<ITupleReference> results = new ArrayList<ITupleReference>();
         searchIndex(txnId, metadataIndex, searchKey, valueExtractor, results);
         if (results.isEmpty()) {
-            throw new MetadataException("Could not find entry to be deleted.");
+            // TODO: Temporarily a TreeIndexException to make it get caught by
+            // caller in the appropriate catch block.
+            throw new TreeIndexException("Could not find entry to be deleted.");
         }
         // There should be exactly one result returned from the search.
         return results.get(0);
@@ -798,22 +768,21 @@ public class MetadataNode implements IMetadataNode {
             IValueExtractor<ResultType> valueExtractor, List<ResultType> results) throws Exception {
         TransactionContext txnCtx = transactionProvider.getTransactionManager().getTransactionContext(txnId);
         transactionProvider.getLockManager().lock(txnCtx, index.getResourceId(), LockMode.SHARED);
-
-        int fileId = index.getFileId();
-        IIndex physicalIndex = indexRegistry.get(DataUtil.byteArrayToInt(index.getResourceId(), 0));
-        physicalIndex.open(fileId);
-        IIndexAccessor indexAccessor = physicalIndex.createAccessor();
-        IIndexCursor rangeCursor = indexAccessor.createSearchCursor();
-
         IBinaryComparatorFactory[] comparatorFactories = index.getKeyBinaryComparatorFactory();
+        int fileId = index.getFileId();
+        BTree btree = (BTree) indexRegistry.get(fileId);
+        btree.open(fileId);
+        ITreeIndexFrame leafFrame = btree.getLeafFrameFactory().createFrame();
+        ITreeIndexAccessor indexAccessor = btree.createAccessor();
+        ITreeIndexCursor rangeCursor = new BTreeRangeSearchCursor((IBTreeLeafFrame) leafFrame, false);
         IBinaryComparator[] searchCmps = new IBinaryComparator[searchKey.getFieldCount()];
         for (int i = 0; i < searchKey.getFieldCount(); i++) {
             searchCmps[i] = comparatorFactories[i].createBinaryComparator();
         }
         MultiComparator searchCmp = new MultiComparator(searchCmps);
         RangePredicate rangePred = new RangePredicate(searchKey, searchKey, true, true, searchCmp, searchCmp);
-
         indexAccessor.search(rangeCursor, rangePred);
+
         try {
             while (rangeCursor.hasNext()) {
                 rangeCursor.next();
@@ -827,78 +796,20 @@ public class MetadataNode implements IMetadataNode {
         }
     }
 
+    // TODO: Can use Hyrack's TupleUtils for this, once we switch to a newer
+    // Hyracks version.
     public ITupleReference createTuple(String... fields) throws HyracksDataException {
-        ISerializerDeserializer[] fieldSerdes = new ISerializerDeserializer[fields.length];
-        for (int i = 0; i < fields.length; i++) {
-            fieldSerdes[i] = UTF8StringSerializerDeserializer.INSTANCE;
+        ISerializerDeserializer<AString> stringSerde = AqlSerializerDeserializerProvider.INSTANCE
+                .getSerializerDeserializer(BuiltinType.ASTRING);
+        AMutableString aString = new AMutableString("");
+        ArrayTupleBuilder tupleBuilder = new ArrayTupleBuilder(fields.length);
+        for (String s : fields) {
+            aString.setValue(s);
+            stringSerde.serialize(aString, tupleBuilder.getDataOutput());
+            tupleBuilder.addFieldEndOffset();
         }
-        return TupleUtils.createTuple(fieldSerdes, (Object[]) fields);
-    }
-
-    /**
-     * Creates resourceIdSeed(which is an AtomicInteger instance) and
-     * initialize the value with the given initialValue.
-     * 
-     * @param initialValue
-     *            resourceIdSeed is set to this initialValue.
-     */
-    @Override
-    public void createResourceIdGenerator(int initialValue) throws RemoteException{
-        resourceIdGenerator.set(initialValue);
-    }
-
-    /**
-     * @return a uniquely generated resourceID.
-     */
-    @Override
-    public int generateResourceId() throws RemoteException{
-        return resourceIdGenerator.getAndIncrement();
-    }
-
-    @Override
-    public int getResourceId(long txnId, String dataverseName, String datasetName, String indexName)
-            throws MetadataException, RemoteException {
-        return getIndex(txnId, dataverseName, datasetName, indexName).getResourceId();
-    }
-
-    /**
-     * @return the maximum resourceID of the resourceIDs which have been generated so far
-     */
-    @Override
-    public int getGeneratedMaxResourceId() throws RemoteException, Exception {
-        int maxResourceId = -1;
-        IMetadataIndex metadataIndex = MetadataPrimaryIndexes.INDEX_DATASET;
-
-        //Prepare IndexTupleTranslator
-        IndexTupleTranslator tupleReaderWriter = new IndexTupleTranslator(false);
-        IValueExtractor<Index> valueExtractor = new MetadataEntityValueExtractor<Index>(tupleReaderWriter);
-
-        //get the index from indexRegistry using resourceId
-        IIndex physicalIndex = indexRegistry.get(DataUtil.byteArrayToInt(metadataIndex.getResourceId(), 0));
-        int fileId = metadataIndex.getFileId();
-        physicalIndex.open(fileId);
-
-        //create a rangePredicate(which is null predicate) and create a cursor with the predicate
-        IIndexAccessor indexAccessor = physicalIndex.createAccessor();
-        IIndexCursor rangeCursor = indexAccessor.createSearchCursor();
-        RangePredicate rangePred = new RangePredicate(null, null, true, true, null, null);
-        indexAccessor.search(rangeCursor, rangePred);
-
-        //while iterating each record(which includes an index information), keep the maxResourceId.
-        try {
-            while (rangeCursor.hasNext()) {
-                rangeCursor.next();
-                //TODO handle the issue of the transactionId or transactionContext during recovery 
-                Index index = valueExtractor.getValue(0, rangeCursor.getTuple());
-                if (index.getResourceId() > maxResourceId) {
-                    maxResourceId = index.getResourceId();
-                }
-            }
-        } finally {
-            rangeCursor.close();
-        }
-
-        return maxResourceId;
-
+        ArrayTupleReference tuple = new ArrayTupleReference();
+        tuple.reset(tupleBuilder.getFieldEndOffsets(), tupleBuilder.getByteArray());
+        return tuple;
     }
 }

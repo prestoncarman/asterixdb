@@ -16,7 +16,6 @@
 package edu.uci.ics.asterix.metadata.declared;
 
 import java.io.File;
-import java.rmi.RemoteException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -43,14 +42,14 @@ import edu.uci.ics.asterix.metadata.entities.InternalDatasetDetails;
 import edu.uci.ics.asterix.metadata.entities.NodeGroup;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.IAType;
-import edu.uci.ics.hyracks.algebricks.core.algebra.data.IAWriterFactory;
+import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksAbsolutePartitionConstraint;
+import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksPartitionConstraint;
+import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
+import edu.uci.ics.hyracks.algebricks.common.utils.Pair;
+import edu.uci.ics.hyracks.algebricks.common.utils.Triple;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluatorFactory;
-import edu.uci.ics.hyracks.algebricks.core.api.constraints.AlgebricksAbsolutePartitionConstraint;
-import edu.uci.ics.hyracks.algebricks.core.api.constraints.AlgebricksPartitionConstraint;
-import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
-import edu.uci.ics.hyracks.algebricks.core.utils.Pair;
-import edu.uci.ics.hyracks.algebricks.core.utils.Triple;
+import edu.uci.ics.hyracks.algebricks.data.IAWriterFactory;
+import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluatorFactory;
 import edu.uci.ics.hyracks.api.io.FileReference;
 import edu.uci.ics.hyracks.dataflow.std.file.ConstantFileSplitProvider;
 import edu.uci.ics.hyracks.dataflow.std.file.FileSplit;
@@ -188,20 +187,21 @@ public class AqlCompiledMetadataDeclarations {
                     String typeName = datasetRecord.getDatatypeName();
                     InternalDatasetDetails id = (InternalDatasetDetails) datasetRecord.getDatasetDetails();
                     ARecordType recType = (ARecordType) findType(typeName);
-                    List<Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType>> partitioningEvalFactories = computePartitioningEvaluatorFactories(
+                    List<Triple<ICopyEvaluatorFactory, ScalarFunctionCallExpression, IAType>> partitioningEvalFactories = computePartitioningEvaluatorFactories(
                             id.getPartitioningKey(), recType);
                     List<Index> indexRecord = this.metadataManager.getDatasetIndexes(mdTxnCtx, dataverseName,
                             datasetName);
                     AqlCompiledIndexDecl primaryIndex = null;
                     List<AqlCompiledIndexDecl> secondaryIndexes = new ArrayList<AqlCompiledIndexDecl>();
-                    for(Index rec : indexRecord) {
+                    for (int i = 0; i < indexRecord.size(); i++) {
+                        Index rec = indexRecord.get(i);
                         if (rec.isPrimaryIndex()) {
-                            primaryIndex = new AqlCompiledIndexDecl(rec.getIndexName(), IndexKind.LSM_BTREE,
+                            primaryIndex = new AqlCompiledIndexDecl(rec.getIndexName(), IndexKind.BTREE,
                                     rec.getKeyFieldNames());
                         } else {
                             secondaryIndexes.add(new AqlCompiledIndexDecl(rec.getIndexName(),
-                                    rec.getIndexType() == IndexType.LSM_BTREE ? IndexKind.LSM_BTREE : IndexKind.RTREE,
-                                    rec.getKeyFieldNames()));
+                                    rec.getIndexType() == IndexType.BTREE ? IndexKind.BTREE : IndexKind.RTREE, rec
+                                            .getKeyFieldNames()));
                         }
                     }
 
@@ -239,12 +239,12 @@ public class AqlCompiledMetadataDeclarations {
         this.outputFile = outputFile;
     }
 
-    public List<Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType>> computePartitioningEvaluatorFactories(
+    public List<Triple<ICopyEvaluatorFactory, ScalarFunctionCallExpression, IAType>> computePartitioningEvaluatorFactories(
             List<String> partitioningExprs, ARecordType recType) {
-        List<Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType>> evalFactories = new ArrayList<Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType>>(
+        List<Triple<ICopyEvaluatorFactory, ScalarFunctionCallExpression, IAType>> evalFactories = new ArrayList<Triple<ICopyEvaluatorFactory, ScalarFunctionCallExpression, IAType>>(
                 partitioningExprs.size());
         for (String expr : partitioningExprs) {
-            Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType> evalFact = null;
+            Triple<ICopyEvaluatorFactory, ScalarFunctionCallExpression, IAType> evalFact = null;
             try {
                 evalFact = format.partitioningEvaluatorFactory(recType, expr);
             } catch (AlgebricksException e) {
@@ -255,7 +255,7 @@ public class AqlCompiledMetadataDeclarations {
         return evalFactories;
     }
 
-    public Pair<IFileSplitProvider, AlgebricksPartitionConstraint> splitProviderAndPartitionConstraintsForInternalOrFeedDataset(
+	public Pair<IFileSplitProvider, AlgebricksPartitionConstraint> splitProviderAndPartitionConstraintsForInternalOrFeedDataset(
             String datasetName, String targetIdxName) throws AlgebricksException, MetadataException {
         FileSplit[] splits = splitsForInternalOrFeedDataset(datasetName, targetIdxName);
         IFileSplitProvider splitProvider = new ConstantFileSplitProvider(splits);
@@ -323,10 +323,5 @@ public class AqlCompiledMetadataDeclarations {
 
     public MetadataTransactionContext getMetadataTransactionContext() {
         return mdTxnCtx;
-    }
-    
-    //TODO change the remote call to cache access.
-    public int findResourceId(String dataverseName, String datasetName, String indexName) throws MetadataException, RemoteException {
-        return this.metadataManager.getResourceId(this.mdTxnCtx, dataverseName, datasetName, indexName);
     }
 }

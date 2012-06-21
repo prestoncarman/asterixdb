@@ -2,11 +2,10 @@ package edu.uci.ics.asterix.test.dml;
 
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileReader;
+import java.io.FileInputStream;
+import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.io.Reader;
-
-import org.junit.Test;
 
 import edu.uci.ics.asterix.api.common.AsterixHyracksIntegrationUtil;
 import edu.uci.ics.asterix.api.java.AsterixJavaClient;
@@ -36,14 +35,18 @@ public class DmlTest {
         outdir.mkdirs();
 
         AsterixHyracksIntegrationUtil.init();
-        Reader loadReader = new BufferedReader(new FileReader(LOAD_FOR_ENLIST_FILE));
-        AsterixJavaClient asterixLoad = new AsterixJavaClient(loadReader, ERR);
+        Reader loadReader = new BufferedReader(
+                new InputStreamReader(new FileInputStream(LOAD_FOR_ENLIST_FILE), "UTF-8"));
+        AsterixJavaClient asterixLoad = new AsterixJavaClient(
+                AsterixHyracksIntegrationUtil.getHyracksClientConnection(), loadReader, ERR);
         try {
             asterixLoad.compile(true, false, false, false, false, true, false);
         } catch (AsterixException e) {
             throw new Exception("Compile ERROR for " + LOAD_FOR_ENLIST_FILE + ": " + e.getMessage(), e);
+        } finally {
+            loadReader.close();
         }
-        asterixLoad.execute(AsterixHyracksIntegrationUtil.DEFAULT_HYRACKS_CC_CLIENT_PORT);
+        asterixLoad.execute();
         AsterixHyracksIntegrationUtil.destroyApp();
 
         AsterixHyracksIntegrationUtil.createApp();
@@ -51,7 +54,8 @@ public class DmlTest {
         String resultFileName = TestsUtils.aqlExtToResExt(enlistFile.getName());
         File expectedFile = new File(PATH_EXPECTED + SEPARATOR + resultFileName);
         File actualFile = new File(PATH_ACTUAL + SEPARATOR + resultFileName);
-        TestsUtils.runScriptAndCompareWithResult(enlistFile, ERR, expectedFile, actualFile);
+        TestsUtils.runScriptAndCompareWithResult(AsterixHyracksIntegrationUtil.getHyracksClientConnection(),
+                enlistFile, ERR, expectedFile, actualFile);
 
         AsterixHyracksIntegrationUtil.deinit();
         for (String d : ASTERIX_DATA_DIRS) {

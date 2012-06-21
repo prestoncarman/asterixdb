@@ -8,6 +8,7 @@ import edu.uci.ics.asterix.aql.base.Clause;
 import edu.uci.ics.asterix.aql.base.Expression;
 import edu.uci.ics.asterix.aql.base.ILiteral;
 import edu.uci.ics.asterix.aql.base.Statement;
+import edu.uci.ics.asterix.aql.expression.BeginFeedStatement;
 import edu.uci.ics.asterix.aql.expression.CallExpr;
 import edu.uci.ics.asterix.aql.expression.ControlFeedStatement;
 import edu.uci.ics.asterix.aql.expression.CreateDataverseStatement;
@@ -293,7 +294,7 @@ public class AQLPrintVisitor implements IAqlVisitorWithVoidReturn<Integer> {
 
     @Override
     public void visit(FunctionDecl fd, Integer step) throws AsterixException {
-        out.println(skip(step) + "FunctionDecl " + fd.getIdent().getValue() + "(" + fd.getParamList().toString()
+        out.println(skip(step) + "FunctionDecl " + fd.getIdent().getFunctionName() + "(" + fd.getParamList().toString()
                 + ") {");
         fd.getFuncBody().accept(this, step + 1);
         out.println(skip(step) + "}");
@@ -526,6 +527,12 @@ public class AQLPrintVisitor implements IAqlVisitorWithVoidReturn<Integer> {
 
     @Override
     public void visit(FunctionDropStatement fds, Integer arg) throws AsterixException {
+        // TODO Auto-generated method stub
+        
+    }
+
+    @Override
+    public void visit(BeginFeedStatement stmtDel, Integer arg) throws AsterixException {
         // TODO Auto-generated method stub
         
     }

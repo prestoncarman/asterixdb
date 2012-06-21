@@ -1,5 +1,6 @@
 package edu.uci.ics.asterix.aql.expression.visitor;
 
+import edu.uci.ics.asterix.aql.expression.BeginFeedStatement;
 import edu.uci.ics.asterix.aql.expression.CallExpr;
 import edu.uci.ics.asterix.aql.expression.ControlFeedStatement;
 import edu.uci.ics.asterix.aql.expression.CreateDataverseStatement;
@@ -139,6 +140,8 @@ public interface IAqlExpressionVisitor<R, T> {
 
     R visitSetStatement(SetStatement ss, T arg) throws AsterixException;
 
+    R visitBeginFeedStatement(BeginFeedStatement bf, T arg) throws AsterixException;
+    
     R visitControlFeedStatement(ControlFeedStatement del, T arg) throws AsterixException;
 
     R visitCallExpr(CallExpr pf, T arg) throws AsterixException;

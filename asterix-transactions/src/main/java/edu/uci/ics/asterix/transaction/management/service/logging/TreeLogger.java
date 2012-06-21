@@ -20,10 +20,10 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
 import edu.uci.ics.asterix.transaction.management.resource.ICloseable;
-import edu.uci.ics.asterix.transaction.management.resource.TreeResourceManager;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionContext;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionProvider;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.ITupleReference;
+import edu.uci.ics.hyracks.storage.am.common.api.ITreeIndex;
 import edu.uci.ics.hyracks.storage.am.common.api.ITreeIndexTupleWriter;
 import edu.uci.ics.hyracks.storage.am.common.ophelpers.IndexOp;
 
@@ -95,7 +95,7 @@ class TxnThreadState {
 
 public class TreeLogger implements ILogger, ICloseable {
 
-    private static final byte resourceMgrId = TreeResourceManager.getInstance().ID;
+    private static final byte resourceMgrId = TreeResourceManager.ID;
     private final Map<Object, Object> arguments = new ConcurrentHashMap<Object, Object>();
 
     public static final String TREE_INDEX = "TREE_INDEX";
@@ -104,6 +104,7 @@ public class TreeLogger implements ILogger, ICloseable {
     public static final String INDEX_OPERATION = "INDEX_OPERATION";
     public static final String RESOURCE_ID = "RESOURCE_ID";
 
+    private final ITreeIndex treeIndex;
     private final ITreeIndexTupleWriter treeIndexTupleWriter;
     private final byte[] resourceIdBytes;
     private final byte[] resourceIdLengthBytes;
@@ -113,9 +114,10 @@ public class TreeLogger implements ILogger, ICloseable {
         public static final byte DELETE = 1;
     }
 
-    public TreeLogger(byte[] resourceId, ITreeIndexTupleWriter tupleWriter) {
-        this.resourceIdBytes = resourceId;
-        this.treeIndexTupleWriter = tupleWriter;
+    public TreeLogger(byte[] resourceIdBytes, ITreeIndex treeIndex) {
+        this.resourceIdBytes = resourceIdBytes;
+        this.treeIndex = treeIndex;
+        treeIndexTupleWriter = treeIndex.getLeafFrameFactory().getTupleWriterFactory().createTupleWriter();
         this.resourceIdLengthBytes = DataUtil.intToByteArray(resourceIdBytes.length);
     }
 

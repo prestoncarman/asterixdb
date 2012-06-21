@@ -11,13 +11,9 @@ create type DBLPType as closed {
   misc: string
 }
 
-create nodegroup group1 if not exists on nc1;
-
 create external dataset DBLPsplits(DBLPType) 
 using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
-("path"="nc1://data/dblp-small/dblp-small.adm"),("format"="adm")); 
-
-// delimited by '|'
+(("path"="nc1://data/dblp-small/dblp-small.adm"),("format"="adm")); 
 
 write output to nc1:"rttest/scan_30.adm";
 

@@ -9,21 +9,16 @@ public class AsterixStorageManagerInterface implements IStorageManagerInterface 
     private static final long serialVersionUID = 1L;
 
     public static AsterixStorageManagerInterface INSTANCE = new AsterixStorageManagerInterface();
-    
-    private AsterixStorageManagerInterface() {
-    }
 
     @Override
     public IBufferCache getBufferCache(IHyracksTaskContext ctx) {
-        INodeApplicationState applicationState = (INodeApplicationState) ctx.getJobletContext().getApplicationContext()
-                .getApplicationObject();
-        return applicationState.getApplicationRuntimeContext().getBufferCache();
+        return ((AsterixAppRuntimeContext) ctx.getJobletContext().getApplicationContext().getApplicationObject())
+                .getBufferCache();
     }
 
     @Override
     public IFileMapProvider getFileMapProvider(IHyracksTaskContext ctx) {
-        INodeApplicationState applicationState = (INodeApplicationState) ctx.getJobletContext().getApplicationContext()
-                .getApplicationObject();
-        return applicationState.getApplicationRuntimeContext().getFileMapManager();
+        return ((AsterixAppRuntimeContext) ctx.getJobletContext().getApplicationContext().getApplicationObject())
+                .getFileMapManager();
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2009-2012 by The Regents of the University of California
+ * Copyright 2009-2010 by The Regents of the University of California
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
@@ -33,8 +33,8 @@ import edu.uci.ics.asterix.transaction.management.service.transaction.ITransacti
  */
 public class TransactionContext implements Serializable {
 
-    // used for showing a transaction is not waiting.
-    public static final long INVALID_TIME = -1l;
+    public static final long INVALID_TIME = -1l; // used for showing a
+    // transaction is not waiting.
     public static final int ACTIVE_STATUS = 0;
     public static final int TIMED_OUT_SATUS = 1;
 

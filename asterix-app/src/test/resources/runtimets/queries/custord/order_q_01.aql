@@ -15,10 +15,9 @@ create type OrderType as open {
 }
 
 
-
 create external dataset Orders(OrderType)
 using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
-(("path"="nc1://data/nontagged/orderData.json"),("format"=adm"));
+(("path"="nc1://data/nontagged/orderData.json"),("format"="adm"));
         
 write output to nc1:"rttest/custord_order_q_01.adm";
       

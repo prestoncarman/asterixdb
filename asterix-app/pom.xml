@@ -1,4 +1,5 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 	<parent>
 		<artifactId>asterix</artifactId>
@@ -36,6 +37,10 @@
 									<mainClass>edu.uci.ics.asterix.drivers.AsterixClientDriver</mainClass>
 									<name>asterix-cmd</name>
 								</program>
+								<program>
+									<mainClass>edu.uci.ics.asterix.drivers.AsterixCLI</mainClass>
+									<name>asterix-cli</name>
+								</program>
 							</programs>
 							<repositoryLayout>flat</repositoryLayout>
 							<repositoryName>lib</repositoryName>
@@ -69,15 +74,15 @@
 				<artifactId>maven-surefire-plugin</artifactId>
 				<version>2.7.2</version>
 				<configuration>
-					<!--
-						doesn't work from m2eclipse, currently
-						<additionalClasspathElements>
-						<additionalClasspathElement>${basedir}/src/main/resources</additionalClasspathElement>
-						</additionalClasspathElements>
-					-->
+					<!-- doesn't work from m2eclipse, currently <additionalClasspathElements> 
+						<additionalClasspathElement>${basedir}/src/main/resources</additionalClasspathElement> 
+						</additionalClasspathElements> -->
 					<forkMode>pertest</forkMode>
-					<argLine>-enableassertions -Xmx${test.heap.size}m -Dfile.encoding=UTF-8
-						-Djava.util.logging.config.file=src/test/resources/logging.properties</argLine>
+					<argLine>-enableassertions -Xmx${test.heap.size}m
+						-Dfile.encoding=UTF-8
+						-Djava.util.logging.config.file=src/test/resources/logging.properties
+						-Xdebug
+						-Xrunjdwp:transport=dt_socket,server=y,address=8000,suspend=n</argLine>
 					<includes>
 						<include>**/*TestSuite.java</include>
 						<include>**/*Test.java</include>
@@ -104,14 +109,14 @@
 		<dependency>
 			<groupId>org.eclipse.jetty</groupId>
 			<artifactId>jetty-server</artifactId>
-			<version>8.0.0.M1</version>
+			<version>8.0.0.M2</version>
 			<type>jar</type>
 			<scope>compile</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.eclipse.jetty</groupId>
 			<artifactId>jetty-servlet</artifactId>
-			<version>8.0.0.M1</version>
+			<version>8.0.0.M2</version>
 			<type>jar</type>
 			<scope>compile</scope>
 		</dependency>
@@ -124,20 +129,17 @@
 		<dependency>
 			<groupId>edu.uci.ics.hyracks</groupId>
 			<artifactId>hyracks-control-cc</artifactId>
-			<version>0.2.0-SNAPSHOT</version>
-			<scope>compile</scope>
+			<version>0.2.1-SNAPSHOT</version>
 		</dependency>
 		<dependency>
 			<groupId>edu.uci.ics.hyracks</groupId>
 			<artifactId>hyracks-control-nc</artifactId>
-			<version>0.2.0-SNAPSHOT</version>
-			<scope>compile</scope>
+			<version>0.2.1-SNAPSHOT</version>
 		</dependency>
 		<dependency>
 			<groupId>edu.uci.ics.hyracks</groupId>
 			<artifactId>hyracks-algebricks-compiler</artifactId>
-			<version>0.2.0-SNAPSHOT</version>
-			<scope>compile</scope>
+			<version>0.2.1-SNAPSHOT</version>
 		</dependency>
 		<dependency>
 			<groupId>edu.uci.ics.asterix</groupId>
@@ -168,15 +170,44 @@
 			<scope>compile</scope>
 		</dependency>
 		<dependency>
+			<groupId>edu.uci.ics.asterix</groupId>
+			<artifactId>asterix-common</artifactId>
+			<version>0.0.4-SNAPSHOT</version>
+			<type>jar</type>
+			<scope>compile</scope>
+		</dependency>
+		<dependency>
 			<groupId>com.kenai.nbpwr</groupId>
 			<artifactId>org-apache-commons-io</artifactId>
 			<version>1.3.1-201002241208</version>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
-			<groupId>edu.uci.ics.hyracks</groupId>
-			<artifactId>hyracks-storage-am-common</artifactId>
-			<version>0.2.0-SNAPSHOT</version>
+			<groupId>org.apache.hadoop</groupId>
+			<artifactId>hadoop-core</artifactId>
+			<version>0.20.2</version>
+			<type>jar</type>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.hadoop</groupId>
+			<artifactId>hadoop-test</artifactId>
+			<version>0.20.2</version>
+			<type>jar</type>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>xerces</groupId>
+			<artifactId>xercesImpl</artifactId>
+			<version>2.9.1</version>
+			<type>jar</type>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>xalan</groupId>
+			<artifactId>xalan</artifactId>
+			<version>2.7.1</version>
+			<type>jar</type>
+			<scope>test</scope>
 		</dependency>
 	</dependencies>
 

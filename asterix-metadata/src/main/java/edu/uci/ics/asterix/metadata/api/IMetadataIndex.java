@@ -24,6 +24,7 @@ import edu.uci.ics.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.IBinaryHashFunctionFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.ITypeTraits;
 import edu.uci.ics.hyracks.api.dataflow.value.RecordDescriptor;
+import edu.uci.ics.hyracks.storage.am.common.api.ITreeIndex;
 
 /**
  * Descriptor interface for a primary or secondary index on metadata datasets.
@@ -53,16 +54,16 @@ public interface IMetadataIndex {
 
     public int[] getFieldPermutation();
 
-    public String getFileRelativePath();
+    public String getFileNameRelativePath();
 
     public ARecordType getPayloadRecordType();
 
     public void setFileId(int fileId);
 
-    public void setTreeLogger(TreeLogger treeLogger) throws ACIDException;
+    public void initTreeLogger(ITreeIndex treeIndex) throws ACIDException;
 
     public int getFileId();
-    
+
     public byte[] getResourceId();
 
     public TreeLogger getTreeLogger();

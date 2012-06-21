@@ -13,17 +13,14 @@ create type MyRecord as closed {
   rec: rectangle
 }
 
-create nodegroup group1  if not exists on nc1, nc2;
-
 create dataset MyData(MyRecord)
-  partitioned by key id on group1;
+  partitioned by key id;
 
 load dataset MyData 
 using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter" 
-(("path"="nc1://data/spatial/spatialData.json"),("format"="admt"));
+(("path"="nc1://data/spatial/spatialData.json"),("format"="adm"));
 
 create index rtree_index_point on MyData(point) type rtree;
-
 
 write output to nc1:"rttest/index_rtree-secondary-index.adm";
 

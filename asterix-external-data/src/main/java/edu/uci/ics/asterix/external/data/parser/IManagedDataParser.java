@@ -14,7 +14,11 @@
  */
 package edu.uci.ics.asterix.external.data.parser;
 
+import edu.uci.ics.asterix.feed.managed.adapter.IManagedFeedAdapter;
+
 public interface IManagedDataParser extends IDataParser {
 
     public IManagedTupleParser getManagedTupleParser();
+    
+    public void setAdapter(IManagedFeedAdapter adapter);
 }

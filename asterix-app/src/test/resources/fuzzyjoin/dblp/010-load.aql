@@ -15,5 +15,5 @@ declare dataset DBLP(DBLPType)
 
 load dataset DBLP 
 using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
-(("path"="nc1:///asterix/asterix-app/data/dblp-small/dblp-small-id.txt"),("format"="delimited-text"),("delimtier=":")) pre-sorted;
+(("path"="nc1:///asterix/asterix-app/data/dblp-small/dblp-small-id.txt"),("format"="delimited-text"),("delimiter=":")) pre-sorted;
 

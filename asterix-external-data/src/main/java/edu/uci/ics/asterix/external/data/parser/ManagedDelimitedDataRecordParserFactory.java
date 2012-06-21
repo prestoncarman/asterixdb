@@ -30,7 +30,7 @@ public class ManagedDelimitedDataRecordParserFactory extends NtDelimitedDataTupl
         super(recType, fieldParserFactories, fieldDelimiter);
         this.adapter = adapter;
     }
-
+    
     @Override
     public ITupleParser createTupleParser(final IHyracksTaskContext ctx) {
         return new ManagedDelimitedDataTupleParser(ctx, recordType, adapter, valueParserFactories, fieldDelimiter);

@@ -25,17 +25,20 @@ import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 public class ADMStreamParser extends AbstractStreamDataParser {
 
     public ADMStreamParser() {
-
     }
 
     @Override
-    public void initialize(ARecordType atype, Map<String, String> configuration, IHyracksTaskContext ctx) {
+    public void initialize(ARecordType atype, IHyracksTaskContext ctx) {
         tupleParser = new AdmSchemafullRecordParserFactory(atype).createTupleParser(ctx);
     }
 
     @Override
     public void parse(IFrameWriter writer) throws HyracksDataException {
         tupleParser.parse(inputStream, writer);
+    }
+
+    @Override
+    public void configure(Map<String, String> configuration) {
     }
 
 }

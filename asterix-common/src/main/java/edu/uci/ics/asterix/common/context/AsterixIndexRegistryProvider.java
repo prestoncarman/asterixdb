@@ -6,6 +6,7 @@ import edu.uci.ics.hyracks.storage.am.common.dataflow.IIndexRegistryProvider;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.IndexRegistry;
 
 public class AsterixIndexRegistryProvider implements IIndexRegistryProvider<IIndex> {
+
     private static final long serialVersionUID = 1L;
 
     public static final AsterixIndexRegistryProvider INSTANCE = new AsterixIndexRegistryProvider();
@@ -15,9 +16,8 @@ public class AsterixIndexRegistryProvider implements IIndexRegistryProvider<IInd
 
     @Override
     public IndexRegistry<IIndex> getRegistry(IHyracksTaskContext ctx) {
-        INodeApplicationState applicationState = (INodeApplicationState) ctx.getJobletContext().getApplicationContext()
-                .getApplicationObject();
-        return applicationState.getApplicationRuntimeContext().getIndexRegistry();
+        return ((AsterixAppRuntimeContext) ctx.getJobletContext().getApplicationContext().getApplicationObject())
+                .getIndexRegistry();
     }
 
 }

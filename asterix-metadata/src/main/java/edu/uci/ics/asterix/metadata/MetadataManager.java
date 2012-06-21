@@ -18,6 +18,7 @@ package edu.uci.ics.asterix.metadata;
 import java.rmi.RemoteException;
 import java.util.List;
 
+import edu.uci.ics.asterix.metadata.MetadataCache.MetadataLogicalOperation;
 import edu.uci.ics.asterix.metadata.api.IAsterixStateProxy;
 import edu.uci.ics.asterix.metadata.api.IMetadataManager;
 import edu.uci.ics.asterix.metadata.api.IMetadataNode;
@@ -33,46 +34,51 @@ import edu.uci.ics.asterix.transaction.management.service.transaction.Transactio
 
 /**
  * Provides access to Asterix metadata via remote methods to the metadata node.
- * This metadata manager maintains a local cache of metadata Java objects received from the
- * metadata node, to avoid contacting the metadata node repeatedly. We assume that this
- * metadata manager is the only metadata manager in an Asterix cluster. Therefore, no separate
- * cache-invalidation mechanism is needed at this point.
+ * This metadata manager maintains a local cache of metadata Java objects
+ * received from the metadata node, to avoid contacting the metadata node
+ * repeatedly. We assume that this metadata manager is the only metadata manager
+ * in an Asterix cluster. Therefore, no separate cache-invalidation mechanism is
+ * needed at this point.
  * Assumptions/Limitations:
- * The metadata subsystem is started during NC Bootstrap start, i.e., when Asterix is deployed.
- * The metadata subsystem is destroyed in NC Bootstrap end, i.e., when Asterix is undeployed.
+ * The metadata subsystem is started during NC Bootstrap start, i.e., when
+ * Asterix is deployed.
+ * The metadata subsystem is destroyed in NC Bootstrap end, i.e., when Asterix
+ * is undeployed.
  * The metadata subsystem consists of the MetadataManager and the MatadataNode.
  * The MetadataManager provides users access to the metadata.
- * The MetadataNode implements direct access to the storage layer on behalf of the
- * MetadataManager, and translates the binary representation of ADM into Java objects for
- * consumption by the MetadataManager's users.
- * There is exactly one instance of the MetadataManager and of the MetadataNode in the cluster,
- * which may or may not be co-located on the same machine (or in the same JVM).
- * The MetadataManager exists in the same JVM as its user's (e.g., the query compiler).
- * The MetadataNode exists in the same JVM as it's transactional components (LockManager,
- * LogManager, etc.)
- * Users shall access the metadata only through the MetadataManager, and never via the
- * MetadataNode directly.
- * Multiple threads may issue requests to the MetadataManager concurrently. For the sake of
- * accessing metadata, we assume a transaction consists of one thread.
- * Users are responsible for locking the metadata (using the MetadataManager API) before
- * issuing requests.
- * The MetadataNode is responsible for acquiring finer-grained locks on behalf of requests
- * from the MetadataManager. Currently, locks are acquired per metadata index, since the
- * underlying data structure (LSM-BTree) does not acquire even finer-grained locks yet
+ * The MetadataNode implements direct access to the storage layer on behalf of
+ * the MetadataManager, and translates the binary representation of ADM into
+ * Java objects for consumption by the MetadataManager's users.
+ * There is exactly one instance of the MetadataManager and of the MetadataNode
+ * in the cluster, which may or may not be co-located on the same machine (or in
+ * the same JVM).
+ * The MetadataManager exists in the same JVM as its user's (e.g., the query
+ * compiler).
+ * The MetadataNode exists in the same JVM as it's transactional components
+ * (LockManager, LogManager, etc.)
+ * Users shall access the metadata only through the MetadataManager, and never
+ * via the MetadataNode directly.
+ * Multiple threads may issue requests to the MetadataManager concurrently. For
+ * the sake of accessing metadata, we assume a transaction consists of one
+ * thread.
+ * Users are responsible for locking the metadata (using the MetadataManager
+ * API) before issuing requests.
+ * The MetadataNode is responsible for acquiring finer-grained locks on behalf
+ * of requests from the MetadataManager. Currently, locks are acquired per
+ * BTree, since the BTree does not acquire even finer-grained locks yet
  * internally.
- * The metadata can be queried with AQL DML like any other dataset, but can only be changed
- * with AQL DDL.
- * The transaction ids for metadata transactions must be unique across the cluster, i.e.,
- * metadata transaction ids shall never "accidentally" overlap with transaction ids of
- * regular jobs or other metadata transactions.
+ * The metadata can be queried with AQL DML like any other dataset, but can only
+ * be changed with AQL DDL.
+ * The transaction ids for metadata transactions must be unique across the
+ * cluster, i.e., metadata transaction ids shall never "accidentally" overlap
+ * with transaction ids of regular jobs or other metadata transactions.
  */
 public class MetadataManager implements IMetadataManager {
-    // Set in CCBootstrapImpl
+    // Set in init().
     public static MetadataManager INSTANCE;
 
     private final MetadataCache cache = new MetadataCache();
-    private final IAsterixStateProxy proxy;
-
+    private IAsterixStateProxy proxy;
     private IMetadataNode metadataNode;
 
     public MetadataManager(IAsterixStateProxy proxy) {
@@ -417,83 +423,72 @@ public class MetadataManager implements IMetadataManager {
         }
         return nodeGroup;
     }
+   
 
-    @Override
-    public void addFunction(MetadataTransactionContext mdTxnCtx, Function function) throws MetadataException {
-        try {
-            metadataNode.addFunction(mdTxnCtx.getTxnId(), function);
-        } catch (RemoteException e) {
-            throw new MetadataException(e);
-        }
-        mdTxnCtx.addFunction(function);
-    }
+	
+	@Override
+	public void addFunction(MetadataTransactionContext mdTxnCtx,
+			Function function) throws MetadataException {
+		try {
+			metadataNode.addFunction(mdTxnCtx.getTxnId(), function);
+		} catch (RemoteException e) {
+			throw new MetadataException(e);
+		}
+		mdTxnCtx.addFunction(function);
+	}
 
-    @Override
-    public void dropFunction(MetadataTransactionContext ctx, String dataverseName, String functionName, int arity)
-            throws MetadataException {
-        try {
-            metadataNode.dropFunction(ctx.getTxnId(), dataverseName, functionName, arity);
-        } catch (RemoteException e) {
-            throw new MetadataException(e);
-        }
-        ctx.dropFunction(dataverseName, functionName, arity);
-    }
+	@Override
+	public void dropFunction(MetadataTransactionContext ctx,
+			String dataverseName, String functionName, int arity)
+			throws MetadataException {
+		try {
+			metadataNode.dropFunction(ctx.getTxnId(), dataverseName,
+					functionName, arity);
+		} catch (RemoteException e) {
+			throw new MetadataException(e);
+		}
+		ctx.dropFunction(dataverseName, functionName, arity);
+	}
 
-    @Override
-    public Function getFunction(MetadataTransactionContext ctx, String dataverseName, String functionName, int arity)
-            throws MetadataException {
-        // First look in the context to see if this transaction created the
-        // requested dataset itself (but the dataset is still uncommitted).
-        Function function = ctx.getFunction(dataverseName, functionName, arity);
-        if (function != null) {
-            // Don't add this dataverse to the cache, since it is still
-            // uncommitted.
-            return function;
-        }
-        if (ctx.functionIsDropped(dataverseName, functionName, arity)) {
-            // Dataset has been dropped by this transaction but could still be
-            // in the cache.
-            return null;
-        }
-        if (ctx.getDataverse(dataverseName) != null) {
-            // This transaction has dropped and subsequently created the same
-            // dataverse.
-            return null;
-        }
-        function = cache.getFunction(dataverseName, functionName, arity);
-        if (function != null) {
-            // Function is already in the cache, don't add it again.
-            return function;
-        }
-        try {
-            function = metadataNode.getFunction(ctx.getTxnId(), dataverseName, functionName, arity);
-        } catch (RemoteException e) {
-            throw new MetadataException(e);
-        }
-        // We fetched the function from the MetadataNode. Add it to the cache
-        // when this transaction commits.
-        if (function != null) {
-            ctx.addFunction(function);
-        }
-        return function;
+	@Override
+	public Function getFunction(MetadataTransactionContext ctx,
+			String dataverseName, String functionName, int arity)
+			throws MetadataException {
+		// First look in the context to see if this transaction created the
+		// requested dataset itself (but the dataset is still uncommitted).
+		Function function = ctx.getFunction(dataverseName, functionName, arity);
+		if (function != null) {
+			// Don't add this dataverse to the cache, since it is still
+			// uncommitted.
+			return function;
+		}
+		if (ctx.functionIsDropped(dataverseName, functionName, arity)) {
+			// Dataset has been dropped by this transaction but could still be
+			// in the cache.
+			return null;
+		}
+		if (ctx.getDataverse(dataverseName) != null) {
+			// This transaction has dropped and subsequently created the same
+			// dataverse.
+			return null;
+		}
+		function = cache.getFunction(dataverseName, functionName, arity);
+		if (function != null) {
+			// Function is already in the cache, don't add it again.
+			return function;
+		}
+		try {
+			function = metadataNode.getFunction(ctx.getTxnId(), dataverseName,
+					functionName, arity);
+		} catch (RemoteException e) {
+			throw new MetadataException(e);
+		}
+		// We fetched the function from the MetadataNode. Add it to the cache
+		// when this transaction commits.
+		if (function != null) {
+			ctx.addFunction(function);
+		}
+		return function;
 
-    }
-
-    public void createResourceIdGenerator(int initialValue) throws RemoteException {
-        metadataNode.createResourceIdGenerator(initialValue);
-    }
-
-    public int generateResourceId() throws RemoteException {
-        return metadataNode.generateResourceId();
-    }
-
-    public int getGeneratedMaxResourceId() throws Exception {
-        return this.metadataNode.getGeneratedMaxResourceId();
-    }
-    
-    @Override
-    public int getResourceId(MetadataTransactionContext ctx, String dataverseName, String datasetName, String indexName)
-            throws MetadataException, RemoteException {
-        return this.metadataNode.getResourceId(ctx.getTxnId(), dataverseName, datasetName, indexName);
-    }
+	}
 }

@@ -28,13 +28,11 @@ create type LineIDType as closed {
   l_suppkey: int32
 }
 
-create nodegroup group1  if not exists on nc1, nc2;
-
 create dataset LineItem(LineItemType)
-  partitioned by key l_orderkey, l_linenumber on group1;
+  partitioned by key l_orderkey, l_linenumber;
 
 create dataset LineID(LineIDType)
-  partitioned by key l_orderkey, l_linenumber on group1;
+  partitioned by key l_orderkey, l_linenumber;
 
 load dataset LineItem 
 using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
@@ -49,7 +47,7 @@ for $l in dataset('LineItem')
 	where $l.l_orderkey<1000
 	return {
 		"l_orderkey": $l.l_orderkey,
-		"l_partkey": $l.l_linenumber,
+		"l_linenumber": $l.l_linenumber,
 		"l_suppkey": $l.l_partkey
 	}
 );
@@ -60,7 +58,7 @@ for $l in dataset('LineItem')
 	die after 1000
 	return {
 		"l_orderkey": $l.l_orderkey,
-		"l_partkey": $l.l_linenumber,
+		"l_linenumber": $l.l_linenumber,
 		"l_suppkey": $l.l_partkey
 	}
 );

@@ -14,26 +14,19 @@
  */
 package edu.uci.ics.asterix.external.data.parser;
 
-import java.util.Map;
-
 import edu.uci.ics.asterix.feed.managed.adapter.IManagedFeedAdapter;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.ATypeTag;
-import edu.uci.ics.hyracks.algebricks.core.api.exceptions.NotImplementedException;
+import edu.uci.ics.hyracks.algebricks.common.exceptions.NotImplementedException;
 import edu.uci.ics.hyracks.api.context.IHyracksTaskContext;
 import edu.uci.ics.hyracks.dataflow.common.data.parsers.IValueParserFactory;
 
 public class ManagedDelimitedDataStreamParser extends DelimitedDataStreamParser implements IManagedDataParser {
 
     private IManagedFeedAdapter adapter;
-
-    public ManagedDelimitedDataStreamParser(Character delimiter, IManagedFeedAdapter adapter) {
-        super(delimiter);
-        this.adapter = adapter;
-    }
-
+   
     @Override
-    public void initialize(ARecordType recordType, Map<String, String> configuration, IHyracksTaskContext ctx) {
+    public void initialize(ARecordType recordType, IHyracksTaskContext ctx) {
         int n = recordType.getFieldTypes().length;
         IValueParserFactory[] fieldParserFactories = new IValueParserFactory[n];
         for (int i = 0; i < n; i++) {
@@ -51,5 +44,10 @@ public class ManagedDelimitedDataStreamParser extends DelimitedDataStreamParser 
     @Override
     public IManagedTupleParser getManagedTupleParser() {
         return (IManagedTupleParser) tupleParser;
+    }
+
+    @Override
+    public void setAdapter(IManagedFeedAdapter adapter) {
+        this.adapter = adapter;
     }
 }

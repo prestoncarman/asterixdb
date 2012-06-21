@@ -14,6 +14,7 @@
  */
 package edu.uci.ics.asterix.hyracks.bootstrap;
 
+import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -21,18 +22,11 @@ import java.util.logging.Logger;
 import edu.uci.ics.asterix.api.aqlj.server.NodeDataClientThreadFactory;
 import edu.uci.ics.asterix.api.aqlj.server.ThreadedServer;
 import edu.uci.ics.asterix.common.context.AsterixAppRuntimeContext;
-import edu.uci.ics.asterix.common.context.INodeApplicationState;
-import edu.uci.ics.asterix.common.context.NodeApplicationState;
-import edu.uci.ics.asterix.common.exceptions.AsterixException;
 import edu.uci.ics.asterix.metadata.MetadataManager;
 import edu.uci.ics.asterix.metadata.MetadataNode;
 import edu.uci.ics.asterix.metadata.api.IAsterixStateProxy;
 import edu.uci.ics.asterix.metadata.api.IMetadataNode;
 import edu.uci.ics.asterix.metadata.bootstrap.MetadataBootstrap;
-import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
-import edu.uci.ics.asterix.transaction.management.service.recovery.IRecoveryManager;
-import edu.uci.ics.asterix.transaction.management.service.recovery.IRecoveryManager.SystemState;
-import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionProvider;
 import edu.uci.ics.hyracks.api.application.INCApplicationContext;
 import edu.uci.ics.hyracks.api.application.INCBootstrap;
 
@@ -40,37 +34,26 @@ public class NCBootstrapImpl implements INCBootstrap {
     private static final Logger LOGGER = Logger.getLogger(NCBootstrapImpl.class.getName());
 
     private INCApplicationContext ncApplicationContext = null;
-    private INodeApplicationState applicationState = new NodeApplicationState();
+    private AsterixAppRuntimeContext runtimeContext;
     private String nodeId;
-
-    // Metadata
     private boolean isMetadataNode = false;
-
-    // API
     private ThreadedServer apiNodeDataServer;
 
     @Override
     public void start() throws Exception {
-        ncApplicationContext.setApplicationObject(applicationState);
         nodeId = ncApplicationContext.getNodeId();
-
         if (LOGGER.isLoggable(Level.INFO)) {
             LOGGER.info("Starting Asterix node controller: " + nodeId);
         }
 
-        // Check if this node is the metadata node
-        IAsterixStateProxy proxy = (IAsterixStateProxy) ncApplicationContext.getDistributedState();
-        isMetadataNode = nodeId.equals(proxy.getAsterixProperties().getMetadataNodeName());
-
-        // Initialize the runtime context
-        AsterixAppRuntimeContext runtimeContext = new AsterixAppRuntimeContext(ncApplicationContext);
-        applicationState.setApplicationRuntimeContext(runtimeContext);
+        runtimeContext = new AsterixAppRuntimeContext(ncApplicationContext);
         runtimeContext.initialize();
 
-        // Initialize the transaction sub-system
-        initializeTransactionSupport();
+        ncApplicationContext.setApplicationObject(runtimeContext);
 
         // Initialize metadata if this node is the metadata node
+        IAsterixStateProxy proxy = (IAsterixStateProxy) ncApplicationContext.getDistributedState();
+        isMetadataNode = nodeId.equals(proxy.getAsterixProperties().getMetadataNodeName());
         if (isMetadataNode) {
             registerRemoteMetadataNode(proxy);
 
@@ -81,23 +64,27 @@ public class NCBootstrapImpl implements INCBootstrap {
             MetadataManager.INSTANCE = new MetadataManager(proxy);
             MetadataManager.INSTANCE.init();
             MetadataBootstrap.startUniverse(proxy.getAsterixProperties(), ncApplicationContext);
-        }
 
-        // Check the system state whether it is healthy or not.
-        // If it is not healthy, start synchronous recovery.
-        IRecoveryManager recoveryMgr = applicationState.getTransactionProvider().getRecoveryManager();
-        if (recoveryMgr.getSystemState() != SystemState.HEALTHY) {
-            initializeResources();
-            recoveryMgr.startRecovery(true);
         }
 
         // Start a sub-component for the API server. This server is only connected to by the 
         // API server that lives on the CC and never by a client wishing to execute AQL.
         // TODO: The API sub-system will change dramatically in the future and this code will go away, 
         // but leave it for now.
-        APINodeState ns = (APINodeState) proxy.getAsterixNodeState(nodeId);
+        AsterixNodeState ns = (AsterixNodeState) proxy.getAsterixNodeState(nodeId);
         apiNodeDataServer = new ThreadedServer(ns.getAPINodeDataServerPort(), new NodeDataClientThreadFactory());
         apiNodeDataServer.start();
+    }
+
+    public void registerRemoteMetadataNode(IAsterixStateProxy proxy) throws RemoteException {
+        IMetadataNode stub = null;
+        MetadataNode.INSTANCE.initialize(runtimeContext);
+        stub = (IMetadataNode) UnicastRemoteObject.exportObject(MetadataNode.INSTANCE, 0);
+        proxy.setMetadataNode(stub);
+
+        if (LOGGER.isLoggable(Level.INFO)) {
+            LOGGER.info("Metadata node bound");
+        }
     }
 
     @Override
@@ -112,33 +99,7 @@ public class NCBootstrapImpl implements INCBootstrap {
         }
 
         apiNodeDataServer.shutdown();
-        applicationState.getApplicationRuntimeContext().deinitialize();
-    }
-
-    private void initializeTransactionSupport() throws ACIDException {
-        TransactionProvider provider = new TransactionProvider(nodeId);
-        applicationState.setTransactionProvider(provider);
-    }
-
-    public void registerRemoteMetadataNode(IAsterixStateProxy proxy) throws Exception {
-        IMetadataNode stub = null;
-        try {
-            MetadataNode.INSTANCE = new MetadataNode(applicationState);
-            stub = (IMetadataNode) UnicastRemoteObject.exportObject(MetadataNode.INSTANCE, 0);
-        } catch (Exception e) {
-            throw new AsterixException(e);
-        }
-        proxy.setMetadataNode(stub);
-
-        if (LOGGER.isLoggable(Level.INFO)) {
-            LOGGER.info("Metadata node bound");
-        }
-    }
-
-    private void initializeResources() {
-        // TODO: bring up resources and resourceMgrs; register in resource repository
-//        TransactionalResourceRepository resourceRepository = applicationState.getTransactionProvider()
-//                .getResourceRepository();
+        runtimeContext.deinitialize();
     }
 
     @Override

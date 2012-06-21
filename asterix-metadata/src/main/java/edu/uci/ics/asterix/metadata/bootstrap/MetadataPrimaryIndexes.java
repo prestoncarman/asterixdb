@@ -32,21 +32,8 @@ public class MetadataPrimaryIndexes {
     public static IMetadataIndex NODE_DATASET;
     public static IMetadataIndex NODEGROUP_DATASET;
     public static IMetadataIndex FUNCTION_DATASET;
-    
-    //The following resourceId value must be monotonically increasing value.
-    //Instead of creating the value using the resourceIdSeed member variable of MetadataNode,
-    //the value is assigned a static value.
-    //Also, the MetadataSecondaryIndexes' resourceId is generated in the same manner.
-    //(Please see the MetadataSecondaryIndexes.java.)
-    //Therefore, the resourceIdSeed must be set to the MetadataSecondaryIndexes' the last resourceId + 1.
-    public static final int DATAVERSE_DATASET_RESOURCE_ID = 1;
-    public static final int DATASET_DATASET_RESOURCE_ID = 2;
-    public static final int DATATYPE_DATASET_RESOURCE_ID = 3;
-    public static final int INDEX_DATASET_RESOURCE_ID = 4;
-    public static final int NODE_DATASET_RESOURCE_ID = 5;
-    public static final int NODEGROUP_DATASET_RESOURCE_ID = 6;
-    public static final int FUNCTION_DATASET_RESOURCE_ID = 7;
-    
+
+
     /**
      * Create all metadata primary index descriptors. MetadataRecordTypes must
      * have been initialized before calling this init.
@@ -62,30 +49,30 @@ public class MetadataPrimaryIndexes {
         }
 
         DATAVERSE_DATASET = new MetadataIndex("Dataverse", null, 2, new IAType[] { BuiltinType.ASTRING },
-                new String[] { "DataverseName" }, MetadataRecordTypes.DATAVERSE_RECORDTYPE, DATAVERSE_DATASET_RESOURCE_ID);
+                new String[] { "DataverseName" }, MetadataRecordTypes.DATAVERSE_RECORDTYPE);
 
         DATASET_DATASET = new MetadataIndex("Dataset", null, 3,
                 new IAType[] { BuiltinType.ASTRING, BuiltinType.ASTRING }, new String[] { "DataverseName",
-                        "DatasetName" }, MetadataRecordTypes.DATASET_RECORDTYPE, DATASET_DATASET_RESOURCE_ID);
+                        "DatasetName" }, MetadataRecordTypes.DATASET_RECORDTYPE);
 
         DATATYPE_DATASET = new MetadataIndex("Datatype", null, 3, new IAType[] { BuiltinType.ASTRING,
                 BuiltinType.ASTRING }, new String[] { "DataverseName", "DatatypeName" },
-                MetadataRecordTypes.DATATYPE_RECORDTYPE, DATATYPE_DATASET_RESOURCE_ID);
+                MetadataRecordTypes.DATATYPE_RECORDTYPE);
 
         INDEX_DATASET = new MetadataIndex("Index", null, 4, new IAType[] { BuiltinType.ASTRING, BuiltinType.ASTRING,
                 BuiltinType.ASTRING }, new String[] { "DataverseName", "DatasetName", "IndexName" },
-                MetadataRecordTypes.INDEX_RECORDTYPE, INDEX_DATASET_RESOURCE_ID);
+                MetadataRecordTypes.INDEX_RECORDTYPE);
 
         NODE_DATASET = new MetadataIndex("Node", null, 2, new IAType[] { BuiltinType.ASTRING },
-                new String[] { "NodeName" }, MetadataRecordTypes.NODE_RECORDTYPE, NODE_DATASET_RESOURCE_ID);
+                new String[] { "NodeName" }, MetadataRecordTypes.NODE_RECORDTYPE);
 
         NODEGROUP_DATASET = new MetadataIndex("Nodegroup", null, 2, new IAType[] { BuiltinType.ASTRING },
-                new String[] { "GroupName" }, MetadataRecordTypes.NODEGROUP_RECORDTYPE, NODEGROUP_DATASET_RESOURCE_ID);
+                new String[] { "GroupName" }, MetadataRecordTypes.NODEGROUP_RECORDTYPE);
         
         FUNCTION_DATASET = new MetadataIndex("Function", null, 4,
 				new IAType[] { BuiltinType.ASTRING, BuiltinType.ASTRING,
 						BuiltinType.ASTRING }, new String[] { "DataverseName",
-                        "FunctionName", "FunctionArity" }, MetadataRecordTypes.FUNCTION_RECORDTYPE, FUNCTION_DATASET_RESOURCE_ID);
+                        "FunctionName", "FunctionArity" }, MetadataRecordTypes.FUNCTION_RECORDTYPE);
 
     }
 }

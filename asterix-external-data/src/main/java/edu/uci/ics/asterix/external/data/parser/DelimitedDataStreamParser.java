@@ -19,7 +19,7 @@ import java.util.Map;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.asterix.runtime.operators.file.NtDelimitedDataTupleParserFactory;
-import edu.uci.ics.hyracks.algebricks.core.api.exceptions.NotImplementedException;
+import edu.uci.ics.hyracks.algebricks.common.exceptions.NotImplementedException;
 import edu.uci.ics.hyracks.api.comm.IFrameWriter;
 import edu.uci.ics.hyracks.api.context.IHyracksTaskContext;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
@@ -28,7 +28,7 @@ import edu.uci.ics.hyracks.dataflow.common.data.parsers.IValueParserFactory;
 public class DelimitedDataStreamParser extends AbstractStreamDataParser {
 
     protected Character delimiter = defaultDelimiter;
-   
+
     protected static final Character defaultDelimiter = new Character('\n');
 
     public Character getDelimiter() {
@@ -43,7 +43,7 @@ public class DelimitedDataStreamParser extends AbstractStreamDataParser {
     }
 
     @Override
-    public void initialize(ARecordType recordType, Map<String, String> configuration, IHyracksTaskContext ctx) {
+    public void initialize(ARecordType recordType, IHyracksTaskContext ctx) {
         int n = recordType.getFieldTypes().length;
         IValueParserFactory[] fieldParserFactories = new IValueParserFactory[n];
         for (int i = 0; i < n; i++) {
@@ -62,10 +62,15 @@ public class DelimitedDataStreamParser extends AbstractStreamDataParser {
     public void parse(IFrameWriter writer) throws HyracksDataException {
         tupleParser.parse(inputStream, writer);
     }
-    
-    public void setDelimiter(Character delimiter) {
-        this.delimiter = delimiter;
-    }
 
+    @Override
+    public void configure(Map<String, String> configuration) {
+        String delimiterArg = configuration.get(KEY_DELIMITER);
+        if (delimiterArg != null) {
+            delimiter = delimiterArg.charAt(0);
+        } else {
+            delimiter = '\n';
+        }
+    }
 
 }

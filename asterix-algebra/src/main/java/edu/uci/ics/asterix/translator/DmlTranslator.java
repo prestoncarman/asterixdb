@@ -1,7 +1,5 @@
 package edu.uci.ics.asterix.translator;
 
-import java.io.FileReader;
-import java.io.Reader;
 import java.rmi.RemoteException;
 import java.util.ArrayList;
 import java.util.List;
@@ -11,6 +9,7 @@ import edu.uci.ics.asterix.aql.base.Clause;
 import edu.uci.ics.asterix.aql.base.Expression;
 import edu.uci.ics.asterix.aql.base.Statement;
 import edu.uci.ics.asterix.aql.base.Statement.Kind;
+import edu.uci.ics.asterix.aql.expression.BeginFeedStatement;
 import edu.uci.ics.asterix.aql.expression.CallExpr;
 import edu.uci.ics.asterix.aql.expression.ControlFeedStatement;
 import edu.uci.ics.asterix.aql.expression.ControlFeedStatement.OperationType;
@@ -20,7 +19,6 @@ import edu.uci.ics.asterix.aql.expression.FLWOGRExpression;
 import edu.uci.ics.asterix.aql.expression.FieldAccessor;
 import edu.uci.ics.asterix.aql.expression.FieldBinding;
 import edu.uci.ics.asterix.aql.expression.ForClause;
-import edu.uci.ics.asterix.aql.expression.FunIdentifier;
 import edu.uci.ics.asterix.aql.expression.Identifier;
 import edu.uci.ics.asterix.aql.expression.InsertStatement;
 import edu.uci.ics.asterix.aql.expression.LiteralExpr;
@@ -31,18 +29,22 @@ import edu.uci.ics.asterix.aql.expression.VariableExpr;
 import edu.uci.ics.asterix.aql.expression.WhereClause;
 import edu.uci.ics.asterix.aql.expression.WriteFromQueryResultStatement;
 import edu.uci.ics.asterix.aql.literal.StringLiteral;
-import edu.uci.ics.asterix.aql.parser.AQLParser;
+import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
 import edu.uci.ics.asterix.common.config.DatasetConfig.IndexType;
+import edu.uci.ics.asterix.metadata.IDatasetDetails;
 import edu.uci.ics.asterix.metadata.MetadataException;
 import edu.uci.ics.asterix.metadata.MetadataManager;
 import edu.uci.ics.asterix.metadata.MetadataTransactionContext;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledDatasetDecl;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
+import edu.uci.ics.asterix.metadata.entities.Dataset;
+import edu.uci.ics.asterix.metadata.entities.FeedDatasetDetails;
+import edu.uci.ics.asterix.metadata.entities.Index;
+import edu.uci.ics.asterix.om.functions.AsterixFunction;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
-import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionManagementConstants.LockManagerConstants.LockMode;
-import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
+import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 
 public class DmlTranslator extends AbstractAqlTranslator {
 
@@ -69,15 +71,28 @@ public class DmlTranslator extends AbstractAqlTranslator {
         return compiledDmlStatements;
     }
 
-    private List<ICompiledDmlStatement> compileDmlStatements() throws AlgebricksException {
+    private List<ICompiledDmlStatement> compileDmlStatements() throws AlgebricksException, MetadataException {
         List<ICompiledDmlStatement> dmlStatements = new ArrayList<ICompiledDmlStatement>();
         for (Statement stmt : aqlStatements) {
+            validateOperation(compiledDeclarations, stmt);
             switch (stmt.getKind()) {
                 case LOAD_FROM_FILE: {
-                    LoadFromFileStatement st1 = (LoadFromFileStatement) stmt;
-                    CompiledLoadFromFileStatement cls = new CompiledLoadFromFileStatement(st1.getDatasetName()
-                            .getValue(), st1.getAdapter(), st1.getProperties(), st1.dataIsAlreadySorted());
+                    LoadFromFileStatement loadStmt = (LoadFromFileStatement) stmt;
+                    CompiledLoadFromFileStatement cls = new CompiledLoadFromFileStatement(loadStmt.getDatasetName()
+                            .getValue(), loadStmt.getAdapter(), loadStmt.getProperties(), loadStmt.dataIsAlreadySorted());
                     dmlStatements.add(cls);
+                    // Also load the dataset's secondary indexes.
+                    List<Index> datasetIndexes = MetadataManager.INSTANCE.getDatasetIndexes(mdTxnCtx,
+                    		compiledDeclarations.getDataverseName(), loadStmt.getDatasetName().getValue());
+                    for (Index index : datasetIndexes) {
+                        if (!index.isSecondaryIndex()) {
+                            continue;
+                        }
+                        // Create CompiledCreateIndexStatement from metadata entity 'index'.
+                        CompiledCreateIndexStatement cis = new CompiledCreateIndexStatement(index.getIndexName(),
+                                index.getDatasetName(), index.getKeyFieldNames(), index.getIndexType());
+                        dmlStatements.add(cis);
+                    }
                     break;
                 }
                 case WRITE_FROM_QUERY_RESULT: {
@@ -89,32 +104,71 @@ public class DmlTranslator extends AbstractAqlTranslator {
                 }
                 case CREATE_INDEX: {
                     CreateIndexStatement cis = (CreateIndexStatement) stmt;
+                    // Assumptions: We first processed the DDL, which added the secondary index to the metadata.
+                    // If the index's dataset is being loaded in this 'session', then let the load add 
+                    // the CompiledCreateIndexStatement to dmlStatements, and don't add it again here.
+                    // It's better to have the load handle this because:
+                    // 1. There may be more secondary indexes to load, which were possibly created in an earlier session.
+                    // 2. If the create index stmt came before the load stmt, then we would first create an empty index only to load it again later. 
+                    // This may cause problems because the index would be considered loaded (even though it was loaded empty). 
+                    for (Statement s : aqlStatements) {
+                    	if (s.getKind() != Kind.LOAD_FROM_FILE) {
+                    		continue;
+                    	}
+                    	LoadFromFileStatement loadStmt = (LoadFromFileStatement) s;
+                    	if (loadStmt.getDatasetName().equals(cis.getDatasetName())) {
+                    		cis.setNeedToCreate(false);
+                    	}
+                    }
                     if (cis.getNeedToCreate()) {
                         CompiledCreateIndexStatement ccis = new CompiledCreateIndexStatement(cis.getIndexName()
                                 .getValue(), cis.getDatasetName().getValue(), cis.getFieldExprs(), cis.getIndexType());
                         dmlStatements.add(ccis);
-                    }
+                    } 
                     break;
                 }
                 case INSERT: {
                     InsertStatement is = (InsertStatement) stmt;
-                    CompiledInsertStatement clfrqs = new CompiledInsertStatement(is.getDatasetName().getValue(),
-                            is.getQuery(), is.getVarCounter());
+                    CompiledInsertStatement clfrqs = new CompiledInsertStatement(is.getDatasetName().getValue(), is
+                            .getQuery(), is.getVarCounter());
                     dmlStatements.add(clfrqs);
                     break;
                 }
                 case DELETE: {
                     DeleteStatement ds = (DeleteStatement) stmt;
-                    CompiledDeleteStatement clfrqs = new CompiledDeleteStatement(ds.getVariableExpr(),
-                            ds.getDatasetName(), ds.getCondition(), ds.getDieClause(), ds.getVarCounter(),
+                    CompiledDeleteStatement clfrqs = new CompiledDeleteStatement(ds.getVariableExpr(), ds
+                            .getDatasetName(), ds.getCondition(), ds.getDieClause(), ds.getVarCounter(),
                             compiledDeclarations);
                     dmlStatements.add(clfrqs);
                     break;
                 }
+
+                case BEGIN_FEED: {
+                    BeginFeedStatement bfs = (BeginFeedStatement) stmt;
+                    CompiledBeginFeedStatement cbfs = new CompiledBeginFeedStatement(bfs.getDatasetName(), bfs
+                            .getQuery(), bfs.getVarCounter());
+                    dmlStatements.add(cbfs);
+                    Dataset dataset;
+                    try {
+                        dataset = MetadataManager.INSTANCE.getDataset(mdTxnCtx,
+                                compiledDeclarations.getDataverseName(), bfs.getDatasetName().getValue());
+                    } catch (MetadataException me) {
+                        throw new AlgebricksException(me);
+                    }
+                    IDatasetDetails datasetDetails = dataset.getDatasetDetails();
+                    if (datasetDetails.getDatasetType() != DatasetType.FEED) {
+                        throw new IllegalArgumentException("Dataset " + bfs.getDatasetName().getValue()
+                                + " is not a feed dataset");
+                    }
+                    bfs.initialize((FeedDatasetDetails) datasetDetails);
+                    cbfs.setQuery(bfs.getQuery());
+                    break;
+                }
+
                 case CONTROL_FEED: {
                     ControlFeedStatement cfs = (ControlFeedStatement) stmt;
-                    CompiledControlFeedStatement clcfs = new CompiledControlFeedStatement(cfs.getOperationType(),
-                            cfs.getDatasetName(), cfs.getAlterAdapterConfParams());
+                    CompiledControlFeedStatement clcfs = new CompiledControlFeedStatement(cfs.getOperationType(), cfs
+                            .getDatasetName(), cfs.getAlterAdapterConfParams());
                     dmlStatements.add(clcfs);
                     break;
 
@@ -201,7 +255,6 @@ public class DmlTranslator extends AbstractAqlTranslator {
         }
     }
 
-   
     public static class CompiledWriteFromQueryResultStatement implements ICompiledDmlStatement {
 
         private String datasetName;
@@ -262,20 +315,52 @@ public class DmlTranslator extends AbstractAqlTranslator {
         }
     }
 
+    public static class CompiledBeginFeedStatement implements ICompiledDmlStatement {
+        private Identifier datasetName;
+        private Query query;
+        private int varCounter;
+
+        public CompiledBeginFeedStatement(Identifier datasetName, Query query, int varCounter) {
+            this.datasetName = datasetName;
+            this.query = query;
+            this.varCounter = varCounter;
+        }
+
+        public Identifier getDatasetName() {
+            return datasetName;
+        }
+
+        public int getVarCounter() {
+            return varCounter;
+        }
+
+        public Query getQuery() {
+            return query;
+        }
+
+        public void setQuery(Query query) {
+            this.query = query;
+        }
+
+        @Override
+        public Kind getKind() {
+            return Kind.BEGIN_FEED;
+        }
+    }
+
     public static class CompiledControlFeedStatement implements ICompiledDmlStatement {
         private Identifier datasetName;
         private OperationType operationType;
         private Query query;
         private int varCounter;
         private Map<String, String> alteredParams;
-        
+
         public CompiledControlFeedStatement(OperationType operationType, Identifier datasetName,
                 Map<String, String> alteredParams) {
             this.datasetName = datasetName;
             this.operationType = operationType;
             this.alteredParams = alteredParams;
         }
-
 
         public Identifier getDatasetName() {
             return datasetName;
@@ -297,7 +382,7 @@ public class DmlTranslator extends AbstractAqlTranslator {
         public Kind getKind() {
             return Kind.CONTROL_FEED;
         }
-        
+
         public Map<String, String> getProperties() {
             return alteredParams;
         }
@@ -352,7 +437,7 @@ public class DmlTranslator extends AbstractAqlTranslator {
             LiteralExpr argumentLiteral = new LiteralExpr(new StringLiteral(datasetName));
             arguments.add(argumentLiteral);
 
-            CallExpr callExpression = new CallExpr(new FunIdentifier("dataset", 1), arguments);
+            CallExpr callExpression = new CallExpr(new AsterixFunction("dataset", 1), arguments);
             List<Clause> clauseList = new ArrayList<Clause>();
             Clause forClause = new ForClause(var, callExpression);
             clauseList.add(forClause);
@@ -394,25 +479,4 @@ public class DmlTranslator extends AbstractAqlTranslator {
 
     }
 
-    public static void main(String args[]) throws Exception {
-        Reader reader = new FileReader(args[0]);
-        AQLParser parser = new AQLParser(reader);
-        Query q = (Query) parser.Statement();
-
-        // Begin a transaction against the metadata.
-        // Lock the metadata in X mode to protect against other DDL and DML.
-        // TODO: Is there a way to know whether we can get away with locking in
-        // S mode?
-        MetadataTransactionContext ctx = MetadataManager.INSTANCE.beginTransaction();
-        MetadataManager.INSTANCE.lock(ctx, LockMode.EXCLUSIVE);
-        try {
-            DmlTranslator dmlt = new DmlTranslator(ctx, q.getPrologDeclList());
-            dmlt.translate();
-            // dmlt.execute();
-            MetadataManager.INSTANCE.commitTransaction(ctx);
-        } catch (Exception e) {
-            MetadataManager.INSTANCE.abortTransaction(ctx);
-            throw e;
-        }
-    }
 }

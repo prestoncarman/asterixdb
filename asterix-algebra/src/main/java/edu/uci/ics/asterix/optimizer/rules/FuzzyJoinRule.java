@@ -22,6 +22,7 @@ import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.asterix.om.types.TypeHelper;
 import edu.uci.ics.asterix.optimizer.base.FuzzyUtils;
 import edu.uci.ics.asterix.translator.AqlPlusExpressionToPlanTranslator;
+import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.Counter;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
@@ -41,7 +42,6 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.LeftOuterJo
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.visitors.VariableUtilities;
 import edu.uci.ics.hyracks.algebricks.core.algebra.util.OperatorPropertiesUtil;
-import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.rewriter.base.IAlgebraicRewriteRule;
 
 public class FuzzyJoinRule implements IAlgebraicRewriteRule {
@@ -350,10 +350,10 @@ public class FuzzyJoinRule implements IAlgebraicRewriteRule {
         ILogicalExpression exp = expRef.getValue();
         if (exp.getExpressionTag() == LogicalExpressionTag.FUNCTION_CALL) {
             AbstractFunctionCallExpression funcExp = (AbstractFunctionCallExpression) exp;
-            if (funcExp.getFunctionIdentifier() == AsterixBuiltinFunctions.FUZZY_EQ) {
+            if (funcExp.getFunctionIdentifier().equals(AsterixBuiltinFunctions.FUZZY_EQ)) {
                 return expRef;
-            } else if (funcExp.getFunctionIdentifier() == AlgebricksBuiltinFunctions.AND
-                    || funcExp.getFunctionIdentifier() == AlgebricksBuiltinFunctions.OR) {
+            } else if (funcExp.getFunctionIdentifier().equals(AlgebricksBuiltinFunctions.AND)
+                    || funcExp.getFunctionIdentifier().equals(AlgebricksBuiltinFunctions.OR)) {
                 for (int i = 0; i < 2; i++) {
                     Mutable<ILogicalExpression> expRefRet = getSimilarityExpression(funcExp.getArguments().get(i));
                     if (expRefRet != null) {

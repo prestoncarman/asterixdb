@@ -14,6 +14,8 @@
  */
 package edu.uci.ics.asterix.external.data.parser;
 
+import java.util.Map;
+
 import edu.uci.ics.hyracks.dataflow.std.file.ITupleParser;
 
 public interface IManagedTupleParser extends ITupleParser {
@@ -23,5 +25,7 @@ public interface IManagedTupleParser extends ITupleParser {
     public void resume() throws Exception;
 
     public void stop() throws Exception;
+    
+    public void alter(Map<String,String> alterParams) throws Exception;
 
 }

@@ -418,47 +418,4 @@ public interface IMetadataNode extends Remote, Serializable {
 	 */
 	public void addFunction(long txnId, Function function)
 			throws MetadataException, RemoteException;
-	
-	
-	/**
-	 * Creates resourceIdGenerator and
-	 * initialize the value with the given initialValue.
-	 * 
-	 * @param initialValue
-	 *         resourceIdSeed is set to this initialValue.
-	 * @throws RemoteException 
-	 */
-    public void createResourceIdGenerator(int initialValue) throws RemoteException;
-    
-    /**
-     * Increments atomically the resourceIdSeed value by one and 
-     * returns the previous value.
-     * 
-     * @return 
-     *          returns an unique resourceId.
-     * @throws RemoteException 
-     */
-    public int generateResourceId() throws RemoteException;
-
-    /**
-     * Returns resourceId
-     * 
-     * @param txnId
-     * @param dataverseName
-     * @param datasetName
-     * @param indexName
-     * @return
-     * @throws MetadataException
-     * @throws RemoteException
-     */
-    public int getResourceId(long txnId, String dataverseName, String datasetName, String indexName) throws MetadataException,
-            RemoteException;
-    
-    /**
-     * Returns the max resourceId which was issued so far.
-     * @param txnId
-     * @return
-     * @throws Exception
-     */
-    public int getGeneratedMaxResourceId() throws Exception; 
 }

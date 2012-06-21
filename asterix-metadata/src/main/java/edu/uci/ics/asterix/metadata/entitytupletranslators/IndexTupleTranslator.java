@@ -31,7 +31,6 @@ import edu.uci.ics.asterix.metadata.bootstrap.MetadataPrimaryIndexes;
 import edu.uci.ics.asterix.metadata.bootstrap.MetadataRecordTypes;
 import edu.uci.ics.asterix.metadata.entities.Index;
 import edu.uci.ics.asterix.om.base.ABoolean;
-import edu.uci.ics.asterix.om.base.AInt32;
 import edu.uci.ics.asterix.om.base.AOrderedList;
 import edu.uci.ics.asterix.om.base.ARecord;
 import edu.uci.ics.asterix.om.base.AString;
@@ -90,9 +89,7 @@ public class IndexTupleTranslator extends AbstractTupleTranslator<Index> {
         }
         Boolean isPrimaryIndex = ((ABoolean) rec.getValueByPos(MetadataRecordTypes.INDEX_ARECORD_ISPRIMARY_FIELD_INDEX))
                 .getBoolean();
-        int resourceId = ((AInt32) rec.getValueByPos(MetadataRecordTypes.INDEX_ARECORD_RESOURCEID_FIELD_INDEX))
-                .getIntegerValue();
-        return new Index(dvName, dsName, indexName, indexStructure, searchKey, isPrimaryIndex, resourceId);
+        return new Index(dvName, dsName, indexName, indexStructure, searchKey, isPrimaryIndex);
     }
 
     @Override
@@ -163,13 +160,6 @@ public class IndexTupleTranslator extends AbstractTupleTranslator<Index> {
         aString.setValue(Calendar.getInstance().getTime().toString());
         stringSerde.serialize(aString, fieldValue.getDataOutput());
         recordBuilder.addField(MetadataRecordTypes.INDEX_ARECORD_TIMESTAMP_FIELD_INDEX, fieldValue);
-
-        // write field 7
-        fieldValue.reset();
-        //An unique resourceId is generated.
-        AInt32 aInt32 = new AInt32(instance.getResourceId());
-        integerSerde.serialize(aInt32, fieldValue.getDataOutput());
-        recordBuilder.addField(MetadataRecordTypes.INDEX_ARECORD_RESOURCEID_FIELD_INDEX, fieldValue);
 
         // write record
         recordBuilder.write(tupleBuilder.getDataOutput(), true);

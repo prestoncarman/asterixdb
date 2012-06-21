@@ -18,23 +18,23 @@ import java.util.Map;
 
 public class FeedDetailsDecl extends InternalDetailsDecl {
     private Map<String, String> properties;
-    private String adapter;
+    private String adapterClassname;
     private String functionIdentifier;
 
     public void setFunctionIdentifier(String functionIdentifier) {
         this.functionIdentifier = functionIdentifier;
     }
 
-    public void setAdapter(String adapter) {
-        this.adapter = adapter;
+    public void setAdapterClassname(String adapter) {
+        this.adapterClassname = adapter;
     }
 
     public void setProperties(Map<String, String> properties) {
         this.properties = properties;
     }
 
-    public String getAdapter() {
-        return adapter;
+    public String getAdapterClassname() {
+        return adapterClassname;
     }
 
     public Map<String, String> getProperties() {

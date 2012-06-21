@@ -6,8 +6,8 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.io.Reader;
 import java.io.UnsupportedEncodingException;
@@ -20,13 +20,13 @@ import edu.uci.ics.asterix.api.aqlj.client.IADMCursor;
 import edu.uci.ics.asterix.api.aqlj.client.IAQLJConnection;
 import edu.uci.ics.asterix.api.aqlj.client.IAQLJResult;
 import edu.uci.ics.asterix.api.aqlj.common.AQLJException;
-import edu.uci.ics.asterix.api.common.AsterixHyracksIntegrationUtil;
 import edu.uci.ics.asterix.api.java.AsterixJavaClient;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
 import edu.uci.ics.asterix.om.base.IAObject;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.AbstractCollectionType;
 import edu.uci.ics.asterix.om.types.IAType;
+import edu.uci.ics.hyracks.api.client.IHyracksClientConnection;
 
 public class TestsUtils {
 
@@ -46,19 +46,22 @@ public class TestsUtils {
         return path.delete();
     }
 
-    public static void runScriptAndCompareWithResult(File scriptFile, PrintWriter print, File expectedFile,
-            File actualFile) throws Exception {
-        Reader query = new BufferedReader(new FileReader(scriptFile));
-        AsterixJavaClient asterix = new AsterixJavaClient(query, print);
+    public static void runScriptAndCompareWithResult(IHyracksClientConnection hcc, File scriptFile, PrintWriter print,
+            File expectedFile, File actualFile) throws Exception {
+        Reader query = new BufferedReader(new InputStreamReader(new FileInputStream(scriptFile), "UTF-8"));
+        AsterixJavaClient asterix = new AsterixJavaClient(hcc, query, print);
         try {
-            asterix.compile(true, false, false, false, false, true, false);
+            asterix.compile(true, false, true, true, false, true, false);
         } catch (AsterixException e) {
             throw new Exception("Compile ERROR for " + scriptFile + ": " + e.getMessage(), e);
+        } finally {
+            query.close();
         }
-        asterix.execute(AsterixHyracksIntegrationUtil.DEFAULT_HYRACKS_CC_CLIENT_PORT);
-        query.close();
-        BufferedReader readerExpected = new BufferedReader(new FileReader(expectedFile));
-        BufferedReader readerActual = new BufferedReader(new FileReader(actualFile));
+        asterix.execute();
+        BufferedReader readerExpected = new BufferedReader(new InputStreamReader(new FileInputStream(expectedFile),
+                "UTF-8"));
+        BufferedReader readerActual = new BufferedReader(
+                new InputStreamReader(new FileInputStream(actualFile), "UTF-8"));
         String lineExpected, lineActual;
         int num = 1;
         try {
@@ -70,7 +73,7 @@ public class TestsUtils {
                             + "\n> ");
                 }
 
-                if (!lineExpected.split("Timestamp")[0].equals(lineActual.split("Timestamp")[0])) {
+                if (!equalStrings(lineExpected.split("Timestamp")[0], lineActual.split("Timestamp")[0])) {
                     fail("Result for " + scriptFile + " changed at line " + num + ":\n< " + lineExpected + "\n> "
                             + lineActual);
                 }
@@ -121,8 +124,10 @@ public class TestsUtils {
         }
         fos.close();
 
-        BufferedReader readerExpected = new BufferedReader(new FileReader(expectedFile));
-        BufferedReader readerActual = new BufferedReader(new FileReader(actualFile));
+        BufferedReader readerExpected = new BufferedReader(new InputStreamReader(new FileInputStream(expectedFile),
+                "UTF-8"));
+        BufferedReader readerActual = new BufferedReader(
+                new InputStreamReader(new FileInputStream(actualFile), "UTF-8"));
         String lineExpected, lineActual;
         int num = 1;
         try {
@@ -202,9 +207,6 @@ public class TestsUtils {
     private static boolean equalStrings(String s1, String s2) {
         String[] rowsOne = s1.split("\n");
         String[] rowsTwo = s2.split("\n");
-
-        if (rowsOne.length != rowsTwo.length)
-            return false;
 
         for (int i = 0; i < rowsOne.length; i++) {
             String row1 = rowsOne[i];

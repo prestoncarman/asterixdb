@@ -1,5 +1,5 @@
 /*
- * Copyright 2009-2012 by The Regents of the University of California
+ * Copyright 2009-2011 by The Regents of the University of California
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
@@ -14,26 +14,17 @@
  */
 package edu.uci.ics.asterix.transaction.management.service.transaction;
 
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
-import edu.uci.ics.asterix.transaction.management.service.logging.FileUtil;
-import edu.uci.ics.asterix.transaction.management.service.logging.ILogManager;
-import edu.uci.ics.asterix.transaction.management.service.logging.ILogger;
 import edu.uci.ics.asterix.transaction.management.service.logging.LogActionType;
 import edu.uci.ics.asterix.transaction.management.service.logging.LogType;
-import edu.uci.ics.asterix.transaction.management.service.logging.LogUtil;
-import edu.uci.ics.asterix.transaction.management.service.logging.LogicalLogLocator;
 
 /**
- * An implementation of the {@link ITransactionManager} interface that provides
+ * An implementation of the @see ITransactionManager interface that provides
  * implementation of APIs for governing the lifecycle of a transaction.
  */
 public class TransactionManager implements ITransactionManager {
@@ -72,7 +63,7 @@ public class TransactionManager implements ITransactionManager {
     @Override
     public TransactionContext beginTransaction(long transactionId) throws ACIDException {
         TransactionContext txnContext = new TransactionContext(transactionId, transactionProvider);
-        synchronized (transactionContextRepository) {
+        synchronized (this) {
             transactionContextRepository.put(transactionId, txnContext);
         }
         return txnContext;
@@ -83,6 +74,7 @@ public class TransactionManager implements ITransactionManager {
         synchronized (transactionContextRepository) {
             TransactionContext context = transactionContextRepository.get(transactionId);
             if (context == null) {
+                context = transactionContextRepository.get(transactionId);
                 context = new TransactionContext(transactionId, transactionProvider);
                 transactionContextRepository.put(transactionId, context);
             }
@@ -98,8 +90,11 @@ public class TransactionManager implements ITransactionManager {
             }
 
             try {
-                // conditionally write commit log record
-                if (txnContext.getTransactionType().equals(TransactionContext.TransactionType.READ_WRITE)) {
+                if (txnContext.getTransactionType().equals(TransactionContext.TransactionType.READ_WRITE)) { // conditionally
+                    // write
+                    // commit
+                    // log
+                    // record
                     transactionProvider.getLogManager().log(txnContext.getLastLogLocator(), txnContext, (byte) (-1), 0,
                             LogType.COMMIT, LogActionType.NO_OP, 0, null, null);
                 }
@@ -138,16 +133,5 @@ public class TransactionManager implements ITransactionManager {
     public TransactionProvider getTransactionProvider() {
         return transactionProvider;
     }
-    
-    @Override
-    /*
-     * Checkpoint executes the following tasks: 
-     * write <chkpt, minMCTFirstLSN> log record, 
-     * flush logs up to the checkpoint log record, 
-     * save the LSN of the checkpoint log record into checkpoint_log_record file.
-     * However, dirty data in memory is not flushed.
-     */
-    public void checkpoint() throws ACIDException {
-        transactionProvider.getRecoveryManager().checkpoint(false);
-    }
+
 }

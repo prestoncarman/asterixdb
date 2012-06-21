@@ -29,24 +29,22 @@ import edu.uci.ics.asterix.transaction.management.service.recovery.RecoveryManag
  * Users of transaction sub-systems must obtain them from the provider.
  */
 public class TransactionProvider {
-    private final String nodeId;
+    private final String id;
     private final ILogManager logManager;
     private final ILockManager lockManager;
     private final ITransactionManager transactionManager;
     private final IRecoveryManager recoveryManager;
-    private final MemoryComponentTable memoryComponentTable;
     private final TransactionalResourceRepository resourceRepository;
     private final TreeLoggerRepository loggerRepository;
 
-    public TransactionProvider(String nodeId) throws ACIDException {
-        this.memoryComponentTable = new MemoryComponentTable();
-        this.nodeId = nodeId;
+    public TransactionProvider(String id) throws ACIDException {
+        this.id = id;
         this.transactionManager = new TransactionManager(this);
         this.logManager = new LogManager(this);
         this.lockManager = new LockManager(this);
         this.recoveryManager = new RecoveryManager(this);
+        this.loggerRepository = new TreeLoggerRepository(this);
         this.resourceRepository = new TransactionalResourceRepository();
-        this.loggerRepository = new TreeLoggerRepository(resourceRepository);
     }
 
     public ILogManager getLogManager() {
@@ -65,11 +63,7 @@ public class TransactionProvider {
         return recoveryManager;
     }
     
-    public MemoryComponentTable getMemoryComponentTable() {
-        return memoryComponentTable;
-    }
-
-    public TransactionalResourceRepository getResourceRepository() {
+    public TransactionalResourceRepository getTransactionalResourceRepository() {
         return resourceRepository;
     }
     
@@ -78,6 +72,7 @@ public class TransactionProvider {
     }
 
     public String getId() {
-        return nodeId;
+        return id;
     }
+
 }

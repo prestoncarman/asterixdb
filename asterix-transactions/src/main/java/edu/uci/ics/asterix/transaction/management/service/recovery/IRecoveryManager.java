@@ -67,11 +67,4 @@ public interface IRecoveryManager {
      * @throws ACIDException
      */
     public void rollbackTransaction(TransactionContext txnContext) throws ACIDException;
-
-    /**
-     * Checkpoints. 
-     * 
-     * @throws ACIDException 
-     */
-    public void checkpoint(boolean writeToBothFile) throws ACIDException;
 }

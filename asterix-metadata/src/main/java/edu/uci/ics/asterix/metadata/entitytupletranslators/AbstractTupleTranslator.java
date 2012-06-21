@@ -20,7 +20,6 @@ import edu.uci.ics.asterix.builders.RecordBuilder;
 import edu.uci.ics.asterix.formats.nontagged.AqlSerializerDeserializerProvider;
 import edu.uci.ics.asterix.metadata.api.IMetadataEntityTupleTranslator;
 import edu.uci.ics.asterix.om.base.ABoolean;
-import edu.uci.ics.asterix.om.base.AInt32;
 import edu.uci.ics.asterix.om.base.AMutableString;
 import edu.uci.ics.asterix.om.base.AString;
 import edu.uci.ics.asterix.om.types.BuiltinType;
@@ -41,9 +40,6 @@ public abstract class AbstractTupleTranslator<T> implements IMetadataEntityTuple
     @SuppressWarnings("unchecked")
     protected ISerializerDeserializer<ABoolean> booleanSerde = AqlSerializerDeserializerProvider.INSTANCE
             .getSerializerDeserializer(BuiltinType.ABOOLEAN);
-    @SuppressWarnings("unchecked")
-    protected ISerializerDeserializer<AInt32> integerSerde = AqlSerializerDeserializerProvider.INSTANCE
-            .getSerializerDeserializer(BuiltinType.AINT32);
     protected final IARecordBuilder recordBuilder;
     protected final ArrayBackedValueStorage fieldValue;
     protected final ArrayTupleBuilder tupleBuilder;

@@ -20,6 +20,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import edu.uci.ics.asterix.builders.IARecordBuilder;
 import edu.uci.ics.asterix.builders.RecordBuilder;
@@ -42,12 +43,17 @@ public class ManagedDelimitedDataTupleParser extends DelimitedDataTupleParser im
 
     private List<OperationState> nextState;
     private IManagedFeedAdapter adapter;
+    private long tupleInterval;
 
-    public ManagedDelimitedDataTupleParser(IHyracksTaskContext ctx, ARecordType recType,
-            IManagedFeedAdapter adapter, IValueParserFactory[] valueParserFactories, char fieldDelimter) {
+    public static final String TUPLE_INTERVAL_KEY = "tuple-interval";
+
+    public ManagedDelimitedDataTupleParser(IHyracksTaskContext ctx, ARecordType recType, IManagedFeedAdapter adapter,
+            IValueParserFactory[] valueParserFactories, char fieldDelimter) {
         super(ctx, recType, valueParserFactories, fieldDelimter);
         this.adapter = adapter;
         nextState = new ArrayList<OperationState>();
+        tupleInterval = adapter.getAdapterProperty(TUPLE_INTERVAL_KEY) == null ? 0 : Long.parseLong(adapter
+                .getAdapterProperty(TUPLE_INTERVAL_KEY));
     }
 
     @Override
@@ -57,7 +63,7 @@ public class ManagedDelimitedDataTupleParser extends DelimitedDataTupleParser im
             for (int i = 0; i < valueParserFactories.length; ++i) {
                 valueParsers[i] = valueParserFactories[i].createValueParser();
             }
-     
+
             appender.reset(frame, true);
             tb = new ArrayTupleBuilder(1);
             recDos = tb.getDataOutput();
@@ -113,12 +119,15 @@ public class ManagedDelimitedDataTupleParser extends DelimitedDataTupleParser im
                 }
                 recBuilder.write(recDos, true);
                 processNextTuple(nextState.isEmpty() ? null : nextState.get(0), writer);
+                Thread.currentThread().sleep(tupleInterval);
             }
             if (appender.getTupleCount() > 0) {
                 FrameUtils.flushFrame(frame, writer);
             }
         } catch (IOException e) {
             throw new HyracksDataException(e);
+        } catch (InterruptedException ie) {
+            throw new HyracksDataException(ie);
         }
     }
 
@@ -174,7 +183,6 @@ public class ManagedDelimitedDataTupleParser extends DelimitedDataTupleParser im
         nextState.remove(0);
         addTupleToFrame(writer, false);
         adapter.beforeStop();
-        System.out.println("STOPPING");
         adapter.stop();
     }
 
@@ -193,5 +201,12 @@ public class ManagedDelimitedDataTupleParser extends DelimitedDataTupleParser im
     @Override
     public void stop() throws Exception {
         nextState.add(OperationState.STOPPED);
+    }
+
+    @Override
+    public void alter(Map<String, String> alterParams) throws Exception {
+        if (alterParams.get(TUPLE_INTERVAL_KEY) != null) {
+            tupleInterval = Long.parseLong(alterParams.get(TUPLE_INTERVAL_KEY));
+        }
     }
 }

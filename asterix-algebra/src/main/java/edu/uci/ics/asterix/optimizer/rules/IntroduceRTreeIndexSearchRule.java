@@ -7,9 +7,9 @@ import java.util.List;
 import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.commons.lang3.mutable.MutableObject;
 
+import edu.uci.ics.asterix.aql.util.FunctionUtils;
 import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
 import edu.uci.ics.asterix.common.functions.FunctionArgumentsConstants;
-import edu.uci.ics.asterix.common.functions.FunctionUtils;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledDatasetDecl;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
@@ -24,6 +24,9 @@ import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.asterix.om.util.NonTaggedFormatUtil;
 import edu.uci.ics.asterix.optimizer.base.AnalysisUtil;
+import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
+import edu.uci.ics.hyracks.algebricks.common.utils.Pair;
+import edu.uci.ics.hyracks.algebricks.common.utils.Triple;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IOptimizationContext;
@@ -48,11 +51,8 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.OrderOperat
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOperator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluatorFactory;
 import edu.uci.ics.hyracks.algebricks.core.algebra.util.OperatorPropertiesUtil;
-import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
-import edu.uci.ics.hyracks.algebricks.core.utils.Pair;
-import edu.uci.ics.hyracks.algebricks.core.utils.Triple;
+import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluatorFactory;
 
 public class IntroduceRTreeIndexSearchRule extends IntroduceTreeIndexSearchRule {
 
@@ -82,7 +82,7 @@ public class IntroduceRTreeIndexSearchRule extends IntroduceTreeIndexSearchRule 
         if (expr.getExpressionTag() == LogicalExpressionTag.FUNCTION_CALL) {
             AbstractFunctionCallExpression fce = (AbstractFunctionCallExpression) expr;
             FunctionIdentifier fi = fce.getFunctionIdentifier();
-            if (!AsterixBuiltinFunctions.isSpatialFilterFunction(fi) && fi != AlgebricksBuiltinFunctions.AND) {
+            if (!AsterixBuiltinFunctions.isSpatialFilterFunction(fi) && !fi.equals(AlgebricksBuiltinFunctions.AND)) {
                 return false;
             }
         } else {
@@ -154,14 +154,14 @@ public class IntroduceRTreeIndexSearchRule extends IntroduceTreeIndexSearchRule 
 
             int fieldIndex = -1;
 
-            if (fi == AsterixBuiltinFunctions.FIELD_ACCESS_BY_NAME) {
+            if (fi.equals(AsterixBuiltinFunctions.FIELD_ACCESS_BY_NAME)) {
                 ILogicalExpression nameArg = fce.getArguments().get(1).getValue();
                 if (nameArg.getExpressionTag() != LogicalExpressionTag.CONSTANT) {
                     return false;
                 }
                 ConstantExpression cNameExpr = (ConstantExpression) nameArg;
                 fieldName = ((AString) ((AsterixConstantValue) cNameExpr.getValue()).getObject()).getStringValue();
-            } else if (fi == AsterixBuiltinFunctions.FIELD_ACCESS_BY_INDEX) {
+            } else if (fi.equals(AsterixBuiltinFunctions.FIELD_ACCESS_BY_INDEX)) {
                 ILogicalExpression idxArg = fce.getArguments().get(1).getValue();
                 if (idxArg.getExpressionTag() != LogicalExpressionTag.CONSTANT) {
                     return false;
@@ -173,16 +173,13 @@ public class IntroduceRTreeIndexSearchRule extends IntroduceTreeIndexSearchRule 
             }
 
             if (fieldName == null) {
-                if (recordType.isOpen()) {
-                    continue;
-                }
                 fieldName = recordType.getFieldNames()[fieldIndex];
             }
 
             foundVar = findIdxExprs(adecl, primIdxFields, primIdxDecl, foundIdxExprs, outComparedVars, var, fieldName);
             if (foundVar) {
-                IAType spatialType = AqlCompiledIndexDecl.keyFieldType(fieldName, recordType);
-                dimension = NonTaggedFormatUtil.getNumDimensions(spatialType.getTypeTag());
+                Pair<IAType, Boolean> spatialTypePair = AqlCompiledIndexDecl.getNonNullableKeyFieldType(fieldName, recordType);
+                dimension = NonTaggedFormatUtil.getNumDimensions(spatialTypePair.first.getTypeTag());
             }
 
             fldPos++;
@@ -383,13 +380,13 @@ public class IntroduceRTreeIndexSearchRule extends IntroduceTreeIndexSearchRule 
     private static List<Object> secondaryIndexTypes(AqlCompiledDatasetDecl ddecl, AqlCompiledIndexDecl acid,
             ARecordType itemType, int numKeys) throws AlgebricksException {
         List<Object> types = new ArrayList<Object>();
-        IAType keyType = AqlCompiledIndexDecl.keyFieldType(acid.getFieldExprs().get(0), itemType);
-        IAType nestedKeyType = NonTaggedFormatUtil.getNestedSpatialType(keyType.getTypeTag());
+        Pair<IAType, Boolean> keyTypePair = AqlCompiledIndexDecl.getNonNullableKeyFieldType(acid.getFieldExprs().get(0), itemType);
+        IAType nestedKeyType = NonTaggedFormatUtil.getNestedSpatialType(keyTypePair.first.getTypeTag());
 
         for (int i = 0; i < numKeys; i++) {
             types.add(nestedKeyType);
         }
-        for (Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType> t : DatasetUtils
+        for (Triple<ICopyEvaluatorFactory, ScalarFunctionCallExpression, IAType> t : DatasetUtils
                 .getPartitioningFunctions(ddecl)) {
             types.add(t.third);
         }

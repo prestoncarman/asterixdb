@@ -41,11 +41,12 @@ public class CCBootstrapImpl implements ICCBootstrap {
     private static final Logger LOGGER = Logger.getLogger(CCBootstrapImpl.class.getName());
 
     private static final int DEFAULT_WEB_SERVER_PORT = 19001;
+
     public static final int DEFAULT_API_SERVER_PORT = 14600;
     private static final int DEFAULT_API_NODEDATA_SERVER_PORT = 14601;
 
     private Server webServer;
-    private IAsterixStateProxy proxy;
+    private static IAsterixStateProxy proxy;
     private ICCApplicationContext appCtx;
     private ThreadedServer apiServer;
 
@@ -59,14 +60,14 @@ public class CCBootstrapImpl implements ICCBootstrap {
         proxy = AsterixStateProxy.registerRemoteObject();
         proxy.setAsterixProperties(AsterixProperties.INSTANCE);
         appCtx.setDistributedState(proxy);
-        
+
         // Create the metadata manager
         MetadataManager.INSTANCE = new MetadataManager(proxy);
 
         // Setup and start the web interface
         setupWebServer();
         webServer.start();
-        
+
         // Setup and start the API server
         setupAPIServer();
         apiServer.start();
@@ -83,6 +84,11 @@ public class CCBootstrapImpl implements ICCBootstrap {
         apiServer.shutdown();
     }
 
+    @Override
+    public void setApplicationContext(ICCApplicationContext appCtx) {
+        this.appCtx = appCtx;
+    }
+
     private void setupWebServer() throws Exception {
         String portStr = System.getProperty(GlobalConfig.WEB_SERVER_PORT_PROPERTY);
         int port = DEFAULT_WEB_SERVER_PORT;
@@ -90,14 +96,14 @@ public class CCBootstrapImpl implements ICCBootstrap {
             port = Integer.parseInt(portStr);
         }
         webServer = new Server(port);
-        
+
         ServletContextHandler context = new ServletContextHandler(ServletContextHandler.SESSIONS);
         context.setContextPath("/");
         webServer.setHandler(context);
         context.addServlet(new ServletHolder(new APIServlet()), "/*");
     }
 
-    private void setupAPIServer() throws IOException {
+    private void setupAPIServer() throws Exception {
         // set the APINodeDataServer ports
         int startPort = DEFAULT_API_NODEDATA_SERVER_PORT;
         Map<String, Set<String>> nodeNameMap = new HashMap<String, Set<String>>();
@@ -106,22 +112,17 @@ public class CCBootstrapImpl implements ICCBootstrap {
         } catch (Exception e) {
             throw new IOException("Unable to obtain IP address node map", e);
         }
-        
+
         for (Map.Entry<String, Set<String>> entry : nodeNameMap.entrySet()) {
             Set<String> nodeNames = entry.getValue();
             Iterator<String> it = nodeNames.iterator();
             while (it.hasNext()) {
-                APINodeState ns = new APINodeState();
+                AsterixNodeState ns = new AsterixNodeState();
                 ns.setAPINodeDataServerPort(startPort++);
                 proxy.setAsterixNodeState(it.next(), ns);
             }
         }
-        
-        apiServer = new ThreadedServer(DEFAULT_API_SERVER_PORT, new APIClientThreadFactory(appCtx));
-    }
 
-    @Override
-    public void setApplicationContext(ICCApplicationContext appCtx) {
-        this.appCtx = appCtx;
+        apiServer = new ThreadedServer(DEFAULT_API_SERVER_PORT, new APIClientThreadFactory(appCtx));
     }
 }
