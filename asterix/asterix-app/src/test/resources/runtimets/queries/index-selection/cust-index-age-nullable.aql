@@ -25,7 +25,7 @@ using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
 
 create index age_index on Customers(age);
 
-write output to nc1:"rttest/index_cust-index-age-nullable.adm";
+write output to nc1:"rttest/index-selection_cust-index-age-nullable.adm";
 
 for $c in dataset('Customers')
 where $c.age < 20

@@ -100,8 +100,6 @@ public class EditDistanceListIsFilterable extends AbstractScalarFunctionDynamicD
 			    }
 			}
 			
-			System.out.println("LISTLEN: " + listLen);
-			
 	        // Check type and extract edit-distance threshold.
 	        argBuf.reset();
 	        edThreshEval.evaluate(tuple);

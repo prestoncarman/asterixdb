@@ -19,9 +19,9 @@ load dataset DBLP
 using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
 (("path"="nc1://data/dblp-small/dblp-small-id.txt"),("format"="delimited-text"),("delimiter"=":")) pre-sorted;
 
-create index ngram_index on DBLP(title) type ngram(3);
+create index keyword_index on DBLP(title) type keyword;
 
-write output to nc1:"rttest/index_inverted-index-ngram-contains.adm";
+write output to nc1:"rttest/index-selection_inverted-index-word-contains.adm";
 
 for $o in dataset('DBLP')
 where contains($o.title, "Multimedia")

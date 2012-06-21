@@ -23,7 +23,7 @@ using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
 
 create index idx_Orders_Custkey on Orders(o_custkey);
 
-write output to nc1:"rttest/index_orders-index-custkey.adm";
+write output to nc1:"rttest/index-selection_orders-index-custkey.adm";
 
 for $o in dataset('Orders')
 where
