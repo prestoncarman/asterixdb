@@ -1,3 +1,9 @@
+/*
+ * Description    : Fuzzy self joins a dataset, Customers, based on the similarity-jaccard-check function of its interest lists.
+ *                  Customers has a keyword index on interests, and we expect the join to be transformed into an indexed nested-loop join.
+ * Success        : Yes
+ */
+
 drop dataverse test if exists;
 create dataverse test;
 use dataverse test;
@@ -17,10 +23,7 @@ create type CustomerType as closed {
   children: [ { name: string, age: int32? } ]
 }
 
-create nodegroup group1 if not exists on nc1, nc2;
-
-create dataset Customers(CustomerType) 
-  partitioned by key cid on group1;
+create dataset Customers(CustomerType) partitioned by key cid;
   
 load dataset Customers 
 using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"

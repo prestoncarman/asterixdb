@@ -1,3 +1,9 @@
+/*
+ * Description    : Fuzzy joins two datasets, DBLP and CSX, based on ~= using Jaccard of their titles' 3-gram tokens.
+ *                  DBLP has a 3-gram index on title, and we expect the join to be transformed into an indexed nested-loop join.
+ * Success        : Yes
+ */
+
 drop dataverse test if exists;
 create dataverse test;
 use dataverse test;
@@ -18,13 +24,9 @@ create type CSXType as closed {
   misc: string
 }
 
-create nodegroup group1 if not exists on nc1, nc2;
+create dataset DBLP(DBLPType) partitioned by key id;
 
-create dataset DBLP(DBLPType) 
-  partitioned by key id on group1;
-
-create dataset CSX(CSXType) 
-  partitioned by key id on group1;
+create dataset CSX(CSXType) partitioned by key id;
 
 load dataset DBLP 
 using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"

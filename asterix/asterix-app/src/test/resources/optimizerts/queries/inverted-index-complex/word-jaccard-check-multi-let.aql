@@ -1,3 +1,10 @@
+/*
+ * Description    : Tests whether a keyword index is applied to optimize a selection query using the similarity-jaccard-check function on word tokens.
+ *                  Tests that the optimizer rule correctly drills through the let clauses.
+ *                  The index should be applied.
+ * Success        : Yes
+ */
+
 drop dataverse test if exists;
 create dataverse test;
 use dataverse test;
@@ -10,10 +17,7 @@ create type DBLPType as closed {
   misc: string
 }
 
-create nodegroup group1 if not exists on nc1, nc2;
-
-create dataset DBLP(DBLPType) 
-  partitioned by key id on group1;
+create dataset DBLP(DBLPType) partitioned by key id;
 
 load dataset DBLP 
 using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
