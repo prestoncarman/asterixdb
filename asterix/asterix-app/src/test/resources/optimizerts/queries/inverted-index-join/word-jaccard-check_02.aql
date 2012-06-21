@@ -36,11 +36,12 @@ load dataset CSX
 using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
 (("path"="nc1://data/pub-small/csx-small-id.txt"),("format"="delimited-text"),("delimiter"=":"));
 
-create index ngram_index on CSX(title) type keyword;
+create index keyword_index on CSX(title) type keyword;
 
 write output to nc1:"rttest/inverted-index-join_word-jaccard-check_02.adm";
 
 for $a in dataset('DBLP')
 for $b in dataset('CSX')
 where similarity-jaccard-check(word-tokens($a.title), word-tokens($b.title), 0.5f)[0]
+      and $a.id < $b.id
 return {"arec": $a, "brec": $b }

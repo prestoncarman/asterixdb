@@ -24,23 +24,21 @@
                                               -- DATASOURCE_SCAN  |PARTITIONED|
                                                 -- ONE_TO_ONE_EXCHANGE  |PARTITIONED|
                                                   -- EMPTY_TUPLE_SOURCE  |PARTITIONED|
-            -- ONE_TO_ONE_EXCHANGE  |UNPARTITIONED|
-              -- STREAM_PROJECT  |UNPARTITIONED|
-                -- ONE_TO_ONE_EXCHANGE  |PARTITIONED|
-                  -- NESTED_LOOP  |PARTITIONED|
-                    -- BROADCAST_EXCHANGE  |PARTITIONED|
-                      -- ASSIGN  |UNPARTITIONED|
-                        -- ONE_TO_ONE_EXCHANGE  |UNPARTITIONED|
-                          -- DATASOURCE_SCAN  |UNPARTITIONED|
-                            -- ONE_TO_ONE_EXCHANGE  |UNPARTITIONED|
-                              -- EMPTY_TUPLE_SOURCE  |UNPARTITIONED|
+            -- ONE_TO_ONE_EXCHANGE  |PARTITIONED|
+              -- NESTED_LOOP  |PARTITIONED|
+                -- BROADCAST_EXCHANGE  |PARTITIONED|
+                  -- ASSIGN  |UNPARTITIONED|
                     -- ONE_TO_ONE_EXCHANGE  |UNPARTITIONED|
-                      -- STREAM_SELECT  |UNPARTITIONED|
-                        -- ONE_TO_ONE_EXCHANGE  |LOCAL|
-                          -- SPLIT  |LOCAL|
+                      -- DATASOURCE_SCAN  |UNPARTITIONED|
+                        -- ONE_TO_ONE_EXCHANGE  |UNPARTITIONED|
+                          -- EMPTY_TUPLE_SOURCE  |UNPARTITIONED|
+                -- ONE_TO_ONE_EXCHANGE  |UNPARTITIONED|
+                  -- STREAM_SELECT  |UNPARTITIONED|
+                    -- ONE_TO_ONE_EXCHANGE  |LOCAL|
+                      -- SPLIT  |LOCAL|
+                        -- ONE_TO_ONE_EXCHANGE  |PARTITIONED|
+                          -- ASSIGN  |PARTITIONED|
                             -- ONE_TO_ONE_EXCHANGE  |PARTITIONED|
-                              -- ASSIGN  |PARTITIONED|
+                              -- DATASOURCE_SCAN  |PARTITIONED|
                                 -- ONE_TO_ONE_EXCHANGE  |PARTITIONED|
-                                  -- DATASOURCE_SCAN  |PARTITIONED|
-                                    -- ONE_TO_ONE_EXCHANGE  |PARTITIONED|
-                                      -- EMPTY_TUPLE_SOURCE  |PARTITIONED|
+                                  -- EMPTY_TUPLE_SOURCE  |PARTITIONED|

@@ -22,7 +22,7 @@ load dataset DBLP
 using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
 (("path"="nc1://data/dblp-small/dblp-small-id.txt"),("format"="delimited-text"),("delimiter"=":")) pre-sorted;
 
-create index ngram_index on DBLP(title) type keyword;
+create index keyword_index on DBLP(title) type keyword;
 
 write output to nc1:"rttest/inverted-index-join_word-fuzzyeq-jaccard_03.adm";
 
@@ -31,5 +31,5 @@ set simthreshold '0.5f';
 
 for $a in dataset('DBLP')
 for $b in dataset('DBLP')
-where word-tokens($a.title) ~= word-tokens($b.title)
+where word-tokens($a.title) ~= word-tokens($b.title) and $a.id < $b.id
 return {"arec": $a, "brec": $b }

@@ -36,11 +36,11 @@ load dataset CSX
 using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
 (("path"="nc1://data/pub-small/csx-small-id.txt"),("format"="delimited-text"),("delimiter"=":"));
 
-create index ngram_index on DBLP(title) type ngram(3);
+create index ngram_index on DBLP(authors) type ngram(3);
 
 write output to nc1:"rttest/inverted-index-join_ngram-edit-distance_01.adm";
 
 for $a in dataset('DBLP')
 for $b in dataset('CSX')
-where edit-distance($a.title, $b.title) < 3
+where edit-distance($a.authors, $b.authors) < 3
 return {"arec": $a, "brec": $b }
