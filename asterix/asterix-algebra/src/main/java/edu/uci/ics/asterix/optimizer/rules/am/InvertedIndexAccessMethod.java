@@ -408,11 +408,13 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         // Change join into a select with the same condition.
         SelectOperator topSelect = new SelectOperator(new MutableObject<ILogicalExpression>(joinCond));
         topSelect.getInputs().add(indexSubTree.rootRef);
+        topSelect.setExecutionMode(ExecutionMode.LOCAL);
         context.computeAndSetTypeEnvironmentForOperator(topSelect);
         
         // Add a project operator on top to guarantee that our new index-based plan returns exactly the same variables as the original plan.
         ProjectOperator projectOp = new ProjectOperator(originalLiveVars);
         projectOp.getInputs().add(new MutableObject<ILogicalOperator>(topSelect));
+        projectOp.setExecutionMode(ExecutionMode.LOCAL);
         context.computeAndSetTypeEnvironmentForOperator(projectOp);
         joinRef.setValue(projectOp);
         
@@ -434,6 +436,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         	UnionAllOperator unionAllOp = new UnionAllOperator(varMap);
         	unionAllOp.getInputs().add(new MutableObject<ILogicalOperator>(joinRef.getValue()));
         	unionAllOp.getInputs().add(panicJoinRef);
+        	unionAllOp.setExecutionMode(ExecutionMode.PARTITIONED);
         	context.computeAndSetTypeEnvironmentForOperator(unionAllOp);
         	joinRef.setValue(unionAllOp);
         }
@@ -463,7 +466,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         // We split the plan into two "branches", and add selections on each side.
         AbstractLogicalOperator replicateOp = new ReplicateOperator(2);
         replicateOp.getInputs().add(new MutableObject<ILogicalOperator>(probeSubTree.root));
-        replicateOp.setExecutionMode(ExecutionMode.LOCAL);
+        replicateOp.setExecutionMode(ExecutionMode.PARTITIONED);
         context.computeAndSetTypeEnvironmentForOperator(replicateOp);        
         
         // Create select ops for removing tuples that are filterable and not filterable, respectively.
@@ -541,7 +544,9 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         }
         SelectOperator isFilterableSelectOp = new SelectOperator(new MutableObject<ILogicalExpression>(isFilterableExpr));
         isFilterableSelectOp.getInputs().add(new MutableObject<ILogicalOperator>(inputOp));
+        isFilterableSelectOp.setExecutionMode(ExecutionMode.LOCAL);
         context.computeAndSetTypeEnvironmentForOperator(isFilterableSelectOp);
+        
         
         // Select operator for removing tuples that are filterable.
         List<Mutable<ILogicalExpression>> isNotFilterableArgs = new ArrayList<Mutable<ILogicalExpression>>();
@@ -549,6 +554,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         ILogicalExpression isNotFilterableExpr = new ScalarFunctionCallExpression(FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.NOT), isNotFilterableArgs);
         SelectOperator isNotFilterableSelectOp = new SelectOperator(new MutableObject<ILogicalExpression>(isNotFilterableExpr));
         isNotFilterableSelectOp.getInputs().add(new MutableObject<ILogicalOperator>(inputOp));
+        isNotFilterableSelectOp.setExecutionMode(ExecutionMode.LOCAL);
         context.computeAndSetTypeEnvironmentForOperator(isNotFilterableSelectOp);
         
         isFilterableSelectOpRef.setValue(isFilterableSelectOp);
