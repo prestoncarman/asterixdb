@@ -59,6 +59,7 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IExpressionEvalSi
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IExpressionTypeComputer;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IMergeAggregationExpressionFactory;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.INullableTypeComputer;
+import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.LogicalExpressionJobGenToExpressionRuntimeProviderAdapter;
 import edu.uci.ics.hyracks.algebricks.core.algebra.prettyprint.LogicalOperatorPrettyPrintVisitor;
 import edu.uci.ics.hyracks.algebricks.core.algebra.prettyprint.PlanPrettyPrinter;
 import edu.uci.ics.hyracks.algebricks.core.rewriter.base.AbstractRuleController;
@@ -508,11 +509,12 @@ public class APIFramework {
         }
 
         AlgebricksPartitionConstraint clusterLocs = planAndMetadata.getClusterLocations();
-        builder.setBinaryBooleanInspector(format.getBinaryBooleanInspector());
-        builder.setBinaryIntegerInspector(format.getBinaryIntegerInspector());
+        builder.setBinaryBooleanInspectorFactory(format.getBinaryBooleanInspectorFactory());
+        builder.setBinaryIntegerInspectorFactory(format.getBinaryIntegerInspectorFactory());
         builder.setClusterLocations(clusterLocs);
         builder.setComparatorFactoryProvider(format.getBinaryComparatorFactoryProvider());
-        builder.setExprJobGen(AqlLogicalExpressionJobGen.INSTANCE);
+        builder.setExpressionRuntimeProvider(new LogicalExpressionJobGenToExpressionRuntimeProviderAdapter(
+                AqlLogicalExpressionJobGen.INSTANCE));
         builder.setHashFunctionFactoryProvider(format.getBinaryHashFunctionFactoryProvider());
         builder.setNullWriterFactory(format.getNullWriterFactory());
         builder.setPrinterProvider(format.getPrinterFactoryProvider());

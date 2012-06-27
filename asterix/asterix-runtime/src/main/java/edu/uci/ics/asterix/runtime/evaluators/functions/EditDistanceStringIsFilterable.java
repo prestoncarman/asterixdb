@@ -92,7 +92,7 @@ public class EditDistanceStringIsFilterable extends AbstractScalarFunctionDynami
 			if (!typeTag.equals(ATypeTag.STRING)) {
 				throw new AlgebricksException("Expected type 'STRING' as first argument. Encountered '" + typeTag.toString() + "'.");
 			}
-			int utf8Length = UTF8StringPointable.getUTFLen(argBuf.getByteArray(), 1); 
+			int utf8Length = UTF8StringPointable.getUTFLength(argBuf.getByteArray(), 1); 
 			int pos = 3;
 			int strLen = 0;	        
 	        int end = pos + utf8Length;

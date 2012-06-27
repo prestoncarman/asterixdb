@@ -247,7 +247,7 @@ public class SimilarityJaccardEvaluator implements ICopyEvaluator {
     	}
     	case STRING: {
     		// 2 bytes for the UTF8 len, plus the string data.
-    		return 2 + UTF8StringPointable.getUTFLen(bytes, itemOff);
+    		return 2 + UTF8StringPointable.getUTFLength(bytes, itemOff);
     	}
     	default: {
     		return -1;
