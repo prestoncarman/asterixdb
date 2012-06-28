@@ -34,6 +34,7 @@ import edu.uci.ics.asterix.optimizer.rules.IntroduceDynamicTypeCastRule;
 import edu.uci.ics.asterix.optimizer.rules.IntroduceRTreeIndexSearchRule;
 import edu.uci.ics.asterix.optimizer.rules.IntroduceSecondaryIndexInsertDeleteRule;
 import edu.uci.ics.asterix.optimizer.rules.IntroduceStaticTypeCastRule;
+import edu.uci.ics.asterix.optimizer.rules.IntroduceTransactionCommitByAssignOpRule;
 import edu.uci.ics.asterix.optimizer.rules.LoadRecordFieldsRule;
 import edu.uci.ics.asterix.optimizer.rules.NestGroupByRule;
 import edu.uci.ics.asterix.optimizer.rules.PullPositionalVariableFromUnnestRule;
@@ -197,6 +198,8 @@ public final class RuleCollections {
         physicalRewritesAllLevels.add(new PullPositionalVariableFromUnnestRule());
         physicalRewritesAllLevels.add(new PushProjectDownRule());
         physicalRewritesAllLevels.add(new InsertProjectBeforeUnionRule());
+        //Turned off the following rule for now not to change OptimizerTest results.
+        //physicalRewritesAllLevels.add(new IntroduceTransactionCommitByAssignOpRule());
         return physicalRewritesAllLevels;
     }
 
