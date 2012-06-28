@@ -34,9 +34,14 @@ public class OptimizableOperatorSubTree {
     public boolean initFromSubTree(Mutable<ILogicalOperator> subTreeOpRef) {
         rootRef = subTreeOpRef;
         root = subTreeOpRef.getValue();
-        // Examine the select's children to match the expected patterns.
+        // Examine the op's children to match the expected patterns.
         AbstractLogicalOperator subTreeOp = (AbstractLogicalOperator) subTreeOpRef.getValue();
-        // First check primary-index pattern.
+        // Skip select operator.
+        if (subTreeOp.getOperatorTag() == LogicalOperatorTag.SELECT) {
+            subTreeOpRef = subTreeOp.getInputs().get(0);
+            subTreeOp = (AbstractLogicalOperator) subTreeOpRef.getValue();
+        }
+        // Check primary-index pattern.
         if (subTreeOp.getOperatorTag() != LogicalOperatorTag.ASSIGN) {
             // Pattern may still match if we are looking for primary index matches as well.
             if (subTreeOp.getOperatorTag() == LogicalOperatorTag.DATASOURCESCAN) {
