@@ -29,7 +29,12 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
 import edu.uci.ics.hyracks.algebricks.core.rewriter.base.IAlgebraicRewriteRule;
 
+/**
+ * Class that embodies the commonalities between rewrite rules for access methods.
+ */
 public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRewriteRule {
+    
+    public abstract Map<FunctionIdentifier, List<IAccessMethod>> getAccessMethods();
     
     protected static void registerAccessMethod(IAccessMethod accessMethod, Map<FunctionIdentifier, List<IAccessMethod>> accessMethods) {
         List<FunctionIdentifier> funcs = accessMethod.getOptimizableFunctions();
@@ -79,7 +84,6 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
     /**
      * Simply picks the first index that it finds.
      * TODO: Improve this decision process by making it more systematic.
-     * 
      */
     protected Pair<IAccessMethod, AqlCompiledIndexDecl> chooseIndex(
             Map<IAccessMethod, AccessMethodAnalysisContext> analyzedAMs) {
@@ -154,7 +158,6 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
     /**
      * Analyzes the given selection condition, filling analyzedAMs with applicable access method types.
      * At this point we are not yet consulting the metadata whether an actual index exists or not.
-     * 
      */
     protected boolean analyzeCondition(ILogicalExpression cond, List<AssignOperator> assigns, Map<IAccessMethod, AccessMethodAnalysisContext> analyzedAMs) {
         AbstractFunctionCallExpression funcExpr = (AbstractFunctionCallExpression) cond;
@@ -177,10 +180,9 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
     }
     
     /**
-     * Finds applicable access methods for the given function expression based on
-     * the function identifier, and an analysis of the function's arguments.
+     * Finds applicable access methods for the given function expression based
+     * on the function identifier, and an analysis of the function's arguments.
      * Updates the analyzedAMs accordingly.
-     * 
      */
     protected boolean analyzeFunctionExpr(AbstractFunctionCallExpression funcExpr, List<AssignOperator> assigns, Map<IAccessMethod, AccessMethodAnalysisContext> analyzedAMs) {
         FunctionIdentifier funcIdent = funcExpr.getFunctionIdentifier();
@@ -216,9 +218,11 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
     }
     
     /**
+     * Finds secondary indexes whose keys include fieldName, and adds a mapping in analysisCtx.indexEsprs 
+     * from that index to the a corresponding optimizable function expression.
      * 
-     * @return returns true if a candidate index was added to foundIndexExprs,
-     *         false otherwise
+     * @return true if a candidate index was added to foundIndexExprs, false
+     *         otherwise
      */
     protected boolean fillIndexExprs(String fieldName, int matchedFuncExprIndex,
             AqlCompiledDatasetDecl datasetDecl, AccessMethodAnalysisContext analysisCtx) {
@@ -283,7 +287,6 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
     /**
      * Returns the field name corresponding to the assigned variable at varIndex.
      * Returns null if the expr at varIndex is not a field access function.
-     * 
      */
     protected String getFieldNameOfFieldAccess(AssignOperator assign, ARecordType recordType, int varIndex) {
         // Get expression corresponding to var at varIndex.
@@ -314,6 +317,4 @@ public abstract class AbstractIntroduceAccessMethodRule implements IAlgebraicRew
         }
         return null;
     }
-    
-    public abstract Map<FunctionIdentifier, List<IAccessMethod>> getAccessMethods();
 }

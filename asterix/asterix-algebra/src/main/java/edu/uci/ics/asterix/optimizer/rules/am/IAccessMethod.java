@@ -13,16 +13,10 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
 
 /**
- * Interface an access method should implement to work with the
- * IntroduceAccessMethodSearchRule that optimizes simple scan-select queries
- * with access methods (the IAccessMethod must still be manually registered in the
- * IntroduceAccessMethodSearchRule). The IntroduceAccessMethodSearchRule will
- * match an operator pattern, and take care of choosing an index to be applied.
- * This interface abstracts away the analysis of the select condition to see
- * whether this access method is applicable. We also provide a method for
- * transforming the plan if an access method of this type has been chosen, since
- * this step is access method specific.
- * 
+ * Interface that an access method should implement to work with the rewrite
+ * rules to apply it for join and/or selection queries. This interface provides
+ * methods for analyzing a select/join condition, and for rewriting the plan
+ * with a given index.
  */
 public interface IAccessMethod {
     
@@ -33,17 +27,15 @@ public interface IAccessMethod {
     public List<FunctionIdentifier> getOptimizableFunctions();
     
     /**
-     * Analyzes the arguments of the given funcExpr to see if funcExpr is
-     * optimizable (e.g., one arg is a constant and one is a var). We assume
-     * that the funcExpr has already been determined to be optimizable by this
-     * access method based on its function identifier. If funcExpr has been
-     * found to be optimizable, this method adds an OptimizableFunction to
-     * analysisCtx.matchedFuncExprs for further analysis.
+     * Analyzes the arguments of a given optimizable funcExpr to see if this
+     * access method is applicable (e.g., one arg is a constant and one is a
+     * var). We assume that the funcExpr has already been determined to be
+     * optimizable by this access method based on its function identifier. If
+     * funcExpr has been found to be optimizable, this method adds an
+     * OptimizableFunction to analysisCtx.matchedFuncExprs for further analysis.
      * 
-     * @param funcExpr
-     * @param assigns
-     * @param analysisCtx
-     * @return true if funcExpr is optimizable by this access method, false otherwise 
+     * @return true if funcExpr is optimizable by this access method, false
+     *         otherwise
      */
     public boolean analyzeFuncExprArgs(AbstractFunctionCallExpression funcExpr, List<AssignOperator> assigns, AccessMethodAnalysisContext analysisCtx);
     
@@ -55,15 +47,16 @@ public interface IAccessMethod {
      */
     public boolean matchAllIndexExprs();
 
-    /** 
-     * Indicates whether this index is applicable if only a prefix of the index expressions are matched. 
+    /**
+     * Indicates whether this index is applicable if only a prefix of the index
+     * expressions are matched.
+     * 
      * @return boolean
      */
     public boolean matchPrefixIndexExprs();
     
     /**
      * Applies the plan transformation to use chosenIndex to optimize a selection query.
-     * 
      */
     public boolean applySelectPlanTransformation(Mutable<ILogicalOperator> selectRef, OptimizableOperatorSubTree subTree,            
             AqlCompiledIndexDecl chosenIndex, AccessMethodAnalysisContext analysisCtx, IOptimizationContext context)
@@ -71,18 +64,13 @@ public interface IAccessMethod {
     
     /**
      * Applies the plan transformation to use chosenIndex to optimize a join query.
-     * 
      */
     public boolean applyJoinPlanTransformation(Mutable<ILogicalOperator> joinRef, OptimizableOperatorSubTree leftSubTree, OptimizableOperatorSubTree rightSubTree,
             AqlCompiledIndexDecl chosenIndex, AccessMethodAnalysisContext analysisCtx, IOptimizationContext context)
             throws AlgebricksException;
     
     /**
-     * Analyzes expr to see whether it is optimizable by the given concrete index. 
-     * 
-     * @param index
-     * @param expr
-     * @return
+     * Analyzes expr to see whether it is optimizable by the given concrete index.
      */
     public boolean exprIsOptimizable(AqlCompiledIndexDecl index, IOptimizableFuncExpr optFuncExpr);
 }

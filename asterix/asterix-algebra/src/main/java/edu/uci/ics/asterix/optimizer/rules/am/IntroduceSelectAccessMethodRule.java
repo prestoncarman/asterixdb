@@ -22,8 +22,8 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.SelectOpera
 import edu.uci.ics.hyracks.algebricks.core.algebra.util.OperatorPropertiesUtil;
 
 /**
- * This rule tries to optimize simple selections with indexes. The use of an
- * index is expressed as an unnest over an index-search function which will be
+ * This rule optimizes simple selections with secondary or primary indexes. The use of an
+ * index is expressed as an unnest-map over an index-search function which will be
  * replaced with the appropriate embodiment during codegen.
  * 
  * Matches the following operator patterns:
@@ -34,16 +34,17 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.util.OperatorPropertiesUtil;
  * Since no assign is necessary to get the primary key fields (they are already stored fields in the BTree tuples).
  * (select) <-- (datasource scan)
  * 
- * Replaces the above patterns with this pattern: (select) <-- (assign) <-- (btree search) <-- (sort) <-- (unnest(index search)) <-- (assign)
- * The sort is optional, and some access methods may choose not to sort.
+ * Replaces the above patterns with this plan:
+ * (select) <-- (assign) <-- (btree search) <-- (sort) <-- (unnest-map(index search)) <-- (assign)
+ * The sort is optional, and some access methods implementations may choose not to sort.
  * 
- * Note that for some index-based optimizations do not remove the triggering
- * condition from the select, since the index only acts as a filter, and the
- * final verification must still be done via the original function.
+ * Note that for some index-based optimizations we do not remove the triggering
+ * condition from the select, since the index may only acts as a filter, and the
+ * final verification must still be done with the original select condition.
  * 
  * The basic outline of this rule is: 
  * 1. Match operator pattern. 
- * 2. Analyze select to see if there are optimizable functions (delegated to IAccessMethods). 
+ * 2. Analyze select condition to see if there are optimizable functions (delegated to IAccessMethods). 
  * 3. Check metadata to see if there are applicable indexes. 
  * 4. Choose an index to apply (for now only a single index will be chosen).
  * 5. Rewrite plan using index (delegated to IAccessMethods).
@@ -111,7 +112,6 @@ public class IntroduceSelectAccessMethodRule extends AbstractIntroduceAccessMeth
         if (context.checkIfInDontApplySet(this, op1)) {
             return false;
         }
-        // Check op is a select.
         if (op1.getOperatorTag() != LogicalOperatorTag.SELECT) {
             return false;
         }

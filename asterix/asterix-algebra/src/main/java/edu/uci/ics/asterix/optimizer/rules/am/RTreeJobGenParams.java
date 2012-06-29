@@ -9,6 +9,10 @@ import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl.IndexKind;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
 
+/**
+ * Helper class for reading and writing job-gen parameters for RTree access methods to
+ * and from a list of function arguments, typically of an unnest-map.
+ */
 public class RTreeJobGenParams extends AccessMethodJobGenParams {
     
     protected List<LogicalVariable> keyVarList;

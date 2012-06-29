@@ -15,6 +15,10 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IAlgebricksConstantValue;
 
+/**
+ * Helper class for reading and writing job-gen parameters for RTree access methods to
+ * and from a list of function arguments, typically of an unnest-map.
+ */
 public class InvertedIndexJobGenParams extends AccessMethodJobGenParams {
     
     protected SearchModifierType searchModifierType;

@@ -20,6 +20,12 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractLog
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.DataSourceScanOperator;
 
+/**
+ * Operator subtree that matches the following patterns, and provides convenient access to its nodes:
+ * (select)? <-- (assign)+ <-- (datasource scan) 
+ * and
+ * (select)? <-- (datasource scan)
+ */
 public class OptimizableOperatorSubTree {
     public ILogicalOperator root;
     public Mutable<ILogicalOperator> rootRef;

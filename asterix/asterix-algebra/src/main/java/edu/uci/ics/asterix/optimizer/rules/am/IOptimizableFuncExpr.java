@@ -4,6 +4,11 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IAlgebricksConstantValue;
 
+/**
+ * Describes a function expression that is optimizable by an access method.
+ * Provides convenient methods for accessing arguments (constants, variables)
+ * and metadata of such a function.
+ */
 public interface IOptimizableFuncExpr {
     public AbstractFunctionCallExpression getFuncExpr();
     public int getNumLogicalVars();

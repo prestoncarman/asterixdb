@@ -42,6 +42,9 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.OrderOperat
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOperator;
 import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluatorFactory;
 
+/**
+ * Static helper functions for rewriting plans using indexes. 
+ */
 public class AccessMethodUtils {
     public static void appendPrimaryIndexTypes(AqlCompiledDatasetDecl datasetDecl, IAType itemType, List<Object> target) {
         List<Triple<ICopyEvaluatorFactory, ScalarFunctionCallExpression, IAType>> partitioningFunctions = DatasetUtils

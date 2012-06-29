@@ -25,6 +25,9 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOp
 import edu.uci.ics.hyracks.algebricks.core.jobgen.impl.JobGenContext;
 import edu.uci.ics.hyracks.api.dataflow.IOperatorDescriptor;
 
+/**
+ * Contributes the runtime operator for an unnest-map representing a RTree search. 
+ */
 public class RTreeSearchPOperator extends IndexSearchPOperator {
 
     public RTreeSearchPOperator(IDataSourceIndex<String, AqlSourceId> idx, boolean requiresBroadcast) {

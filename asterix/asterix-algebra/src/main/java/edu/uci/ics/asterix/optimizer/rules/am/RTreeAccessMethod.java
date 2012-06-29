@@ -30,6 +30,9 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AssignOpera
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.DataSourceScanOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOperator;
 
+/**
+ * Class for helping rewrite rules to choose and apply RTree indexes.  
+ */
 public class RTreeAccessMethod implements IAccessMethod {
 
     private static List<FunctionIdentifier> funcIdents = new ArrayList<FunctionIdentifier>();

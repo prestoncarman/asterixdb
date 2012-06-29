@@ -31,6 +31,9 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.visitors.Va
 import edu.uci.ics.hyracks.algebricks.core.jobgen.impl.JobGenContext;
 import edu.uci.ics.hyracks.api.dataflow.IOperatorDescriptor;
 
+/**
+ * Contributes the runtime operator for an unnest-map representing a BTree search. 
+ */
 public class BTreeSearchPOperator extends IndexSearchPOperator {
 
     public BTreeSearchPOperator(IDataSourceIndex<String, AqlSourceId> idx, boolean requiresBroadcast) {

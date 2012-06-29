@@ -4,6 +4,10 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IAlgebricksConstantValue;
 
+/**
+ * General-purpose implementation of IOptimizableFuncExpr that supports any
+ * number of constant args, variable args and field names.
+ */
 public class OptimizableFuncExpr implements IOptimizableFuncExpr {
 	protected final AbstractFunctionCallExpression funcExpr;
     protected final LogicalVariable[] logicalVars;

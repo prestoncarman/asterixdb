@@ -13,6 +13,10 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
 
+/**
+ * Helper class for reading and writing job-gen parameters for access methods to
+ * and from a list of function arguments, typically of an unnest-map.
+ */
 public class AccessMethodJobGenParams {
     protected String indexName;
     protected IndexKind indexKind;

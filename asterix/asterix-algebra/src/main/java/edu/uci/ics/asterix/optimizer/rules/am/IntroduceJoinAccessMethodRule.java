@@ -21,6 +21,31 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractLog
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.InnerJoinOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.util.OperatorPropertiesUtil;
 
+/**
+ * This rule optimizes a join with secondary indexes into an indexed nested-loop join.
+ * 
+ * Matches the following operator pattern:
+ * (join) <-- (select)? <-- (assign)+ <-- (datasource scan)
+ *        <-- (select)? <-- (assign)+ <-- (datasource scan)
+ * 
+ * Replaces the above pattern with the following simplified plan: 
+ * (select) <-- (assign) <-- (btree search) <-- (sort) <-- (unnest(index search)) <-- (assign) <-- (datasource scan)
+ * The sort is optional, and some access methods may choose not to sort.
+ * 
+ * Note that for some index-based optimizations we do not remove the triggering
+ * condition from the join, since the secondary index may only act as a filter, and the
+ * final verification must still be done with the original join condition.
+ * 
+ * The basic outline of this rule is: 
+ * 1. Match operator pattern. 
+ * 2. Analyze join condition to see if there are optimizable functions (delegated to IAccessMethods). 
+ * 3. Check metadata to see if there are applicable indexes. 
+ * 4. Choose an index to apply (for now only a single index will be chosen).
+ * 5. Rewrite plan using index (delegated to IAccessMethods).
+ * 
+ * TODO (Alex): Currently this rule requires a data scan on both inputs of the join. I should generalize the pattern 
+ * to accept any subtree on one side, as long as the other side has a datasource scan.
+ */
 public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethodRule {
     
     protected Mutable<ILogicalOperator> joinRef = null;
@@ -101,7 +126,6 @@ public class IntroduceJoinAccessMethodRule extends AbstractIntroduceAccessMethod
         if (context.checkIfInDontApplySet(this, op1)) {
             return false;
         }
-        // Check op is a select.
         if (op1.getOperatorTag() != LogicalOperatorTag.INNERJOIN) {
             return false;
         }

@@ -51,6 +51,9 @@ import edu.uci.ics.hyracks.storage.am.invertedindex.api.IInvertedIndexSearchModi
 import edu.uci.ics.hyracks.storage.am.invertedindex.dataflow.InvertedIndexSearchOperatorDescriptor;
 import edu.uci.ics.hyracks.storage.am.invertedindex.tokenizers.IBinaryTokenizerFactory;
 
+/**
+ * Contributes the runtime operator for an unnest-map representing an inverted-index search. 
+ */
 public class InvertedIndexPOperator extends IndexSearchPOperator {
     public InvertedIndexPOperator(IDataSourceIndex<String, AqlSourceId> idx, boolean requiresBroadcast) {
         super(idx, requiresBroadcast);

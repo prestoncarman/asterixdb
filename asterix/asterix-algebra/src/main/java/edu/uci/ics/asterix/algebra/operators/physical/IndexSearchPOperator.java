@@ -18,6 +18,9 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.properties.IPhysicalPropertie
 import edu.uci.ics.hyracks.algebricks.core.algebra.properties.PhysicalRequirements;
 import edu.uci.ics.hyracks.algebricks.core.algebra.properties.StructuralPropertiesVector;
 
+/**
+ * Class that embodies the commonalities between access method physical operators.
+ */
 public abstract class IndexSearchPOperator extends AbstractScanPOperator {
 
     private final IDataSourceIndex<String, AqlSourceId> idx;

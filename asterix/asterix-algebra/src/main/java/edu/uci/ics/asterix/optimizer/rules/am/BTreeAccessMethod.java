@@ -36,6 +36,9 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.DataSourceS
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOperator;
 
+/**
+ * Class for helping rewrite rules to choose and apply BTree indexes.  
+ */
 public class BTreeAccessMethod implements IAccessMethod {
 
     // Describes whether a search predicate is an open/closed interval.
@@ -220,7 +223,6 @@ public class BTreeAccessMethod implements IAccessMethod {
         int numLowKeys = createKeyVarsAndExprs(lowKeyLimits, lowKeyConstants, keyExprList, keyVarList, context);
         int numHighKeys = createKeyVarsAndExprs(highKeyLimits, highKeyConstants, keyExprList, keyVarList, context);
         
-        // TODO: For now retainInput and requiresBroadcast are always false.
         BTreeJobGenParams jobGenParams = new BTreeJobGenParams(chosenIndex.getIndexName(), IndexKind.BTREE, datasetDecl.getName(), false, false);
         jobGenParams.setLowKeyInclusive(lowKeyInclusive[0]);
         jobGenParams.setHighKeyInclusive(highKeyInclusive[0]);
@@ -280,7 +282,7 @@ public class BTreeAccessMethod implements IAccessMethod {
             OptimizableOperatorSubTree leftSubTree, OptimizableOperatorSubTree rightSubTree,
             AqlCompiledIndexDecl chosenIndex, AccessMethodAnalysisContext analysisCtx, IOptimizationContext context)
             throws AlgebricksException {
-        // TODO Implement this.
+        // TODO: Implement this.
         return false;
     }
 
@@ -379,12 +381,11 @@ public class BTreeAccessMethod implements IAccessMethod {
         return limit;
     }
     
-    // Returns true if the constant value is on the "left hand side" (assuming a binary function).
+    // Returns true if there is a constant value on the left-hand side  if the given optimizable function (assuming a binary function).
     public boolean constantIsOnLhs(IOptimizableFuncExpr optFuncExpr) {
         return optFuncExpr.getFuncExpr().getArguments().get(0) == optFuncExpr.getConstantVal(0);
     }
 
-    
     private ILogicalExpression createSelectCondition(List<Mutable<ILogicalExpression>> predList) {
         if (predList.size() > 1) {
             IFunctionInfo finfo = AsterixBuiltinFunctions.getAsterixFunctionInfo(AlgebricksBuiltinFunctions.AND);
@@ -395,7 +396,7 @@ public class BTreeAccessMethod implements IAccessMethod {
 
     @Override
     public boolean exprIsOptimizable(AqlCompiledIndexDecl index, IOptimizableFuncExpr optFuncExpr) {
-        // No additional analysis required.
+        // No additional analysis required for BTrees.
         return true;
     }
 }

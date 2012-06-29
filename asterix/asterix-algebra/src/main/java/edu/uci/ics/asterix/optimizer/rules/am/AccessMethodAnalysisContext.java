@@ -7,11 +7,15 @@ import java.util.List;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledDatasetDecl;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl;
 
+/**
+ * Context for analyzing the applicability of a single access method.
+ */
 public class AccessMethodAnalysisContext {
     
     public List<IOptimizableFuncExpr> matchedFuncExprs = new ArrayList<IOptimizableFuncExpr>();
+    
     // Contains candidate indexes and a list of integers that index into matchedFuncExprs.
-    // In effect, we are mapping from candidate indexes to a list of function expressions 
+    // We are mapping from candidate indexes to a list of function expressions 
     // that match one of the index's expressions.
     public HashMap<AqlCompiledIndexDecl, List<Integer>> indexExprs = new HashMap<AqlCompiledIndexDecl, List<Integer>>();
     

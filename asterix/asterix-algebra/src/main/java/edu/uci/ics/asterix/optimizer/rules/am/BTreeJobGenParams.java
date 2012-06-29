@@ -11,6 +11,10 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
 
+/**
+ * Helper class for reading and writing job-gen parameters for BTree access methods to
+ * and from a list of function arguments, typically of an unnest-map.
+ */
 public class BTreeJobGenParams extends AccessMethodJobGenParams {
 
     protected List<LogicalVariable> lowKeyVarList;

@@ -65,6 +65,9 @@ import edu.uci.ics.hyracks.storage.am.invertedindex.searchmodifiers.EditDistance
 import edu.uci.ics.hyracks.storage.am.invertedindex.searchmodifiers.JaccardSearchModifierFactory;
 import edu.uci.ics.hyracks.storage.am.invertedindex.tokenizers.IBinaryTokenizerFactory;
 
+/**
+ * Class for helping rewrite rules to choose and apply inverted indexes.  
+ */
 public class InvertedIndexAccessMethod implements IAccessMethod {
 
     // Enum describing the search modifier type. Used for passing info to jobgen.
@@ -78,13 +81,13 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
     private static List<FunctionIdentifier> funcIdents = new ArrayList<FunctionIdentifier>();
     static {
         funcIdents.add(AsterixBuiltinFunctions.CONTAINS);        
-        // For matching similarity-check functions. For example similarity-jaccard-check returns a list of two items,
-        // and the where condition will get the first list-item and check whether it evaluates to true. 
+        // For matching similarity-check functions. For example, similarity-jaccard-check returns a list of two items,
+        // and the select condition will get the first list-item and check whether it evaluates to true. 
         funcIdents.add(AsterixBuiltinFunctions.GET_ITEM);
     }
     
     // These function identifiers are matched in this AM's analyzeFuncExprArgs(), 
-    // and are not visible to the outside driver (IntroduceAccessMethodSearchRule).
+    // and are not visible to the outside driver.
     private static HashSet<FunctionIdentifier> secondLevelFuncIdents = new HashSet<FunctionIdentifier>();
     static {
         secondLevelFuncIdents.add(AsterixBuiltinFunctions.SIMILARITY_JACCARD_CHECK);
@@ -335,14 +338,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
             inputOp.setExecutionMode(dataSourceScan.getExecutionMode());
         } else {
             // We are optimizing a join. Add the input variable to the secondaryIndexFuncArgs.
-            LogicalVariable inputSearchVariable = null;
-            if (optFuncExpr.getOperatorSubTree(0) == indexSubTree) {
-                // If the index is on a dataset in subtree 0, then subtree 1 will feed.
-                inputSearchVariable = optFuncExpr.getLogicalVar(1);
-            } else {
-                // If the index is on a dataset in subtree 1, then subtree 0 will feed.
-                inputSearchVariable = optFuncExpr.getLogicalVar(0);
-            }
+            LogicalVariable inputSearchVariable = getInputSearchVar(optFuncExpr, indexSubTree);
             keyVarList.add(inputSearchVariable);
             inputOp = (AbstractLogicalOperator) probeSubTree.root;
         }
@@ -353,6 +349,21 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         UnnestMapOperator primaryIndexUnnestOp = AccessMethodUtils.createPrimaryIndexUnnestMap(dataSourceScan,
                 datasetDecl, recordType, secondaryIndexUnnestOp, context, true, retainInput, false);
         return primaryIndexUnnestOp;
+    }
+    
+    /**
+     * Returns the variable which acts as the input search key to a secondary
+     * index that optimizes optFuncExpr by replacing rewriting indexSubTree
+     * (which is the original subtree that will be replaced by the index plan).
+     */
+    private LogicalVariable getInputSearchVar(IOptimizableFuncExpr optFuncExpr, OptimizableOperatorSubTree indexSubTree) {
+        if (optFuncExpr.getOperatorSubTree(0) == indexSubTree) {
+            // If the index is on a dataset in subtree 0, then subtree 1 will feed.
+            return optFuncExpr.getLogicalVar(1);
+        } else {
+            // If the index is on a dataset in subtree 1, then subtree 0 will feed.
+            return optFuncExpr.getLogicalVar(0);
+        }
     }
     
     @Override
@@ -444,7 +455,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
     }
     
     private IOptimizableFuncExpr chooseOptFuncExpr(AqlCompiledIndexDecl chosenIndex, AccessMethodAnalysisContext analysisCtx) {
-        // TODO: We can probably do something smarter here based on selectivity.
+        // TODO: We can probably do something smarter here.
         // Pick the first expr optimizable by this index.
         List<Integer> indexExprs = analysisCtx.getIndexExprs(chosenIndex);
         int firstExprIndex = indexExprs.get(0);
@@ -452,16 +463,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
     }
 
     private Mutable<ILogicalOperator> createPanicNestedLoopJoinPlan(Mutable<ILogicalOperator> joinRef, OptimizableOperatorSubTree indexSubTree, OptimizableOperatorSubTree probeSubTree, IOptimizableFuncExpr optFuncExpr, AqlCompiledIndexDecl chosenIndex, IOptimizationContext context) throws AlgebricksException {
-        // We are optimizing a join. Add the input variable to the secondaryIndexFuncArgs.
-        LogicalVariable inputSearchVar = null;
-        // TODO: Factor out this code.
-        if (optFuncExpr.getOperatorSubTree(0) == indexSubTree) {
-            // If the index is on a dataset in subtree 0, then subtree 1 will feed.
-            inputSearchVar = optFuncExpr.getLogicalVar(1);
-        } else {
-            // If the index is on a dataset in subtree 1, then subtree 0 will feed.
-            inputSearchVar = optFuncExpr.getLogicalVar(0);
-        }
+        LogicalVariable inputSearchVar = getInputSearchVar(optFuncExpr, indexSubTree);
         
         // We split the plan into two "branches", and add selections on each side.
         AbstractLogicalOperator replicateOp = new ReplicateOperator(2);
@@ -546,7 +548,6 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         isFilterableSelectOp.getInputs().add(new MutableObject<ILogicalOperator>(inputOp));
         isFilterableSelectOp.setExecutionMode(ExecutionMode.LOCAL);
         context.computeAndSetTypeEnvironmentForOperator(isFilterableSelectOp);
-        
         
         // Select operator for removing tuples that are filterable.
         List<Mutable<ILogicalExpression>> isNotFilterableArgs = new ArrayList<Mutable<ILogicalExpression>>();
@@ -649,7 +650,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
             }
             return true;
         }
-        // TODO: We need more checking. Also need to check the gram length, prePost, etc.
+        // TODO: We need more checking: gram length, prePost, etc.
         if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.SIMILARITY_JACCARD_CHECK) {
             // Check the tokenization function of the non-constant func arg to see if it fits the concrete index type.
             ILogicalExpression arg1 = optFuncExpr.getFuncExpr().getArguments().get(0).getValue();
