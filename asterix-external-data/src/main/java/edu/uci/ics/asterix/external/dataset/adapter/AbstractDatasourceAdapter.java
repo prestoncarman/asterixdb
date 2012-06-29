@@ -17,17 +17,11 @@ package edu.uci.ics.asterix.external.dataset.adapter;
 import java.util.HashMap;
 import java.util.Map;
 
-import edu.uci.ics.asterix.external.data.adapter.api.IDatasourceAdapter;
 import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksPartitionConstraint;
 import edu.uci.ics.hyracks.api.context.IHyracksTaskContext;
-import edu.uci.ics.hyracks.dataflow.common.data.parsers.DoubleParserFactory;
-import edu.uci.ics.hyracks.dataflow.common.data.parsers.FloatParserFactory;
 import edu.uci.ics.hyracks.dataflow.common.data.parsers.IValueParserFactory;
-import edu.uci.ics.hyracks.dataflow.common.data.parsers.IntegerParserFactory;
-import edu.uci.ics.hyracks.dataflow.common.data.parsers.LongParserFactory;
-import edu.uci.ics.hyracks.dataflow.common.data.parsers.UTF8StringParserFactory;
 
 /**
  * Represents the base class that is required to be extended by every
@@ -38,48 +32,32 @@ public abstract class AbstractDatasourceAdapter implements IDatasourceAdapter {
     private static final long serialVersionUID = -3510610289692452466L;
 
     protected Map<String, String> configuration;
-
     protected transient AlgebricksPartitionConstraint partitionConstraint;
-
     protected IAType atype;
-
     protected IHyracksTaskContext ctx;
+    protected AdapterDataFlowType dataFlowType;
+    protected AdapterType adapterType;
+    protected boolean typeInfoRequired = false;
 
     protected static final HashMap<ATypeTag, IValueParserFactory> typeToValueParserFactMap = new HashMap<ATypeTag, IValueParserFactory>();
-
-    protected static final HashMap<String, String> formatToParserMap = new HashMap<String, String>();
-
-    protected static final HashMap<String, String> formatToManagedParserMap = new HashMap<String, String>();
-
-    protected AdapterDataFlowType dataFlowType;
-
-    protected AdapterType adapterType;
-
-    static {
-        typeToValueParserFactMap.put(ATypeTag.INT32, IntegerParserFactory.INSTANCE);
-        typeToValueParserFactMap.put(ATypeTag.FLOAT, FloatParserFactory.INSTANCE);
-        typeToValueParserFactMap.put(ATypeTag.DOUBLE, DoubleParserFactory.INSTANCE);
-        typeToValueParserFactMap.put(ATypeTag.INT64, LongParserFactory.INSTANCE);
-        typeToValueParserFactMap.put(ATypeTag.STRING, UTF8StringParserFactory.INSTANCE);
-
-        formatToParserMap.put("delimited-text", "edu.uci.ics.asterix.external.data.parser.DelimitedDataStreamParser");
-        formatToParserMap.put("adm", "edu.uci.ics.asterix.external.data.parser.ADMStreamParser");
-
-        formatToManagedParserMap.put("delimited-text",
-                "edu.uci.ics.asterix.external.data.parser.ManagedDelimitedDataStreamParser");
-        formatToManagedParserMap.put("adm", "edu.uci.ics.asterix.external.data.parser.ManagedAdmStreamParser");
-
-    }
+    protected static final HashMap<String, String> formatToParserFactoryMap = new HashMap<String, String>();
 
     public static final String KEY_FORMAT = "format";
-    public static final String KEY_PARSER = "parser";
+    public static final String KEY_PARSER_FACTORY = "parser";
 
     public static final String FORMAT_DELIMITED_TEXT = "delimited-text";
     public static final String FORMAT_ADM = "adm";
 
+    static {
+        formatToParserFactoryMap.put(FORMAT_DELIMITED_TEXT,
+                "edu.uci.ics.asterix.runtime.operators.file.AdmSchemafullRecordParserFactory");
+        formatToParserFactoryMap.put(FORMAT_ADM,
+                "edu.uci.ics.asterix.runtime.operators.file.NtDelimitedDataTupleParserFactory");
+    }
+
     abstract public void initialize(IHyracksTaskContext ctx) throws Exception;
 
-    abstract public void configure(Map<String, String> arguments, IAType atype) throws Exception;
+    abstract public void configure(Map<String, String> arguments) throws Exception;
 
     abstract public AdapterDataFlowType getAdapterDataFlowType();
 
@@ -89,16 +67,24 @@ public abstract class AbstractDatasourceAdapter implements IDatasourceAdapter {
         return partitionConstraint;
     }
 
-    public void setAdapterProperty(String property, String value) {
-        configuration.put(property, value);
-    }
-
     public String getAdapterProperty(String attribute) {
         return configuration.get(attribute);
     }
 
     public Map<String, String> getConfiguration() {
         return configuration;
+    }
+
+    public IAType getAdapterOutputType() {
+        return atype;
+    }
+
+    public void setAdapterProperty(String property, String value) {
+        configuration.put(property, value);
+    }
+
+    public boolean isTypeInfoRequired() {
+        return typeInfoRequired;
     }
 
 }

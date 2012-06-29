@@ -12,13 +12,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package edu.uci.ics.asterix.external.data.adapter.api;
+package edu.uci.ics.asterix.external.dataset.adapter;
 
 import java.io.Serializable;
 import java.util.Map;
 
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksPartitionConstraint;
+import edu.uci.ics.hyracks.api.comm.IFrameWriter;
 import edu.uci.ics.hyracks.api.context.IHyracksTaskContext;
 
 /**
@@ -143,7 +144,7 @@ public interface IDatasourceAdapter extends Serializable {
      *            providing all arguments as a set of (key,value) pairs. These
      *            arguments are put into the metadata.
      */
-    public void configure(Map<String, String> arguments, IAType atype)
+    public void configure(Map<String, String> arguments)
             throws Exception;
 
     /**
@@ -162,6 +163,12 @@ public interface IDatasourceAdapter extends Serializable {
      */
     public AlgebricksPartitionConstraint getPartitionConstraint();
 
+    
+    /**
+     *  Returns the output ASTERIX type returned by the adapter. 
+     */
+    public IAType getAdapterOutputType();
+    
     /**
      * Allows the adapter to establish connection with the external data source
      * expressing intent for data and providing any configuration parameters
@@ -175,4 +182,7 @@ public interface IDatasourceAdapter extends Serializable {
      * @throws Exception
      */
     public void initialize(IHyracksTaskContext ctx) throws Exception;
+    
+    
+    public void start(int partition, IFrameWriter writer) throws Exception;
 }

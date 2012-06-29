@@ -16,8 +16,9 @@ package edu.uci.ics.asterix.external.data.operator;
 
 import java.util.Map;
 
-import edu.uci.ics.asterix.external.data.adapter.api.IDatasourceAdapter;
-import edu.uci.ics.asterix.external.data.adapter.api.IDatasourceReadAdapter;
+import edu.uci.ics.asterix.external.adapter.factory.IDatasourceAdapterFactory;
+import edu.uci.ics.asterix.external.adapter.factory.IGenericDatasourceAdapterFactory;
+import edu.uci.ics.asterix.external.dataset.adapter.IDatasourceAdapter;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.hyracks.api.application.ICCApplicationContext;
 import edu.uci.ics.hyracks.api.constraints.IConstraintAcceptor;
@@ -34,16 +35,16 @@ import edu.uci.ics.hyracks.dataflow.std.base.AbstractUnaryOutputSourceOperatorNo
 public class ExternalDataScanOperatorDescriptor extends AbstractSingleActivityOperatorDescriptor {
     private static final long serialVersionUID = 1L;
 
-    private final String adapter;
+    private final String adapterFactory;
     private final Map<String, String> adapterConfiguration;
     private final IAType atype;
-    private  IDatasourceReadAdapter datasourceReadAdapter;
+    private IDatasourceAdapterFactory datasourceAdapterFactory;
 
     public ExternalDataScanOperatorDescriptor(JobSpecification spec, String adapter, Map<String, String> arguments,
             IAType atype, RecordDescriptor rDesc) {
         super(spec, 0, 1);
         recordDescriptors[0] = rDesc;
-        this.adapter = adapter;
+        this.adapterFactory = adapter;
         this.adapterConfiguration = arguments;
         this.atype = atype;
     }
@@ -51,7 +52,7 @@ public class ExternalDataScanOperatorDescriptor extends AbstractSingleActivityOp
     @Override
     public void contributeSchedulingConstraints(IConstraintAcceptor constraintAcceptor, JobActivityGraph plan,
             ICCApplicationContext appCtx) {
-        
+
         /*
         Comment: The following code is commented out. This is because constraints are being set at compile time so that they can 
         be propagated to upstream Asterix operators. Hyracks has to provide a way to propagate constraints to upstream operators.
@@ -81,14 +82,11 @@ public class ExternalDataScanOperatorDescriptor extends AbstractSingleActivityOp
 
     }
 
-    public IOperatorNodePushable createPushRuntime(IHyracksTaskContext ctx,
+    public IOperatorNodePushable createPushRuntime(final IHyracksTaskContext ctx,
             IRecordDescriptorProvider recordDescProvider, final int partition, int nPartitions)
             throws HyracksDataException {
-
         try {
-            //datasourceReadAdapter = (IDatasourceReadAdapter) Class.forName(adapter).newInstance();
-            datasourceReadAdapter.configure(adapterConfiguration, atype);
-            datasourceReadAdapter.initialize(ctx);
+            datasourceAdapterFactory = (IDatasourceAdapterFactory) Class.forName(adapterFactory).newInstance();
         } catch (Exception e) {
             throw new HyracksDataException("initialization of adapter failed", e);
         }
@@ -96,8 +94,14 @@ public class ExternalDataScanOperatorDescriptor extends AbstractSingleActivityOp
             @Override
             public void initialize() throws HyracksDataException {
                 writer.open();
+                IDatasourceAdapter adapter = null;
                 try {
-                    datasourceReadAdapter.getDataParser(partition).parse(writer);
+                    if (datasourceAdapterFactory.getAdapterType().equals(IDatasourceAdapterFactory.AdapterType.GENERIC)) {
+                        adapter = ((IGenericDatasourceAdapterFactory) datasourceAdapterFactory).createAdapter(
+                                adapterConfiguration, atype);
+                    }
+                    adapter.initialize(ctx);
+                    adapter.start(partition, writer);
                 } catch (Exception e) {
                     throw new HyracksDataException("exception during reading from external data source", e);
                 } finally {
@@ -106,8 +110,5 @@ public class ExternalDataScanOperatorDescriptor extends AbstractSingleActivityOp
             }
         };
     }
-    
-    public void setDatasourceAdapter(IDatasourceReadAdapter adapterInstance){
-        this.datasourceReadAdapter = adapterInstance;
-    }
+
 }

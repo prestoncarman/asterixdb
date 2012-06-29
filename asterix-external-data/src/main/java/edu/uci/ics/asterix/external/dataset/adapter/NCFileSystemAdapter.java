@@ -18,53 +18,39 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.InputStream;
+import java.lang.reflect.Constructor;
 import java.util.Map;
 
-import edu.uci.ics.asterix.external.data.adapter.api.IDatasourceReadAdapter;
-import edu.uci.ics.asterix.external.data.parser.IDataParser;
-import edu.uci.ics.asterix.external.data.parser.IDataStreamParser;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksAbsolutePartitionConstraint;
+import edu.uci.ics.hyracks.api.comm.IFrameWriter;
 import edu.uci.ics.hyracks.api.context.IHyracksTaskContext;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 import edu.uci.ics.hyracks.api.io.FileReference;
 import edu.uci.ics.hyracks.dataflow.std.file.FileSplit;
+import edu.uci.ics.hyracks.dataflow.std.file.ITupleParser;
+import edu.uci.ics.hyracks.dataflow.std.file.ITupleParserFactory;
 
-public class NCFileSystemAdapter extends AbstractDatasourceAdapter implements IDatasourceReadAdapter {
+public class NCFileSystemAdapter extends AbstractDatasourceAdapter {
 
     private static final long serialVersionUID = -4154256369973615710L;
     private FileSplit[] fileSplits;
-    private String parserClass;
+    private String parserFactory;
 
-    public class Constants {
-        public static final String KEY_SPLITS = "path";
-        public static final String KEY_FORMAT = "format";
-        public static final String KEY_PARSER = "parser";
-        public static final String FORMAT_DELIMITED_TEXT = "delimited-text";
-        public static final String FORMAT_ADM = "adm";
+    public static final String KEY_SPLITS = "path";
+
+    public NCFileSystemAdapter(IAType atype) {
+        this.atype = atype;
     }
 
     @Override
-    public void configure(Map<String, String> arguments, IAType atype) throws Exception {
+    public void configure(Map<String, String> arguments) throws Exception {
         this.configuration = arguments;
-        String[] splits = arguments.get(Constants.KEY_SPLITS).split(",");
+        String[] splits = arguments.get(KEY_SPLITS).split(",");
         configureFileSplits(splits);
         configurePartitionConstraint();
         configureFormat();
-        if (atype == null) {
-            configureInputType();
-        } else {
-            setInputAType(atype);
-        }
-    }
-
-    public IAType getAType() {
-        return atype;
-    }
-
-    public void setInputAType(IAType atype) {
-        this.atype = atype;
     }
 
     @Override
@@ -80,28 +66,6 @@ public class NCFileSystemAdapter extends AbstractDatasourceAdapter implements ID
     @Override
     public AdapterType getAdapterType() {
         return AdapterType.READ;
-    }
-
-    @Override
-    public IDataParser getDataParser(int partition) throws Exception {
-        FileSplit split = fileSplits[partition];
-        File inputFile = split.getLocalFile().getFile();
-        InputStream in;
-        try {
-            in = new FileInputStream(inputFile);
-        } catch (FileNotFoundException e) {
-            throw new HyracksDataException(e);
-        }
-
-        IDataParser dataParser = (IDataParser) Class.forName(parserClass).newInstance();
-        if (dataParser instanceof IDataStreamParser) {
-            ((IDataStreamParser) dataParser).setInputStream(in);
-        } else {
-            throw new IllegalArgumentException(" parser not compatible");
-        }
-        dataParser.configure(configuration);
-        dataParser.initialize((ARecordType) atype, ctx);
-        return dataParser;
     }
 
     private void configureFileSplits(String[] splits) {
@@ -120,21 +84,17 @@ public class NCFileSystemAdapter extends AbstractDatasourceAdapter implements ID
     }
 
     protected void configureFormat() throws Exception {
-        parserClass = configuration.get(Constants.KEY_PARSER);
-        if (parserClass == null) {
-            if (Constants.FORMAT_DELIMITED_TEXT.equalsIgnoreCase(configuration.get(KEY_FORMAT))) {
-                parserClass = formatToParserMap.get(FORMAT_DELIMITED_TEXT);
-            } else if (Constants.FORMAT_ADM.equalsIgnoreCase(configuration.get(Constants.KEY_FORMAT))) {
-                parserClass = formatToParserMap.get(Constants.FORMAT_ADM);
+        parserFactory = configuration.get(KEY_PARSER_FACTORY);
+        if (parserFactory == null) {
+            if (FORMAT_DELIMITED_TEXT.equalsIgnoreCase(configuration.get(KEY_FORMAT))) {
+                parserFactory = formatToParserFactoryMap.get(FORMAT_DELIMITED_TEXT);
+            } else if (FORMAT_ADM.equalsIgnoreCase(configuration.get(KEY_FORMAT))) {
+                parserFactory = formatToParserFactoryMap.get(FORMAT_ADM);
             } else {
                 throw new IllegalArgumentException(" format " + configuration.get(KEY_FORMAT) + " not supported");
             }
         }
 
-    }
-
-    private void configureInputType() {
-        throw new UnsupportedOperationException(" Cannot resolve input type, operation not supported");
     }
 
     private void configurePartitionConstraint() {
@@ -143,6 +103,24 @@ public class NCFileSystemAdapter extends AbstractDatasourceAdapter implements ID
             locs[i] = fileSplits[i].getNodeName();
         }
         partitionConstraint = new AlgebricksAbsolutePartitionConstraint(locs);
+    }
+
+    @Override
+    public void start(int partition, IFrameWriter writer) throws Exception {
+        FileSplit split = fileSplits[partition];
+        File inputFile = split.getLocalFile().getFile();
+        InputStream in;
+        try {
+            in = new FileInputStream(inputFile);
+        } catch (FileNotFoundException e) {
+            throw new HyracksDataException(e);
+        }
+
+        Class tupleParserFactoryClass = Class.forName(parserFactory);
+        Constructor ctor = tupleParserFactoryClass.getConstructor(ARecordType.class);
+        ITupleParserFactory parserFactory = (ITupleParserFactory) ctor.newInstance(atype);
+        ITupleParser parser = parserFactory.createTupleParser(ctx);
+        parser.parse(in, writer);
     }
 
 }
