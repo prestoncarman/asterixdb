@@ -102,6 +102,8 @@ public class APIFramework {
                 RuleCollections.buildConsolidationRuleCollection()));
         defaultLogicalRewrites.add(new Pair<AbstractRuleController, List<IAlgebraicRewriteRule>>(seqCtrlNoDfs,
                 RuleCollections.buildOpPushDownRuleCollection()));
+        
+        //put TXnRuleCollection!
         return defaultLogicalRewrites;
     }
 

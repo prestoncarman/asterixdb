@@ -17,24 +17,16 @@ package edu.uci.ics.asterix.optimizer.rules;
 import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.commons.lang3.mutable.MutableObject;
 
-import edu.uci.ics.asterix.aql.util.FunctionUtils;
-import edu.uci.ics.asterix.om.base.ABoolean;
-import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IOptimizationContext;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalOperatorTag;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
-import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
-import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
-import edu.uci.ics.hyracks.algebricks.core.algebra.functions.AlgebricksBuiltinFunctions;
-import edu.uci.ics.hyracks.algebricks.core.algebra.functions.IFunctionInfo;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.physical.AssignPOperator;
 import edu.uci.ics.hyracks.algebricks.core.rewriter.base.IAlgebraicRewriteRule;
 
 public class IntroduceTransactionCommitByAssignOpRule implements IAlgebraicRewriteRule {
@@ -56,13 +48,12 @@ public class IntroduceTransactionCommitByAssignOpRule implements IAlgebraicRewri
 
         Mutable<ILogicalOperator> childOfSelect = selectOperator.getInputs().get(0);
 
-        //[Direction] SelectOp(cond1)<--ChildOps... ==> SelectOp(newCond)<--NewAssignOp(cond1)<--ChildOps... 
+        //[Direction] SelectOp(cond1)<--ChildOps... ==> SelectOp(booleanValue of cond1)<--NewAssignOp(cond1)<--ChildOps... 
         //#. Create an assign-operator with a new local variable and the condition of the select-operator. 
         //#. Set the input(child operator) of the new assign-operator to input(child operator) of the select-operator.
         //	 (Later, the newly created assign-operator will apply the condition on behalf of the select-operator, 
         //    and set the variable of the assign-operator to a boolean value according to the condition evaluation.)
-        //#. Give the select-operator a new condition that checks the boolean value created by the newly created child
-        //   assign-operator.
+        //#. Give the select-operator the result boolean value created by the newly created child assign-operator.
 
         //create an assignOp with a variable and the condition of the select-operator. 
         LogicalVariable v = context.newVar();
@@ -70,28 +61,13 @@ public class IntroduceTransactionCommitByAssignOpRule implements IAlgebraicRewri
                 .getCondition().getValue()));
 
         //set the input of the new assign-operator to the input of the select-operator.
-        assignOperator.getInputs().clear();
         assignOperator.getInputs().add(childOfSelect);
-        //set to a physical operator
-        assignOperator.setPhysicalOperator(new AssignPOperator());
-
-        //create a condition which checks the boolean value of the assignOperator and 
-        //set the select-operator to the condition
-
-        //create a ScalarFunctionCallExpression object which will be a new condition of the select-operator
-        IFunctionInfo finfo = FunctionUtils.getFunctionInfo(AlgebricksBuiltinFunctions.EQ);
-        @SuppressWarnings("unchecked")
-        ScalarFunctionCallExpression scalarFunctionCallExpression = new ScalarFunctionCallExpression(finfo,
-                new MutableObject<ILogicalExpression>(new VariableReferenceExpression(v)),
-                new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(ABoolean.TRUE))));
-
-        //set the function to the condition of the select-operator
-        selectOperator.getCondition().setValue(scalarFunctionCallExpression);
-        selectOperator.getInputs().clear();
-        selectOperator.getInputs().add(new MutableObject<ILogicalOperator>(assignOperator));
+        
+        //set the result value of the assign-operator to the condition of the select-operator
+        selectOperator.getCondition().setValue(new VariableReferenceExpression(v));//scalarFunctionCallExpression);
+        selectOperator.getInputs().set(0, new MutableObject<ILogicalOperator>(assignOperator));
 
         context.computeAndSetTypeEnvironmentForOperator(assignOperator);
-        context.computeAndSetTypeEnvironmentForOperator(selectOperator);
 
         //Once this rule is fired, don't apply again.
         context.addToDontApplySet(this, selectOperator);

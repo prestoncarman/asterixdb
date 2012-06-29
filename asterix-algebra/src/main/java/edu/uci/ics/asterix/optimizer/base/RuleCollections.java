@@ -190,6 +190,8 @@ public final class RuleCollections {
     public final static List<IAlgebraicRewriteRule> buildPhysicalRewritesAllLevelsRuleCollection() {
         List<IAlgebraicRewriteRule> physicalRewritesAllLevels = new LinkedList<IAlgebraicRewriteRule>();
         physicalRewritesAllLevels.add(new PullSelectOutOfEqJoin());
+        //Turned off the following rule for now not to change OptimizerTest results.
+        //physicalRewritesAllLevels.add(new IntroduceTransactionCommitByAssignOpRule());        
         physicalRewritesAllLevels.add(new SetAlgebricksPhysicalOperatorsRule());
         physicalRewritesAllLevels.add(new SetAsterixPhysicalOperatorsRule());
         physicalRewritesAllLevels.add(new EnforceStructuralPropertiesRule());
@@ -198,8 +200,7 @@ public final class RuleCollections {
         physicalRewritesAllLevels.add(new PullPositionalVariableFromUnnestRule());
         physicalRewritesAllLevels.add(new PushProjectDownRule());
         physicalRewritesAllLevels.add(new InsertProjectBeforeUnionRule());
-        //Turned off the following rule for now not to change OptimizerTest results.
-        //physicalRewritesAllLevels.add(new IntroduceTransactionCommitByAssignOpRule());
+
         return physicalRewritesAllLevels;
     }
 
