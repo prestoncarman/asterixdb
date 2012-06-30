@@ -257,7 +257,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         IDatasourceAdapterFactory adapterFactory;
         IDatasourceAdapter adapter;
         try {
-            adapterFactory = (IDatasourceAdapterFactory) Class.forName(decl.getAdapter()).newInstance();
+            adapterFactory = (IDatasourceAdapterFactory) Class.forName(decl.getAdapterFactory()).newInstance();
 
             if (adapterFactory.getAdapterType().equals(AdapterType.GENERIC)) {
                 adapter = ((IGenericDatasourceAdapterFactory) adapterFactory).createAdapter(decl.getProperties(),
@@ -273,7 +273,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         RecordDescriptor feedDesc = new RecordDescriptor(new ISerializerDeserializer[] { payloadSerde });
 
         FeedIntakeOperatorDescriptor feedIngestor = new FeedIntakeOperatorDescriptor(jobSpec, new FeedId(dataverse,
-                dataset), decl.getAdapter(), decl.getProperties(), (ARecordType) itemType, feedDesc);
+                dataset), decl.getAdapterFactory(), decl.getProperties(), (ARecordType) itemType, feedDesc);
 
         AlgebricksPartitionConstraint constraint = adapter.getPartitionConstraint();
         return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(feedIngestor, constraint);

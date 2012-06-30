@@ -21,7 +21,12 @@ import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksPartitionConstraint;
 import edu.uci.ics.hyracks.api.context.IHyracksTaskContext;
+import edu.uci.ics.hyracks.dataflow.common.data.parsers.DoubleParserFactory;
+import edu.uci.ics.hyracks.dataflow.common.data.parsers.FloatParserFactory;
 import edu.uci.ics.hyracks.dataflow.common.data.parsers.IValueParserFactory;
+import edu.uci.ics.hyracks.dataflow.common.data.parsers.IntegerParserFactory;
+import edu.uci.ics.hyracks.dataflow.common.data.parsers.LongParserFactory;
+import edu.uci.ics.hyracks.dataflow.common.data.parsers.UTF8StringParserFactory;
 
 /**
  * Represents the base class that is required to be extended by every
@@ -29,62 +34,79 @@ import edu.uci.ics.hyracks.dataflow.common.data.parsers.IValueParserFactory;
  */
 public abstract class AbstractDatasourceAdapter implements IDatasourceAdapter {
 
-    private static final long serialVersionUID = -3510610289692452466L;
+	private static final long serialVersionUID = -3510610289692452466L;
 
-    protected Map<String, String> configuration;
-    protected transient AlgebricksPartitionConstraint partitionConstraint;
-    protected IAType atype;
-    protected IHyracksTaskContext ctx;
-    protected AdapterDataFlowType dataFlowType;
-    protected AdapterType adapterType;
-    protected boolean typeInfoRequired = false;
+	protected Map<String, String> configuration;
+	protected transient AlgebricksPartitionConstraint partitionConstraint;
+	protected IAType atype;
+	protected IHyracksTaskContext ctx;
+	protected AdapterDataFlowType dataFlowType;
+	protected AdapterType adapterType;
+	protected boolean typeInfoRequired = false;
 
-    protected static final HashMap<ATypeTag, IValueParserFactory> typeToValueParserFactMap = new HashMap<ATypeTag, IValueParserFactory>();
-    protected static final HashMap<String, String> formatToParserFactoryMap = new HashMap<String, String>();
+	protected static final HashMap<ATypeTag, IValueParserFactory> typeToValueParserFactMap = new HashMap<ATypeTag, IValueParserFactory>();
+	static {
+		typeToValueParserFactMap.put(ATypeTag.INT32,
+				IntegerParserFactory.INSTANCE);
+		typeToValueParserFactMap.put(ATypeTag.FLOAT,
+				FloatParserFactory.INSTANCE);
+		typeToValueParserFactMap.put(ATypeTag.DOUBLE,
+				DoubleParserFactory.INSTANCE);
+		typeToValueParserFactMap
+				.put(ATypeTag.INT64, LongParserFactory.INSTANCE);
+		typeToValueParserFactMap.put(ATypeTag.STRING,
+				UTF8StringParserFactory.INSTANCE);
+	}
 
-    public static final String KEY_FORMAT = "format";
-    public static final String KEY_PARSER_FACTORY = "parser";
+	protected static final HashMap<String, String> formatToParserFactoryMap = new HashMap<String, String>();
 
-    public static final String FORMAT_DELIMITED_TEXT = "delimited-text";
-    public static final String FORMAT_ADM = "adm";
+	public static final String KEY_FORMAT = "format";
+	public static final String KEY_PARSER_FACTORY = "parser";
 
-    static {
-        formatToParserFactoryMap.put(FORMAT_DELIMITED_TEXT,
-                "edu.uci.ics.asterix.runtime.operators.file.AdmSchemafullRecordParserFactory");
-        formatToParserFactoryMap.put(FORMAT_ADM,
-                "edu.uci.ics.asterix.runtime.operators.file.NtDelimitedDataTupleParserFactory");
-    }
+	public static final String FORMAT_DELIMITED_TEXT = "delimited-text";
+	public static final String FORMAT_ADM = "adm";
 
-    abstract public void initialize(IHyracksTaskContext ctx) throws Exception;
+	static {
+		formatToParserFactoryMap
+				.put(FORMAT_DELIMITED_TEXT,
+						"edu.uci.ics.asterix.runtime.operators.file.NtDelimitedDataTupleParserFactory");
+		formatToParserFactoryMap
+				.put(FORMAT_ADM,
+						"edu.uci.ics.asterix.runtime.operators.file.AdmSchemafullRecordParserFactory");
 
-    abstract public void configure(Map<String, String> arguments) throws Exception;
+	}
 
-    abstract public AdapterDataFlowType getAdapterDataFlowType();
+	abstract public void initialize(IHyracksTaskContext ctx) throws Exception;
 
-    abstract public AdapterType getAdapterType();
+	abstract public void configure(Map<String, String> arguments)
+			throws Exception;
 
-    public AlgebricksPartitionConstraint getPartitionConstraint() {
-        return partitionConstraint;
-    }
+	abstract public AdapterDataFlowType getAdapterDataFlowType();
 
-    public String getAdapterProperty(String attribute) {
-        return configuration.get(attribute);
-    }
+	abstract public AdapterType getAdapterType();
 
-    public Map<String, String> getConfiguration() {
-        return configuration;
-    }
+	public AlgebricksPartitionConstraint getPartitionConstraint() {
+		return partitionConstraint;
+	}
 
-    public IAType getAdapterOutputType() {
-        return atype;
-    }
+	public String getAdapterProperty(String attribute) {
+		return configuration.get(attribute);
+	}
 
-    public void setAdapterProperty(String property, String value) {
-        configuration.put(property, value);
-    }
+	public Map<String, String> getConfiguration() {
+		return configuration;
+	}
 
-    public boolean isTypeInfoRequired() {
-        return typeInfoRequired;
-    }
+	public IAType getAdapterOutputType() {
+		return atype;
+	}
+
+	public void setAdapterProperty(String property, String value) {
+		configuration.put(property, value);
+	}
+
+	public boolean isTypeInfoRequired() {
+		return typeInfoRequired;
+	}
 
 }

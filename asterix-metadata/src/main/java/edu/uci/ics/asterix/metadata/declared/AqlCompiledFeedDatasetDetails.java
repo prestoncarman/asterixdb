@@ -25,7 +25,7 @@ import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluatorFactory;
 
 public class AqlCompiledFeedDatasetDetails extends
 		AqlCompiledInternalDatasetDetails {
-	private final String adapter;
+	private final String adapterFactory;
 	private final Map<String, String> properties;
 	private final String functionIdentifier;
 	private final String feedState;
@@ -39,14 +39,14 @@ public class AqlCompiledFeedDatasetDetails extends
 			String feedState) {
 		super(partitioningExprs, partitionFuns, nodegroupName, primaryIndex,
 				secondaryIndexes);
-		this.adapter = adapter;
+		this.adapterFactory = adapter;
 		this.properties = properties;
 		this.functionIdentifier = functionIdentifier;
 		this.feedState = feedState;
 	}
 
-	public String getAdapter() {
-		return adapter;
+	public String getAdapterFactory() {
+		return adapterFactory;
 	}
 
 	public Map<String, String> getProperties() {

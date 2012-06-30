@@ -211,7 +211,7 @@ public class AqlCompiledMetadataDeclarations {
                     } else {
                         acdd = new AqlCompiledFeedDatasetDetails(id.getPartitioningKey(), partitioningEvalFactories,
                                 id.getNodeGroupName(), primaryIndex, secondaryIndexes,
-                                ((FeedDatasetDetails) id).getAdapter(), ((FeedDatasetDetails) id).getProperties(),
+                                ((FeedDatasetDetails) id).getAdapterFactory(), ((FeedDatasetDetails) id).getProperties(),
                                 ((FeedDatasetDetails) id).getFunctionIdentifier(), ((FeedDatasetDetails) id)
                                         .getFeedState().toString());
                     }
