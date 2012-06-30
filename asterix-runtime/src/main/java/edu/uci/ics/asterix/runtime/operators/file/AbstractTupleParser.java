@@ -73,7 +73,7 @@ public abstract class AbstractTupleParser implements ITupleParser {
 		}
 	}
 
-	private void addTupleToFrame(IFrameWriter writer)
+	protected void addTupleToFrame(IFrameWriter writer)
 			throws HyracksDataException {
 		if (!appender.append(tb.getFieldEndOffsets(), tb.getByteArray(), 0,
 				tb.getSize())) {
