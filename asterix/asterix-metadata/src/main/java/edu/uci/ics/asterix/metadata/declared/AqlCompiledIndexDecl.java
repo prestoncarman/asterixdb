@@ -36,7 +36,7 @@ public class AqlCompiledIndexDecl {
 
     private String indexName;
     private IndexKind kind;
-    private List<String> fieldExprs = new ArrayList<String>();    
+    private List<String> fieldExprs = new ArrayList<String>();
     // Only for NGRAM indexes.
     private int gramLength;
 
@@ -46,7 +46,7 @@ public class AqlCompiledIndexDecl {
         this.fieldExprs = fieldExprs;
         this.gramLength = gramLength;
     }
-    
+
     public AqlCompiledIndexDecl(String indexName, IndexKind kind, List<String> fieldExprs) {
         this.indexName = indexName;
         this.kind = kind;
@@ -70,12 +70,13 @@ public class AqlCompiledIndexDecl {
     public List<String> getFieldExprs() {
         return fieldExprs;
     }
-    
+
     public int getGramLength() {
-    	return gramLength;
+        return gramLength;
     }
 
-    public static Pair<IAType, Boolean> getNonNullableKeyFieldType(String expr, ARecordType recType) throws AlgebricksException {
+    public static Pair<IAType, Boolean> getNonNullableKeyFieldType(String expr, ARecordType recType)
+            throws AlgebricksException {
         IAType keyType = AqlCompiledIndexDecl.keyFieldType(expr, recType);
         boolean nullable = false;
         if (keyType.getTypeTag() == ATypeTag.UNION) {
@@ -88,7 +89,7 @@ public class AqlCompiledIndexDecl {
         }
         return new Pair<IAType, Boolean>(keyType, nullable);
     }
-    
+
     private static IAType keyFieldType(String expr, ARecordType recType) throws AlgebricksException {
         String[] names = recType.getFieldNames();
         int n = names.length;

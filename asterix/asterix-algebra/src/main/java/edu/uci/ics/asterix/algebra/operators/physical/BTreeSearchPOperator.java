@@ -32,7 +32,7 @@ import edu.uci.ics.hyracks.algebricks.core.jobgen.impl.JobGenContext;
 import edu.uci.ics.hyracks.api.dataflow.IOperatorDescriptor;
 
 /**
- * Contributes the runtime operator for an unnest-map representing a BTree search. 
+ * Contributes the runtime operator for an unnest-map representing a BTree search.
  */
 public class BTreeSearchPOperator extends IndexSearchPOperator {
 
@@ -48,7 +48,7 @@ public class BTreeSearchPOperator extends IndexSearchPOperator {
     @Override
     public void contributeRuntimeOperator(IHyracksJobBuilder builder, JobGenContext context, ILogicalOperator op,
             IOperatorSchema opSchema, IOperatorSchema[] inputSchemas, IOperatorSchema outerPlanSchema)
-                    throws AlgebricksException {
+            throws AlgebricksException {
         UnnestMapOperator unnestMap = (UnnestMapOperator) op;
         ILogicalExpression unnestExpr = unnestMap.getExpressionRef().getValue();
         if (unnestExpr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
@@ -56,7 +56,7 @@ public class BTreeSearchPOperator extends IndexSearchPOperator {
         }
         AbstractFunctionCallExpression unnestFuncExpr = (AbstractFunctionCallExpression) unnestExpr;
         FunctionIdentifier funcIdent = unnestFuncExpr.getFunctionIdentifier();
-        if (!funcIdent.equals(AsterixBuiltinFunctions.INDEX_SEARCH)) {            
+        if (!funcIdent.equals(AsterixBuiltinFunctions.INDEX_SEARCH)) {
             return;
         }
         BTreeJobGenParams jobGenParams = new BTreeJobGenParams();

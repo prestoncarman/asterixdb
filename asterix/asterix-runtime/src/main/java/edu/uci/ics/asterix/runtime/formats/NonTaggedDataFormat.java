@@ -318,7 +318,7 @@ public class NonTaggedDataFormat implements IDataFormat {
         temp.add(SimilarityJaccardSortedCheckDescriptor.FACTORY);
         temp.add(SimilarityJaccardPrefixDescriptor.FACTORY);
         temp.add(SimilarityJaccardPrefixCheckDescriptor.FACTORY);
-        
+
         temp.add(SwitchCaseDescriptor.FACTORY);
         temp.add(RegExpDescriptor.FACTORY);
         temp.add(InjectFailureDescriptor.FACTORY);

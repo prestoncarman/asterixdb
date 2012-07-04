@@ -199,8 +199,8 @@ public class AqlCompiledMetadataDeclarations {
                             primaryIndex = new AqlCompiledIndexDecl(rec.getIndexName(), IndexKind.BTREE,
                                     rec.getKeyFieldNames());
                         } else {
-                            secondaryIndexes.add(new AqlCompiledIndexDecl(rec.getIndexName(),
-                            		getIndexKindFromType(rec.getIndexType()), rec.getKeyFieldNames(), rec.getGramLength()));
+                            secondaryIndexes.add(new AqlCompiledIndexDecl(rec.getIndexName(), getIndexKindFromType(rec
+                                    .getIndexType()), rec.getKeyFieldNames(), rec.getGramLength()));
                         }
                     }
 
@@ -235,15 +235,19 @@ public class AqlCompiledMetadataDeclarations {
     }
 
     private IndexKind getIndexKindFromType(IndexType type) {
-    	switch(type) {
-    	case BTREE: return IndexKind.BTREE;
-    	case RTREE: return IndexKind.RTREE;
-    	case WORD_INVIX: return IndexKind.WORD_INVIX;
-    	case NGRAM_INVIX: return IndexKind.NGRAM_INVIX;
-    	}
-    	return null;
+        switch (type) {
+            case BTREE:
+                return IndexKind.BTREE;
+            case RTREE:
+                return IndexKind.RTREE;
+            case WORD_INVIX:
+                return IndexKind.WORD_INVIX;
+            case NGRAM_INVIX:
+                return IndexKind.NGRAM_INVIX;
+        }
+        return null;
     }
-    
+
     public void setOutputFile(FileSplit outputFile) {
         this.outputFile = outputFile;
     }
@@ -264,7 +268,7 @@ public class AqlCompiledMetadataDeclarations {
         return evalFactories;
     }
 
-	public Pair<IFileSplitProvider, AlgebricksPartitionConstraint> splitProviderAndPartitionConstraintsForInternalOrFeedDataset(
+    public Pair<IFileSplitProvider, AlgebricksPartitionConstraint> splitProviderAndPartitionConstraintsForInternalOrFeedDataset(
             String datasetName, String targetIdxName) throws AlgebricksException, MetadataException {
         FileSplit[] splits = splitsForInternalOrFeedDataset(datasetName, targetIdxName);
         IFileSplitProvider splitProvider = new ConstantFileSplitProvider(splits);
@@ -276,7 +280,8 @@ public class AqlCompiledMetadataDeclarations {
         return new Pair<IFileSplitProvider, AlgebricksPartitionConstraint>(splitProvider, pc);
     }
 
-    public Pair<IFileSplitProvider, IFileSplitProvider> getInvertedIndexFileSplitProviders(IFileSplitProvider splitProvider) {
+    public Pair<IFileSplitProvider, IFileSplitProvider> getInvertedIndexFileSplitProviders(
+            IFileSplitProvider splitProvider) {
         int numSplits = splitProvider.getFileSplits().length;
         FileSplit[] btreeSplits = new FileSplit[numSplits];
         FileSplit[] invListsSplits = new FileSplit[numSplits];
@@ -289,7 +294,7 @@ public class AqlCompiledMetadataDeclarations {
         return new Pair<IFileSplitProvider, IFileSplitProvider>(new ConstantFileSplitProvider(btreeSplits),
                 new ConstantFileSplitProvider(invListsSplits));
     }
-    
+
     private FileSplit[] splitsForInternalOrFeedDataset(String datasetName, String targetIdxName)
             throws AlgebricksException, MetadataException {
 

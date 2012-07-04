@@ -91,7 +91,7 @@ public final class RuleCollections {
     }
 
     public final static List<IAlgebraicRewriteRule> buildNormalizationRuleCollection() {
-        List<IAlgebraicRewriteRule> normalization = new LinkedList<IAlgebraicRewriteRule>();        
+        List<IAlgebraicRewriteRule> normalization = new LinkedList<IAlgebraicRewriteRule>();
         normalization.add(new EliminateSubplanRule());
         normalization.add(new IntroduceGroupByForStandaloneAggregRule());
         normalization.add(new BreakSelectIntoConjunctsRule());
@@ -157,7 +157,7 @@ public final class RuleCollections {
     public final static List<IAlgebraicRewriteRule> buildFuzzyJoinRuleCollection() {
         List<IAlgebraicRewriteRule> fuzzy = new LinkedList<IAlgebraicRewriteRule>();
         fuzzy.add(new FuzzyJoinRule());
-        fuzzy.add(new InferTypesRule());        
+        fuzzy.add(new InferTypesRule());
         return fuzzy;
     }
 

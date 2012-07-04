@@ -44,7 +44,7 @@ public class ContainsDescriptor extends AbstractScalarFunctionDynamicDescriptor 
 
                         int s1Start = 3;
                         int s2Start = 3;
-                        
+
                         boolean matches = false;
                         int maxStart = utflen1 - utflen2;
                         int startMatch = 0;

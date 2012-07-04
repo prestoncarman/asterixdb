@@ -39,7 +39,8 @@ import edu.uci.ics.hyracks.algebricks.core.rewriter.base.IAlgebraicRewriteRule;
 public class FuzzyEqRule implements IAlgebraicRewriteRule {
 
     @Override
-    public boolean rewritePost(Mutable<ILogicalOperator> opRef, IOptimizationContext context) throws AlgebricksException {
+    public boolean rewritePost(Mutable<ILogicalOperator> opRef, IOptimizationContext context)
+            throws AlgebricksException {
         AbstractLogicalOperator op = (AbstractLogicalOperator) opRef.getValue();
 
         // current operator is INNERJOIN or LEFTOUTERJOIN or SELECT
@@ -83,7 +84,7 @@ public class FuzzyEqRule implements IAlgebraicRewriteRule {
             // TODO: Current hack to be able to optimize selections. 
             // We change the behavior of this rule for the specific cases of const-var, or for edit-distance functions.
             boolean useExprAsIs = false;
-            
+
             String simFuncName = FuzzyUtils.getSimFunction(aqlMetadata);
             ArrayList<Mutable<ILogicalExpression>> similarityArgs = new ArrayList<Mutable<ILogicalExpression>>();
             List<ATypeTag> inputExprTypes = new ArrayList<ATypeTag>();
@@ -100,12 +101,12 @@ public class FuzzyEqRule implements IAlgebraicRewriteRule {
                     inputExprTypes.add(t.getTypeTag());
                 } else if (inputExp.getExpressionTag() == LogicalExpressionTag.FUNCTION_CALL) {
                     // Hack to make sure that we will add the func call as is, without wrapping a tokenizer around.
-                    inputTypeTag = ATypeTag.UNORDEREDLIST;                    
+                    inputTypeTag = ATypeTag.UNORDEREDLIST;
                     inputExprTypes.add(inputTypeTag);
                     useExprAsIs = true;
                 } else if (inputExp.getExpressionTag() == LogicalExpressionTag.CONSTANT) {
                     ConstantExpression inputConst = (ConstantExpression) inputExp;
-                    AsterixConstantValue constVal =  (AsterixConstantValue) inputConst.getValue();
+                    AsterixConstantValue constVal = (AsterixConstantValue) inputConst.getValue();
                     inputTypeTag = constVal.getObject().getType().getTypeTag();
                     inputExprTypes.add(inputTypeTag);
                     useExprAsIs = true;
@@ -135,15 +136,15 @@ public class FuzzyEqRule implements IAlgebraicRewriteRule {
                     similarityArgs.add(new MutableObject<ILogicalExpression>(tokenizerExp));
                 }
             }
-            
-                        
+
             FunctionIdentifier simFunctionIdentifier = FuzzyUtils.getFunctionIdentifier(simFuncName);
             ScalarFunctionCallExpression similarityExp = new ScalarFunctionCallExpression(
                     FunctionUtils.getFunctionInfo(simFunctionIdentifier), similarityArgs);
             ArrayList<Mutable<ILogicalExpression>> cmpArgs = new ArrayList<Mutable<ILogicalExpression>>();
             cmpArgs.add(new MutableObject<ILogicalExpression>(similarityExp));
             IAObject simThreshold = FuzzyUtils.getSimThreshold(aqlMetadata, simFuncName);
-            cmpArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(simThreshold))));
+            cmpArgs.add(new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(
+                    simThreshold))));
             ScalarFunctionCallExpression cmpExpr = FuzzyUtils.getComparisonExpr(simFuncName, cmpArgs);
             expRef.setValue(cmpExpr);
             return true;
@@ -156,7 +157,7 @@ public class FuzzyEqRule implements IAlgebraicRewriteRule {
         }
         return expanded;
     }
-    
+
     @Override
     public boolean rewritePre(Mutable<ILogicalOperator> opRef, IOptimizationContext context) throws AlgebricksException {
         return false;

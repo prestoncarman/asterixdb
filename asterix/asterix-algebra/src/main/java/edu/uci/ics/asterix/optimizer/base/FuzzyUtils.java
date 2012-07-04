@@ -1,6 +1,5 @@
 package edu.uci.ics.asterix.optimizer.base;
 
-
 import java.util.ArrayList;
 
 import org.apache.commons.lang3.mutable.Mutable;
@@ -29,7 +28,7 @@ public class FuzzyUtils {
 
     public final static String JACCARD_FUNCTION_NAME = "jaccard";
     public final static String EDIT_DISTANCE_FUNCTION_NAME = "edit-distance";
-    
+
     public static FunctionIdentifier getTokenizer(ATypeTag inputTag) {
         switch (inputTag) {
             case STRING:
@@ -42,7 +41,7 @@ public class FuzzyUtils {
         }
     }
 
-    public static IAObject getSimThreshold(AqlCompiledMetadataDeclarations metadata, String simFuncName) {        
+    public static IAObject getSimThreshold(AqlCompiledMetadataDeclarations metadata, String simFuncName) {
         String simThresholValue = metadata.getPropertyValue(SIM_THRESHOLD_PROP_NAME);
         IAObject ret = null;
         if (simFuncName.equals(JACCARD_FUNCTION_NAME)) {
@@ -62,7 +61,7 @@ public class FuzzyUtils {
         }
         return ret;
     }
-    
+
     public static FunctionIdentifier getFunctionIdentifier(String simFuncName) {
         if (simFuncName.equals(JACCARD_FUNCTION_NAME)) {
             return AsterixBuiltinFunctions.SIMILARITY_JACCARD;
@@ -71,16 +70,19 @@ public class FuzzyUtils {
         }
         return null;
     }
-    
-    public static ScalarFunctionCallExpression getComparisonExpr(String simFuncName, ArrayList<Mutable<ILogicalExpression>> cmpArgs) {
+
+    public static ScalarFunctionCallExpression getComparisonExpr(String simFuncName,
+            ArrayList<Mutable<ILogicalExpression>> cmpArgs) {
         if (simFuncName.equals(JACCARD_FUNCTION_NAME)) {
-            return new ScalarFunctionCallExpression(FunctionUtils.getFunctionInfo(AlgebricksBuiltinFunctions.GE), cmpArgs);
+            return new ScalarFunctionCallExpression(FunctionUtils.getFunctionInfo(AlgebricksBuiltinFunctions.GE),
+                    cmpArgs);
         } else if (simFuncName.equals(EDIT_DISTANCE_FUNCTION_NAME)) {
-            return new ScalarFunctionCallExpression(FunctionUtils.getFunctionInfo(AlgebricksBuiltinFunctions.LE), cmpArgs);
+            return new ScalarFunctionCallExpression(FunctionUtils.getFunctionInfo(AlgebricksBuiltinFunctions.LE),
+                    cmpArgs);
         }
         return null;
     }
-    
+
     public static float getSimThreshold(AqlCompiledMetadataDeclarations metadata) {
         float simThreshold = JACCARD_DEFAULT_SIM_THRESHOLD;
         String simThresholValue = metadata.getPropertyValue(SIM_THRESHOLD_PROP_NAME);

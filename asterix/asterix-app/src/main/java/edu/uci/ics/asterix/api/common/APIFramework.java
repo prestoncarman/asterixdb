@@ -192,7 +192,7 @@ public class APIFramework {
                 switch (stmt.getKind()) {
                     case LOAD_FROM_FILE: {
                         CompiledLoadFromFileStatement stmtLoad = (CompiledLoadFromFileStatement) stmt;
-                        dmlJobs.add(DatasetOperations.createLoadDatasetJobSpec(stmtLoad, metadata));                        
+                        dmlJobs.add(DatasetOperations.createLoadDatasetJobSpec(stmtLoad, metadata));
                         break;
                     }
                     case WRITE_FROM_QUERY_RESULT: {

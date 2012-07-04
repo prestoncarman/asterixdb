@@ -47,7 +47,8 @@ import edu.uci.ics.hyracks.algebricks.rewriter.util.JoinUtils;
 public class SetAsterixPhysicalOperatorsRule implements IAlgebraicRewriteRule {
 
     @Override
-    public boolean rewritePost(Mutable<ILogicalOperator> opRef, IOptimizationContext context) throws AlgebricksException {
+    public boolean rewritePost(Mutable<ILogicalOperator> opRef, IOptimizationContext context)
+            throws AlgebricksException {
         return false;
     }
 
@@ -150,10 +151,11 @@ public class SetAsterixPhysicalOperatorsRule implements IAlgebraicRewriteRule {
                         AqlMetadataProvider mp = (AqlMetadataProvider) context.getMetadataProvider();
                         String dataverseName = mp.getMetadataDeclarations().getDataverseName();
                         AqlSourceId dataSourceId = new AqlSourceId(dataverseName, jobGenParams.getDatasetName());
-                        IDataSourceIndex<String, AqlSourceId> dsi = mp.findDataSourceIndex(jobGenParams.getIndexName(), dataSourceId);
+                        IDataSourceIndex<String, AqlSourceId> dsi = mp.findDataSourceIndex(jobGenParams.getIndexName(),
+                                dataSourceId);
                         if (dsi == null) {
-                            throw new AlgebricksException("Could not find index " + jobGenParams.getIndexName() + " for dataset "
-                                    + dataSourceId);
+                            throw new AlgebricksException("Could not find index " + jobGenParams.getIndexName()
+                                    + " for dataset " + dataSourceId);
                         }
                         IndexKind indexKind = jobGenParams.getIndexKind();
                         boolean requiresBroadcast = jobGenParams.getRequiresBroadcast();

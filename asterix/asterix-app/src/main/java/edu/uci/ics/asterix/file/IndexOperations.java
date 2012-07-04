@@ -27,16 +27,18 @@ public class IndexOperations {
 
     public static JobSpecification buildSecondaryIndexCreationJobSpec(CompiledCreateIndexStatement createIndexStmt,
             AqlCompiledMetadataDeclarations metadata) throws AsterixException, AlgebricksException {
-        SecondaryIndexCreator secondaryIndexCreator = SecondaryIndexCreator.createIndexCreator(createIndexStmt, metadata, physicalOptimizationConfig);
+        SecondaryIndexCreator secondaryIndexCreator = SecondaryIndexCreator.createIndexCreator(createIndexStmt,
+                metadata, physicalOptimizationConfig);
         return secondaryIndexCreator.buildCreationJobSpec();
     }
-    
+
     public static JobSpecification buildSecondaryIndexLoadingJobSpec(CompiledCreateIndexStatement createIndexStmt,
             AqlCompiledMetadataDeclarations metadata) throws AsterixException, AlgebricksException {
-        SecondaryIndexCreator secondaryIndexCreator = SecondaryIndexCreator.createIndexCreator(createIndexStmt, metadata, physicalOptimizationConfig);
+        SecondaryIndexCreator secondaryIndexCreator = SecondaryIndexCreator.createIndexCreator(createIndexStmt,
+                metadata, physicalOptimizationConfig);
         return secondaryIndexCreator.buildLoadingJobSpec();
     }
-    
+
     public static JobSpecification buildDropSecondaryIndexJobSpec(CompiledIndexDropStatement deleteStmt,
             AqlCompiledMetadataDeclarations datasetDecls) throws AlgebricksException, MetadataException {
         String datasetName = deleteStmt.getDatasetName();

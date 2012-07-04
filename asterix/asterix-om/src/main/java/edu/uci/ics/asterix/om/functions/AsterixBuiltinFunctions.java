@@ -237,27 +237,27 @@ public class AsterixBuiltinFunctions {
     public final static FunctionIdentifier PREFIX_LEN_JACCARD = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "prefix-len-jaccard", 2, true);
 
-    public final static FunctionIdentifier SIMILARITY_JACCARD = new FunctionIdentifier(
-			FunctionConstants.ASTERIX_NS, "similarity-jaccard", 2, true);
-	public final static FunctionIdentifier SIMILARITY_JACCARD_CHECK = new FunctionIdentifier(
-			FunctionConstants.ASTERIX_NS, "similarity-jaccard-check", 3, true);
-	public final static FunctionIdentifier SIMILARITY_JACCARD_SORTED = new FunctionIdentifier(
-			FunctionConstants.ASTERIX_NS, "similarity-jaccard-sorted", 2, true);
-	public final static FunctionIdentifier SIMILARITY_JACCARD_SORTED_CHECK = new FunctionIdentifier(
-			FunctionConstants.ASTERIX_NS, "similarity-jaccard-sorted-check", 3, true);
-	public final static FunctionIdentifier SIMILARITY_JACCARD_PREFIX = new FunctionIdentifier(
-			FunctionConstants.ASTERIX_NS, "similarity-jaccard-prefix", 6, true);
-	public final static FunctionIdentifier SIMILARITY_JACCARD_PREFIX_CHECK = new FunctionIdentifier(
-			FunctionConstants.ASTERIX_NS, "similarity-jaccard-prefix-check", 6, true);
+    public final static FunctionIdentifier SIMILARITY_JACCARD = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "similarity-jaccard", 2, true);
+    public final static FunctionIdentifier SIMILARITY_JACCARD_CHECK = new FunctionIdentifier(
+            FunctionConstants.ASTERIX_NS, "similarity-jaccard-check", 3, true);
+    public final static FunctionIdentifier SIMILARITY_JACCARD_SORTED = new FunctionIdentifier(
+            FunctionConstants.ASTERIX_NS, "similarity-jaccard-sorted", 2, true);
+    public final static FunctionIdentifier SIMILARITY_JACCARD_SORTED_CHECK = new FunctionIdentifier(
+            FunctionConstants.ASTERIX_NS, "similarity-jaccard-sorted-check", 3, true);
+    public final static FunctionIdentifier SIMILARITY_JACCARD_PREFIX = new FunctionIdentifier(
+            FunctionConstants.ASTERIX_NS, "similarity-jaccard-prefix", 6, true);
+    public final static FunctionIdentifier SIMILARITY_JACCARD_PREFIX_CHECK = new FunctionIdentifier(
+            FunctionConstants.ASTERIX_NS, "similarity-jaccard-prefix-check", 6, true);
 
     public final static FunctionIdentifier EDIT_DISTANCE = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "edit-distance", 2, true);
     public final static FunctionIdentifier EDIT_DISTANCE_CHECK = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "edit-distance-check", 3, true);
-    public final static FunctionIdentifier EDIT_DISTANCE_LIST_IS_FILTERABLE = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
-            "edit-distance-list-is-filterable", 2, true);
-    public final static FunctionIdentifier EDIT_DISTANCE_STRING_IS_FILTERABLE = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
-            "edit-distance-string-is-filterable", 4, true);
+    public final static FunctionIdentifier EDIT_DISTANCE_LIST_IS_FILTERABLE = new FunctionIdentifier(
+            FunctionConstants.ASTERIX_NS, "edit-distance-list-is-filterable", 2, true);
+    public final static FunctionIdentifier EDIT_DISTANCE_STRING_IS_FILTERABLE = new FunctionIdentifier(
+            FunctionConstants.ASTERIX_NS, "edit-distance-string-is-filterable", 4, true);
 
     // tokenizers:
     public final static FunctionIdentifier WORD_TOKENS = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
@@ -503,11 +503,11 @@ public class AsterixBuiltinFunctions {
         add(SERIAL_LOCAL_AVG, NonTaggedLocalAvgTypeComputer.INSTANCE);
         add(SERIAL_SUM, NonTaggedSumTypeComputer.INSTANCE);
         add(SIMILARITY_JACCARD, AFloatTypeComputer.INSTANCE);
-		add(SIMILARITY_JACCARD_CHECK, OrderedListOfAnyTypeComputer.INSTANCE);
-		add(SIMILARITY_JACCARD_SORTED, AFloatTypeComputer.INSTANCE);
-		add(SIMILARITY_JACCARD_SORTED_CHECK, OrderedListOfAnyTypeComputer.INSTANCE);
-		add(SIMILARITY_JACCARD_PREFIX, AFloatTypeComputer.INSTANCE);
-		add(SIMILARITY_JACCARD_PREFIX_CHECK, OrderedListOfAnyTypeComputer.INSTANCE);
+        add(SIMILARITY_JACCARD_CHECK, OrderedListOfAnyTypeComputer.INSTANCE);
+        add(SIMILARITY_JACCARD_SORTED, AFloatTypeComputer.INSTANCE);
+        add(SIMILARITY_JACCARD_SORTED_CHECK, OrderedListOfAnyTypeComputer.INSTANCE);
+        add(SIMILARITY_JACCARD_PREFIX, AFloatTypeComputer.INSTANCE);
+        add(SIMILARITY_JACCARD_PREFIX_CHECK, OrderedListOfAnyTypeComputer.INSTANCE);
         add(SPATIAL_AREA, ADoubleTypeComputer.INSTANCE);
         add(SPATIAL_CELL, ARectangleTypeComputer.INSTANCE);
         add(SPATIAL_DISTANCE, ADoubleTypeComputer.INSTANCE);

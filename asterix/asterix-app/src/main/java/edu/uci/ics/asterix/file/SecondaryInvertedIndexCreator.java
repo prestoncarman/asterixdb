@@ -36,22 +36,22 @@ import edu.uci.ics.hyracks.storage.am.invertedindex.dataflow.InvertedIndexCreate
 import edu.uci.ics.hyracks.storage.am.invertedindex.tokenizers.IBinaryTokenizerFactory;
 
 public class SecondaryInvertedIndexCreator extends SecondaryIndexCreator {
-    
+
     private IAType secondaryKeyType;
-	private ITypeTraits[] invListsTypeTraits;
-	private IBinaryComparatorFactory[] tokenComparatorFactories;
-	private ITypeTraits[] tokenTypeTraits;
-	private IBinaryTokenizerFactory tokenizerFactory;
-	private Pair<IFileSplitProvider, IFileSplitProvider> fileSplitProviders;
-	// For tokenization, sorting and loading. Represents <token, primary keys>.
-	private int numTokenKeyPairFields;
-	private IBinaryComparatorFactory[] tokenKeyPairComparatorFactories;
-	private RecordDescriptor tokenKeyPairRecDesc;
-	
+    private ITypeTraits[] invListsTypeTraits;
+    private IBinaryComparatorFactory[] tokenComparatorFactories;
+    private ITypeTraits[] tokenTypeTraits;
+    private IBinaryTokenizerFactory tokenizerFactory;
+    private Pair<IFileSplitProvider, IFileSplitProvider> fileSplitProviders;
+    // For tokenization, sorting and loading. Represents <token, primary keys>.
+    private int numTokenKeyPairFields;
+    private IBinaryComparatorFactory[] tokenKeyPairComparatorFactories;
+    private RecordDescriptor tokenKeyPairRecDesc;
+
     protected SecondaryInvertedIndexCreator(PhysicalOptimizationConfig physOptConf) {
         super(physOptConf);
     }
-    
+
     @Override
     @SuppressWarnings("rawtypes")
     protected void setSecondaryRecDescAndComparators(CompiledCreateIndexStatement createIndexStmt)
@@ -62,7 +62,7 @@ public class SecondaryInvertedIndexCreator extends SecondaryIndexCreator {
         }
         if (numSecondaryKeys > 1) {
             throw new AsterixException("Cannot create composite inverted index on multiple fields.");
-        }        
+        }
         // Prepare record descriptor used in the assign op, and the optional select op.
         List<String> secondaryKeyFields = createIndexStmt.getKeyFields();
         secondaryFieldAccessEvalFactories = new ICopyEvaluatorFactory[numSecondaryKeys];
@@ -107,7 +107,8 @@ public class SecondaryInvertedIndexCreator extends SecondaryIndexCreator {
         tokenKeyPairComparatorFactories = new IBinaryComparatorFactory[numTokenKeyPairFields];
         tokenKeyPairFields[0] = serdeProvider.getSerializerDeserializer(secondaryKeyType);
         tokenKeyPairTypeTraits[0] = tokenTypeTraits[0];
-        tokenKeyPairComparatorFactories[0] = InvertedIndexAccessMethod.getTokenBinaryComparatorFactory(secondaryKeyType);
+        tokenKeyPairComparatorFactories[0] = InvertedIndexAccessMethod
+                .getTokenBinaryComparatorFactory(secondaryKeyType);
         for (int i = 0; i < numPrimaryKeys; i++) {
             tokenKeyPairFields[i + 1] = primaryRecDesc.getFields()[i];
             tokenKeyPairTypeTraits[i + 1] = primaryRecDesc.getTypeTraits()[i];
@@ -115,7 +116,7 @@ public class SecondaryInvertedIndexCreator extends SecondaryIndexCreator {
         }
         tokenKeyPairRecDesc = new RecordDescriptor(tokenKeyPairFields, tokenKeyPairTypeTraits);
     }
-    
+
     @Override
     public JobSpecification buildCreationJobSpec() throws AsterixException, AlgebricksException {
         JobSpecification spec = new JobSpecification();
@@ -130,29 +131,29 @@ public class SecondaryInvertedIndexCreator extends SecondaryIndexCreator {
         spec.setConnectorPolicyAssignmentPolicy(new ConnectorPolicyAssignmentPolicy());
         return spec;
     }
-    
+
     @Override
     public JobSpecification buildLoadingJobSpec() throws AsterixException, AlgebricksException {
         JobSpecification spec = new JobSpecification();
 
         // Create dummy key provider for feeding the primary index scan. 
         AbstractOperatorDescriptor keyProviderOp = createDummyKeyProviderOp(spec);
-        
+
         // Create primary index scan op.
         BTreeSearchOperatorDescriptor primaryScanOp = createPrimaryIndexScanOp(spec);
-        
+
         // Assign op.
         AlgebricksMetaOperatorDescriptor asterixAssignOp = createAssignOp(spec, primaryScanOp, numSecondaryKeys);
-        
+
         // If any of the secondary fields are nullable, then add a select op that filters nulls.
         AlgebricksMetaOperatorDescriptor selectOp = null;
         if (anySecondaryKeyIsNullable) {
             selectOp = createFilterNullsSelectOp(spec, numSecondaryKeys);
         }
-        
+
         // Create a tokenizer op.
         AbstractOperatorDescriptor tokenizerOp = createTokenizerOp(spec);
-        
+
         // Sort by token + primary keys.
         ExternalSortOperatorDescriptor sortOp = createSortOp(spec, tokenKeyPairComparatorFactories, tokenKeyPairRecDesc);
 
@@ -161,7 +162,7 @@ public class SecondaryInvertedIndexCreator extends SecondaryIndexCreator {
 
         // Connect the operators.
         spec.connect(new OneToOneConnectorDescriptor(spec), keyProviderOp, 0, primaryScanOp, 0);
-        spec.connect(new OneToOneConnectorDescriptor(spec), primaryScanOp, 0, asterixAssignOp, 0);        
+        spec.connect(new OneToOneConnectorDescriptor(spec), primaryScanOp, 0, asterixAssignOp, 0);
         if (anySecondaryKeyIsNullable) {
             spec.connect(new OneToOneConnectorDescriptor(spec), asterixAssignOp, 0, selectOp, 0);
             spec.connect(new OneToOneConnectorDescriptor(spec), selectOp, 0, tokenizerOp, 0);
@@ -174,7 +175,7 @@ public class SecondaryInvertedIndexCreator extends SecondaryIndexCreator {
         spec.setConnectorPolicyAssignmentPolicy(new ConnectorPolicyAssignmentPolicy());
         return spec;
     }
-    
+
     private AbstractOperatorDescriptor createTokenizerOp(JobSpecification spec) throws AlgebricksException {
         int[] fieldsToTokenize = new int[numSecondaryKeys];
         for (int i = 0; i < numSecondaryKeys; i++) {
@@ -190,7 +191,7 @@ public class SecondaryInvertedIndexCreator extends SecondaryIndexCreator {
                 primaryPartitionConstraint);
         return tokenizerOp;
     }
-    
+
     @Override
     protected ExternalSortOperatorDescriptor createSortOp(JobSpecification spec,
             IBinaryComparatorFactory[] secondaryComparatorFactories, RecordDescriptor secondaryRecDesc) {
@@ -204,7 +205,7 @@ public class SecondaryInvertedIndexCreator extends SecondaryIndexCreator {
         AlgebricksPartitionConstraintHelper.setPartitionConstraintInJobSpec(spec, sortOp, primaryPartitionConstraint);
         return sortOp;
     }
-    
+
     private InvertedIndexBulkLoadOperatorDescriptor createInvertedIndexBulkLoadOp(JobSpecification spec) {
         int[] fieldPermutation = new int[numSecondaryKeys + numPrimaryKeys];
         for (int i = 0; i < numTokenKeyPairFields; i++) {

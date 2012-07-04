@@ -63,13 +63,13 @@ import edu.uci.ics.hyracks.storage.am.common.impls.NoOpOperationCallbackProvider
 // not just for creation.
 public abstract class SecondaryIndexCreator {
     protected final PhysicalOptimizationConfig physOptConf;
-    
+
     protected int numPrimaryKeys;
     protected int numSecondaryKeys;
     protected AqlCompiledMetadataDeclarations metadata;
     protected String datasetName;
     protected AqlCompiledDatasetDecl datasetDecl;
-    protected ARecordType itemType;    
+    protected ARecordType itemType;
     protected ISerializerDeserializer payloadSerde;
     protected IFileSplitProvider primaryFileSplitProvider;
     protected AlgebricksPartitionConstraint primaryPartitionConstraint;
@@ -83,13 +83,15 @@ public abstract class SecondaryIndexCreator {
     protected IBinaryComparatorFactory[] secondaryComparatorFactories;
     protected RecordDescriptor secondaryRecDesc;
     protected ICopyEvaluatorFactory[] secondaryFieldAccessEvalFactories;
-    
+
     // Prevent public construction. Should be created via createIndexCreator().
     protected SecondaryIndexCreator(PhysicalOptimizationConfig physOptConf) {
         this.physOptConf = physOptConf;
     }
 
-    public static SecondaryIndexCreator createIndexCreator(CompiledCreateIndexStatement createIndexStmt, AqlCompiledMetadataDeclarations metadata, PhysicalOptimizationConfig physOptConf) throws AsterixException, AlgebricksException {
+    public static SecondaryIndexCreator createIndexCreator(CompiledCreateIndexStatement createIndexStmt,
+            AqlCompiledMetadataDeclarations metadata, PhysicalOptimizationConfig physOptConf) throws AsterixException,
+            AlgebricksException {
         SecondaryIndexCreator indexCreator = null;
         switch (createIndexStmt.getIndexType()) {
             case BTREE: {
@@ -112,12 +114,13 @@ public abstract class SecondaryIndexCreator {
         indexCreator.init(createIndexStmt, metadata);
         return indexCreator;
     }
-    
+
     public abstract JobSpecification buildCreationJobSpec() throws AsterixException, AlgebricksException;
-    
+
     public abstract JobSpecification buildLoadingJobSpec() throws AsterixException, AlgebricksException;
-    
-    protected void init(CompiledCreateIndexStatement createIndexStmt, AqlCompiledMetadataDeclarations metadata) throws AsterixException, AlgebricksException {
+
+    protected void init(CompiledCreateIndexStatement createIndexStmt, AqlCompiledMetadataDeclarations metadata)
+            throws AsterixException, AlgebricksException {
         this.metadata = metadata;
         datasetName = createIndexStmt.getDatasetName();
         secondaryIndexName = createIndexStmt.getIndexName();
@@ -129,8 +132,7 @@ public abstract class SecondaryIndexCreator {
             throw new AsterixException("Cannot index an external dataset (" + datasetName + ").");
         }
         itemType = (ARecordType) metadata.findType(datasetDecl.getItemTypeName());
-        payloadSerde = AqlSerializerDeserializerProvider.INSTANCE
-                .getSerializerDeserializer(itemType);
+        payloadSerde = AqlSerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(itemType);
         numPrimaryKeys = DatasetUtils.getPartitioningFunctions(datasetDecl).size();
         numSecondaryKeys = createIndexStmt.getKeyFields().size();
         Pair<IFileSplitProvider, AlgebricksPartitionConstraint> primarySplitsAndConstraint = metadata
@@ -145,7 +147,7 @@ public abstract class SecondaryIndexCreator {
         setPrimaryRecDescAndComparators();
         setSecondaryRecDescAndComparators(createIndexStmt);
     }
-    
+
     protected void setPrimaryRecDescAndComparators() throws AlgebricksException {
         int numPrimaryKeys = DatasetUtils.getPartitioningFunctions(datasetDecl).size();
         ISerializerDeserializer[] primaryRecFields = new ISerializerDeserializer[numPrimaryKeys + 1];
@@ -159,8 +161,8 @@ public abstract class SecondaryIndexCreator {
             IAType keyType = evalFactoryAndType.third;
             ISerializerDeserializer keySerde = serdeProvider.getSerializerDeserializer(keyType);
             primaryRecFields[i] = keySerde;
-			primaryComparatorFactories[i] = AqlBinaryComparatorFactoryProvider.INSTANCE
-					.getBinaryComparatorFactory(keyType, true);
+            primaryComparatorFactories[i] = AqlBinaryComparatorFactoryProvider.INSTANCE.getBinaryComparatorFactory(
+                    keyType, true);
             primaryTypeTraits[i] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(keyType);
             ++i;
         }
@@ -168,7 +170,7 @@ public abstract class SecondaryIndexCreator {
         primaryTypeTraits[numPrimaryKeys] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(itemType);
         primaryRecDesc = new RecordDescriptor(primaryRecFields, primaryTypeTraits);
     }
-    
+
     protected void setSecondaryRecDescAndComparators(CompiledCreateIndexStatement createIndexStmt)
             throws AlgebricksException, AsterixException {
         List<String> secondaryKeyFields = createIndexStmt.getKeyFields();
@@ -200,9 +202,9 @@ public abstract class SecondaryIndexCreator {
         }
         secondaryRecDesc = new RecordDescriptor(secondaryRecFields, secondaryTypeTraits);
     }
-    
-    protected AbstractOperatorDescriptor createDummyKeyProviderOp(
-            JobSpecification spec) throws AsterixException, AlgebricksException {
+
+    protected AbstractOperatorDescriptor createDummyKeyProviderOp(JobSpecification spec) throws AsterixException,
+            AlgebricksException {
         // Build dummy tuple containing one field with a dummy value inside.
         ArrayTupleBuilder tb = new ArrayTupleBuilder(1);
         DataOutput dos = tb.getDataOutput();
@@ -217,14 +219,13 @@ public abstract class SecondaryIndexCreator {
         tb.addFieldEndOffset();
         ISerializerDeserializer[] keyRecDescSers = { IntegerSerializerDeserializer.INSTANCE };
         RecordDescriptor keyRecDesc = new RecordDescriptor(keyRecDescSers);
-        ConstantTupleSourceOperatorDescriptor keyProviderOp = new ConstantTupleSourceOperatorDescriptor(
-                spec, keyRecDesc, tb.getFieldEndOffsets(), tb.getByteArray(),
-                tb.getSize());
-        AlgebricksPartitionConstraintHelper.setPartitionConstraintInJobSpec(
-                spec, keyProviderOp, primaryPartitionConstraint);
+        ConstantTupleSourceOperatorDescriptor keyProviderOp = new ConstantTupleSourceOperatorDescriptor(spec,
+                keyRecDesc, tb.getFieldEndOffsets(), tb.getByteArray(), tb.getSize());
+        AlgebricksPartitionConstraintHelper.setPartitionConstraintInJobSpec(spec, keyProviderOp,
+                primaryPartitionConstraint);
         return keyProviderOp;
     }
-    
+
     protected BTreeSearchOperatorDescriptor createPrimaryIndexScanOp(JobSpecification spec) throws AlgebricksException {
         // -Infinity
         int[] lowKeyFields = null;
@@ -233,12 +234,13 @@ public abstract class SecondaryIndexCreator {
         BTreeSearchOperatorDescriptor primarySearchOp = new BTreeSearchOperatorDescriptor(spec, primaryRecDesc,
                 AsterixStorageManagerInterface.INSTANCE, AsterixIndexRegistryProvider.INSTANCE,
                 primaryFileSplitProvider, primaryRecDesc.getTypeTraits(), primaryComparatorFactories, lowKeyFields,
-                highKeyFields, true, true, new BTreeDataflowHelperFactory(), false, NoOpOperationCallbackProvider.INSTANCE);
+                highKeyFields, true, true, new BTreeDataflowHelperFactory(), false,
+                NoOpOperationCallbackProvider.INSTANCE);
         AlgebricksPartitionConstraintHelper.setPartitionConstraintInJobSpec(spec, primarySearchOp,
                 primaryPartitionConstraint);
         return primarySearchOp;
     }
-    
+
     protected AlgebricksMetaOperatorDescriptor createAssignOp(JobSpecification spec,
             BTreeSearchOperatorDescriptor primaryScanOp, int numSecondaryKeyFields) throws AlgebricksException {
         int[] outColumns = new int[numSecondaryKeyFields];
@@ -265,7 +267,7 @@ public abstract class SecondaryIndexCreator {
                 primaryPartitionConstraint);
         return asterixAssignOp;
     }
-    
+
     protected ExternalSortOperatorDescriptor createSortOp(JobSpecification spec,
             IBinaryComparatorFactory[] secondaryComparatorFactories, RecordDescriptor secondaryRecDesc) {
         int[] sortFields = new int[secondaryComparatorFactories.length];
@@ -274,14 +276,13 @@ public abstract class SecondaryIndexCreator {
         }
         ExternalSortOperatorDescriptor sortOp = new ExternalSortOperatorDescriptor(spec,
                 physOptConf.getMaxFramesExternalSort(), sortFields, secondaryComparatorFactories, secondaryRecDesc);
-        AlgebricksPartitionConstraintHelper.setPartitionConstraintInJobSpec(spec, sortOp,
-                primaryPartitionConstraint);
+        AlgebricksPartitionConstraintHelper.setPartitionConstraintInJobSpec(spec, sortOp, primaryPartitionConstraint);
         return sortOp;
     }
-    
+
     protected TreeIndexBulkLoadOperatorDescriptor createTreeIndexBulkLoadOp(JobSpecification spec,
-            int numSecondaryKeyFields, IIndexDataflowHelperFactory dataflowHelperFactory, float fillFactor) throws MetadataException,
-            AlgebricksException {
+            int numSecondaryKeyFields, IIndexDataflowHelperFactory dataflowHelperFactory, float fillFactor)
+            throws MetadataException, AlgebricksException {
         int[] fieldPermutation = new int[numSecondaryKeyFields + numPrimaryKeys];
         for (int i = 0; i < numSecondaryKeyFields + numPrimaryKeys; i++) {
             fieldPermutation[i] = i;
@@ -296,16 +297,19 @@ public abstract class SecondaryIndexCreator {
                 secondarySplitsAndConstraint.second);
         return treeIndexBulkLoadOp;
     }
-    
-    public AlgebricksMetaOperatorDescriptor createFilterNullsSelectOp(JobSpecification spec, int numSecondaryKeyFields) throws AlgebricksException {
+
+    public AlgebricksMetaOperatorDescriptor createFilterNullsSelectOp(JobSpecification spec, int numSecondaryKeyFields)
+            throws AlgebricksException {
         ICopyEvaluatorFactory[] andArgsEvalFactories = new ICopyEvaluatorFactory[numSecondaryKeyFields];
         NotDescriptor notDesc = new NotDescriptor();
         IsNullDescriptor isNullDesc = new IsNullDescriptor();
         for (int i = 0; i < numSecondaryKeyFields; i++) {
             // Access column i, and apply 'is not null'.
             ColumnAccessEvalFactory columnAccessEvalFactory = new ColumnAccessEvalFactory(i);
-            ICopyEvaluatorFactory isNullEvalFactory = isNullDesc.createEvaluatorFactory(new ICopyEvaluatorFactory[] { columnAccessEvalFactory });
-            ICopyEvaluatorFactory notEvalFactory = notDesc.createEvaluatorFactory(new ICopyEvaluatorFactory[] { isNullEvalFactory });
+            ICopyEvaluatorFactory isNullEvalFactory = isNullDesc
+                    .createEvaluatorFactory(new ICopyEvaluatorFactory[] { columnAccessEvalFactory });
+            ICopyEvaluatorFactory notEvalFactory = notDesc
+                    .createEvaluatorFactory(new ICopyEvaluatorFactory[] { isNullEvalFactory });
             andArgsEvalFactories[i] = notEvalFactory;
         }
         ICopyEvaluatorFactory selectCond = null;

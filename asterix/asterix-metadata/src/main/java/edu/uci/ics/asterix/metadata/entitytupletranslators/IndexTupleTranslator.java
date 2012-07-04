@@ -57,7 +57,7 @@ public class IndexTupleTranslator extends AbstractTupleTranslator<Index> {
     public static final int INDEX_PAYLOAD_TUPLE_FIELD_INDEX = 3;
     // Field name of open field.
     public static final String GRAM_LENGTH_FIELD_NAME = "GramLength";
-    
+
     private IAOrderedListBuilder listBuilder = new OrderedListBuilder();
     private ArrayBackedValueStorage nameValue = new ArrayBackedValueStorage();
     private ArrayBackedValueStorage itemValue = new ArrayBackedValueStorage();
@@ -101,7 +101,7 @@ public class IndexTupleTranslator extends AbstractTupleTranslator<Index> {
         int gramLength = -1;
         int gramLenPos = rec.getType().findFieldPosition(GRAM_LENGTH_FIELD_NAME);
         if (gramLenPos >= 0) {
-        	gramLength = ((AInt32) rec.getValueByPos(gramLenPos)).getIntegerValue();
+            gramLength = ((AInt32) rec.getValueByPos(gramLenPos)).getIntegerValue();
         }
         return new Index(dvName, dsName, indexName, indexStructure, searchKey, gramLength, isPrimaryIndex);
     }
@@ -174,15 +174,15 @@ public class IndexTupleTranslator extends AbstractTupleTranslator<Index> {
         aString.setValue(Calendar.getInstance().getTime().toString());
         stringSerde.serialize(aString, fieldValue.getDataOutput());
         recordBuilder.addField(MetadataRecordTypes.INDEX_ARECORD_TIMESTAMP_FIELD_INDEX, fieldValue);
-        
+
         // write optional field 7        
         if (instance.getGramLength() > 0) {
-        	fieldValue.reset();
-        	nameValue.reset();
-        	aString.setValue(GRAM_LENGTH_FIELD_NAME);
-        	stringSerde.serialize(aString, nameValue.getDataOutput());
-        	intSerde.serialize(new AInt32(instance.getGramLength()), fieldValue.getDataOutput());
-        	recordBuilder.addField(nameValue, fieldValue);
+            fieldValue.reset();
+            nameValue.reset();
+            aString.setValue(GRAM_LENGTH_FIELD_NAME);
+            stringSerde.serialize(aString, nameValue.getDataOutput());
+            intSerde.serialize(new AInt32(instance.getGramLength()), fieldValue.getDataOutput());
+            recordBuilder.addField(nameValue, fieldValue);
         }
 
         // write record

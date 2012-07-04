@@ -40,8 +40,8 @@ public abstract class AbstractTupleTranslator<T> implements IMetadataEntityTuple
     @SuppressWarnings("unchecked")
     protected ISerializerDeserializer<ABoolean> booleanSerde = AqlSerializerDeserializerProvider.INSTANCE
             .getSerializerDeserializer(BuiltinType.ABOOLEAN);
-    protected final IARecordBuilder recordBuilder;    
-    protected final ArrayBackedValueStorage fieldValue;    
+    protected final IARecordBuilder recordBuilder;
+    protected final ArrayBackedValueStorage fieldValue;
     protected final ArrayTupleBuilder tupleBuilder;
     protected final ArrayTupleReference tuple;
 

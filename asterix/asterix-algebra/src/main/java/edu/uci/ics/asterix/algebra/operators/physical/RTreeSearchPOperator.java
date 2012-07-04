@@ -26,7 +26,7 @@ import edu.uci.ics.hyracks.algebricks.core.jobgen.impl.JobGenContext;
 import edu.uci.ics.hyracks.api.dataflow.IOperatorDescriptor;
 
 /**
- * Contributes the runtime operator for an unnest-map representing a RTree search. 
+ * Contributes the runtime operator for an unnest-map representing a RTree search.
  */
 public class RTreeSearchPOperator extends IndexSearchPOperator {
 
@@ -53,13 +53,13 @@ public class RTreeSearchPOperator extends IndexSearchPOperator {
         if (!funcIdent.equals(AsterixBuiltinFunctions.INDEX_SEARCH)) {
             return;
         }
-        
+
         RTreeJobGenParams jobGenParams = new RTreeJobGenParams();
         jobGenParams.readFromFuncArgs(unnestFuncExpr.getArguments());
         if (jobGenParams.getIndexKind() != IndexKind.RTREE) {
             throw new NotImplementedException(jobGenParams.getIndexKind() + " indexes are not implemented.");
         }
-        
+
         int[] keyIndexes = getKeyIndexes(jobGenParams.getKeyVarList(), inputSchemas);
         AqlMetadataProvider mp = (AqlMetadataProvider) context.getMetadataProvider();
         AqlCompiledMetadataDeclarations metadata = mp.getMetadataDeclarations();
@@ -68,10 +68,12 @@ public class RTreeSearchPOperator extends IndexSearchPOperator {
             throw new AlgebricksException("Unknown dataset " + jobGenParams.getDatasetName());
         }
         if (adecl.getDatasetType() == DatasetType.EXTERNAL) {
-            throw new AlgebricksException("Trying to run rtree search over external dataset (" + jobGenParams.getDatasetName() + ").");
+            throw new AlgebricksException("Trying to run rtree search over external dataset ("
+                    + jobGenParams.getDatasetName() + ").");
         }
         Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> rtreeSearch = AqlMetadataProvider.buildRtreeRuntime(
-                metadata, context, builder.getJobSpec(), jobGenParams.getDatasetName(), adecl, jobGenParams.getIndexName(), keyIndexes);
+                metadata, context, builder.getJobSpec(), jobGenParams.getDatasetName(), adecl,
+                jobGenParams.getIndexName(), keyIndexes);
         builder.contributeHyracksOperator(unnestMap, rtreeSearch.first);
         builder.contributeAlgebricksPartitionConstraint(rtreeSearch.first, rtreeSearch.second);
         ILogicalOperator srcExchange = unnestMap.getInputs().get(0).getValue();

@@ -6,7 +6,6 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
@@ -64,17 +63,6 @@ public class TestsUtils {
         BufferedReader readerActual = new BufferedReader(
                 new InputStreamReader(new FileInputStream(actualFile), "UTF-8"));
         String lineExpected, lineActual;
-        StringBuilder actualBuilder = new StringBuilder();
-        try {
-        	while((lineActual = readerActual.readLine()) != null) {
-        		actualBuilder.append(lineActual);
-        		actualBuilder.append('\n');
-        	}
-        } finally {
-        	readerActual.close();
-        }
-        System.out.println(actualBuilder.toString());
-        readerActual = new BufferedReader(new FileReader(actualFile));
         int num = 1;
         try {
             while ((lineExpected = readerExpected.readLine()) != null) {

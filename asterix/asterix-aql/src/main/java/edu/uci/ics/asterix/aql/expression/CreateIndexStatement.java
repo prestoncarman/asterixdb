@@ -20,18 +20,18 @@ public class CreateIndexStatement implements Statement {
 
     // Specific to NGram indexes.
     private int gramLength;
-    
+
     public CreateIndexStatement() {
     }
 
     public void setGramLength(int gramLength) {
-    	this.gramLength = gramLength;
+        this.gramLength = gramLength;
     }
-    
+
     public int getGramLength() {
-    	return gramLength;
+        return gramLength;
     }
-    
+
     public void setNeedToCreate(boolean needToCreate) {
         this.needToCreate = needToCreate;
     }

@@ -59,9 +59,9 @@ public class SecondaryRTreeCreator extends SecondaryIndexCreator {
     }
 
     @Override
-    protected void setSecondaryRecDescAndComparators(CompiledCreateIndexStatement createIndexStmt) throws AlgebricksException,
-            AsterixException {
-    	List<String> secondaryKeyFields = createIndexStmt.getKeyFields();
+    protected void setSecondaryRecDescAndComparators(CompiledCreateIndexStatement createIndexStmt)
+            throws AlgebricksException, AsterixException {
+        List<String> secondaryKeyFields = createIndexStmt.getKeyFields();
         int numSecondaryKeys = secondaryKeyFields.size();
         if (numSecondaryKeys != 1) {
             throw new AsterixException(
@@ -78,8 +78,8 @@ public class SecondaryRTreeCreator extends SecondaryIndexCreator {
         }
         int numDimensions = NonTaggedFormatUtil.getNumDimensions(spatialType.getTypeTag());
         numNestedSecondaryKeyFields = numDimensions * 2;
-        secondaryFieldAccessEvalFactories = metadata.getFormat().createMBRFactory(itemType, secondaryKeyFields.get(0), numPrimaryKeys,
-                numDimensions);
+        secondaryFieldAccessEvalFactories = metadata.getFormat().createMBRFactory(itemType, secondaryKeyFields.get(0),
+                numPrimaryKeys, numDimensions);
         secondaryComparatorFactories = new IBinaryComparatorFactory[numNestedSecondaryKeyFields];
         valueProviderFactories = new IPrimitiveValueProviderFactory[numNestedSecondaryKeyFields];
         ISerializerDeserializer[] secondaryRecFields = new ISerializerDeserializer[numPrimaryKeys

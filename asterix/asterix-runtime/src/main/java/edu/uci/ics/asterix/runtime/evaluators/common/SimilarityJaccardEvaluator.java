@@ -29,9 +29,9 @@ import edu.uci.ics.hyracks.dataflow.common.data.accessors.IFrameTupleReference;
 public class SimilarityJaccardEvaluator implements ICopyEvaluator {
 
     // Parameters for hash table.
-	protected final int TABLE_SIZE = 100;
-	protected final int TABLE_FRAME_SIZE = 32768;
-	
+    protected final int TABLE_SIZE = 100;
+    protected final int TABLE_FRAME_SIZE = 32768;
+
     // Assuming type indicator in serde format.
     protected final int TYPE_INDICATOR_SIZE = 1;
 
@@ -47,32 +47,33 @@ public class SimilarityJaccardEvaluator implements ICopyEvaluator {
 
     protected AbstractAsterixListIterator firstListIter;
     protected AbstractAsterixListIterator secondListIter;
-    
+
     protected final AMutableFloat aFloat = new AMutableFloat(0);
     @SuppressWarnings("unchecked")
     protected final ISerializerDeserializer<AFloat> floatSerde = AqlSerializerDeserializerProvider.INSTANCE
             .getSerializerDeserializer(BuiltinType.AFLOAT);
-    
+
     protected ATypeTag firstTypeTag;
     protected ATypeTag secondTypeTag;
     protected int firstStart = -1;
     protected int secondStart = -1;
     protected float jaccSim = 0.0f;
     protected ATypeTag itemTypeTag;
-    
+
     protected BinaryHashMap hashMap;
     protected BinaryEntry keyEntry = new BinaryEntry();
     protected BinaryEntry valEntry = new BinaryEntry();
-    
+
     // Ignore case for strings. Defaults to true.
     protected final boolean ignoreCase = true;
-    
-    public SimilarityJaccardEvaluator(ICopyEvaluatorFactory[] args, IDataOutputProvider output) throws AlgebricksException {
+
+    public SimilarityJaccardEvaluator(ICopyEvaluatorFactory[] args, IDataOutputProvider output)
+            throws AlgebricksException {
         out = output.getDataOutput();
         firstOrdListEval = args[0].createEvaluator(argOut);
         secondOrdListEval = args[1].createEvaluator(argOut);
         byte[] emptyValBuf = new byte[8];
-        Arrays.fill(emptyValBuf, (byte)0);
+        Arrays.fill(emptyValBuf, (byte) 0);
         valEntry.set(emptyValBuf, 0, 8);
     }
 
@@ -106,7 +107,8 @@ public class SimilarityJaccardEvaluator implements ICopyEvaluator {
         secondTypeTag = EnumDeserializer.ATYPETAGDESERIALIZER.deserialize(argOut.getByteArray()[secondStart]);
     }
 
-    protected boolean prepareLists(byte[] bytes, int firstStart, int secondStart, ATypeTag argType) throws AlgebricksException {
+    protected boolean prepareLists(byte[] bytes, int firstStart, int secondStart, ATypeTag argType)
+            throws AlgebricksException {
         firstListIter.reset(bytes, firstStart);
         secondListIter.reset(bytes, secondStart);
         // Check for special case where one of the lists is empty, since list
@@ -121,9 +123,9 @@ public class SimilarityJaccardEvaluator implements ICopyEvaluator {
         itemTypeTag = EnumDeserializer.ATYPETAGDESERIALIZER.deserialize(bytes[firstStart + 1]);
         return true;
     }
-    
+
     protected float computeResult(byte[] bytes, int firstStart, int secondStart, ATypeTag argType)
-            throws AlgebricksException {        
+            throws AlgebricksException {
         setHashMap(bytes, firstStart, secondStart);
         // We will subtract the intersection size later to get the real union size.
         int firstListSize = firstListIter.size();
@@ -134,7 +136,7 @@ public class SimilarityJaccardEvaluator implements ICopyEvaluator {
         AbstractAsterixListIterator probeList = (buildList == firstListIter) ? secondListIter : firstListIter;
         int buildListSize = (buildList == firstListIter) ? firstListSize : secondListSize;
         int probeListSize = (probeList == firstListIter) ? firstListSize : secondListSize;
-        
+
         buildHashMap(buildList);
         int intersectionSize = probeHashMap(probeList, buildListSize, probeListSize);
         // Special indicator for the "check" version of jaccard.
@@ -150,7 +152,7 @@ public class SimilarityJaccardEvaluator implements ICopyEvaluator {
         // Value in map is a pair of integers. Set first integer to 1.
         IntegerPointable.setInteger(valEntry.buf, 0, 1);
         while (buildIter.hasNext()) {
-            byte[] buf = buildIter.getData();           
+            byte[] buf = buildIter.getData();
             int off = buildIter.getPos();
             int len = getItemLen(buf, off);
             keyEntry.set(buf, off, len);
@@ -163,15 +165,15 @@ public class SimilarityJaccardEvaluator implements ICopyEvaluator {
             buildIter.next();
         }
     }
-    
+
     protected int probeHashMap(AbstractAsterixListIterator probeIter, int probeListSize, int buildListSize) {
         // Probe phase: Probe items from second list, and compute intersection size.
         int intersectionSize = 0;
-        while (probeIter.hasNext()) {          
+        while (probeIter.hasNext()) {
             byte[] buf = probeIter.getData();
             int off = probeIter.getPos();
             int len = getItemLen(buf, off);
-            keyEntry.set(buf, off, len);            
+            keyEntry.set(buf, off, len);
             BinaryEntry entry = hashMap.get(keyEntry);
             if (entry != null) {
                 // Increment second value.
@@ -192,69 +194,72 @@ public class SimilarityJaccardEvaluator implements ICopyEvaluator {
         }
         return intersectionSize;
     }
-    
+
     protected void setHashMap(byte[] bytes, int firstStart, int secondStart) {
-    	if (hashMap != null) {
-    		hashMap.clear();
-    		return;
-    	}
-    	IBinaryHashFunction hashFunc = null;
-    	IBinaryComparator cmp = null;
-    	switch (itemTypeTag) {
-    	case INT32: {
-    		hashFunc = AqlBinaryHashFunctionFactoryProvider.INTEGER_POINTABLE_INSTANCE.createBinaryHashFunction();
-    		cmp = AqlBinaryComparatorFactoryProvider.INTEGER_POINTABLE_INSTANCE.createBinaryComparator();
-    		break;
-    	}
-    	case FLOAT: {
-    		hashFunc = AqlBinaryHashFunctionFactoryProvider.FLOAT_POINTABLE_INSTANCE.createBinaryHashFunction();
-    		cmp = AqlBinaryComparatorFactoryProvider.FLOAT_POINTABLE_INSTANCE.createBinaryComparator();
-    		break;
-    	}
-    	case DOUBLE: {
-    		hashFunc = AqlBinaryHashFunctionFactoryProvider.DOUBLE_POINTABLE_INSTANCE.createBinaryHashFunction();
-    		cmp = AqlBinaryComparatorFactoryProvider.DOUBLE_POINTABLE_INSTANCE.createBinaryComparator();
-    		break;
-    	}
-    	case STRING: {
-    	    if (ignoreCase) {
-    	        // Ignore case in comparisons and hashing.
-    	        hashFunc = AqlBinaryHashFunctionFactoryProvider.UTF8STRING_LOWERCASE_POINTABLE_INSTANCE.createBinaryHashFunction();
-    	        cmp = AqlBinaryComparatorFactoryProvider.UTF8STRING_LOWERCASE_POINTABLE_INSTANCE.createBinaryComparator();
-    	    } else {
-    	        hashFunc = AqlBinaryHashFunctionFactoryProvider.UTF8STRING_POINTABLE_INSTANCE.createBinaryHashFunction();
-                cmp = AqlBinaryComparatorFactoryProvider.UTF8STRING_POINTABLE_INSTANCE.createBinaryComparator();
-    	    }
-    		break;
-    	}
-    	default: {
-    		break;
-    	}
-    	}
-    	hashMap = new BinaryHashMap(TABLE_SIZE, TABLE_FRAME_SIZE, hashFunc, cmp);
+        if (hashMap != null) {
+            hashMap.clear();
+            return;
+        }
+        IBinaryHashFunction hashFunc = null;
+        IBinaryComparator cmp = null;
+        switch (itemTypeTag) {
+            case INT32: {
+                hashFunc = AqlBinaryHashFunctionFactoryProvider.INTEGER_POINTABLE_INSTANCE.createBinaryHashFunction();
+                cmp = AqlBinaryComparatorFactoryProvider.INTEGER_POINTABLE_INSTANCE.createBinaryComparator();
+                break;
+            }
+            case FLOAT: {
+                hashFunc = AqlBinaryHashFunctionFactoryProvider.FLOAT_POINTABLE_INSTANCE.createBinaryHashFunction();
+                cmp = AqlBinaryComparatorFactoryProvider.FLOAT_POINTABLE_INSTANCE.createBinaryComparator();
+                break;
+            }
+            case DOUBLE: {
+                hashFunc = AqlBinaryHashFunctionFactoryProvider.DOUBLE_POINTABLE_INSTANCE.createBinaryHashFunction();
+                cmp = AqlBinaryComparatorFactoryProvider.DOUBLE_POINTABLE_INSTANCE.createBinaryComparator();
+                break;
+            }
+            case STRING: {
+                if (ignoreCase) {
+                    // Ignore case in comparisons and hashing.
+                    hashFunc = AqlBinaryHashFunctionFactoryProvider.UTF8STRING_LOWERCASE_POINTABLE_INSTANCE
+                            .createBinaryHashFunction();
+                    cmp = AqlBinaryComparatorFactoryProvider.UTF8STRING_LOWERCASE_POINTABLE_INSTANCE
+                            .createBinaryComparator();
+                } else {
+                    hashFunc = AqlBinaryHashFunctionFactoryProvider.UTF8STRING_POINTABLE_INSTANCE
+                            .createBinaryHashFunction();
+                    cmp = AqlBinaryComparatorFactoryProvider.UTF8STRING_POINTABLE_INSTANCE.createBinaryComparator();
+                }
+                break;
+            }
+            default: {
+                break;
+            }
+        }
+        hashMap = new BinaryHashMap(TABLE_SIZE, TABLE_FRAME_SIZE, hashFunc, cmp);
     }
-    
+
     protected int getItemLen(byte[] bytes, int itemOff) {
-    	switch (itemTypeTag) {
-    	case INT32: {
-    		return 4;
-    	}
-    	case FLOAT: {
-    		return 4;
-    	}
-    	case DOUBLE: {
-    		return 8;
-    	}
-    	case STRING: {
-    		// 2 bytes for the UTF8 len, plus the string data.
-    		return 2 + UTF8StringPointable.getUTFLength(bytes, itemOff);
-    	}
-    	default: {
-    		return -1;
-    	}
-    	}
+        switch (itemTypeTag) {
+            case INT32: {
+                return 4;
+            }
+            case FLOAT: {
+                return 4;
+            }
+            case DOUBLE: {
+                return 8;
+            }
+            case STRING: {
+                // 2 bytes for the UTF8 len, plus the string data.
+                return 2 + UTF8StringPointable.getUTFLength(bytes, itemOff);
+            }
+            default: {
+                return -1;
+            }
+        }
     }
-    
+
     protected boolean checkArgTypes(ATypeTag typeTag1, ATypeTag typeTag2) throws AlgebricksException {
         // Jaccard between null and anything else is 0
         if (typeTag1 == ATypeTag.NULL || typeTag2 == ATypeTag.NULL) {
