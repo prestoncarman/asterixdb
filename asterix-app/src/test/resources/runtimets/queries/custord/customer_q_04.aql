@@ -23,7 +23,7 @@ create type CustomerType as closed {
 }
 
 create external dataset Customers(CustomerType)
-using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
+using "localfs"
 (("path"="nc1://data/nontagged/customerData.json"),("format"="adm"));
         
 write output to nc1:"rttest/custord_customer_q_04.adm";

@@ -75,7 +75,7 @@ public class AQLParser extends ScopeChecker {
     
     // data generator hints
     private static final String DGEN_HINT = "dgen";
-   
+    
     private static String getHint(Token t) {
        if (t.specialToken == null) {
          return null;
@@ -88,6 +88,11 @@ public class AQLParser extends ScopeChecker {
        return s.substring(1).trim();
     }
 
+	public AQLParser(String s){
+		this(new StringReader(s));
+		super.setInput(s);
+	}
+	
 	public static void main(String args[]) throws ParseException, TokenMgrError, IOException, FileNotFoundException, AsterixException {
 			File file = new File(args[0]);
 			Reader fis = new BufferedReader(new InputStreamReader(new FileInputStream(file), "UTF-8"));
@@ -1078,9 +1083,12 @@ CreateFunctionStatement FunctionCreation() throws ParseException:
   int arity = 0;
   boolean ifNotExists = false;
   List<VarIdentifier> paramList = new ArrayList<VarIdentifier>();
-  String funcBody;
+  Expression funcBodyExpr;
+  String functionBody;
   VarIdentifier var = null;
   createNewScope();
+  Token beginPos;
+  Token endPos;
 }
 {
 
@@ -1112,15 +1120,20 @@ CreateFunctionStatement FunctionCreation() throws ParseException:
       paramList.add(var);
       getCurrentScope().addNewVarSymbolToScope(var);
       arity++;
-    })*)? <RIGHTPAREN>  "{" <STRING_LITERAL>
-          {
-            funcBody = removeQuotesAndEscapes(token.image);
-          }
-          "}"
+    })*)? <RIGHTPAREN>  "{" 
+       {
+          beginPos = getToken(0);
+       } 
+          funcBodyExpr = Expression() 
+       "}"
+       {
+          endPos = getToken(0);
+          functionBody = extractFragment(beginPos.beginLine, beginPos.beginColumn, endPos.beginLine, endPos.beginColumn);
+        }
     {
       ident = new AsterixFunction(functionName, arity);
       getCurrentScope().addFunctionDescriptor(ident, false);
-      cfs = new CreateFunctionStatement(ident, paramList, funcBody, ifNotExists);
+      cfs = new CreateFunctionStatement(ident, paramList, functionBody, ifNotExists);
       return cfs;
     }
 }

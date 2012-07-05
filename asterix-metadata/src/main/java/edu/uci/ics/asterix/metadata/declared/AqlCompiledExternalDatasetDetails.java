@@ -17,18 +17,19 @@ package edu.uci.ics.asterix.metadata.declared;
 import java.util.Map;
 
 import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
+import edu.uci.ics.asterix.metadata.entities.Adapter;
 
 public class AqlCompiledExternalDatasetDetails implements IAqlCompiledDatasetDetails {
 
-    private final String adapter;
+    private final Adapter adapter;
     private final Map<String, String> properties;
 
-    public AqlCompiledExternalDatasetDetails(String adapter, Map<String, String> properties) {
+    public AqlCompiledExternalDatasetDetails(Adapter adapter, Map<String, String> properties) {
         this.adapter = adapter;
         this.properties = properties;
     }
 
-    public String getAdapter() {
+    public Adapter getAdapter() {
         return adapter;
     }
 

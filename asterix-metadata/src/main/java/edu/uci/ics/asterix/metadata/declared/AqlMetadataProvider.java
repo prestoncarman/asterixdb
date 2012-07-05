@@ -38,6 +38,7 @@ import edu.uci.ics.asterix.formats.nontagged.AqlBinaryComparatorFactoryProvider;
 import edu.uci.ics.asterix.formats.nontagged.AqlSerializerDeserializerProvider;
 import edu.uci.ics.asterix.formats.nontagged.AqlTypeTraitProvider;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl.IndexKind;
+import edu.uci.ics.asterix.metadata.entities.Adapter;
 import edu.uci.ics.asterix.metadata.utils.DatasetUtils;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
 import edu.uci.ics.asterix.om.types.ARecordType;
@@ -196,7 +197,8 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         IDatasourceAdapterFactory adapterFactory;
         IDatasourceAdapter adapter;
         try {
-            adapterFactory = (IDatasourceAdapterFactory) Class.forName(decl.getAdapter()).newInstance();
+            Adapter adapterEntity = decl.getAdapter();
+            adapterFactory = (IDatasourceAdapterFactory) Class.forName(adapterEntity.getClassname()).newInstance();
             if (adapterFactory.getAdapterType().equals(AdapterType.GENERIC)) {
                 adapter = ((IGenericDatasourceAdapterFactory) adapterFactory).createAdapter(decl.getProperties(),
                         itemType);
@@ -218,8 +220,8 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         ISerializerDeserializer payloadSerde = format.getSerdeProvider().getSerializerDeserializer(itemType);
         RecordDescriptor scannerDesc = new RecordDescriptor(new ISerializerDeserializer[] { payloadSerde });
 
-        ExternalDataScanOperatorDescriptor dataScanner = new ExternalDataScanOperatorDescriptor(jobSpec,
-                decl.getAdapter(), decl.getProperties(), rt, scannerDesc);
+        ExternalDataScanOperatorDescriptor dataScanner = new ExternalDataScanOperatorDescriptor(jobSpec, decl
+                .getAdapter().getClassname(), decl.getProperties(), rt, scannerDesc);
         AlgebricksPartitionConstraint constraint = adapter.getPartitionConstraint();
         return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(dataScanner, constraint);
     }
@@ -248,17 +250,17 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
     }
 
     @SuppressWarnings("rawtypes")
-    public static Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> buildFeedIntakeRuntime(
-            JobSpecification jobSpec, String dataverse, String dataset, IAType itemType,
-            AqlCompiledFeedDatasetDetails decl, IDataFormat format) throws AlgebricksException {
+    private Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> buildFeedIntakeRuntime(JobSpecification jobSpec,
+            String dataverse, String dataset, IAType itemType, AqlCompiledFeedDatasetDetails decl, IDataFormat format)
+            throws AlgebricksException {
         if (itemType.getTypeTag() != ATypeTag.RECORD) {
             throw new AlgebricksException("Can only consume records.");
         }
         IDatasourceAdapterFactory adapterFactory;
         IDatasourceAdapter adapter;
         try {
-            adapterFactory = (IDatasourceAdapterFactory) Class.forName(decl.getAdapterFactory()).newInstance();
-
+            Adapter adapterEntity = decl.getAdapter();
+            adapterFactory = (IDatasourceAdapterFactory) Class.forName(adapterEntity.getClassname()).newInstance();
             if (adapterFactory.getAdapterType().equals(AdapterType.GENERIC)) {
                 adapter = ((IGenericDatasourceAdapterFactory) adapterFactory).createAdapter(decl.getProperties(),
                         itemType);
@@ -266,6 +268,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
                 adapter = ((ITypedDatasourceAdapterFactory) adapterFactory).createAdapter(decl.getProperties());
             }
         } catch (Exception e) {
+            e.printStackTrace();
             throw new AlgebricksException("unable to load the adapter factry class " + e);
         }
 
@@ -273,7 +276,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         RecordDescriptor feedDesc = new RecordDescriptor(new ISerializerDeserializer[] { payloadSerde });
 
         FeedIntakeOperatorDescriptor feedIngestor = new FeedIntakeOperatorDescriptor(jobSpec, new FeedId(dataverse,
-                dataset), decl.getAdapterFactory(), decl.getProperties(), (ARecordType) itemType, feedDesc);
+                dataset), decl.getAdapter().getClassname(), decl.getProperties(), (ARecordType) itemType, feedDesc);
 
         AlgebricksPartitionConstraint constraint = adapter.getPartitionConstraint();
         return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(feedIngestor, constraint);

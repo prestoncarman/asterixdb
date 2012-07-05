@@ -35,11 +35,11 @@ create dataset OrdersSomeSat02(OrderType)
   partitioned by key oid;
 
 load dataset CustomerSomeSat02 
-using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter" 
+using "localfs" 
 (("path"="nc1://data/custord-tiny/customer-tiny.adm"),("format"="adm"));
 
 load dataset OrdersSomeSat02 
-using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter" 
+using "localfs" 
 (("path"="nc1://data/custord-tiny/order-tiny.adm"),("format"="adm"));
 
 write output to nc1:"rttest/quantifiers_somesat_02.adm";

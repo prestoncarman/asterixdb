@@ -26,10 +26,13 @@ import java.util.logging.Logger;
 import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
 import edu.uci.ics.asterix.common.config.DatasetConfig.IndexType;
 import edu.uci.ics.asterix.common.context.AsterixAppRuntimeContext;
+import edu.uci.ics.asterix.common.functions.FunctionConstants;
+import edu.uci.ics.asterix.external.dataset.adapter.AdapterIdentifier;
 import edu.uci.ics.asterix.metadata.IDatasetDetails;
 import edu.uci.ics.asterix.metadata.MetadataManager;
 import edu.uci.ics.asterix.metadata.MetadataTransactionContext;
 import edu.uci.ics.asterix.metadata.api.IMetadataIndex;
+import edu.uci.ics.asterix.metadata.entities.Adapter;
 import edu.uci.ics.asterix.metadata.entities.AsterixBuiltinTypeMap;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
 import edu.uci.ics.asterix.metadata.entities.Datatype;
@@ -96,7 +99,8 @@ public class MetadataBootstrap {
         primaryIndexes = new IMetadataIndex[] { MetadataPrimaryIndexes.DATAVERSE_DATASET,
                 MetadataPrimaryIndexes.DATASET_DATASET, MetadataPrimaryIndexes.DATATYPE_DATASET,
                 MetadataPrimaryIndexes.INDEX_DATASET, MetadataPrimaryIndexes.NODE_DATASET,
-                MetadataPrimaryIndexes.NODEGROUP_DATASET, MetadataPrimaryIndexes.FUNCTION_DATASET };
+                MetadataPrimaryIndexes.NODEGROUP_DATASET, MetadataPrimaryIndexes.FUNCTION_DATASET,
+                MetadataPrimaryIndexes.ADAPTER_DATASET };
         secondaryIndexes = new IMetadataIndex[] { MetadataSecondaryIndexes.GROUPNAME_ON_DATASET_INDEX,
                 MetadataSecondaryIndexes.DATATYPENAME_ON_DATASET_INDEX,
                 MetadataSecondaryIndexes.DATATYPENAME_ON_DATATYPE_INDEX };
@@ -166,6 +170,7 @@ public class MetadataBootstrap {
                 insertInitialIndexes(mdTxnCtx);
                 insertNodes(mdTxnCtx);
                 insertInitialGroups(mdTxnCtx);
+                insertInitialAdapters(mdTxnCtx);
                 LOGGER.info("FINISHED CREATING METADATA B-TREES.");
             } else {
                 for (int i = 0; i < primaryIndexes.length; i++) {
@@ -302,6 +307,30 @@ public class MetadataBootstrap {
         NodeGroup defaultGroup = new NodeGroup(MetadataConstants.METADATA_DEFAULT_NODEGROUP_NAME, nodes);
         MetadataManager.INSTANCE.addNodegroup(mdTxnCtx, defaultGroup);
 
+    }
+
+    private static void insertInitialAdapters(MetadataTransactionContext mdTxnCtx) throws Exception {
+        Adapter localFileSystemAdapter = new Adapter(new AdapterIdentifier(FunctionConstants.ASTERIX_NS, "localfs"),
+                "edu.uci.ics.asterix.external.adapter.factory.NCFileSystemAdapterFactory", Adapter.AdapterType.INTERNAL);
+
+        Adapter HDFSAdapter = new Adapter(new AdapterIdentifier(FunctionConstants.ASTERIX_NS, "hdfs"),
+                "edu.uci.ics.asterix.external.adapter.factory.HDFSAdapterFactory", Adapter.AdapterType.INTERNAL);
+
+        Adapter PullBasedTwitterFeedAdapter = new Adapter(new AdapterIdentifier(FunctionConstants.ASTERIX_NS,
+                "pullTwitter"), "edu.uci.ics.asterix.external.adapter.factory.PullBasedTwitterAdapterFactory",
+                Adapter.AdapterType.INTERNAL);
+
+        Adapter RSSFeedAdapter = new Adapter(new AdapterIdentifier(FunctionConstants.ASTERIX_NS, "rssFeed"),
+                "edu.uci.ics.asterix.external.adapter.factory.RSSFeedAdapterFactory", Adapter.AdapterType.INTERNAL);
+
+        Adapter CNNFeedAdapter = new Adapter(new AdapterIdentifier(FunctionConstants.ASTERIX_NS, "cnnFeed"),
+                "edu.uci.ics.asterix.external.adapter.factory.CNNFeedAdapterFactory", Adapter.AdapterType.INTERNAL);
+
+        MetadataManager.INSTANCE.addAdapter(mdTxnCtx, localFileSystemAdapter);
+        MetadataManager.INSTANCE.addAdapter(mdTxnCtx, HDFSAdapter);
+        MetadataManager.INSTANCE.addAdapter(mdTxnCtx, PullBasedTwitterFeedAdapter);
+        MetadataManager.INSTANCE.addAdapter(mdTxnCtx, RSSFeedAdapter);
+        MetadataManager.INSTANCE.addAdapter(mdTxnCtx, CNNFeedAdapter);
     }
 
     public static void createIndex(IMetadataIndex dataset) throws Exception {

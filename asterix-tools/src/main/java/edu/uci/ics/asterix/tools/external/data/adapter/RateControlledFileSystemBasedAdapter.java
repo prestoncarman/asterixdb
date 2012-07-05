@@ -39,25 +39,32 @@ import edu.uci.ics.hyracks.dataflow.std.file.ITupleParserFactory;
 public class RateControlledFileSystemBasedAdapter extends
 		FileSystemBasedAdapter {
 
-	public enum FileSystem {
-		LOCAL_FS, HDFS
-	}
+	public static final String KEY_FILE_SYSTEM = "fs";
+	public static final String KEY_FORMAT = "format";
 
-	private final FileSystem fs;
+	public static final String LOCAL_FS = "localfs";
+	public static final String HDFS = "hdfs";
+
+	public static final String FORMAT_DELIMITED_TEXT = "delimited-text";
+	public static final String FORMAT_ADM = "adm";
+
 	private final FileSystemBasedAdapter coreAdapter;
 	private final Map<String, String> configuration;
+	private final String fileSystem;
+	private final String format;
 
-	public RateControlledFileSystemBasedAdapter(FileSystem fs,
-			ARecordType atype, Map<String, String> configuration)
-			throws Exception {
+	public RateControlledFileSystemBasedAdapter(ARecordType atype,
+			Map<String, String> configuration) throws Exception {
 		super(atype);
 		String adapterFactoryClass = null;
-		this.fs = fs;
-		if (fs.equals(FileSystem.LOCAL_FS)) {
+		fileSystem = configuration.get(KEY_FILE_SYSTEM);
+		if (fileSystem.equalsIgnoreCase(LOCAL_FS)) {
 			adapterFactoryClass = "edu.uci.ics.asterix.external.adapter.factory.NCFileSystemAdapterFactory";
-		} else if (fs.equals(FileSystem.HDFS)) {
+		} else if (fileSystem.equals(HDFS)) {
 			adapterFactoryClass = "edu.uci.ics.asterix.external.adapter.factory.HDFSAdapterFactory";
 		}
+
+		format = configuration.get(KEY_FORMAT);
 		IGenericDatasourceAdapterFactory adapterFactory = (IGenericDatasourceAdapterFactory) Class
 				.forName(adapterFactoryClass).newInstance();
 		coreAdapter = (FileSystemBasedAdapter) adapterFactory.createAdapter(
@@ -67,9 +74,9 @@ public class RateControlledFileSystemBasedAdapter extends
 
 	protected ITupleParser getTupleParser() throws Exception {
 		ITupleParser parser = null;
-		if (fs.equals(FileSystem.LOCAL_FS)) {
+		if (format.equals(FORMAT_DELIMITED_TEXT)) {
 			parser = getRateControlledDelimitedDataTupleParser((ARecordType) atype);
-		} else if (fs.equals(FileSystem.HDFS)) {
+		} else if (format.equals(FORMAT_ADM)) {
 			parser = getRateControlledADMDataTupleParser((ARecordType) atype);
 		} else {
 			throw new IllegalArgumentException(" format "
@@ -87,6 +94,7 @@ public class RateControlledFileSystemBasedAdapter extends
 	@Override
 	public void initialize(IHyracksTaskContext ctx) throws Exception {
 		coreAdapter.initialize(ctx);
+		this.ctx = ctx;
 	}
 
 	@Override
@@ -216,7 +224,7 @@ class RateControlledTupleParser extends AbstractTupleParser {
 			parser.initialize(in, recType, true);
 			while (true) {
 				tb.reset();
-				if (parser.parse(tb.getDataOutput())) {
+				if (!parser.parse(tb.getDataOutput())) {
 					break;
 				}
 				tb.addFieldEndOffset();

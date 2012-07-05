@@ -29,6 +29,7 @@ import edu.uci.ics.asterix.metadata.api.IMetadataNode;
 import edu.uci.ics.asterix.metadata.api.IValueExtractor;
 import edu.uci.ics.asterix.metadata.bootstrap.MetadataPrimaryIndexes;
 import edu.uci.ics.asterix.metadata.bootstrap.MetadataSecondaryIndexes;
+import edu.uci.ics.asterix.metadata.entities.Adapter;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
 import edu.uci.ics.asterix.metadata.entities.Datatype;
 import edu.uci.ics.asterix.metadata.entities.Dataverse;
@@ -37,6 +38,7 @@ import edu.uci.ics.asterix.metadata.entities.Index;
 import edu.uci.ics.asterix.metadata.entities.InternalDatasetDetails;
 import edu.uci.ics.asterix.metadata.entities.Node;
 import edu.uci.ics.asterix.metadata.entities.NodeGroup;
+import edu.uci.ics.asterix.metadata.entitytupletranslators.AdapterTupleTranslator;
 import edu.uci.ics.asterix.metadata.entitytupletranslators.DatasetTupleTranslator;
 import edu.uci.ics.asterix.metadata.entitytupletranslators.DatatypeTupleTranslator;
 import edu.uci.ics.asterix.metadata.entitytupletranslators.DataverseTupleTranslator;
@@ -91,7 +93,7 @@ public class MetadataNode implements IMetadataNode {
     private MetadataNode() {
         super();
     }
-    
+
     public void initialize(AsterixAppRuntimeContext runtimeContext) {
         this.transactionProvider = runtimeContext.getTransactionProvider();
         this.indexRegistry = runtimeContext.getIndexRegistry();
@@ -236,7 +238,7 @@ public class MetadataNode implements IMetadataNode {
             insertTupleIntoIndex(txnId, MetadataPrimaryIndexes.FUNCTION_DATASET, functionTuple);
 
         } catch (BTreeDuplicateKeyException e) {
-            throw new MetadataException("A dataset with this name " + function.getFunctionName() + " and arity "
+            throw new MetadataException("A function with this name " + function.getFunctionName() + " and arity "
                     + function.getFunctionArity() + " already exists in dataverse '" + function.getDataverseName()
                     + "'.", e);
         } catch (Exception e) {
@@ -812,4 +814,70 @@ public class MetadataNode implements IMetadataNode {
         tuple.reset(tupleBuilder.getFieldEndOffsets(), tupleBuilder.getByteArray());
         return tuple;
     }
+
+    @Override
+    public void addAdapter(long txnId, Adapter adapter) throws MetadataException, RemoteException {
+        try {
+            // Insert into the 'Adapter' dataset.
+            AdapterTupleTranslator tupleReaderWriter = new AdapterTupleTranslator(true);
+            ITupleReference adapterTuple = tupleReaderWriter.getTupleFromMetadataEntity(adapter);
+            insertTupleIntoIndex(txnId, MetadataPrimaryIndexes.ADAPTER_DATASET, adapterTuple);
+
+        } catch (BTreeDuplicateKeyException e) {
+            throw new MetadataException("A adapter with this name " + adapter.getAdapterIdentifier().getAdapterName()
+                    + " already exists in dataverse '" + adapter.getAdapterIdentifier().getNamespace() + "'.", e);
+        } catch (Exception e) {
+            throw new MetadataException(e);
+        }
+
+    }
+
+    @Override
+    public void dropAdapter(long txnId, String dataverseName, String adapterName) throws MetadataException,
+            RemoteException {
+        Adapter adapter;
+        try {
+            adapter = getAdapter(txnId, dataverseName, adapterName);
+        } catch (Exception e) {
+            throw new MetadataException(e);
+        }
+        if (adapter == null) {
+            throw new MetadataException("Cannot drop adapter '" + adapter + "' because it doesn't exist.");
+        }
+        try {
+            // Delete entry from the 'Adapter' dataset.
+            ITupleReference searchKey = createTuple(dataverseName, adapterName);
+            // Searches the index for the tuple to be deleted. Acquires an S
+            // lock on the 'Adapter' dataset.
+            ITupleReference datasetTuple = getTupleToBeDeleted(txnId, MetadataPrimaryIndexes.ADAPTER_DATASET, searchKey);
+            deleteTupleFromIndex(txnId, MetadataPrimaryIndexes.ADAPTER_DATASET, datasetTuple);
+
+            // TODO: Change this to be a BTree specific exception, e.g.,
+            // BTreeKeyDoesNotExistException.
+        } catch (TreeIndexException e) {
+            throw new MetadataException("Cannot drop adapter '" + adapterName, e);
+        } catch (Exception e) {
+            throw new MetadataException(e);
+        }
+
+    }
+
+    @Override
+    public Adapter getAdapter(long txnId, String dataverseName, String adapterName) throws MetadataException,
+            RemoteException {
+        try {
+            ITupleReference searchKey = createTuple(dataverseName, adapterName);
+            AdapterTupleTranslator tupleReaderWriter = new AdapterTupleTranslator(false);
+            List<Adapter> results = new ArrayList<Adapter>();
+            IValueExtractor<Adapter> valueExtractor = new MetadataEntityValueExtractor<Adapter>(tupleReaderWriter);
+            searchIndex(txnId, MetadataPrimaryIndexes.ADAPTER_DATASET, searchKey, valueExtractor, results);
+            if (results.isEmpty()) {
+                return null;
+            }
+            return results.get(0);
+        } catch (Exception e) {
+            throw new MetadataException(e);
+        }
+    }
+
 }

@@ -26,7 +26,7 @@ create dataset LineItem(LineItemType)
   partitioned by key l_orderkey, l_linenumber;
 
 load dataset LineItem 
-using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
+using "localfs"
 (("path"="nc1://data/tpch0.001/lineitem.tbl"),("format"="delimited-text"),("delimiter"="|")) pre-sorted;
 
 delete $l from dataset LineItem where $l.l_orderkey>=10 die after 1500;

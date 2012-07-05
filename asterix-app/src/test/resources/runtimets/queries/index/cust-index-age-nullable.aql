@@ -20,7 +20,7 @@ create type CustomerType as open {
 create dataset Customers(CustomerType) partitioned by key cid;
 
 load dataset Customers 
-using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
+using "localfs"
 (("path"="nc1://data/semistructured/tiny01/customer.adm"),("format"="adm"));
 
 create index age_index on Customers(age);

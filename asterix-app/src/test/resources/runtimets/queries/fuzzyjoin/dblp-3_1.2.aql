@@ -15,7 +15,7 @@ create type DBLPType as open {
 create dataset DBLP(DBLPType) partitioned by key id;
 
 load dataset DBLP 
-using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
+using "localfs"
 (("path"="nc1://data/pub-small/dblp-small-id.txt"),("format"="delimited-text"),("delimiter"=":"));
 
 write output to nc1:'rttest/fuzzyjoin_dblp-3_1.2.adm';

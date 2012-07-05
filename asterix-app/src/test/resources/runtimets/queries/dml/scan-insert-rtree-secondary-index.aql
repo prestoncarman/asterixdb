@@ -22,14 +22,14 @@ create dataset MyData(MyRecord)
   partitioned by key id;
 
 load dataset MyData 
-using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
+using "localfs"
 (("path"="nc1://data/spatial/spatialData.json"),("format"="adm")) pre-sorted;
 
 create dataset MyMiniData(MyMiniRecord)
   partitioned by key id;
 
 load dataset MyMiniData 
-using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
+using "localfs"
 (("path"="nc1://data/spatial/spatialData0.json"),("format"="adm")) pre-sorted;
 
 create index rtree_index_point_0 on MyData(point) type rtree;

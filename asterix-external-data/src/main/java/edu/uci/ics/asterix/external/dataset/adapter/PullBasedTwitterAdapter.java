@@ -18,98 +18,97 @@ import java.util.HashMap;
 import java.util.Map;
 
 import edu.uci.ics.asterix.feed.intake.IPullBasedFeedClient;
-import edu.uci.ics.asterix.feed.intake.TwitterFeedClient;
+import edu.uci.ics.asterix.feed.intake.PullBasedTwitterFeedClient;
 import edu.uci.ics.asterix.feed.managed.adapter.IManagedFeedAdapter;
 import edu.uci.ics.asterix.feed.managed.adapter.IMutableFeedAdapter;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksCountPartitionConstraint;
 import edu.uci.ics.hyracks.api.context.IHyracksTaskContext;
 
-public class PullBasedTwitterAdapter extends PullBasedAdapter implements IManagedFeedAdapter, IMutableFeedAdapter {
+public class PullBasedTwitterAdapter extends PullBasedAdapter implements
+		IManagedFeedAdapter, IMutableFeedAdapter {
 
-    private int interval = 10;
-    private boolean stopRequested = false;
-    private boolean alterRequested = false;
-    private Map<String, String> alteredParams = new HashMap<String, String>();
+	private int interval = 10;
+	private boolean stopRequested = false;
+	private boolean alterRequested = false;
+	private Map<String, String> alteredParams = new HashMap<String, String>();
 
-    private TwitterFeedClient tweetClient;
-    //    private FrameTupleAppender appender;
-    //    private ByteBuffer frame;
-    //   
-    public static final String QUERY = "query";
-    public static final String INTERVAL = "interval";
+	private PullBasedTwitterFeedClient tweetClient;
 
-    @Override
-    public IPullBasedFeedClient getFeedClient(int partition) {
-        return tweetClient;
-    }
+	public static final String QUERY = "query";
+	public static final String INTERVAL = "interval";
 
-    @Override
-    public void configure(Map<String, String> arguments) throws Exception {
-        configuration = arguments;
-        partitionConstraint = new AlgebricksCountPartitionConstraint(1);
-        interval = Integer.parseInt(arguments.get(INTERVAL));
-    }
+	@Override
+	public IPullBasedFeedClient getFeedClient(int partition) {
+		return tweetClient;
+	}
 
-    @Override
-    public void initialize(IHyracksTaskContext ctx) throws Exception {
-        this.ctx = ctx;
-        tweetClient = new TwitterFeedClient(ctx, this);
-    }
+	@Override
+	public void configure(Map<String, String> arguments) throws Exception {
+		configuration = arguments;
+		partitionConstraint = new AlgebricksCountPartitionConstraint(1);
+		interval = Integer.parseInt(arguments.get(INTERVAL));
+	}
 
-    @Override
-    public IAType getAdapterOutputType() {
-        return tweetClient.getRecordType();
-    }
+	@Override
+	public void initialize(IHyracksTaskContext ctx) throws Exception {
+		this.ctx = ctx;
+		tweetClient = new PullBasedTwitterFeedClient(ctx, this);
+	}
 
-    @Override
-    public AdapterDataFlowType getAdapterDataFlowType() {
-        return dataFlowType.PULL;
-    }
+	@Override
+	public IAType getAdapterOutputType() {
+		return tweetClient.getRecordType();
+	}
 
-    @Override
-    public AdapterType getAdapterType() {
-        return adapterType.READ;
-    }
+	@Override
+	public AdapterDataFlowType getAdapterDataFlowType() {
+		return dataFlowType.PULL;
+	}
 
-    @Override
-    public void suspend() throws Exception {
-        // TODO Auto-generated method stub
+	@Override
+	public AdapterType getAdapterType() {
+		return adapterType.READ;
+	}
 
-    }
+	@Override
+	public void suspend() throws Exception {
+		// TODO Auto-generated method stub
 
-    @Override
-    public void resume() throws Exception {
-        // TODO Auto-generated method stub
+	}
 
-    }
+	@Override
+	public void resume() throws Exception {
+		// TODO Auto-generated method stub
 
-    @Override
-    public void stop() throws Exception {
-        stopRequested = true;
-    }
+	}
 
-    public boolean isStopRequested() {
-        return stopRequested;
-    }
+	@Override
+	public void stop() throws Exception {
+		stopRequested = true;
+	}
 
-    @Override
-    public void alter(Map<String, String> properties) throws Exception {
-        alterRequested = true;
-        this.alteredParams = properties;
-    }
+	public boolean isStopRequested() {
+		return stopRequested;
+	}
 
-    public boolean isAlterRequested() {
-        return alterRequested;
-    }
+	@Override
+	public void alter(Map<String, String> properties) throws Exception {
+		alterRequested = true;
+		this.alteredParams = properties;
+	}
 
-    public Map<String, String> getAlteredParams() {
-        return alteredParams;
-    }
+	public boolean isAlterRequested() {
+		return alterRequested;
+	}
 
-    public void postAlteration() {
-        alteredParams = null;
-        alterRequested = false;
-    }
+	public Map<String, String> getAlteredParams() {
+		return alteredParams;
+	}
+
+	public void postAlteration() {
+		alteredParams = null;
+		alterRequested = false;
+	}
 
 }

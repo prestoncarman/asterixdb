@@ -32,295 +32,296 @@ import edu.uci.ics.hyracks.dataflow.common.data.accessors.ArrayBackedValueStorag
 import edu.uci.ics.hyracks.dataflow.common.data.parsers.IValueParser;
 import edu.uci.ics.hyracks.dataflow.common.data.parsers.IValueParserFactory;
 
-public class DelimitedDataParser extends AbstractDataParser implements
-		IDataParser {
+public class DelimitedDataParser extends AbstractDataParser implements IDataParser {
 
-	protected final IValueParserFactory[] valueParserFactories;
-	protected final char fieldDelimiter;
+    protected final IValueParserFactory[] valueParserFactories;
+    protected final char fieldDelimiter;
 
-	protected final ARecordType recordType;
+    protected final ARecordType recordType;
 
-	IARecordBuilder recBuilder;
-	ArrayBackedValueStorage fieldValueBuffer;
-	DataOutput fieldValueBufferOutput;
-	IValueParser[] valueParsers;
-	FieldCursor cursor;
-	byte[] fieldTypeTags;
-	int[] fldIds;
-	ArrayBackedValueStorage[] nameBuffers;
+    IARecordBuilder recBuilder;
+    ArrayBackedValueStorage fieldValueBuffer;
+    DataOutput fieldValueBufferOutput;
+    IValueParser[] valueParsers;
+    FieldCursor cursor;
+    byte[] fieldTypeTags;
+    int[] fldIds;
+    ArrayBackedValueStorage[] nameBuffers;
 
-	public DelimitedDataParser(ARecordType recordType,
-			IValueParserFactory[] valueParserFactories, char fieldDelimter) {
-		this.recordType = recordType;
-		this.valueParserFactories = valueParserFactories;
-		this.fieldDelimiter = fieldDelimter;
-	}
+    public DelimitedDataParser(ARecordType recordType, IValueParserFactory[] valueParserFactories, char fieldDelimter) {
+        this.recordType = recordType;
+        this.valueParserFactories = valueParserFactories;
+        this.fieldDelimiter = fieldDelimter;
+    }
 
-	@Override
-	public void initialize(InputStream in, ARecordType recordType,
-			boolean datasetRec) throws AsterixException, IOException {
+    @Override
+    public void initialize(InputStream in, ARecordType recordType, boolean datasetRec) throws AsterixException,
+            IOException {
 
-		valueParsers = new IValueParser[valueParserFactories.length];
-		for (int i = 0; i < valueParserFactories.length; ++i) {
-			valueParsers[i] = valueParserFactories[i].createValueParser();
-		}
+        valueParsers = new IValueParser[valueParserFactories.length];
+        for (int i = 0; i < valueParserFactories.length; ++i) {
+            valueParsers[i] = valueParserFactories[i].createValueParser();
+        }
 
-		fieldValueBuffer = new ArrayBackedValueStorage();
-		fieldValueBufferOutput = fieldValueBuffer.getDataOutput();
-		recBuilder = new RecordBuilder();
-		recBuilder.reset(recordType);
-		recBuilder.init();
+        fieldValueBuffer = new ArrayBackedValueStorage();
+        fieldValueBufferOutput = fieldValueBuffer.getDataOutput();
+        recBuilder = new RecordBuilder();
+        recBuilder.reset(recordType);
+        recBuilder.init();
 
-		int n = recordType.getFieldNames().length;
-		fieldTypeTags = new byte[n];
-		for (int i = 0; i < n; i++) {
-			ATypeTag tag = recordType.getFieldTypes()[i].getTypeTag();
-			fieldTypeTags[i] = tag.serialize();
-		}
+        int n = recordType.getFieldNames().length;
+        fieldTypeTags = new byte[n];
+        for (int i = 0; i < n; i++) {
+            ATypeTag tag = recordType.getFieldTypes()[i].getTypeTag();
+            fieldTypeTags[i] = tag.serialize();
+        }
 
-		fldIds = new int[n];
-		nameBuffers = new ArrayBackedValueStorage[n];
-		AMutableString str = new AMutableString(null);
-		for (int i = 0; i < n; i++) {
-			String name = recordType.getFieldNames()[i];
-			fldIds[i] = recBuilder.getFieldId(name);
-			if (fldIds[i] < 0) {
-				if (!recordType.isOpen()) {
-					throw new HyracksDataException("Illegal field " + name
-							+ " in closed type " + recordType);
-				} else {
-					nameBuffers[i] = new ArrayBackedValueStorage();
-					fieldNameToBytes(name, str, nameBuffers[i]);
-				}
-			}
-		}
+        fldIds = new int[n];
+        nameBuffers = new ArrayBackedValueStorage[n];
+        AMutableString str = new AMutableString(null);
+        for (int i = 0; i < n; i++) {
+            String name = recordType.getFieldNames()[i];
+            fldIds[i] = recBuilder.getFieldId(name);
+            if (fldIds[i] < 0) {
+                if (!recordType.isOpen()) {
+                    throw new HyracksDataException("Illegal field " + name + " in closed type " + recordType);
+                } else {
+                    nameBuffers[i] = new ArrayBackedValueStorage();
+                    fieldNameToBytes(name, str, nameBuffers[i]);
+                }
+            }
+        }
 
-		cursor = new FieldCursor(new InputStreamReader(in));
+        cursor = new FieldCursor(new InputStreamReader(in));
 
-	}
+    }
 
-	@Override
-	public boolean parse(DataOutput out) throws AsterixException, IOException {
+    @Override
+    public boolean parse(DataOutput out) throws AsterixException, IOException {
 
-		while (cursor.nextRecord()) {
-			recBuilder.reset(recordType);
-			recBuilder.init();
+        if (cursor.nextRecord()) {
+            recBuilder.reset(recordType);
+            recBuilder.init();
+            for (int i = 0; i < valueParsers.length; ++i) {
+                if (!cursor.nextField()) {
+                    break;
+                }
+                fieldValueBuffer.reset();
+                fieldValueBufferOutput.writeByte(fieldTypeTags[i]);
+                valueParsers[i]
+                        .parse(cursor.buffer, cursor.fStart, cursor.fEnd - cursor.fStart, fieldValueBufferOutput);
+                if (fldIds[i] < 0) {
+                    recBuilder.addField(nameBuffers[i], fieldValueBuffer);
+                } else {
+                    recBuilder.addField(fldIds[i], fieldValueBuffer);
+                }
+            }
+            recBuilder.write(out, true);
+            return true;
+        } else {
+            return false;
+        }
+    }
 
-			for (int i = 0; i < valueParsers.length; ++i) {
-				if (!cursor.nextField()) {
-					break;
-				}
-				fieldValueBuffer.reset();
-				fieldValueBufferOutput.writeByte(fieldTypeTags[i]);
-				valueParsers[i].parse(cursor.buffer, cursor.fStart, cursor.fEnd
-						- cursor.fStart, fieldValueBufferOutput);
-				if (fldIds[i] < 0) {
-					recBuilder.addField(nameBuffers[i], fieldValueBuffer);
-				} else {
-					recBuilder.addField(fldIds[i], fieldValueBuffer);
-				}
-			}
-			recBuilder.write(out,true);
-			return false;
-		}
-		return true;
-	}
+    protected void fieldNameToBytes(String fieldName, AMutableString str, ArrayBackedValueStorage buffer)
+            throws HyracksDataException {
+        buffer.reset();
+        DataOutput out = buffer.getDataOutput();
+        str.setValue(fieldName);
+        try {
+            stringSerde.serialize(str, out);
+        } catch (IOException e) {
+            throw new HyracksDataException(e);
+        }
+    }
 
-	protected void fieldNameToBytes(String fieldName, AMutableString str,
-			ArrayBackedValueStorage buffer) throws HyracksDataException {
-		buffer.reset();
-		DataOutput out = buffer.getDataOutput();
-		str.setValue(fieldName);
-		try {
-			stringSerde.serialize(str, out);
-		} catch (IOException e) {
-			throw new HyracksDataException(e);
-		}
-	}
+    protected enum State {
+        INIT,
+        IN_RECORD,
+        EOR,
+        CR,
+        EOF
+    }
 
-	protected enum State {
-		INIT, IN_RECORD, EOR, CR, EOF
-	}
+    protected class FieldCursor {
+        private static final int INITIAL_BUFFER_SIZE = 4096;
+        private static final int INCREMENT = 4096;
 
-	protected class FieldCursor {
-		private static final int INITIAL_BUFFER_SIZE = 4096;
-		private static final int INCREMENT = 4096;
+        private final Reader in;
 
-		private final Reader in;
+        private char[] buffer;
+        private int start;
+        private int end;
+        private State state;
 
-		private char[] buffer;
-		private int start;
-		private int end;
-		private State state;
+        private int fStart;
+        private int fEnd;
 
-		private int fStart;
-		private int fEnd;
+        public FieldCursor(Reader in) {
+            this.in = in;
+            buffer = new char[INITIAL_BUFFER_SIZE];
+            start = 0;
+            end = 0;
+            state = State.INIT;
+        }
 
-		public FieldCursor(Reader in) {
-			this.in = in;
-			buffer = new char[INITIAL_BUFFER_SIZE];
-			start = 0;
-			end = 0;
-			state = State.INIT;
-		}
+        public boolean nextRecord() throws IOException {
+            while (true) {
+                switch (state) {
+                    case INIT:
+                        boolean eof = !readMore();
+                        if (eof) {
+                            state = State.EOF;
+                            return false;
+                        } else {
+                            state = State.IN_RECORD;
+                            return true;
+                        }
 
-		public boolean nextRecord() throws IOException {
-			while (true) {
-				switch (state) {
-				case INIT:
-					boolean eof = !readMore();
-					if (eof) {
-						state = State.EOF;
-						return false;
-					} else {
-						state = State.IN_RECORD;
-						return true;
-					}
+                    case IN_RECORD:
+                        int p = start;
+                        while (true) {
+                            if (p >= end) {
+                                int s = start;
+                                eof = !readMore();
+                                if (eof) {
+                                    state = State.EOF;
+                                    return start < end;
+                                }
+                                p -= (s - start);
+                            }
+                            char ch = buffer[p];
+                            if (ch == '\n') {
+                                start = p + 1;
+                                state = State.EOR;
+                                break;
+                            } else if (ch == '\r') {
+                                start = p + 1;
+                                state = State.CR;
+                                break;
+                            }
+                            ++p;
+                        }
+                        break;
 
-				case IN_RECORD:
-					int p = start;
-					while (true) {
-						if (p >= end) {
-							int s = start;
-							eof = !readMore();
-							if (eof) {
-								state = State.EOF;
-								return start < end;
-							}
-							p -= (s - start);
-						}
-						char ch = buffer[p];
-						if (ch == '\n') {
-							start = p + 1;
-							state = State.EOR;
-							break;
-						} else if (ch == '\r') {
-							start = p + 1;
-							state = State.CR;
-							break;
-						}
-						++p;
-					}
-					break;
+                    case CR:
+                        if (start >= end) {
+                            eof = !readMore();
+                            if (eof) {
+                                state = State.EOF;
+                                return false;
+                            }
+                        }
+                        char ch = buffer[start];
+                        if (ch == '\n') {
+                            ++start;
+                            state = State.EOR;
+                        } else {
+                            state = State.IN_RECORD;
+                            return true;
+                        }
 
-				case CR:
-					if (start >= end) {
-						eof = !readMore();
-						if (eof) {
-							state = State.EOF;
-							return false;
-						}
-					}
-					char ch = buffer[start];
-					if (ch == '\n') {
-						++start;
-						state = State.EOR;
-					} else {
-						state = State.IN_RECORD;
-						return true;
-					}
+                    case EOR:
+                        if (start >= end) {
+                            eof = !readMore();
+                            if (eof) {
+                                state = State.EOF;
+                                return false;
+                            }
+                        }
+                        state = State.IN_RECORD;
+                        return start < end;
 
-				case EOR:
-					if (start >= end) {
-						eof = !readMore();
-						if (eof) {
-							state = State.EOF;
-							return false;
-						}
-					}
-					state = State.IN_RECORD;
-					return start < end;
+                    case EOF:
+                        return false;
+                }
+            }
+        }
 
-				case EOF:
-					return false;
-				}
-			}
-		}
+        public boolean nextField() throws IOException {
+            switch (state) {
+                case INIT:
+                case EOR:
+                case EOF:
+                case CR:
+                    return false;
 
-		public boolean nextField() throws IOException {
-			switch (state) {
-			case INIT:
-			case EOR:
-			case EOF:
-			case CR:
-				return false;
+                case IN_RECORD:
+                    boolean eof;
+                    int p = start;
+                    while (true) {
+                        if (p >= end) {
+                            int s = start;
+                            eof = !readMore();
+                            if (eof) {
+                                state = State.EOF;
+                                return true;
+                            }
+                            p -= (s - start);
+                        }
+                        char ch = buffer[p];
+                        if (ch == fieldDelimiter) {
+                            fStart = start;
+                            fEnd = p;
+                            start = p + 1;
+                            return true;
+                        } else if (ch == '\n') {
+                            fStart = start;
+                            fEnd = p;
+                            start = p + 1;
+                            state = State.EOR;
+                            return true;
+                        } else if (ch == '\r') {
+                            fStart = start;
+                            fEnd = p;
+                            start = p + 1;
+                            state = State.CR;
+                            return true;
+                        }
+                        ++p;
+                    }
+            }
+            throw new IllegalStateException();
+        }
 
-			case IN_RECORD:
-				boolean eof;
-				int p = start;
-				while (true) {
-					if (p >= end) {
-						int s = start;
-						eof = !readMore();
-						if (eof) {
-							state = State.EOF;
-							return true;
-						}
-						p -= (s - start);
-					}
-					char ch = buffer[p];
-					if (ch == fieldDelimiter) {
-						fStart = start;
-						fEnd = p;
-						start = p + 1;
-						return true;
-					} else if (ch == '\n') {
-						fStart = start;
-						fEnd = p;
-						start = p + 1;
-						state = State.EOR;
-						return true;
-					} else if (ch == '\r') {
-						fStart = start;
-						fEnd = p;
-						start = p + 1;
-						state = State.CR;
-						return true;
-					}
-					++p;
-				}
-			}
-			throw new IllegalStateException();
-		}
+        protected boolean readMore() throws IOException {
+            if (start > 0) {
+                System.arraycopy(buffer, start, buffer, 0, end - start);
+            }
+            end -= start;
+            start = 0;
 
-		protected boolean readMore() throws IOException {
-			if (start > 0) {
-				System.arraycopy(buffer, start, buffer, 0, end - start);
-			}
-			end -= start;
-			start = 0;
+            if (end == buffer.length) {
+                buffer = Arrays.copyOf(buffer, buffer.length + INCREMENT);
+            }
 
-			if (end == buffer.length) {
-				buffer = Arrays.copyOf(buffer, buffer.length + INCREMENT);
-			}
+            int n = in.read(buffer, end, buffer.length - end);
+            if (n < 0) {
+                return false;
+            }
+            end += n;
+            return true;
+        }
 
-			int n = in.read(buffer, end, buffer.length - end);
-			if (n < 0) {
-				return false;
-			}
-			end += n;
-			return true;
-		}
+        public int getfStart() {
+            return fStart;
+        }
 
-		public int getfStart() {
-			return fStart;
-		}
+        public void setfStart(int fStart) {
+            this.fStart = fStart;
+        }
 
-		public void setfStart(int fStart) {
-			this.fStart = fStart;
-		}
+        public int getfEnd() {
+            return fEnd;
+        }
 
-		public int getfEnd() {
-			return fEnd;
-		}
+        public void setfEnd(int fEnd) {
+            this.fEnd = fEnd;
+        }
 
-		public void setfEnd(int fEnd) {
-			this.fEnd = fEnd;
-		}
-
-		public char[] getBuffer() {
-			return buffer;
-		}
-	}
+        public char[] getBuffer() {
+            return buffer;
+        }
+    }
 
 }

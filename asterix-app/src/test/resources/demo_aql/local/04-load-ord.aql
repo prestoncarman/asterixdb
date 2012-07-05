@@ -15,5 +15,5 @@ declare dataset Orders(OrderType)
   partitioned by key oid on group1;
 
 load dataset Orders 
-using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
+using "localfs"
 (("path"="nc1:///tmp/orders.adm"),("format"="adm"));

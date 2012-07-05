@@ -17,7 +17,7 @@ create dataset DBLPadm(DBLPType)
 
 // drop dataset DBLPadm;
 load dataset DBLPadm 
-using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter" 
+using "localfs" 
 (("path"="nc1://data/dblp-small/dblp-small.adm"),("format"="adm"));
 
 write output to nc1:"rttest/scan_20.adm";

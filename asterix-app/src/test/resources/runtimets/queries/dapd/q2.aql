@@ -32,7 +32,7 @@ create type EventType as closed {
 }
 
 create external dataset Event(EventType) 
-using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
+using "localfs"
 (("path"="nc1://data/events/tiny/event.adm"),("format"="adm"));
 
 write output to nc1:"rttest/dapd_q2.adm";

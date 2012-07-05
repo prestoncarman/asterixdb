@@ -14,7 +14,7 @@ create dataset Temp2(TempType)
 	partitioned by key id;
 
 load dataset Temp2 
-using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
+using "localfs"
 (("path"="nc1://data/nontagged/tempData.txt"),("format"="delimited-text"),("delimiter"="|")) pre-sorted;
        
 write output to nc1:"rttest/scan_temp_types_02.adm";

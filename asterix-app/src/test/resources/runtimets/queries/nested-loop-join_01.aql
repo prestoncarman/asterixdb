@@ -21,11 +21,11 @@ create dataset Visitors(VisitorType) partitioned by key vid;
 
 
 load dataset Users 
-using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter" 
+using "localfs" 
 (("path"="nc1://data/users-visitors-small/users.json"),("format"="adm"));
 
 load dataset Visitors 
-using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter" 
+using "localfs" 
 (("path"="nc1://data/users-visitors-small/visitors.json"),("format"="adm"));
 
 write output to nc1:'rttest/nested-loop-join_01.adm';

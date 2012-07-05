@@ -44,11 +44,11 @@ create dataset CustomerOrders2(CustomerOrdersType)
   partitioned by key cid;
 
 load dataset Customers2 
-using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
+using "localfs"
 (("path"="nc1://data/custord-tiny/customer-tiny.adm"),("format"="adm")) pre-sorted;
 
 load dataset Orders2 
-using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
+using "localfs"
 (("path"="nc1://data/custord-tiny/order-tiny.adm"),("format"="adm")) pre-sorted;
 
 write into dataset CustomerOrders2 (

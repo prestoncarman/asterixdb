@@ -17,7 +17,7 @@ create type NumericType as open {
 write output to nc1:"rttest/aggregate_avg_double_null.adm";
 
 create external dataset Numeric(NumericType)
-using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
+using "localfs"
 (("path"="nc1://data/nontagged/numericData.json"),("format"="adm"));
 
 let $a := avg( 

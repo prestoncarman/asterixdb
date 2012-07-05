@@ -18,51 +18,47 @@ import java.util.List;
 import java.util.Map;
 
 import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
+import edu.uci.ics.asterix.metadata.entities.Adapter;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.hyracks.algebricks.common.utils.Triple;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluatorFactory;
 
-public class AqlCompiledFeedDatasetDetails extends
-		AqlCompiledInternalDatasetDetails {
-	private final String adapterFactory;
-	private final Map<String, String> properties;
-	private final String functionIdentifier;
-	private final String feedState;
+public class AqlCompiledFeedDatasetDetails extends AqlCompiledInternalDatasetDetails {
+    private final Adapter adapter;
+    private final Map<String, String> properties;
+    private final String functionIdentifier;
+    private final String feedState;
 
-	public AqlCompiledFeedDatasetDetails(
-			List<String> partitioningExprs,
-			List<Triple<ICopyEvaluatorFactory, ScalarFunctionCallExpression, IAType>> partitionFuns,
-			String nodegroupName, AqlCompiledIndexDecl primaryIndex,
-			List<AqlCompiledIndexDecl> secondaryIndexes, String adapter,
-			Map<String, String> properties, String functionIdentifier,
-			String feedState) {
-		super(partitioningExprs, partitionFuns, nodegroupName, primaryIndex,
-				secondaryIndexes);
-		this.adapterFactory = adapter;
-		this.properties = properties;
-		this.functionIdentifier = functionIdentifier;
-		this.feedState = feedState;
-	}
+    public AqlCompiledFeedDatasetDetails(List<String> partitioningExprs,
+            List<Triple<ICopyEvaluatorFactory, ScalarFunctionCallExpression, IAType>> partitionFuns,
+            String nodegroupName, AqlCompiledIndexDecl primaryIndex, List<AqlCompiledIndexDecl> secondaryIndexes,
+            Adapter adapter, Map<String, String> properties, String functionIdentifier, String feedState) {
+        super(partitioningExprs, partitionFuns, nodegroupName, primaryIndex, secondaryIndexes);
+        this.adapter = adapter;
+        this.properties = properties;
+        this.functionIdentifier = functionIdentifier;
+        this.feedState = feedState;
+    }
 
-	public String getAdapterFactory() {
-		return adapterFactory;
-	}
+    public Adapter getAdapter() {
+        return adapter;
+    }
 
-	public Map<String, String> getProperties() {
-		return properties;
-	}
+    public Map<String, String> getProperties() {
+        return properties;
+    }
 
-	public String getFunctionIdentifier() {
-		return functionIdentifier;
-	}
+    public String getFunctionIdentifier() {
+        return functionIdentifier;
+    }
 
-	public DatasetType getDatasetType() {
-		return DatasetType.FEED;
-	}
+    public DatasetType getDatasetType() {
+        return DatasetType.FEED;
+    }
 
-	public String getFeedState() {
-		return feedState;
-	}
+    public String getFeedState() {
+        return feedState;
+    }
 
 }

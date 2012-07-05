@@ -83,7 +83,9 @@ public final class AqlRewriter {
     private String dataverseName;
 
     private enum DfsColor {
-        WHITE, GRAY, BLACK
+        WHITE,
+        GRAY,
+        BLACK
     }
 
     public AqlRewriter(Query topExpr, int varCounter, MetadataTransactionContext txnContext, String dataverseName) {
@@ -160,18 +162,19 @@ public final class AqlRewriter {
                 continue;
             }
 
-            if (AsterixBuiltinFunctions.isBuiltinCompilerFunction(new FunctionIdentifier(AlgebricksBuiltinFunctions.ALGEBRICKS_NS,
-                    funId.getFunctionName(), false))) {
+            if (AsterixBuiltinFunctions.isBuiltinCompilerFunction(new FunctionIdentifier(
+                    AlgebricksBuiltinFunctions.ALGEBRICKS_NS, funId.getFunctionName(), false))) {
                 continue;
             }
-            
+
             if (declaredFunctions != null && declaredFunctions.contains(funId)) {
                 continue;
             }
 
             FunctionDecl functionDecl = getFunctionDecl(funId);
             if (functionDecls.contains(functionDecl)) {
-                throw new AsterixException(" Detected recursvity!");
+                throw new AsterixException("ERROR:Recursive invocation "
+                        + functionDecls.get(functionDecls.size() - 1).getIdent() + " <==> " + functionDecl.getIdent());
             }
             functionDecls.add(functionDecl);
             buildOtherUdfs(functionDecl.getFuncBody(), functionDecls, declaredFunctions);
@@ -179,8 +182,8 @@ public final class AqlRewriter {
     }
 
     private FunctionDecl getFunctionDecl(AsterixFunction funId) throws AsterixException {
-        Function function = MetadataManager.INSTANCE.getFunction(mdTxnCtx, dataverseName, funId.getFunctionName(), funId
-                .getArity());
+        Function function = MetadataManager.INSTANCE.getFunction(mdTxnCtx, dataverseName, funId.getFunctionName(),
+                funId.getArity());
         if (function == null) {
             throw new AsterixException(" unknown function " + funId);
         }

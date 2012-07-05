@@ -33,125 +33,104 @@ import edu.uci.ics.hyracks.dataflow.std.file.ITupleParserFactory;
 
 public abstract class FileSystemBasedAdapter extends AbstractDatasourceAdapter {
 
-	protected boolean userDefinedParser = false;
-	protected String parserFactoryClassname;
+    protected boolean userDefinedParser = false;
+    protected String parserFactoryClassname;
 
-	public static final String KEY_DELIMITER = "delimiter";
+    public static final String KEY_DELIMITER = "delimiter";
 
-	public abstract InputStream getInputStream(int partition)
-			throws IOException;
+    public abstract InputStream getInputStream(int partition) throws IOException;
 
-	public FileSystemBasedAdapter(IAType atype) {
-		this.atype = atype;
-	}
+    public FileSystemBasedAdapter(IAType atype) {
+        this.atype = atype;
+    }
 
-	@Override
-	public void start(int partition, IFrameWriter writer) throws Exception {
-		InputStream in = getInputStream(partition);
-		ITupleParser parser = getTupleParser();
-		parser.parse(in, writer);
-	}
+    @Override
+    public void start(int partition, IFrameWriter writer) throws Exception {
+        InputStream in = getInputStream(partition);
+        ITupleParser parser = getTupleParser();
+        parser.parse(in, writer);
+    }
 
-	@Override
-	public abstract void initialize(IHyracksTaskContext ctx) throws Exception;
+    @Override
+    public abstract void initialize(IHyracksTaskContext ctx) throws Exception;
 
-	@Override
-	public abstract void configure(Map<String, String> arguments)
-			throws Exception;
+    @Override
+    public abstract void configure(Map<String, String> arguments) throws Exception;
 
-	@Override
-	public abstract AdapterDataFlowType getAdapterDataFlowType();
+    @Override
+    public abstract AdapterDataFlowType getAdapterDataFlowType();
 
-	@Override
-	public abstract AdapterType getAdapterType();
+    @Override
+    public abstract AdapterType getAdapterType();
 
-	protected ITupleParser getTupleParser() throws Exception {
-		ITupleParser parser = null;
-		if (userDefinedParser) {
-			Class tupleParserFactoryClass = Class
-					.forName(parserFactoryClassname);
-			ITupleParserFactory parserFactory = (ITupleParserFactory) tupleParserFactoryClass
-					.newInstance();
-			parser = parserFactory.createTupleParser(ctx);
-		} else {
-			if (FORMAT_DELIMITED_TEXT.equalsIgnoreCase(configuration
-					.get(KEY_FORMAT))) {
-				parser = getDelimitedDataTupleParser((ARecordType) atype);
+    protected ITupleParser getTupleParser() throws Exception {
+        ITupleParser parser = null;
+        if (userDefinedParser) {
+            Class tupleParserFactoryClass = Class.forName(parserFactoryClassname);
+            ITupleParserFactory parserFactory = (ITupleParserFactory) tupleParserFactoryClass.newInstance();
+            parser = parserFactory.createTupleParser(ctx);
+        } else {
+            if (FORMAT_DELIMITED_TEXT.equalsIgnoreCase(configuration.get(KEY_FORMAT))) {
+                parser = getDelimitedDataTupleParser((ARecordType) atype);
 
-			} else if (FORMAT_ADM.equalsIgnoreCase(configuration
-					.get(KEY_FORMAT))) {
-				parser = getADMDataTupleParser((ARecordType) atype);
-			} else {
-				throw new IllegalArgumentException(" format "
-						+ configuration.get(KEY_FORMAT) + " not supported");
-			}
-		}
-		return parser;
+            } else if (FORMAT_ADM.equalsIgnoreCase(configuration.get(KEY_FORMAT))) {
+                parser = getADMDataTupleParser((ARecordType) atype);
+            } else {
+                throw new IllegalArgumentException(" format " + configuration.get(KEY_FORMAT) + " not supported");
+            }
+        }
+        return parser;
 
-	}
+    }
 
-	protected void configureFormat() throws Exception {
-		parserFactoryClassname = configuration.get(KEY_PARSER_FACTORY);
-		userDefinedParser = (parserFactoryClassname != null);
+    protected void configureFormat() throws Exception {
+        parserFactoryClassname = configuration.get(KEY_PARSER_FACTORY);
+        userDefinedParser = (parserFactoryClassname != null);
 
-		if (parserFactoryClassname == null) {
-			if (FORMAT_DELIMITED_TEXT.equalsIgnoreCase(configuration
-					.get(KEY_FORMAT))) {
-				parserFactoryClassname = formatToParserFactoryMap
-						.get(FORMAT_DELIMITED_TEXT);
-			} else if (FORMAT_ADM.equalsIgnoreCase(configuration
-					.get(KEY_FORMAT))) {
-				parserFactoryClassname = formatToParserFactoryMap
-						.get(FORMAT_ADM);
-			} else {
-				throw new IllegalArgumentException(" format "
-						+ configuration.get(KEY_FORMAT) + " not supported");
-			}
-		}
+        if (parserFactoryClassname == null) {
+            if (FORMAT_DELIMITED_TEXT.equalsIgnoreCase(configuration.get(KEY_FORMAT))) {
+                parserFactoryClassname = formatToParserFactoryMap.get(FORMAT_DELIMITED_TEXT);
+            } else if (FORMAT_ADM.equalsIgnoreCase(configuration.get(KEY_FORMAT))) {
+                parserFactoryClassname = formatToParserFactoryMap.get(FORMAT_ADM);
+            } else {
+                throw new IllegalArgumentException(" format " + configuration.get(KEY_FORMAT) + " not supported");
+            }
+        }
 
-	}
+    }
 
-	protected ITupleParser getDelimitedDataTupleParser(ARecordType recordType)
-			throws AsterixException {
-		ITupleParser parser;
-		int n = recordType.getFieldTypes().length;
-		IValueParserFactory[] fieldParserFactories = new IValueParserFactory[n];
-		for (int i = 0; i < n; i++) {
-			ATypeTag tag = recordType.getFieldTypes()[i].getTypeTag();
-			IValueParserFactory vpf = typeToValueParserFactMap.get(tag);
-			if (vpf == null) {
-				throw new NotImplementedException(
-						"No value parser factory for delimited fields of type "
-								+ tag);
-			}
-			fieldParserFactories[i] = vpf;
-		}
-		String delimiterValue = (String) configuration.get(KEY_DELIMITER);
-		if (delimiterValue != null && delimiterValue.length() > 1) {
-			throw new AsterixException("improper delimiter");
-		}
+    protected ITupleParser getDelimitedDataTupleParser(ARecordType recordType) throws AsterixException {
+        ITupleParser parser;
+        int n = recordType.getFieldTypes().length;
+        IValueParserFactory[] fieldParserFactories = new IValueParserFactory[n];
+        for (int i = 0; i < n; i++) {
+            ATypeTag tag = recordType.getFieldTypes()[i].getTypeTag();
+            IValueParserFactory vpf = typeToValueParserFactMap.get(tag);
+            if (vpf == null) {
+                throw new NotImplementedException("No value parser factory for delimited fields of type " + tag);
+            }
+            fieldParserFactories[i] = vpf;
+        }
+        String delimiterValue = (String) configuration.get(KEY_DELIMITER);
+        if (delimiterValue != null && delimiterValue.length() > 1) {
+            throw new AsterixException("improper delimiter");
+        }
 
-		Character delimiter = delimiterValue.charAt(0);
-		parser = new NtDelimitedDataTupleParserFactory(recordType,
-				fieldParserFactories, delimiter).createTupleParser(ctx);
-		return parser;
-	}
+        Character delimiter = delimiterValue.charAt(0);
+        parser = new NtDelimitedDataTupleParserFactory(recordType, fieldParserFactories, delimiter)
+                .createTupleParser(ctx);
+        return parser;
+    }
 
-	protected ITupleParser getADMDataTupleParser(ARecordType recordType)
-			throws AsterixException {
-		ITupleParser parser = null;
-		try {
-			Class tupleParserFactoryClass = Class
-					.forName(parserFactoryClassname);
-			Constructor ctor = tupleParserFactoryClass
-					.getConstructor(ARecordType.class);
-			ITupleParserFactory parserFactory = (ITupleParserFactory) ctor
-					.newInstance(atype);
-			parserFactory.createTupleParser(ctx);
-			return parser;
-		} catch (Exception e) {
-			throw new AsterixException(e);
-		}
+    protected ITupleParser getADMDataTupleParser(ARecordType recordType) throws AsterixException {
+        try {
+            Class tupleParserFactoryClass = Class.forName(parserFactoryClassname);
+            Constructor ctor = tupleParserFactoryClass.getConstructor(ARecordType.class);
+            ITupleParserFactory parserFactory = (ITupleParserFactory) ctor.newInstance(atype);
+            return parserFactory.createTupleParser(ctx);
+        } catch (Exception e) {
+            throw new AsterixException(e);
+        }
 
-	}
+    }
 }

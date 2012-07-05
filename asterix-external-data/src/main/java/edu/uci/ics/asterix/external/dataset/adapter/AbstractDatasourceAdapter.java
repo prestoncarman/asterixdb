@@ -43,6 +43,13 @@ public abstract class AbstractDatasourceAdapter implements IDatasourceAdapter {
 	protected AdapterDataFlowType dataFlowType;
 	protected AdapterType adapterType;
 	protected boolean typeInfoRequired = false;
+	
+	
+	
+	
+	
+	
+	
 
 	protected static final HashMap<ATypeTag, IValueParserFactory> typeToValueParserFactMap = new HashMap<ATypeTag, IValueParserFactory>();
 	static {

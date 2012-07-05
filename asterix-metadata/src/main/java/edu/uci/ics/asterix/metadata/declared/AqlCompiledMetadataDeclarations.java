@@ -25,6 +25,7 @@ import edu.uci.ics.asterix.common.annotations.TypeDataGen;
 import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
 import edu.uci.ics.asterix.common.config.DatasetConfig.IndexType;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
+import edu.uci.ics.asterix.common.functions.FunctionConstants;
 import edu.uci.ics.asterix.formats.base.IDataFormat;
 import edu.uci.ics.asterix.metadata.MetadataException;
 import edu.uci.ics.asterix.metadata.MetadataManager;
@@ -32,6 +33,7 @@ import edu.uci.ics.asterix.metadata.MetadataTransactionContext;
 import edu.uci.ics.asterix.metadata.api.IMetadataManager;
 import edu.uci.ics.asterix.metadata.bootstrap.AsterixProperties;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl.IndexKind;
+import edu.uci.ics.asterix.metadata.entities.Adapter;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
 import edu.uci.ics.asterix.metadata.entities.Datatype;
 import edu.uci.ics.asterix.metadata.entities.Dataverse;
@@ -209,9 +211,12 @@ public class AqlCompiledMetadataDeclarations {
                         acdd = new AqlCompiledInternalDatasetDetails(id.getPartitioningKey(),
                                 partitioningEvalFactories, id.getNodeGroupName(), primaryIndex, secondaryIndexes);
                     } else {
+                        String adapterName = ((FeedDatasetDetails) id).getAdapterFactory();
+                        Adapter adapter = getAdapter(adapterName);
+
                         acdd = new AqlCompiledFeedDatasetDetails(id.getPartitioningKey(), partitioningEvalFactories,
-                                id.getNodeGroupName(), primaryIndex, secondaryIndexes,
-                                ((FeedDatasetDetails) id).getAdapterFactory(), ((FeedDatasetDetails) id).getProperties(),
+                                id.getNodeGroupName(), primaryIndex, secondaryIndexes, adapter,
+                                ((FeedDatasetDetails) id).getProperties(),
                                 ((FeedDatasetDetails) id).getFunctionIdentifier(), ((FeedDatasetDetails) id)
                                         .getFeedState().toString());
                     }
@@ -219,8 +224,10 @@ public class AqlCompiledMetadataDeclarations {
                 }
 
                 case EXTERNAL: {
-                    acdd = new AqlCompiledExternalDatasetDetails(
-                            ((ExternalDatasetDetails) datasetRecord.getDatasetDetails()).getAdapter(),
+                    String adapterName = ((ExternalDatasetDetails) datasetRecord.getDatasetDetails()).getAdapter();
+                    Adapter adapter = getAdapter(adapterName);
+
+                    acdd = new AqlCompiledExternalDatasetDetails(adapter,
                             ((ExternalDatasetDetails) datasetRecord.getDatasetDetails()).getProperties());
                     break;
                 }
@@ -255,7 +262,7 @@ public class AqlCompiledMetadataDeclarations {
         return evalFactories;
     }
 
-	public Pair<IFileSplitProvider, AlgebricksPartitionConstraint> splitProviderAndPartitionConstraintsForInternalOrFeedDataset(
+    public Pair<IFileSplitProvider, AlgebricksPartitionConstraint> splitProviderAndPartitionConstraintsForInternalOrFeedDataset(
             String datasetName, String targetIdxName) throws AlgebricksException, MetadataException {
         FileSplit[] splits = splitsForInternalOrFeedDataset(datasetName, targetIdxName);
         IFileSplitProvider splitProvider = new ConstantFileSplitProvider(splits);
@@ -323,5 +330,19 @@ public class AqlCompiledMetadataDeclarations {
 
     public MetadataTransactionContext getMetadataTransactionContext() {
         return mdTxnCtx;
+    }
+
+    public Adapter getAdapter(String adapterName) throws MetadataException {
+        Adapter adapter = null;
+        // search in default namespace (built-in adapter)
+        adapter = metadataManager.getAdapter(mdTxnCtx, FunctionConstants.ASTERIX_NS, adapterName);
+        if (adapter == null) {
+            adapter = metadataManager.getAdapter(mdTxnCtx, dataverseName, adapterName);
+        }
+        // search in dataverse (user-defined adapter)
+        if (adapter == null) {
+            throw new IllegalStateException("Unknown adapter " + adapterName);
+        }
+        return adapter;
     }
 }

@@ -12,7 +12,7 @@ create type SpatialType as open {
 }
 
 create external dataset Spatial(SpatialType)
-using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
+using "localfs"
 (("path"="nc1://data/nontagged/spatialData.json"),("format"="adm"));
         
 write output to nc1:"rttest/scan_spatial_types_01.adm";

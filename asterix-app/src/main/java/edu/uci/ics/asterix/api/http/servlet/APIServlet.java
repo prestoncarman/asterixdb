@@ -58,7 +58,7 @@ public class APIServlet extends HttpServlet {
                     context.setAttribute(HYRACKS_CONNECTION_ATTR, hcc);
                 }
             }
-            AQLParser parser = new AQLParser(new StringReader(query));
+            AQLParser parser = new AQLParser(query);
             Query q = (Query) parser.Statement();
             SessionConfig pc = new SessionConfig(port, true, isSet(printExprParam), isSet(printRewrittenExprParam),
                     isSet(printLogicalPlanParam), isSet(printOptimizedLogicalPlanParam), false, isSet(printJob));
@@ -110,7 +110,7 @@ public class APIServlet extends HttpServlet {
 
         } catch (Exception e) {
             out.println(e.getMessage());
-       }
+        }
     }
 
     @Override

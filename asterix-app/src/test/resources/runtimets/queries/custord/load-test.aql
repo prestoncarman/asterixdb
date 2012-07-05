@@ -26,7 +26,7 @@ create dataset c2(CustomerType)
   partitioned by key cid;  
   
 load dataset c1 
-using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
+using "localfs"
 (("path"="nc1://data/custord-tiny/customer-tiny.adm"),("format"="adm")) pre-sorted;
 
 

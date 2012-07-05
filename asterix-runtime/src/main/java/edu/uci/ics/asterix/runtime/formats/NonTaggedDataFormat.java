@@ -175,511 +175,571 @@ import edu.uci.ics.hyracks.dataflow.std.file.ITupleParserFactory;
 
 public class NonTaggedDataFormat implements IDataFormat {
 
-    private static boolean registered = false;
+	private static boolean registered = false;
 
-    public static final NonTaggedDataFormat INSTANCE = new NonTaggedDataFormat();
+	public static final NonTaggedDataFormat INSTANCE = new NonTaggedDataFormat();
 
-    private static LogicalVariable METADATA_DUMMY_VAR = new LogicalVariable(-1);
+	public static final String NON_TAGGED_DATA_FORMAT = "edu.uci.ics.asterix.runtime.formats.NonTaggedDataFormat";
 
-    private static final HashMap<ATypeTag, IValueParserFactory> typeToValueParserFactMap = new HashMap<ATypeTag, IValueParserFactory>();
-    static {
-        typeToValueParserFactMap.put(ATypeTag.INT32, IntegerParserFactory.INSTANCE);
-        typeToValueParserFactMap.put(ATypeTag.FLOAT, FloatParserFactory.INSTANCE);
-        typeToValueParserFactMap.put(ATypeTag.DOUBLE, DoubleParserFactory.INSTANCE);
-        typeToValueParserFactMap.put(ATypeTag.INT64, LongParserFactory.INSTANCE);
-        typeToValueParserFactMap.put(ATypeTag.STRING, UTF8StringParserFactory.INSTANCE);
-    }
+	private static LogicalVariable METADATA_DUMMY_VAR = new LogicalVariable(-1);
 
-    public NonTaggedDataFormat() {
-    }
+	private static final HashMap<ATypeTag, IValueParserFactory> typeToValueParserFactMap = new HashMap<ATypeTag, IValueParserFactory>();
+	static {
+		typeToValueParserFactMap.put(ATypeTag.INT32,
+				IntegerParserFactory.INSTANCE);
+		typeToValueParserFactMap.put(ATypeTag.FLOAT,
+				FloatParserFactory.INSTANCE);
+		typeToValueParserFactMap.put(ATypeTag.DOUBLE,
+				DoubleParserFactory.INSTANCE);
+		typeToValueParserFactMap
+				.put(ATypeTag.INT64, LongParserFactory.INSTANCE);
+		typeToValueParserFactMap.put(ATypeTag.STRING,
+				UTF8StringParserFactory.INSTANCE);
+	}
 
-    public void registerRuntimeFunctions() throws AlgebricksException {
+	public NonTaggedDataFormat() {
+	}
 
-        if (registered) {
-            return;
-        }
-        registered = true;
+	public void registerRuntimeFunctions() throws AlgebricksException {
 
-        if (FunctionManagerHolder.getFunctionManager() != null) {
-            return;
-        }
+		if (registered) {
+			return;
+		}
+		registered = true;
 
-        List<IFunctionDescriptorFactory> temp = new ArrayList<IFunctionDescriptorFactory>();
+		if (FunctionManagerHolder.getFunctionManager() != null) {
+			return;
+		}
 
-        // format-independent
-        temp.add(ContainsDescriptor.FACTORY);
-        temp.add(EndsWithDescriptor.FACTORY);
-        temp.add(StartsWithDescriptor.FACTORY);
-        temp.add(SubstringDescriptor.FACTORY);
-        temp.add(TidRunningAggregateDescriptor.FACTORY);
+		List<IFunctionDescriptorFactory> temp = new ArrayList<IFunctionDescriptorFactory>();
 
-        // format-dependent
-        temp.add(AndDescriptor.FACTORY);
-        temp.add(OrDescriptor.FACTORY);
-        temp.add(LikeDescriptor.FACTORY);
-        temp.add(YearDescriptor.FACTORY);
-        temp.add(ScanCollectionDescriptor.FACTORY);
-        temp.add(AnyCollectionMemberDescriptor.FACTORY);
-        temp.add(ClosedRecordConstructorDescriptor.FACTORY);
-        temp.add(FieldAccessByIndexDescriptor.FACTORY);
-        temp.add(FieldAccessByNameDescriptor.FACTORY);
-        temp.add(GetItemDescriptor.FACTORY);
-        temp.add(NumericUnaryMinusDescriptor.FACTORY);
-        temp.add(OpenRecordConstructorDescriptor.FACTORY);
-        temp.add(OrderedListConstructorDescriptor.FACTORY);
-        temp.add(UnorderedListConstructorDescriptor.FACTORY);
-        temp.add(EmbedTypeDescriptor.FACTORY);
+		// format-independent
+		temp.add(ContainsDescriptor.FACTORY);
+		temp.add(EndsWithDescriptor.FACTORY);
+		temp.add(StartsWithDescriptor.FACTORY);
+		temp.add(SubstringDescriptor.FACTORY);
+		temp.add(TidRunningAggregateDescriptor.FACTORY);
 
-        temp.add(NumericAddDescriptor.FACTORY);
-        temp.add(NumericDivideDescriptor.FACTORY);
-        temp.add(NumericMultiplyDescriptor.FACTORY);
-        temp.add(NumericSubtractDescriptor.FACTORY);
-        temp.add(IsNullDescriptor.FACTORY);
-        temp.add(NotDescriptor.FACTORY);
-        temp.add(LenDescriptor.FACTORY);
-        temp.add(NonEmptyStreamAggregateDescriptor.FACTORY);
-        temp.add(RangeDescriptor.FACTORY);
+		// format-dependent
+		temp.add(AndDescriptor.FACTORY);
+		temp.add(OrDescriptor.FACTORY);
+		temp.add(LikeDescriptor.FACTORY);
+		temp.add(YearDescriptor.FACTORY);
+		temp.add(ScanCollectionDescriptor.FACTORY);
+		temp.add(AnyCollectionMemberDescriptor.FACTORY);
+		temp.add(ClosedRecordConstructorDescriptor.FACTORY);
+		temp.add(FieldAccessByIndexDescriptor.FACTORY);
+		temp.add(FieldAccessByNameDescriptor.FACTORY);
+		temp.add(GetItemDescriptor.FACTORY);
+		temp.add(NumericUnaryMinusDescriptor.FACTORY);
+		temp.add(OpenRecordConstructorDescriptor.FACTORY);
+		temp.add(OrderedListConstructorDescriptor.FACTORY);
+		temp.add(UnorderedListConstructorDescriptor.FACTORY);
+		temp.add(EmbedTypeDescriptor.FACTORY);
 
-        // aggregates
-        temp.add(ListifyAggregateDescriptor.FACTORY);
-        temp.add(CountAggregateDescriptor.FACTORY);
-        temp.add(AvgAggregateDescriptor.FACTORY);
-        temp.add(LocalAvgAggregateDescriptor.FACTORY);
-        temp.add(GlobalAvgAggregateDescriptor.FACTORY);
-        temp.add(SumAggregateDescriptor.FACTORY);
-        temp.add(MaxAggregateDescriptor.FACTORY);
-        temp.add(MinAggregateDescriptor.FACTORY);
+		temp.add(NumericAddDescriptor.FACTORY);
+		temp.add(NumericDivideDescriptor.FACTORY);
+		temp.add(NumericMultiplyDescriptor.FACTORY);
+		temp.add(NumericSubtractDescriptor.FACTORY);
+		temp.add(IsNullDescriptor.FACTORY);
+		temp.add(NotDescriptor.FACTORY);
+		temp.add(LenDescriptor.FACTORY);
+		temp.add(NonEmptyStreamAggregateDescriptor.FACTORY);
+		temp.add(RangeDescriptor.FACTORY);
 
-        // serializable aggregates
-        temp.add(SerializableCountAggregateDescriptor.FACTORY);
-        temp.add(SerializableAvgAggregateDescriptor.FACTORY);
-        temp.add(SerializableLocalAvgAggregateDescriptor.FACTORY);
-        temp.add(SerializableGlobalAvgAggregateDescriptor.FACTORY);
-        temp.add(SerializableSumAggregateDescriptor.FACTORY);
+		// aggregates
+		temp.add(ListifyAggregateDescriptor.FACTORY);
+		temp.add(CountAggregateDescriptor.FACTORY);
+		temp.add(AvgAggregateDescriptor.FACTORY);
+		temp.add(LocalAvgAggregateDescriptor.FACTORY);
+		temp.add(GlobalAvgAggregateDescriptor.FACTORY);
+		temp.add(SumAggregateDescriptor.FACTORY);
+		temp.add(MaxAggregateDescriptor.FACTORY);
+		temp.add(MinAggregateDescriptor.FACTORY);
 
-        // new functions - constructors
-        temp.add(ABooleanConstructorDescriptor.FACTORY);
-        temp.add(ANullConstructorDescriptor.FACTORY);
-        temp.add(AStringConstructorDescriptor.FACTORY);
-        temp.add(AInt8ConstructorDescriptor.FACTORY);
-        temp.add(AInt16ConstructorDescriptor.FACTORY);
-        temp.add(AInt32ConstructorDescriptor.FACTORY);
-        temp.add(AInt64ConstructorDescriptor.FACTORY);
-        temp.add(AFloatConstructorDescriptor.FACTORY);
-        temp.add(ADoubleConstructorDescriptor.FACTORY);
-        temp.add(APointConstructorDescriptor.FACTORY);
-        temp.add(APoint3DConstructorDescriptor.FACTORY);
-        temp.add(ALineConstructorDescriptor.FACTORY);
-        temp.add(APolygonConstructorDescriptor.FACTORY);
-        temp.add(ACircleConstructorDescriptor.FACTORY);
-        temp.add(ARectangleConstructorDescriptor.FACTORY);
-        temp.add(ATimeConstructorDescriptor.FACTORY);
-        temp.add(ADateConstructorDescriptor.FACTORY);
-        temp.add(ADateTimeConstructorDescriptor.FACTORY);
-        temp.add(ADurationConstructorDescriptor.FACTORY);
+		// serializable aggregates
+		temp.add(SerializableCountAggregateDescriptor.FACTORY);
+		temp.add(SerializableAvgAggregateDescriptor.FACTORY);
+		temp.add(SerializableLocalAvgAggregateDescriptor.FACTORY);
+		temp.add(SerializableGlobalAvgAggregateDescriptor.FACTORY);
+		temp.add(SerializableSumAggregateDescriptor.FACTORY);
 
-        // Spatial
-        temp.add(CreatePointDescriptor.FACTORY);
-        temp.add(CreateLineDescriptor.FACTORY);
-        temp.add(CreatePolygonDescriptor.FACTORY);
-        temp.add(CreateCircleDescriptor.FACTORY);
-        temp.add(CreateRectangleDescriptor.FACTORY);
-        temp.add(SpatialAreaDescriptor.FACTORY);
-        temp.add(SpatialDistanceDescriptor.FACTORY);
-        temp.add(SpatialIntersectDescriptor.FACTORY);
-        temp.add(CreateMBRDescriptor.FACTORY);
-        temp.add(SpatialCellDescriptor.FACTORY);
+		// new functions - constructors
+		temp.add(ABooleanConstructorDescriptor.FACTORY);
+		temp.add(ANullConstructorDescriptor.FACTORY);
+		temp.add(AStringConstructorDescriptor.FACTORY);
+		temp.add(AInt8ConstructorDescriptor.FACTORY);
+		temp.add(AInt16ConstructorDescriptor.FACTORY);
+		temp.add(AInt32ConstructorDescriptor.FACTORY);
+		temp.add(AInt64ConstructorDescriptor.FACTORY);
+		temp.add(AFloatConstructorDescriptor.FACTORY);
+		temp.add(ADoubleConstructorDescriptor.FACTORY);
+		temp.add(APointConstructorDescriptor.FACTORY);
+		temp.add(APoint3DConstructorDescriptor.FACTORY);
+		temp.add(ALineConstructorDescriptor.FACTORY);
+		temp.add(APolygonConstructorDescriptor.FACTORY);
+		temp.add(ACircleConstructorDescriptor.FACTORY);
+		temp.add(ARectangleConstructorDescriptor.FACTORY);
+		temp.add(ATimeConstructorDescriptor.FACTORY);
+		temp.add(ADateConstructorDescriptor.FACTORY);
+		temp.add(ADateTimeConstructorDescriptor.FACTORY);
+		temp.add(ADurationConstructorDescriptor.FACTORY);
 
-        // fuzzyjoin function
-        temp.add(FuzzyEqDescriptor.FACTORY);
-        temp.add(SubsetCollectionDescriptor.FACTORY);
-        temp.add(PrefixLenJaccardDescriptor.FACTORY);
+		// Spatial
+		temp.add(CreatePointDescriptor.FACTORY);
+		temp.add(CreateLineDescriptor.FACTORY);
+		temp.add(CreatePolygonDescriptor.FACTORY);
+		temp.add(CreateCircleDescriptor.FACTORY);
+		temp.add(CreateRectangleDescriptor.FACTORY);
+		temp.add(SpatialAreaDescriptor.FACTORY);
+		temp.add(SpatialDistanceDescriptor.FACTORY);
+		temp.add(SpatialIntersectDescriptor.FACTORY);
+		temp.add(CreateMBRDescriptor.FACTORY);
+		temp.add(SpatialCellDescriptor.FACTORY);
 
-        temp.add(WordTokensDescriptor.FACTORY);
-        temp.add(HashedWordTokensDescriptor.FACTORY);
-        temp.add(CountHashedWordTokensDescriptor.FACTORY);
+		// fuzzyjoin function
+		temp.add(FuzzyEqDescriptor.FACTORY);
+		temp.add(SubsetCollectionDescriptor.FACTORY);
+		temp.add(PrefixLenJaccardDescriptor.FACTORY);
 
-        temp.add(GramTokensDescriptor.FACTORY);
-        temp.add(HashedGramTokensDescriptor.FACTORY);
-        temp.add(CountHashedGramTokensDescriptor.FACTORY);
+		temp.add(WordTokensDescriptor.FACTORY);
+		temp.add(HashedWordTokensDescriptor.FACTORY);
+		temp.add(CountHashedWordTokensDescriptor.FACTORY);
 
-        temp.add(EditDistanceDescriptor.FACTORY);
-        temp.add(EditDistanceCheckDescriptor.FACTORY);
+		temp.add(GramTokensDescriptor.FACTORY);
+		temp.add(HashedGramTokensDescriptor.FACTORY);
+		temp.add(CountHashedGramTokensDescriptor.FACTORY);
 
-        temp.add(SimilarityJaccardDescriptor.FACTORY);
-        temp.add(SimilarityJaccardCheckDescriptor.FACTORY);
-        temp.add(SimilarityJaccardPrefixDescriptor.FACTORY);
-        temp.add(SimilarityJaccardPrefixCheckDescriptor.FACTORY);
+		temp.add(EditDistanceDescriptor.FACTORY);
+		temp.add(EditDistanceCheckDescriptor.FACTORY);
 
-        temp.add(SwitchCaseDescriptor.FACTORY);
-        temp.add(RegExpDescriptor.FACTORY);
-        temp.add(InjectFailureDescriptor.FACTORY);
-        temp.add(CastRecordDescriptor.FACTORY);
+		temp.add(SimilarityJaccardDescriptor.FACTORY);
+		temp.add(SimilarityJaccardCheckDescriptor.FACTORY);
+		temp.add(SimilarityJaccardPrefixDescriptor.FACTORY);
+		temp.add(SimilarityJaccardPrefixCheckDescriptor.FACTORY);
 
-        IFunctionManager mgr = new FunctionManagerImpl();
-        for (IFunctionDescriptorFactory fdFactory : temp) {
-            mgr.registerFunction(fdFactory);
-        }
-        FunctionManagerHolder.setFunctionManager(mgr);
-    }
+		temp.add(SwitchCaseDescriptor.FACTORY);
+		temp.add(RegExpDescriptor.FACTORY);
+		temp.add(InjectFailureDescriptor.FACTORY);
+		temp.add(CastRecordDescriptor.FACTORY);
 
-    @Override
-    public IBinaryBooleanInspectorFactory getBinaryBooleanInspectorFactory() {
-        return AqlBinaryBooleanInspectorImpl.FACTORY;
-    }
+		IFunctionManager mgr = new FunctionManagerImpl();
+		for (IFunctionDescriptorFactory fdFactory : temp) {
+			mgr.registerFunction(fdFactory);
+		}
+		FunctionManagerHolder.setFunctionManager(mgr);
+	}
 
-    @Override
-    public IBinaryComparatorFactoryProvider getBinaryComparatorFactoryProvider() {
-        return AqlBinaryComparatorFactoryProvider.INSTANCE;
-    }
+	@Override
+	public IBinaryBooleanInspectorFactory getBinaryBooleanInspectorFactory() {
+		return AqlBinaryBooleanInspectorImpl.FACTORY;
+	}
 
-    @Override
-    public IBinaryHashFunctionFactoryProvider getBinaryHashFunctionFactoryProvider() {
-        return AqlBinaryHashFunctionFactoryProvider.INSTANCE;
-    }
+	@Override
+	public IBinaryComparatorFactoryProvider getBinaryComparatorFactoryProvider() {
+		return AqlBinaryComparatorFactoryProvider.INSTANCE;
+	}
 
-    @Override
-    public ISerializerDeserializerProvider getSerdeProvider() {
-        return AqlSerializerDeserializerProvider.INSTANCE; // done
-    }
+	@Override
+	public IBinaryHashFunctionFactoryProvider getBinaryHashFunctionFactoryProvider() {
+		return AqlBinaryHashFunctionFactoryProvider.INSTANCE;
+	}
 
-    @Override
-    public ITypeTraitProvider getTypeTraitProvider() {
-        return AqlTypeTraitProvider.INSTANCE;
-    }
+	@Override
+	public ISerializerDeserializerProvider getSerdeProvider() {
+		return AqlSerializerDeserializerProvider.INSTANCE; // done
+	}
 
-    @SuppressWarnings("unchecked")
-    @Override
-    public ICopyEvaluatorFactory getFieldAccessEvaluatorFactory(ARecordType recType, String fldName, int recordColumn)
-            throws AlgebricksException {
-        String[] names = recType.getFieldNames();
-        int n = names.length;
-        for (int i = 0; i < n; i++) {
-            if (names[i].equals(fldName)) {
-                ICopyEvaluatorFactory recordEvalFactory = new ColumnAccessEvalFactory(recordColumn);
-                ArrayBackedValueStorage abvs = new ArrayBackedValueStorage();
-                DataOutput dos = abvs.getDataOutput();
-                try {
-                    AInt32 ai = new AInt32(i);
-                    AqlSerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(ai.getType()).serialize(ai,
-                            dos);
-                } catch (HyracksDataException e) {
-                    throw new AlgebricksException(e);
-                }
-                ICopyEvaluatorFactory fldIndexEvalFactory = new ConstantEvalFactory(Arrays.copyOf(abvs.getByteArray(),
-                        abvs.getLength()));
-                ICopyEvaluatorFactory evalFactory = new FieldAccessByIndexEvalFactory(recordEvalFactory,
-                        fldIndexEvalFactory, recType);
-                return evalFactory;
-            }
-        }
-        throw new AlgebricksException("Could not find field " + fldName + " in the schema.");
-    }
+	@Override
+	public ITypeTraitProvider getTypeTraitProvider() {
+		return AqlTypeTraitProvider.INSTANCE;
+	}
 
-    @SuppressWarnings("unchecked")
-    @Override
-    public ICopyEvaluatorFactory[] createMBRFactory(ARecordType recType, String fldName, int recordColumn, int dimension)
-            throws AlgebricksException {
-        ICopyEvaluatorFactory evalFactory = getFieldAccessEvaluatorFactory(recType, fldName, recordColumn);
-        int numOfFields = dimension * 2;
-        ICopyEvaluatorFactory[] evalFactories = new ICopyEvaluatorFactory[numOfFields];
+	@SuppressWarnings("unchecked")
+	@Override
+	public ICopyEvaluatorFactory getFieldAccessEvaluatorFactory(
+			ARecordType recType, String fldName, int recordColumn)
+			throws AlgebricksException {
+		String[] names = recType.getFieldNames();
+		int n = names.length;
+		for (int i = 0; i < n; i++) {
+			if (names[i].equals(fldName)) {
+				ICopyEvaluatorFactory recordEvalFactory = new ColumnAccessEvalFactory(
+						recordColumn);
+				ArrayBackedValueStorage abvs = new ArrayBackedValueStorage();
+				DataOutput dos = abvs.getDataOutput();
+				try {
+					AInt32 ai = new AInt32(i);
+					AqlSerializerDeserializerProvider.INSTANCE
+							.getSerializerDeserializer(ai.getType()).serialize(
+									ai, dos);
+				} catch (HyracksDataException e) {
+					throw new AlgebricksException(e);
+				}
+				ICopyEvaluatorFactory fldIndexEvalFactory = new ConstantEvalFactory(
+						Arrays.copyOf(abvs.getByteArray(), abvs.getLength()));
+				ICopyEvaluatorFactory evalFactory = new FieldAccessByIndexEvalFactory(
+						recordEvalFactory, fldIndexEvalFactory, recType);
+				return evalFactory;
+			}
+		}
+		throw new AlgebricksException("Could not find field " + fldName
+				+ " in the schema.");
+	}
 
-        ArrayBackedValueStorage abvs1 = new ArrayBackedValueStorage();
-        DataOutput dos1 = abvs1.getDataOutput();
-        try {
-            AInt32 ai = new AInt32(dimension);
-            AqlSerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(ai.getType()).serialize(ai, dos1);
-        } catch (HyracksDataException e) {
-            throw new AlgebricksException(e);
-        }
-        ICopyEvaluatorFactory dimensionEvalFactory = new ConstantEvalFactory(Arrays.copyOf(abvs1.getByteArray(),
-                abvs1.getLength()));
+	@SuppressWarnings("unchecked")
+	@Override
+	public ICopyEvaluatorFactory[] createMBRFactory(ARecordType recType,
+			String fldName, int recordColumn, int dimension)
+			throws AlgebricksException {
+		ICopyEvaluatorFactory evalFactory = getFieldAccessEvaluatorFactory(
+				recType, fldName, recordColumn);
+		int numOfFields = dimension * 2;
+		ICopyEvaluatorFactory[] evalFactories = new ICopyEvaluatorFactory[numOfFields];
 
-        for (int i = 0; i < numOfFields; i++) {
-            ArrayBackedValueStorage abvs2 = new ArrayBackedValueStorage();
-            DataOutput dos2 = abvs2.getDataOutput();
-            try {
-                AInt32 ai = new AInt32(i);
-                AqlSerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(ai.getType()).serialize(ai, dos2);
-            } catch (HyracksDataException e) {
-                throw new AlgebricksException(e);
-            }
-            ICopyEvaluatorFactory coordinateEvalFactory = new ConstantEvalFactory(Arrays.copyOf(abvs2.getByteArray(),
-                    abvs2.getLength()));
+		ArrayBackedValueStorage abvs1 = new ArrayBackedValueStorage();
+		DataOutput dos1 = abvs1.getDataOutput();
+		try {
+			AInt32 ai = new AInt32(dimension);
+			AqlSerializerDeserializerProvider.INSTANCE
+					.getSerializerDeserializer(ai.getType())
+					.serialize(ai, dos1);
+		} catch (HyracksDataException e) {
+			throw new AlgebricksException(e);
+		}
+		ICopyEvaluatorFactory dimensionEvalFactory = new ConstantEvalFactory(
+				Arrays.copyOf(abvs1.getByteArray(), abvs1.getLength()));
 
-            evalFactories[i] = new CreateMBREvalFactory(evalFactory, dimensionEvalFactory, coordinateEvalFactory);
-        }
-        return evalFactories;
-    }
+		for (int i = 0; i < numOfFields; i++) {
+			ArrayBackedValueStorage abvs2 = new ArrayBackedValueStorage();
+			DataOutput dos2 = abvs2.getDataOutput();
+			try {
+				AInt32 ai = new AInt32(i);
+				AqlSerializerDeserializerProvider.INSTANCE
+						.getSerializerDeserializer(ai.getType()).serialize(ai,
+								dos2);
+			} catch (HyracksDataException e) {
+				throw new AlgebricksException(e);
+			}
+			ICopyEvaluatorFactory coordinateEvalFactory = new ConstantEvalFactory(
+					Arrays.copyOf(abvs2.getByteArray(), abvs2.getLength()));
 
-    @SuppressWarnings("unchecked")
-    @Override
-    public Triple<ICopyEvaluatorFactory, ScalarFunctionCallExpression, IAType> partitioningEvaluatorFactory(
-            ARecordType recType, String fldName) throws AlgebricksException {
-        String[] names = recType.getFieldNames();
-        int n = names.length;
-        for (int i = 0; i < n; i++) {
-            if (names[i].equals(fldName)) {
-                ICopyEvaluatorFactory recordEvalFactory = new ColumnAccessEvalFactory(
-                        GlobalConfig.DEFAULT_INPUT_DATA_COLUMN);
-                ArrayBackedValueStorage abvs = new ArrayBackedValueStorage();
-                DataOutput dos = abvs.getDataOutput();
-                try {
-                    AInt32 ai = new AInt32(i);
-                    AqlSerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(ai.getType()).serialize(ai,
-                            dos);
-                } catch (HyracksDataException e) {
-                    throw new AlgebricksException(e);
-                }
-                ICopyEvaluatorFactory fldIndexEvalFactory = new ConstantEvalFactory(Arrays.copyOf(abvs.getByteArray(),
-                        abvs.getLength()));
-                ICopyEvaluatorFactory evalFactory = new FieldAccessByIndexEvalFactory(recordEvalFactory,
-                        fldIndexEvalFactory, recType);
-                IFunctionInfo finfoAccess = AsterixBuiltinFunctions
-                        .getAsterixFunctionInfo(AsterixBuiltinFunctions.FIELD_ACCESS_BY_INDEX);
+			evalFactories[i] = new CreateMBREvalFactory(evalFactory,
+					dimensionEvalFactory, coordinateEvalFactory);
+		}
+		return evalFactories;
+	}
 
-                ScalarFunctionCallExpression partitionFun = new ScalarFunctionCallExpression(finfoAccess,
-                        new MutableObject<ILogicalExpression>(new VariableReferenceExpression(METADATA_DUMMY_VAR)),
-                        new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(
-                                new AInt32(i)))));
-                return new Triple<ICopyEvaluatorFactory, ScalarFunctionCallExpression, IAType>(evalFactory,
-                        partitionFun, recType.getFieldTypes()[i]);
-            }
-        }
-        throw new AlgebricksException("Could not find field " + fldName + " in the schema.");
-    }
+	@SuppressWarnings("unchecked")
+	@Override
+	public Triple<ICopyEvaluatorFactory, ScalarFunctionCallExpression, IAType> partitioningEvaluatorFactory(
+			ARecordType recType, String fldName) throws AlgebricksException {
+		String[] names = recType.getFieldNames();
+		int n = names.length;
+		for (int i = 0; i < n; i++) {
+			if (names[i].equals(fldName)) {
+				ICopyEvaluatorFactory recordEvalFactory = new ColumnAccessEvalFactory(
+						GlobalConfig.DEFAULT_INPUT_DATA_COLUMN);
+				ArrayBackedValueStorage abvs = new ArrayBackedValueStorage();
+				DataOutput dos = abvs.getDataOutput();
+				try {
+					AInt32 ai = new AInt32(i);
+					AqlSerializerDeserializerProvider.INSTANCE
+							.getSerializerDeserializer(ai.getType()).serialize(
+									ai, dos);
+				} catch (HyracksDataException e) {
+					throw new AlgebricksException(e);
+				}
+				ICopyEvaluatorFactory fldIndexEvalFactory = new ConstantEvalFactory(
+						Arrays.copyOf(abvs.getByteArray(), abvs.getLength()));
+				ICopyEvaluatorFactory evalFactory = new FieldAccessByIndexEvalFactory(
+						recordEvalFactory, fldIndexEvalFactory, recType);
+				IFunctionInfo finfoAccess = AsterixBuiltinFunctions
+						.getAsterixFunctionInfo(AsterixBuiltinFunctions.FIELD_ACCESS_BY_INDEX);
 
-    @Override
-    public IFunctionDescriptor resolveFunction(ILogicalExpression expr, IVariableTypeEnvironment context)
-            throws AlgebricksException {
-        FunctionIdentifier fnId = ((AbstractFunctionCallExpression) expr).getFunctionIdentifier();
-        IFunctionManager mgr = FunctionManagerHolder.getFunctionManager();
-        IFunctionDescriptor fd = mgr.lookupFunction(fnId);
-        if (fd == null) {
-            throw new AsterixRuntimeException("Unresolved function " + fnId);
-        }
-        typeInference(expr, fd, context);
-        return fd;
-    }
+				ScalarFunctionCallExpression partitionFun = new ScalarFunctionCallExpression(
+						finfoAccess,
+						new MutableObject<ILogicalExpression>(
+								new VariableReferenceExpression(
+										METADATA_DUMMY_VAR)),
+						new MutableObject<ILogicalExpression>(
+								new ConstantExpression(
+										new AsterixConstantValue(new AInt32(i)))));
+				return new Triple<ICopyEvaluatorFactory, ScalarFunctionCallExpression, IAType>(
+						evalFactory, partitionFun, recType.getFieldTypes()[i]);
+			}
+		}
+		throw new AlgebricksException("Could not find field " + fldName
+				+ " in the schema.");
+	}
 
-    private void typeInference(ILogicalExpression expr, IFunctionDescriptor fd, IVariableTypeEnvironment context)
-            throws AlgebricksException {
-        if (fd.getIdentifier().equals(AsterixBuiltinFunctions.LISTIFY)) {
-            AbstractFunctionCallExpression f = (AbstractFunctionCallExpression) expr;
-            if (f.getArguments().size() == 0) {
-                ((ListifyAggregateDescriptor) fd).reset(new AOrderedListType(null, null));
-            } else {
-                IAType itemType = (IAType) context.getType(f.getArguments().get(0).getValue());
-                ((ListifyAggregateDescriptor) fd).reset(new AOrderedListType(itemType, null));
-            }
-        }
-        if (fd.getIdentifier().equals(AsterixBuiltinFunctions.CAST_RECORD)) {
-            ARecordType rt = (ARecordType) TypeComputerUtilities.getRequiredType((AbstractFunctionCallExpression) expr);
-            ARecordType it = (ARecordType) TypeComputerUtilities.getInputType((AbstractFunctionCallExpression) expr);
-            ((CastRecordDescriptor) fd).reset(rt, it);
-        }
-        if (fd.getIdentifier().equals(AsterixBuiltinFunctions.OPEN_RECORD_CONSTRUCTOR)) {
-            ARecordType rt = (ARecordType) context.getType(expr);
-            ((OpenRecordConstructorDescriptor) fd).reset(rt,
-                    computeOpenFields((AbstractFunctionCallExpression) expr, rt));
-        }
-        if (fd.getIdentifier().equals(AsterixBuiltinFunctions.CLOSED_RECORD_CONSTRUCTOR)) {
-            ((ClosedRecordConstructorDescriptor) fd).reset((ARecordType) context.getType(expr));
-        }
-        if (fd.getIdentifier().equals(AsterixBuiltinFunctions.ORDERED_LIST_CONSTRUCTOR)) {
-            ((OrderedListConstructorDescriptor) fd).reset((AOrderedListType) context.getType(expr));
-        }
-        if (fd.getIdentifier().equals(AsterixBuiltinFunctions.UNORDERED_LIST_CONSTRUCTOR)) {
-            ((UnorderedListConstructorDescriptor) fd).reset((AUnorderedListType) context.getType(expr));
-        }
-        if (fd.getIdentifier().equals(AsterixBuiltinFunctions.FIELD_ACCESS_BY_INDEX)) {
-            AbstractFunctionCallExpression fce = (AbstractFunctionCallExpression) expr;
-            IAType t = (IAType) context.getType(fce.getArguments().get(0).getValue());
-            switch (t.getTypeTag()) {
-                case RECORD: {
-                    ARecordType recType = (ARecordType) t;
-                    ((FieldAccessByIndexDescriptor) fd).reset(recType);
-                    break;
-                }
-                case UNION: {
-                    AUnionType unionT = (AUnionType) t;
-                    if (unionT.isNullableType()) {
-                        IAType t2 = unionT.getUnionList().get(1);
-                        if (t2.getTypeTag() == ATypeTag.RECORD) {
-                            ARecordType recType = (ARecordType) t2;
-                            ((FieldAccessByIndexDescriptor) fd).reset(recType);
-                            break;
-                        }
-                    }
-                    throw new NotImplementedException("field-access-by-index for data of type " + t);
-                }
-                default: {
-                    throw new NotImplementedException("field-access-by-index for data of type " + t);
-                }
-            }
-        }
-    }
+	@Override
+	public IFunctionDescriptor resolveFunction(ILogicalExpression expr,
+			IVariableTypeEnvironment context) throws AlgebricksException {
+		FunctionIdentifier fnId = ((AbstractFunctionCallExpression) expr)
+				.getFunctionIdentifier();
+		IFunctionManager mgr = FunctionManagerHolder.getFunctionManager();
+		IFunctionDescriptor fd = mgr.lookupFunction(fnId);
+		if (fd == null) {
+			throw new AsterixRuntimeException("Unresolved function " + fnId);
+		}
+		typeInference(expr, fd, context);
+		return fd;
+	}
 
-    private boolean[] computeOpenFields(AbstractFunctionCallExpression expr, ARecordType recType) {
-        int n = expr.getArguments().size() / 2;
-        boolean[] open = new boolean[n];
-        for (int i = 0; i < n; i++) {
-            Mutable<ILogicalExpression> argRef = expr.getArguments().get(2 * i);
-            ILogicalExpression arg = argRef.getValue();
-            if (arg.getExpressionTag() == LogicalExpressionTag.CONSTANT) {
-                String fn = ((AString) ((AsterixConstantValue) ((ConstantExpression) arg).getValue()).getObject())
-                        .getStringValue();
-                open[i] = true;
-                for (String s : recType.getFieldNames()) {
-                    if (s.equals(fn)) {
-                        open[i] = false;
-                        break;
-                    }
-                }
-            } else {
-                open[i] = true;
-            }
-        }
-        return open;
-    }
+	private void typeInference(ILogicalExpression expr, IFunctionDescriptor fd,
+			IVariableTypeEnvironment context) throws AlgebricksException {
+		if (fd.getIdentifier().equals(AsterixBuiltinFunctions.LISTIFY)) {
+			AbstractFunctionCallExpression f = (AbstractFunctionCallExpression) expr;
+			if (f.getArguments().size() == 0) {
+				((ListifyAggregateDescriptor) fd).reset(new AOrderedListType(
+						null, null));
+			} else {
+				IAType itemType = (IAType) context.getType(f.getArguments()
+						.get(0).getValue());
+				((ListifyAggregateDescriptor) fd).reset(new AOrderedListType(
+						itemType, null));
+			}
+		}
+		if (fd.getIdentifier().equals(AsterixBuiltinFunctions.CAST_RECORD)) {
+			ARecordType rt = (ARecordType) TypeComputerUtilities
+					.getRequiredType((AbstractFunctionCallExpression) expr);
+			ARecordType it = (ARecordType) TypeComputerUtilities
+					.getInputType((AbstractFunctionCallExpression) expr);
+			((CastRecordDescriptor) fd).reset(rt, it);
+		}
+		if (fd.getIdentifier().equals(
+				AsterixBuiltinFunctions.OPEN_RECORD_CONSTRUCTOR)) {
+			ARecordType rt = (ARecordType) context.getType(expr);
+			((OpenRecordConstructorDescriptor) fd)
+					.reset(rt,
+							computeOpenFields(
+									(AbstractFunctionCallExpression) expr, rt));
+		}
+		if (fd.getIdentifier().equals(
+				AsterixBuiltinFunctions.CLOSED_RECORD_CONSTRUCTOR)) {
+			((ClosedRecordConstructorDescriptor) fd)
+					.reset((ARecordType) context.getType(expr));
+		}
+		if (fd.getIdentifier().equals(
+				AsterixBuiltinFunctions.ORDERED_LIST_CONSTRUCTOR)) {
+			((OrderedListConstructorDescriptor) fd)
+					.reset((AOrderedListType) context.getType(expr));
+		}
+		if (fd.getIdentifier().equals(
+				AsterixBuiltinFunctions.UNORDERED_LIST_CONSTRUCTOR)) {
+			((UnorderedListConstructorDescriptor) fd)
+					.reset((AUnorderedListType) context.getType(expr));
+		}
+		if (fd.getIdentifier().equals(
+				AsterixBuiltinFunctions.FIELD_ACCESS_BY_INDEX)) {
+			AbstractFunctionCallExpression fce = (AbstractFunctionCallExpression) expr;
+			IAType t = (IAType) context.getType(fce.getArguments().get(0)
+					.getValue());
+			switch (t.getTypeTag()) {
+			case RECORD: {
+				ARecordType recType = (ARecordType) t;
+				((FieldAccessByIndexDescriptor) fd).reset(recType);
+				break;
+			}
+			case UNION: {
+				AUnionType unionT = (AUnionType) t;
+				if (unionT.isNullableType()) {
+					IAType t2 = unionT.getUnionList().get(1);
+					if (t2.getTypeTag() == ATypeTag.RECORD) {
+						ARecordType recType = (ARecordType) t2;
+						((FieldAccessByIndexDescriptor) fd).reset(recType);
+						break;
+					}
+				}
+				throw new NotImplementedException(
+						"field-access-by-index for data of type " + t);
+			}
+			default: {
+				throw new NotImplementedException(
+						"field-access-by-index for data of type " + t);
+			}
+			}
+		}
+	}
 
-    @Override
-    public IPrinterFactoryProvider getPrinterFactoryProvider() {
-        return AqlPrinterFactoryProvider.INSTANCE;
-    }
+	private boolean[] computeOpenFields(AbstractFunctionCallExpression expr,
+			ARecordType recType) {
+		int n = expr.getArguments().size() / 2;
+		boolean[] open = new boolean[n];
+		for (int i = 0; i < n; i++) {
+			Mutable<ILogicalExpression> argRef = expr.getArguments().get(2 * i);
+			ILogicalExpression arg = argRef.getValue();
+			if (arg.getExpressionTag() == LogicalExpressionTag.CONSTANT) {
+				String fn = ((AString) ((AsterixConstantValue) ((ConstantExpression) arg)
+						.getValue()).getObject()).getStringValue();
+				open[i] = true;
+				for (String s : recType.getFieldNames()) {
+					if (s.equals(fn)) {
+						open[i] = false;
+						break;
+					}
+				}
+			} else {
+				open[i] = true;
+			}
+		}
+		return open;
+	}
 
-    @SuppressWarnings("unchecked")
-    @Override
-    public ICopyEvaluatorFactory getConstantEvalFactory(IAlgebricksConstantValue value) throws AlgebricksException {
-        IAObject obj = null;
-        if (value.isNull()) {
-            obj = ANull.NULL;
-        } else if (value.isTrue()) {
-            obj = ABoolean.TRUE;
-        } else if (value.isFalse()) {
-            obj = ABoolean.FALSE;
-        } else {
-            AsterixConstantValue acv = (AsterixConstantValue) value;
-            obj = acv.getObject();
-        }
-        ArrayBackedValueStorage abvs = new ArrayBackedValueStorage();
-        DataOutput dos = abvs.getDataOutput();
-        try {
-            AqlSerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(obj.getType()).serialize(obj, dos);
-        } catch (HyracksDataException e) {
-            throw new AlgebricksException(e);
-        }
-        return new ConstantEvalFactory(Arrays.copyOf(abvs.getByteArray(), abvs.getLength()));
-    }
+	@Override
+	public IPrinterFactoryProvider getPrinterFactoryProvider() {
+		return AqlPrinterFactoryProvider.INSTANCE;
+	}
 
-    @Override
-    public IBinaryIntegerInspectorFactory getBinaryIntegerInspectorFactory() {
-        return AqlBinaryIntegerInspector.FACTORY;
-    }
+	@SuppressWarnings("unchecked")
+	@Override
+	public ICopyEvaluatorFactory getConstantEvalFactory(
+			IAlgebricksConstantValue value) throws AlgebricksException {
+		IAObject obj = null;
+		if (value.isNull()) {
+			obj = ANull.NULL;
+		} else if (value.isTrue()) {
+			obj = ABoolean.TRUE;
+		} else if (value.isFalse()) {
+			obj = ABoolean.FALSE;
+		} else {
+			AsterixConstantValue acv = (AsterixConstantValue) value;
+			obj = acv.getObject();
+		}
+		ArrayBackedValueStorage abvs = new ArrayBackedValueStorage();
+		DataOutput dos = abvs.getDataOutput();
+		try {
+			AqlSerializerDeserializerProvider.INSTANCE
+					.getSerializerDeserializer(obj.getType()).serialize(obj,
+							dos);
+		} catch (HyracksDataException e) {
+			throw new AlgebricksException(e);
+		}
+		return new ConstantEvalFactory(Arrays.copyOf(abvs.getByteArray(),
+				abvs.getLength()));
+	}
 
-    @Override
-    public ITupleParserFactory createTupleParser(ARecordType recType, IParseFileSplitsDecl decl) {
-        if (decl.isDelimitedFileFormat()) {
-            int n = recType.getFieldTypes().length;
-            IValueParserFactory[] fieldParserFactories = new IValueParserFactory[n];
-            for (int i = 0; i < n; i++) {
-                ATypeTag tag = recType.getFieldTypes()[i].getTypeTag();
-                IValueParserFactory vpf = typeToValueParserFactMap.get(tag);
-                if (vpf == null) {
-                    throw new NotImplementedException("No value parser factory for delimited fields of type " + tag);
-                }
-                fieldParserFactories[i] = vpf;
-            }
-            return new NtDelimitedDataTupleParserFactory(recType, fieldParserFactories, decl.getDelimChar());
-        } else {
-            return new AdmSchemafullRecordParserFactory(recType);
-        }
-    }
+	@Override
+	public IBinaryIntegerInspectorFactory getBinaryIntegerInspectorFactory() {
+		return AqlBinaryIntegerInspector.FACTORY;
+	}
 
-    @Override
-    public ITupleParserFactory createTupleParser(ARecordType recType, boolean delimitedFormat, Character delimiter) {
-        if (delimitedFormat) {
-            int n = recType.getFieldTypes().length;
-            IValueParserFactory[] fieldParserFactories = new IValueParserFactory[n];
-            for (int i = 0; i < n; i++) {
-                ATypeTag tag = recType.getFieldTypes()[i].getTypeTag();
-                IValueParserFactory vpf = typeToValueParserFactMap.get(tag);
-                if (vpf == null) {
-                    throw new NotImplementedException("No value parser factory for delimited fields of type " + tag);
-                }
-                fieldParserFactories[i] = vpf;
-            }
-            return new NtDelimitedDataTupleParserFactory(recType, fieldParserFactories, delimiter);
-        } else {
-            return new AdmSchemafullRecordParserFactory(recType);
-        }
-    }
+	@Override
+	public ITupleParserFactory createTupleParser(ARecordType recType,
+			IParseFileSplitsDecl decl) {
+		if (decl.isDelimitedFileFormat()) {
+			int n = recType.getFieldTypes().length;
+			IValueParserFactory[] fieldParserFactories = new IValueParserFactory[n];
+			for (int i = 0; i < n; i++) {
+				ATypeTag tag = recType.getFieldTypes()[i].getTypeTag();
+				IValueParserFactory vpf = typeToValueParserFactMap.get(tag);
+				if (vpf == null) {
+					throw new NotImplementedException(
+							"No value parser factory for delimited fields of type "
+									+ tag);
+				}
+				fieldParserFactories[i] = vpf;
+			}
+			return new NtDelimitedDataTupleParserFactory(recType,
+					fieldParserFactories, decl.getDelimChar());
+		} else {
+			return new AdmSchemafullRecordParserFactory(recType);
+		}
+	}
 
-    @Override
-    public INullWriterFactory getNullWriterFactory() {
-        return AqlNullWriterFactory.INSTANCE;
-    }
+	@Override
+	public ITupleParserFactory createTupleParser(ARecordType recType,
+			boolean delimitedFormat, Character delimiter) {
+		if (delimitedFormat) {
+			int n = recType.getFieldTypes().length;
+			IValueParserFactory[] fieldParserFactories = new IValueParserFactory[n];
+			for (int i = 0; i < n; i++) {
+				ATypeTag tag = recType.getFieldTypes()[i].getTypeTag();
+				IValueParserFactory vpf = typeToValueParserFactMap.get(tag);
+				if (vpf == null) {
+					throw new NotImplementedException(
+							"No value parser factory for delimited fields of type "
+									+ tag);
+				}
+				fieldParserFactories[i] = vpf;
+			}
+			return new NtDelimitedDataTupleParserFactory(recType,
+					fieldParserFactories, delimiter);
+		} else {
+			return new AdmSchemafullRecordParserFactory(recType);
+		}
+	}
 
-    @Override
-    public IExpressionEvalSizeComputer getExpressionEvalSizeComputer() {
-        return new IExpressionEvalSizeComputer() {
-            @Override
-            public int getEvalSize(ILogicalExpression expr, IVariableEvalSizeEnvironment env)
-                    throws AlgebricksException {
-                switch (expr.getExpressionTag()) {
-                    case CONSTANT: {
-                        ConstantExpression c = (ConstantExpression) expr;
-                        if (c == ConstantExpression.NULL) {
-                            return 1;
-                        } else if (c == ConstantExpression.FALSE || c == ConstantExpression.TRUE) {
-                            return 2;
-                        } else {
-                            AsterixConstantValue acv = (AsterixConstantValue) c.getValue();
-                            IAObject o = acv.getObject();
-                            switch (o.getType().getTypeTag()) {
-                                case DOUBLE: {
-                                    return 9;
-                                }
-                                case BOOLEAN: {
-                                    return 2;
-                                }
-                                case NULL: {
-                                    return 1;
-                                }
-                                case INT32: {
-                                    return 5;
-                                }
-                                case INT64: {
-                                    return 9;
-                                }
-                                default: {
-                                    // TODO
-                                    return -1;
-                                }
-                            }
-                        }
-                    }
-                    case FUNCTION_CALL: {
-                        AbstractFunctionCallExpression f = (AbstractFunctionCallExpression) expr;
-                        if (f.getFunctionIdentifier().equals(AsterixBuiltinFunctions.TID)) {
-                            return 5;
-                        } else {
-                            // TODO
-                            return -1;
-                        }
-                    }
-                    default: {
-                        // TODO
-                        return -1;
-                    }
-                }
-            }
-        };
-    }
+	@Override
+	public INullWriterFactory getNullWriterFactory() {
+		return AqlNullWriterFactory.INSTANCE;
+	}
 
-    @Override
-    public INormalizedKeyComputerFactoryProvider getNormalizedKeyComputerFactoryProvider() {
-        return AqlNormalizedKeyComputerFactoryProvider.INSTANCE;
-    }
+	@Override
+	public IExpressionEvalSizeComputer getExpressionEvalSizeComputer() {
+		return new IExpressionEvalSizeComputer() {
+			@Override
+			public int getEvalSize(ILogicalExpression expr,
+					IVariableEvalSizeEnvironment env)
+					throws AlgebricksException {
+				switch (expr.getExpressionTag()) {
+				case CONSTANT: {
+					ConstantExpression c = (ConstantExpression) expr;
+					if (c == ConstantExpression.NULL) {
+						return 1;
+					} else if (c == ConstantExpression.FALSE
+							|| c == ConstantExpression.TRUE) {
+						return 2;
+					} else {
+						AsterixConstantValue acv = (AsterixConstantValue) c
+								.getValue();
+						IAObject o = acv.getObject();
+						switch (o.getType().getTypeTag()) {
+						case DOUBLE: {
+							return 9;
+						}
+						case BOOLEAN: {
+							return 2;
+						}
+						case NULL: {
+							return 1;
+						}
+						case INT32: {
+							return 5;
+						}
+						case INT64: {
+							return 9;
+						}
+						default: {
+							// TODO
+							return -1;
+						}
+						}
+					}
+				}
+				case FUNCTION_CALL: {
+					AbstractFunctionCallExpression f = (AbstractFunctionCallExpression) expr;
+					if (f.getFunctionIdentifier().equals(
+							AsterixBuiltinFunctions.TID)) {
+						return 5;
+					} else {
+						// TODO
+						return -1;
+					}
+				}
+				default: {
+					// TODO
+					return -1;
+				}
+				}
+			}
+		};
+	}
+
+	@Override
+	public INormalizedKeyComputerFactoryProvider getNormalizedKeyComputerFactoryProvider() {
+		return AqlNormalizedKeyComputerFactoryProvider.INSTANCE;
+	}
 
 }

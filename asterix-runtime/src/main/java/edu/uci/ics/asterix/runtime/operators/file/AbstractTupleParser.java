@@ -57,7 +57,7 @@ public abstract class AbstractTupleParser implements ITupleParser {
 			parser.initialize(in, recType, true);
 			while (true) {
 				tb.reset();
-				if (parser.parse(tb.getDataOutput())) {
+				if (!parser.parse(tb.getDataOutput())) {
 					break;
 				}
 				tb.addFieldEndOffset();
