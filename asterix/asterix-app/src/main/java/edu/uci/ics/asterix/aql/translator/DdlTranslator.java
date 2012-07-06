@@ -472,8 +472,7 @@ public class DdlTranslator extends AbstractAqlTranslator {
             DisplayFormat pdf) throws Exception {
         for (int i = 0; i < specs.length; i++) {
             specs[i].setMaxReattempts(0);
-            JobId jobId = hcc.createJob(GlobalConfig.HYRACKS_APP_NAME, specs[i]);
-            hcc.start(jobId);
+            JobId jobId = hcc.startJob(GlobalConfig.HYRACKS_APP_NAME, specs[i]);
             hcc.waitForCompletion(jobId);
         }
     }
