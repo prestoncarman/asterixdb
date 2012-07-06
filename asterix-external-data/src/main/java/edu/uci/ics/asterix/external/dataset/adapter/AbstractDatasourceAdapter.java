@@ -45,12 +45,6 @@ public abstract class AbstractDatasourceAdapter implements IDatasourceAdapter {
 	protected boolean typeInfoRequired = false;
 	
 	
-	
-	
-	
-	
-	
-
 	protected static final HashMap<ATypeTag, IValueParserFactory> typeToValueParserFactMap = new HashMap<ATypeTag, IValueParserFactory>();
 	static {
 		typeToValueParserFactMap.put(ATypeTag.INT32,
@@ -113,7 +107,7 @@ public abstract class AbstractDatasourceAdapter implements IDatasourceAdapter {
 	}
 
 	public boolean isTypeInfoRequired() {
-		return typeInfoRequired;
-	}
+        return typeInfoRequired;
+    }
 
 }

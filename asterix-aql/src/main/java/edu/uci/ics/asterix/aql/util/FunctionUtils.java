@@ -52,7 +52,9 @@ public class FunctionUtils {
             builder.append(param);
             builder.append(",");
         }
-        builder.delete(builder.length() - 1, builder.length());
+        if (params.size() > 0) {
+            builder.delete(builder.length() - 1, builder.length());
+        }
         builder.append(")");
         builder.append("{");
         builder.append(functionBody);
@@ -84,8 +86,8 @@ public class FunctionUtils {
                     asterixFunction.getArity(), true);
         }
         if (fid == null) {
-            Function function = MetadataManager.INSTANCE.getFunction(mdTxnCtx, dataverseName, asterixFunction
-                    .getFunctionName(), asterixFunction.getArity());
+            Function function = MetadataManager.INSTANCE.getFunction(mdTxnCtx, dataverseName,
+                    asterixFunction.getFunctionName(), asterixFunction.getArity());
             if (function != null) {
                 finfo = new AsterixFunctionInfo(dataverseName, asterixFunction, false);
                 // todo: for external functions, we shall construct another kind of function info (that extends AsterixFunctionInfo)

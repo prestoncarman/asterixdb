@@ -20,6 +20,7 @@ import java.io.DataInput;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.List;
 
 import edu.uci.ics.asterix.builders.IAOrderedListBuilder;
@@ -39,149 +40,129 @@ import edu.uci.ics.hyracks.dataflow.common.data.accessors.ITupleReference;
 
 /**
  * Translates a Function metadata entity to an ITupleReference and vice versa.
- * 
  */
 public class FunctionTupleTranslator extends AbstractTupleTranslator<Function> {
-	// Field indexes of serialized Function in a tuple.
-	// First key field.
-	public static final int FUNCTION_DATAVERSENAME_TUPLE_FIELD_INDEX = 0;
-	// Second key field.
-	public static final int FUNCTION_FUNCTIONNAME_TUPLE_FIELD_INDEX = 1;
-	// Thirdy key field.
-	public static final int FUNCTION_FUNCTIONARITY_TUPLE_FIELD_INDEX = 2;
+    // Field indexes of serialized Function in a tuple.
+    // First key field.
+    public static final int FUNCTION_DATAVERSENAME_TUPLE_FIELD_INDEX = 0;
+    // Second key field.
+    public static final int FUNCTION_FUNCTIONNAME_TUPLE_FIELD_INDEX = 1;
+    // Thirdy key field.
+    public static final int FUNCTION_FUNCTIONARITY_TUPLE_FIELD_INDEX = 2;
 
-	// Payload field containing serialized Function.
-	public static final int FUNCTION_PAYLOAD_TUPLE_FIELD_INDEX = 3;
+    // Payload field containing serialized Function.
+    public static final int FUNCTION_PAYLOAD_TUPLE_FIELD_INDEX = 3;
 
-	@SuppressWarnings("unchecked")
-	private ISerializerDeserializer<ARecord> recordSerDes = AqlSerializerDeserializerProvider.INSTANCE
-			.getSerializerDeserializer(MetadataRecordTypes.FUNCTION_RECORDTYPE);
+    @SuppressWarnings("unchecked")
+    private ISerializerDeserializer<ARecord> recordSerDes = AqlSerializerDeserializerProvider.INSTANCE
+            .getSerializerDeserializer(MetadataRecordTypes.FUNCTION_RECORDTYPE);
 
-	public FunctionTupleTranslator(boolean getTuple) {
-		super(getTuple, MetadataPrimaryIndexes.FUNCTION_DATASET.getFieldCount());
-	}
+    public FunctionTupleTranslator(boolean getTuple) {
+        super(getTuple, MetadataPrimaryIndexes.FUNCTION_DATASET.getFieldCount());
+    }
 
-	@Override
-	public Function getMetadataEntytiFromTuple(ITupleReference frameTuple)
-			throws IOException {
-		byte[] serRecord = frameTuple
-				.getFieldData(FUNCTION_PAYLOAD_TUPLE_FIELD_INDEX);
-		int recordStartOffset = frameTuple
-				.getFieldStart(FUNCTION_PAYLOAD_TUPLE_FIELD_INDEX);
-		int recordLength = frameTuple
-				.getFieldLength(FUNCTION_PAYLOAD_TUPLE_FIELD_INDEX);
-		ByteArrayInputStream stream = new ByteArrayInputStream(serRecord,
-				recordStartOffset, recordLength);
-		DataInput in = new DataInputStream(stream);
-		ARecord functionRecord = (ARecord) recordSerDes.deserialize(in);
-		return createFunctionFromARecord(functionRecord);
-	}
+    @Override
+    public Function getMetadataEntytiFromTuple(ITupleReference frameTuple) throws IOException {
+        byte[] serRecord = frameTuple.getFieldData(FUNCTION_PAYLOAD_TUPLE_FIELD_INDEX);
+        int recordStartOffset = frameTuple.getFieldStart(FUNCTION_PAYLOAD_TUPLE_FIELD_INDEX);
+        int recordLength = frameTuple.getFieldLength(FUNCTION_PAYLOAD_TUPLE_FIELD_INDEX);
+        ByteArrayInputStream stream = new ByteArrayInputStream(serRecord, recordStartOffset, recordLength);
+        DataInput in = new DataInputStream(stream);
+        ARecord functionRecord = (ARecord) recordSerDes.deserialize(in);
+        return createFunctionFromARecord(functionRecord);
+    }
 
-	private Function createFunctionFromARecord(ARecord functionRecord) {
-		String dataverseName = ((AString) functionRecord
-				.getValueByPos(MetadataRecordTypes.FUNCTION_ARECORD_DATAVERSENAME_FIELD_INDEX))
-				.getStringValue();
-		String functionName = ((AString) functionRecord
-				.getValueByPos(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTIONNAME_FIELD_INDEX))
-				.getStringValue();
-		String arity = ((AString) functionRecord
-				.getValueByPos(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTIONARITY_FIELD_INDEX))
-				.getStringValue();
+    private Function createFunctionFromARecord(ARecord functionRecord) {
+        String dataverseName = ((AString) functionRecord
+                .getValueByPos(MetadataRecordTypes.FUNCTION_ARECORD_DATAVERSENAME_FIELD_INDEX)).getStringValue();
+        String functionName = ((AString) functionRecord
+                .getValueByPos(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTIONNAME_FIELD_INDEX)).getStringValue();
+        String arity = ((AString) functionRecord
+                .getValueByPos(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTIONARITY_FIELD_INDEX)).getStringValue();
 
-		IACursor cursor = ((AOrderedList) functionRecord
-				.getValueByPos(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_PARAM_LIST_FIELD_INDEX))
-				.getCursor();
-		List<String> params = new ArrayList<String>();
-		while (cursor.next()) {
-			params.add(((AString) cursor.get()).getStringValue());
-		}
+        IACursor cursor = ((AOrderedList) functionRecord
+                .getValueByPos(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_PARAM_LIST_FIELD_INDEX)).getCursor();
+        List<String> params = new ArrayList<String>();
+        while (cursor.next()) {
+            params.add(((AString) cursor.get()).getStringValue());
+        }
 
-		String functionBody = ((AString) functionRecord
-				.getValueByPos(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_BODY_FIELD_INDEX))
-				.getStringValue();
+        String functionBody = ((AString) functionRecord
+                .getValueByPos(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_BODY_FIELD_INDEX)).getStringValue();
 
-		return new Function(dataverseName, functionName,
-				Integer.parseInt(arity), params, functionBody);
+        return new Function(dataverseName, functionName, Integer.parseInt(arity), params, functionBody);
 
-	}
+    }
 
-	@Override
-	public ITupleReference getTupleFromMetadataEntity(Function function)
-			throws IOException {
-		// write the key in the first 3 fields of the tuple
-		tupleBuilder.reset();
-		aString.setValue(function.getDataverseName());
-		stringSerde.serialize(aString, tupleBuilder.getDataOutput());
-		tupleBuilder.addFieldEndOffset();
-		aString.setValue(function.getFunctionName());
-		stringSerde.serialize(aString, tupleBuilder.getDataOutput());
-		tupleBuilder.addFieldEndOffset();
-		aString.setValue("" + function.getFunctionArity());
-		stringSerde.serialize(aString, tupleBuilder.getDataOutput());
-		tupleBuilder.addFieldEndOffset();
+    @Override
+    public ITupleReference getTupleFromMetadataEntity(Function function) throws IOException {
+        // write the key in the first 3 fields of the tuple
+        tupleBuilder.reset();
+        aString.setValue(function.getDataverseName());
+        stringSerde.serialize(aString, tupleBuilder.getDataOutput());
+        tupleBuilder.addFieldEndOffset();
+        aString.setValue(function.getFunctionName());
+        stringSerde.serialize(aString, tupleBuilder.getDataOutput());
+        tupleBuilder.addFieldEndOffset();
+        aString.setValue("" + function.getFunctionArity());
+        stringSerde.serialize(aString, tupleBuilder.getDataOutput());
+        tupleBuilder.addFieldEndOffset();
 
-		// write the pay-load in the fourth field of the tuple
+        // write the pay-load in the fourth field of the tuple
 
-		recordBuilder.reset(MetadataRecordTypes.FUNCTION_RECORDTYPE);
+        recordBuilder.reset(MetadataRecordTypes.FUNCTION_RECORDTYPE);
 
-		// write field 0
-		fieldValue.reset();
-		aString.setValue(function.getDataverseName());
-		stringSerde.serialize(aString, fieldValue.getDataOutput());
-		recordBuilder.addField(
-				MetadataRecordTypes.FUNCTION_ARECORD_DATAVERSENAME_FIELD_INDEX,
-				fieldValue);
+        // write field 0
+        fieldValue.reset();
+        aString.setValue(function.getDataverseName());
+        stringSerde.serialize(aString, fieldValue.getDataOutput());
+        recordBuilder.addField(MetadataRecordTypes.FUNCTION_ARECORD_DATAVERSENAME_FIELD_INDEX, fieldValue);
 
-		// write field 1
-		fieldValue.reset();
-		aString.setValue(function.getFunctionName());
-		stringSerde.serialize(aString, fieldValue.getDataOutput());
-		recordBuilder.addField(
-				MetadataRecordTypes.FUNCTION_ARECORD_FUNCTIONNAME_FIELD_INDEX,
-				fieldValue);
+        // write field 1
+        fieldValue.reset();
+        aString.setValue(function.getFunctionName());
+        stringSerde.serialize(aString, fieldValue.getDataOutput());
+        recordBuilder.addField(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTIONNAME_FIELD_INDEX, fieldValue);
 
-		// write field 2
-		fieldValue.reset();
-		aString.setValue("" + function.getFunctionArity());
-		stringSerde.serialize(aString, fieldValue.getDataOutput());
-		recordBuilder.addField(
-				MetadataRecordTypes.FUNCTION_ARECORD_FUNCTIONARITY_FIELD_INDEX,
-				fieldValue);
+        // write field 2
+        fieldValue.reset();
+        aString.setValue("" + function.getFunctionArity());
+        stringSerde.serialize(aString, fieldValue.getDataOutput());
+        recordBuilder.addField(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTIONARITY_FIELD_INDEX, fieldValue);
 
-		// write field 3
-		IAOrderedListBuilder listBuilder = new OrderedListBuilder();
-		ArrayBackedValueStorage itemValue = new ArrayBackedValueStorage();
-		listBuilder
-				.reset((AOrderedListType) MetadataRecordTypes.FUNCTION_RECORDTYPE
-						.getFieldTypes()[MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_PARAM_LIST_FIELD_INDEX]);
-		for (String param : function.getParams()) {
-			itemValue.reset();
-			aString.setValue(param);
-			stringSerde.serialize(aString, itemValue.getDataOutput());
-			listBuilder.addItem(itemValue);
-		}
-		fieldValue.reset();
-		listBuilder.write(fieldValue.getDataOutput(), true);
-		recordBuilder
-				.addField(
-						MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_PARAM_LIST_FIELD_INDEX,
-						fieldValue);
+        // write field 3
+        IAOrderedListBuilder listBuilder = new OrderedListBuilder();
+        ArrayBackedValueStorage itemValue = new ArrayBackedValueStorage();
+        listBuilder
+                .reset((AOrderedListType) MetadataRecordTypes.FUNCTION_RECORDTYPE.getFieldTypes()[MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_PARAM_LIST_FIELD_INDEX]);
+        for (String param : function.getParams()) {
+            itemValue.reset();
+            aString.setValue(param);
+            stringSerde.serialize(aString, itemValue.getDataOutput());
+            listBuilder.addItem(itemValue);
+        }
+        fieldValue.reset();
+        listBuilder.write(fieldValue.getDataOutput(), true);
+        recordBuilder.addField(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_PARAM_LIST_FIELD_INDEX, fieldValue);
 
-		// write field 4
-		fieldValue.reset();
-		aString.setValue(function.getFunctionBody());
-		stringSerde.serialize(aString, fieldValue.getDataOutput());
-		recordBuilder.addField(
-				MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_BODY_FIELD_INDEX,
-				fieldValue);
+        // write field 4
+        fieldValue.reset();
+        aString.setValue(function.getFunctionBody());
+        stringSerde.serialize(aString, fieldValue.getDataOutput());
+        recordBuilder.addField(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_BODY_FIELD_INDEX, fieldValue);
 
-		// write record
-		recordBuilder.write(tupleBuilder.getDataOutput(), true);
-		tupleBuilder.addFieldEndOffset();
+        // write field 5
+        fieldValue.reset();
+        aString.setValue(Calendar.getInstance().getTime().toString());
+        stringSerde.serialize(aString, fieldValue.getDataOutput());
+        recordBuilder.addField(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_TIMESTAMP_FIELD_INDEX, fieldValue);
 
-		tuple.reset(tupleBuilder.getFieldEndOffsets(),
-				tupleBuilder.getByteArray());
-		return tuple;
-	}
+        // write record
+        recordBuilder.write(tupleBuilder.getDataOutput(), true);
+        tupleBuilder.addFieldEndOffset();
+
+        tuple.reset(tupleBuilder.getFieldEndOffsets(), tupleBuilder.getByteArray());
+        return tuple;
+    }
 
 }

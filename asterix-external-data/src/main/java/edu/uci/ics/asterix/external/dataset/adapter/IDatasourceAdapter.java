@@ -144,8 +144,7 @@ public interface IDatasourceAdapter extends Serializable {
      *            providing all arguments as a set of (key,value) pairs. These
      *            arguments are put into the metadata.
      */
-    public void configure(Map<String, String> arguments)
-            throws Exception;
+    public void configure(Map<String, String> arguments) throws Exception;
 
     /**
      * Returns a list of partition constraints. A partition constraint can be a
@@ -163,12 +162,11 @@ public interface IDatasourceAdapter extends Serializable {
      */
     public AlgebricksPartitionConstraint getPartitionConstraint();
 
-    
     /**
-     *  Returns the output ASTERIX type returned by the adapter. 
+     * Returns the output ASTERIX type returned by the adapter.
      */
     public IAType getAdapterOutputType();
-    
+
     /**
      * Allows the adapter to establish connection with the external data source
      * expressing intent for data and providing any configuration parameters
@@ -182,7 +180,6 @@ public interface IDatasourceAdapter extends Serializable {
      * @throws Exception
      */
     public void initialize(IHyracksTaskContext ctx) throws Exception;
-    
-    
+
     public void start(int partition, IFrameWriter writer) throws Exception;
 }

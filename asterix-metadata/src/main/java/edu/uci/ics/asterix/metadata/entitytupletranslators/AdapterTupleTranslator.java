@@ -18,6 +18,7 @@ import java.io.ByteArrayInputStream;
 import java.io.DataInput;
 import java.io.DataInputStream;
 import java.io.IOException;
+import java.util.Calendar;
 
 import edu.uci.ics.asterix.external.dataset.adapter.AdapterIdentifier;
 import edu.uci.ics.asterix.formats.nontagged.AqlSerializerDeserializerProvider;
@@ -112,6 +113,12 @@ public class AdapterTupleTranslator extends AbstractTupleTranslator<Adapter> {
         aString.setValue(adapter.getType().name());
         stringSerde.serialize(aString, fieldValue.getDataOutput());
         recordBuilder.addField(MetadataRecordTypes.ADAPTER_ARECORD_ADAPTERTYPE_FIELD_INDEX, fieldValue);
+
+        // write field 4
+        fieldValue.reset();
+        aString.setValue(Calendar.getInstance().getTime().toString());
+        stringSerde.serialize(aString, fieldValue.getDataOutput());
+        recordBuilder.addField(MetadataRecordTypes.ADAPTER_ARECORD_ADAPTER_TIMESTAMP_FIELD_INDEX, fieldValue);
 
         // write record
         recordBuilder.write(tupleBuilder.getDataOutput(), true);

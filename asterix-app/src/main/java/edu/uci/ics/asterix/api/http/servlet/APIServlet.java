@@ -101,13 +101,14 @@ public class APIServlet extends HttpServlet {
             String message = pe.getMessage();
             message = message.replace("<", "&lt");
             message = message.replace(">", "&gt");
-            int pos = message.indexOf("line");
-            int columnPos = message.indexOf(",", pos + 1 + "line".length());
-            int lineNo = Integer.parseInt(message.substring(pos + "line".length() + 1, columnPos));
-            String line = query.split("\n")[lineNo - 1];
             out.println("SyntaxError:" + message);
-            out.println("==> " + line);
-
+            int pos = message.indexOf("line");
+            if (pos >= 0) {
+                int columnPos = message.indexOf(",", pos + 1 + "line".length());
+                int lineNo = Integer.parseInt(message.substring(pos + "line".length() + 1, columnPos));
+                String line = query.split("\n")[lineNo - 1];
+                out.println("==> " + line);
+            }
         } catch (Exception e) {
             out.println(e.getMessage());
         }

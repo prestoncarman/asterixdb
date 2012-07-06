@@ -191,6 +191,10 @@ Statement Statement() throws ParseException:
           	{
             		decls.add(DataverseDropStatement());
           	}
+          	| "function"
+          	{
+            		decls.add(FunctionDropStatement());
+          	}
         	)
           | "write" {
                        decls.add(WriteStatement());
@@ -506,6 +510,39 @@ DataverseDropStatement DataverseDropStatement() throws ParseException :
     return new DataverseDropStatement(dataverseName, ifExists);
   }
 }
+
+FunctionDropStatement FunctionDropStatement() throws ParseException :
+{
+  Identifier functionId;
+  int arity=0;
+  boolean ifExists = false;
+}
+{
+  < IDENTIFIER >
+  {
+    functionId = new Identifier(token.image);
+  }
+   "@"
+  (<INTEGER_LITERAL>)? 
+  {  
+     Token t= getToken(0);
+	 arity = new Integer(t.image);
+  	 if( arity < 0){
+  	 	throw new ParseException(" invalid arity:" + arity);
+  	 } 
+  }
+  
+  (
+    "if exists"
+    {
+      ifExists = true;
+    }
+  )? ";"
+  {
+    return new FunctionDropStatement(functionId, arity, ifExists);
+  }
+}
+
 
 CreateDataverseStatement CreateDataverseStatement() throws ParseException :
 {

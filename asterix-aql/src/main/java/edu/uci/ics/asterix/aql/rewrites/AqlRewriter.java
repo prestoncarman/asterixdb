@@ -171,7 +171,13 @@ public final class AqlRewriter {
                 continue;
             }
 
-            FunctionDecl functionDecl = getFunctionDecl(funId);
+            Function function = MetadataManager.INSTANCE.getFunction(mdTxnCtx, dataverseName, funId.getFunctionName(),
+                    funId.getArity());
+            if (function == null) {
+                throw new AsterixException(" function " + functionDecls.get(functionDecls.size() - 1).getIdent()
+                        + " depends upon function " + funId + " which is undefined");
+            }
+            FunctionDecl functionDecl = FunctionUtils.getFunctionDecl(function);
             if (functionDecls.contains(functionDecl)) {
                 throw new AsterixException("ERROR:Recursive invocation "
                         + functionDecls.get(functionDecls.size() - 1).getIdent() + " <==> " + functionDecl.getIdent());
@@ -179,16 +185,6 @@ public final class AqlRewriter {
             functionDecls.add(functionDecl);
             buildOtherUdfs(functionDecl.getFuncBody(), functionDecls, declaredFunctions);
         }
-    }
-
-    private FunctionDecl getFunctionDecl(AsterixFunction funId) throws AsterixException {
-        Function function = MetadataManager.INSTANCE.getFunction(mdTxnCtx, dataverseName, funId.getFunctionName(),
-                funId.getArity());
-        if (function == null) {
-            throw new AsterixException(" unknown function " + funId);
-        }
-        return FunctionUtils.getFunctionDecl(function);
-
     }
 
     private List<AsterixFunction> getFunctionCalls(Expression expression) throws AsterixException {

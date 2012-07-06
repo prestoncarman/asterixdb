@@ -1,0 +1,5 @@
+{ "DataverseName": "asterix", "Name": "cnnFeed", "Classname": "edu.uci.ics.asterix.external.adapter.factory.CNNFeedAdapterFactory", "Type": "INTERNAL", "Timestamp": "Fri Jul 06 10:03:29 PDT 2012" }
+{ "DataverseName": "asterix", "Name": "hdfs", "Classname": "edu.uci.ics.asterix.external.adapter.factory.HDFSAdapterFactory", "Type": "INTERNAL", "Timestamp": "Fri Jul 06 10:03:29 PDT 2012" }
+{ "DataverseName": "asterix", "Name": "localfs", "Classname": "edu.uci.ics.asterix.external.adapter.factory.NCFileSystemAdapterFactory", "Type": "INTERNAL", "Timestamp": "Fri Jul 06 10:03:29 PDT 2012" }
+{ "DataverseName": "asterix", "Name": "pullTwitter", "Classname": "edu.uci.ics.asterix.external.adapter.factory.PullBasedTwitterAdapterFactory", "Type": "INTERNAL", "Timestamp": "Fri Jul 06 10:03:29 PDT 2012" }
+{ "DataverseName": "asterix", "Name": "rssFeed", "Classname": "edu.uci.ics.asterix.external.adapter.factory.RSSFeedAdapterFactory", "Type": "INTERNAL", "Timestamp": "Fri Jul 06 10:03:29 PDT 2012" }
