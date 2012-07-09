@@ -133,20 +133,20 @@ public class DdlTranslator extends AbstractAqlTranslator {
                     compiledDeclarations.connectToDataverse(dataverseName);
                     break;
                 }
-                
+
                 case CREATE_DATAVERSE: {
                     checkForDataverseConnection(false);
                     CreateDataverseStatement stmtCreateDataverse = (CreateDataverseStatement) stmt;
                     String dvName = stmtCreateDataverse.getDataverseName().getValue();
                     Dataverse dv = MetadataManager.INSTANCE.getDataverse(mdTxnCtx, dvName);
                     if (dv != null && !stmtCreateDataverse.getIfNotExists()) {
-                            throw new AlgebricksException("A dataverse with this name " + dvName + " already exists.");
+                        throw new AlgebricksException("A dataverse with this name " + dvName + " already exists.");
                     }
                     MetadataManager.INSTANCE.addDataverse(mdTxnCtx,
-                    		new Dataverse(dvName, stmtCreateDataverse.getFormat()));
+                            new Dataverse(dvName, stmtCreateDataverse.getFormat()));
                     break;
                 }
-                
+
                 case DATASET_DECL: {
                     checkForDataverseConnection(true);
                     DatasetDecl dd = (DatasetDecl) stmt;
@@ -158,7 +158,7 @@ public class DdlTranslator extends AbstractAqlTranslator {
                             datasetName);
                     if (ds != null) {
                         if (dd.getIfNotExists()) {
-                            continue;                            
+                            continue;
                         } else {
                             throw new AlgebricksException("A dataset with this name " + datasetName
                                     + " already exists.");
@@ -213,9 +213,8 @@ public class DdlTranslator extends AbstractAqlTranslator {
                             break;
                         }
                     }
-                    MetadataManager.INSTANCE.addDataset(mdTxnCtx,
-                            new Dataset(compiledDeclarations.getDataverseName(), datasetName, itemTypeName,
-                                    datasetDetails, dsType));
+                    MetadataManager.INSTANCE.addDataset(mdTxnCtx, new Dataset(compiledDeclarations.getDataverseName(),
+                            datasetName, itemTypeName, datasetDetails, dsType));
                     if (dd.getDatasetType() == DatasetType.INTERNAL || dd.getDatasetType() == DatasetType.FEED) {
                         runCreateDatasetJob(hcc, datasetName);
                     }
@@ -243,9 +242,9 @@ public class DdlTranslator extends AbstractAqlTranslator {
                     } else {
                         MetadataManager.INSTANCE.addIndex(mdTxnCtx, new Index(compiledDeclarations.getDataverseName(),
                                 datasetName, indexName, stmtCreateIndex.getIndexType(),
-                                stmtCreateIndex.getFieldExprs(), false));
+                                stmtCreateIndex.getFieldExprs(), stmtCreateIndex.getGramLength(), false));
                         runCreateIndexJob(hcc, stmtCreateIndex);
-                    }                            
+                    }
                     break;
                 }
                 case TYPE_DECL: {
@@ -256,8 +255,7 @@ public class DdlTranslator extends AbstractAqlTranslator {
                             compiledDeclarations.getDataverseName(), typeName);
                     if (dt != null) {
                         if (!stmtCreateType.getIfNotExists())
-                            throw new AlgebricksException("A datatype with this name " + typeName
-                                    + " already exists.");
+                            throw new AlgebricksException("A datatype with this name " + typeName + " already exists.");
                     } else {
                         if (builtinTypeMap.get(typeName) != null) {
                             throw new AlgebricksException("Cannot redefine builtin type " + typeName + ".");
@@ -310,7 +308,7 @@ public class DdlTranslator extends AbstractAqlTranslator {
                         List<Dataset> datasets = MetadataManager.INSTANCE.getDataverseDatasets(mdTxnCtx, dvName);
                         for (int j = 0; j < datasets.size(); j++) {
                             String datasetName = datasets.get(j).getDatasetName();
-                            DatasetType dsType = datasets.get(j).getType();
+                            DatasetType dsType = datasets.get(j).getDatasetType();
                             if (dsType == DatasetType.INTERNAL || dsType == DatasetType.FEED) {
                                 List<Index> indexes = MetadataManager.INSTANCE.getDatasetIndexes(mdTxnCtx, dvName,
                                         datasetName);
@@ -343,7 +341,7 @@ public class DdlTranslator extends AbstractAqlTranslator {
                         if (!stmtDelete.getIfExists())
                             throw new AlgebricksException("There is no dataset with this name " + datasetName + ".");
                     } else {
-                        if (ds.getType() == DatasetType.INTERNAL || ds.getType() == DatasetType.FEED) {
+                        if (ds.getDatasetType() == DatasetType.INTERNAL || ds.getDatasetType() == DatasetType.FEED) {
                             List<Index> indexes = MetadataManager.INSTANCE.getDatasetIndexes(mdTxnCtx,
                                     compiledDeclarations.getDataverseName(), datasetName);
                             for (int j = 0; j < indexes.size(); j++) {
@@ -364,7 +362,7 @@ public class DdlTranslator extends AbstractAqlTranslator {
                             datasetName);
                     if (ds == null)
                         throw new AlgebricksException("There is no dataset with this name " + datasetName + ".");
-                    if (ds.getType() == DatasetType.INTERNAL || ds.getType() == DatasetType.FEED) {
+                    if (ds.getDatasetType() == DatasetType.INTERNAL || ds.getDatasetType() == DatasetType.FEED) {
                         String indexName = stmtDelete.getIndexName().getValue();
                         Index idx = MetadataManager.INSTANCE.getIndex(mdTxnCtx,
                                 compiledDeclarations.getDataverseName(), datasetName, indexName);
@@ -403,8 +401,7 @@ public class DdlTranslator extends AbstractAqlTranslator {
                     NodeGroup ng = MetadataManager.INSTANCE.getNodegroup(mdTxnCtx, nodegroupName);
                     if (ng == null) {
                         if (!stmtDelete.getIfExists())
-                            throw new AlgebricksException("There is no nodegroup with this name " + nodegroupName
-                                    + ".");
+                            throw new AlgebricksException("There is no nodegroup with this name " + nodegroupName + ".");
                     } else
                         MetadataManager.INSTANCE.dropNodegroup(mdTxnCtx, nodegroupName);
                     break;
@@ -412,8 +409,9 @@ public class DdlTranslator extends AbstractAqlTranslator {
 
                 case CREATE_FUNCTION: {
                     CreateFunctionStatement cfs = (CreateFunctionStatement) stmt;
-                    Function function = new Function(compiledDeclarations.getDataverseName(), cfs.getFunctionIdentifier().getFunctionName(),
-                            cfs.getFunctionIdentifier().getArity(), cfs.getParamList(), cfs.getFunctionBody());
+                    Function function = new Function(compiledDeclarations.getDataverseName(), cfs
+                            .getFunctionIdentifier().getFunctionName(), cfs.getFunctionIdentifier().getArity(),
+                            cfs.getParamList(), cfs.getFunctionBody());
                     try {
                         FunctionUtils.getFunctionDecl(function);
                     } catch (Exception e) {
@@ -474,8 +472,7 @@ public class DdlTranslator extends AbstractAqlTranslator {
             DisplayFormat pdf) throws Exception {
         for (int i = 0; i < specs.length; i++) {
             specs[i].setMaxReattempts(0);
-            JobId jobId = hcc.createJob(GlobalConfig.HYRACKS_APP_NAME, specs[i]);
-            hcc.start(jobId);
+            JobId jobId = hcc.startJob(GlobalConfig.HYRACKS_APP_NAME, specs[i]);
             hcc.waitForCompletion(jobId);
         }
     }
@@ -484,13 +481,13 @@ public class DdlTranslator extends AbstractAqlTranslator {
             AlgebricksException, Exception {
         runJob(hcc, DatasetOperations.createDatasetJobSpec(datasetName, compiledDeclarations));
     }
-    
+
     private void runCreateIndexJob(IHyracksClientConnection hcc, CreateIndexStatement stmtCreateIndex) throws Exception {
         // TODO: Eventually CreateIndexStatement and CompiledCreateIndexStatement should be replaced by the corresponding metadata entity.
         // For now we must still convert to a CompiledCreateIndexStatement here.
         CompiledCreateIndexStatement createIndexStmt = new CompiledCreateIndexStatement(stmtCreateIndex.getIndexName()
                 .getValue(), stmtCreateIndex.getDatasetName().getValue(), stmtCreateIndex.getFieldExprs(),
-                stmtCreateIndex.getIndexType());
+                stmtCreateIndex.getGramLength(), stmtCreateIndex.getIndexType());
         JobSpecification spec = IndexOperations.buildSecondaryIndexCreationJobSpec(createIndexStmt,
                 compiledDeclarations);
         if (spec == null) {
@@ -499,13 +496,13 @@ public class DdlTranslator extends AbstractAqlTranslator {
         }
         runJob(hcc, spec);
     }
-	
+
     private void compileDatasetDropStatement(IHyracksClientConnection hcc, MetadataTransactionContext mdTxnCtx,
             String datasetName) throws Exception {
         CompiledDatasetDropStatement cds = new CompiledDatasetDropStatement(datasetName);
         Dataset ds = MetadataManager.INSTANCE
                 .getDataset(mdTxnCtx, compiledDeclarations.getDataverseName(), datasetName);
-        if (ds.getType() == DatasetType.INTERNAL || ds.getType() == DatasetType.FEED) {
+        if (ds.getDatasetType() == DatasetType.INTERNAL || ds.getDatasetType() == DatasetType.FEED) {
             JobSpecification[] jobs = DatasetOperations.createDropDatasetJobSpec(cds, compiledDeclarations);
             for (JobSpecification job : jobs)
                 runJob(hcc, job);
