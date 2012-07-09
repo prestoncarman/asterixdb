@@ -18,7 +18,6 @@ package edu.uci.ics.asterix.metadata;
 import java.rmi.RemoteException;
 import java.util.List;
 
-import edu.uci.ics.asterix.metadata.MetadataCache.MetadataLogicalOperation;
 import edu.uci.ics.asterix.metadata.api.IAsterixStateProxy;
 import edu.uci.ics.asterix.metadata.api.IMetadataManager;
 import edu.uci.ics.asterix.metadata.api.IMetadataNode;
@@ -407,40 +406,38 @@ public class MetadataManager implements IMetadataManager {
 		ctx.dropNodeGroup(nodeGroupName);
 	}
 
-	@Override
-	public NodeGroup getNodegroup(MetadataTransactionContext ctx,
-			String nodeGroupName) throws MetadataException {
-		// First look in the context to see if this transaction created the
-		// requested dataverse itself (but the dataverse is still uncommitted).
-		NodeGroup nodeGroup = ctx.getNodeGroup(nodeGroupName);
-		if (nodeGroup != null) {
-			// Don't add this dataverse to the cache, since it is still
-			// uncommitted.
-			return nodeGroup;
-		}
-		if (ctx.nodeGroupIsDropped(nodeGroupName)) {
-			// NodeGroup has been dropped by this transaction but could still be
-			// in the cache.
-			return null;
-		}
-		nodeGroup = cache.getNodeGroup(nodeGroupName);
-		if (nodeGroup != null) {
-			// NodeGroup is already in the cache, don't add it again.
-			return nodeGroup;
-		}
-		try {
-			nodeGroup = metadataNode
-					.getNodeGroup(ctx.getTxnId(), nodeGroupName);
-		} catch (RemoteException e) {
-			throw new MetadataException(e);
-		}
-		// We fetched the nodeGroup from the MetadataNode. Add it to the cache
-		// when this transaction commits.
-		if (nodeGroup != null) {
-			ctx.addNogeGroup(nodeGroup);
-		}
-		return nodeGroup;
-	}
+    @Override
+    public NodeGroup getNodegroup(MetadataTransactionContext ctx, String nodeGroupName) throws MetadataException {
+        // First look in the context to see if this transaction created the
+        // requested dataverse itself (but the dataverse is still uncommitted).
+        NodeGroup nodeGroup = ctx.getNodeGroup(nodeGroupName);
+        if (nodeGroup != null) {
+            // Don't add this dataverse to the cache, since it is still
+            // uncommitted.
+            return nodeGroup;
+        }
+        if (ctx.nodeGroupIsDropped(nodeGroupName)) {
+            // NodeGroup has been dropped by this transaction but could still be
+            // in the cache.
+            return null;
+        }
+        nodeGroup = cache.getNodeGroup(nodeGroupName);
+        if (nodeGroup != null) {
+            // NodeGroup is already in the cache, don't add it again.
+            return nodeGroup;
+        }
+        try {
+            nodeGroup = metadataNode.getNodeGroup(ctx.getTxnId(), nodeGroupName);
+        } catch (RemoteException e) {
+            throw new MetadataException(e);
+        }
+        // We fetched the nodeGroup from the MetadataNode. Add it to the cache
+        // when this transaction commits.
+        if (nodeGroup != null) {
+            ctx.addNogeGroup(nodeGroup);
+        }
+        return nodeGroup;
+    }
 
 	@Override
 	public void addFunction(MetadataTransactionContext mdTxnCtx,
@@ -453,60 +450,57 @@ public class MetadataManager implements IMetadataManager {
 		mdTxnCtx.addFunction(function);
 	}
 
-	@Override
-	public void dropFunction(MetadataTransactionContext ctx,
-			String dataverseName, String functionName, int arity)
-			throws MetadataException {
-		try {
-			metadataNode.dropFunction(ctx.getTxnId(), dataverseName,
-					functionName, arity);
-		} catch (RemoteException e) {
-			throw new MetadataException(e);
-		}
-		ctx.dropFunction(dataverseName, functionName, arity);
-	}
+	
+    @Override
+    public void dropFunction(MetadataTransactionContext ctx, String dataverseName, String functionName, int arity)
+            throws MetadataException {
+        try {
+            metadataNode.dropFunction(ctx.getTxnId(), dataverseName, functionName, arity);
+        } catch (RemoteException e) {
+            throw new MetadataException(e);
+        }
+        ctx.dropFunction(dataverseName, functionName, arity);
+    }
 
-	@Override
-	public Function getFunction(MetadataTransactionContext ctx,
-			String dataverseName, String functionName, int arity)
-			throws MetadataException {
-		// First look in the context to see if this transaction created the
-		// requested dataset itself (but the dataset is still uncommitted).
-		Function function = ctx.getFunction(dataverseName, functionName, arity);
-		if (function != null) {
-			// Don't add this dataverse to the cache, since it is still
-			// uncommitted.
-			return function;
-		}
-		if (ctx.functionIsDropped(dataverseName, functionName, arity)) {
-			// Dataset has been dropped by this transaction but could still be
-			// in the cache.
-			return null;
-		}
-		if (ctx.getDataverse(dataverseName) != null) {
-			// This transaction has dropped and subsequently created the same
-			// dataverse.
-			return null;
-		}
-		function = cache.getFunction(dataverseName, functionName, arity);
-		if (function != null) {
-			// Function is already in the cache, don't add it again.
-			return function;
-		}
-		try {
-			function = metadataNode.getFunction(ctx.getTxnId(), dataverseName,
-					functionName, arity);
-		} catch (RemoteException e) {
-			throw new MetadataException(e);
-		}
-		// We fetched the function from the MetadataNode. Add it to the cache
-		// when this transaction commits.
-		if (function != null) {
-			ctx.addFunction(function);
-		}
-		return function;
+    @Override
+    public Function getFunction(MetadataTransactionContext ctx, String dataverseName, String functionName, int arity)
+            throws MetadataException {
+        // First look in the context to see if this transaction created the
+        // requested dataset itself (but the dataset is still uncommitted).
+        Function function = ctx.getFunction(dataverseName, functionName, arity);
+        if (function != null) {
+            // Don't add this dataverse to the cache, since it is still
+            // uncommitted.
+            return function;
+        }
+        if (ctx.functionIsDropped(dataverseName, functionName, arity)) {
+            // Dataset has been dropped by this transaction but could still be
+            // in the cache.
+            return null;
+        }
+        if (ctx.getDataverse(dataverseName) != null) {
+            // This transaction has dropped and subsequently created the same
+            // dataverse.
+            return null;
+        }
+        function = cache.getFunction(dataverseName, functionName, arity);
+        if (function != null) {
+            // Function is already in the cache, don't add it again.
+            return function;
+        }
+        try {
+            function = metadataNode.getFunction(ctx.getTxnId(), dataverseName, functionName, arity);
+        } catch (RemoteException e) {
+            throw new MetadataException(e);
+        }
+        // We fetched the function from the MetadataNode. Add it to the cache
+        // when this transaction commits.
+        if (function != null) {
+            ctx.addFunction(function);
+        }
+        return function;
 
-	}
+    }
 
 	@Override
 	public void addAdapter(MetadataTransactionContext mdTxnCtx, Adapter adapter)
