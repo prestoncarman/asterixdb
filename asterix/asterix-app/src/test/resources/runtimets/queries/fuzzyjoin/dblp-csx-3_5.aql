@@ -20,17 +20,15 @@ create type CSXType as open {
   misc: string
 }
 
-create nodegroup group1  if not exists on nc1, nc2;
-
-create dataset DBLP(DBLPType) partitioned by key id on group1;
-create dataset CSX(CSXType) partitioned by key id on group1;
+create dataset DBLP(DBLPType) partitioned by key id;
+create dataset CSX(CSXType) partitioned by key id;
 
 load dataset DBLP
-using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
+using "localfs"
 (("path"="nc1://data/pub-small/dblp-small-id.txt"),("format"="delimited-text"),("delimiter"=":"));
 
 load dataset CSX
-using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
+using "localfs"
 (("path"="nc1://data/pub-small/csx-small-id.txt"),("format"="delimited-text"),("delimiter"=":"));
 
 

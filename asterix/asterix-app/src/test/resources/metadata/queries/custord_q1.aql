@@ -47,14 +47,14 @@ create dataset Customers(CustomerType)
   partitioned by key cid, name on group1;
 
 load dataset Customers 
-using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
+using "localfs"
 (("path"="nc1://data/metadata/customerData.json"),("format"="adm"));
         
 create dataset Orders(OrderType)
   partitioned by key oid on group1;
 
 load dataset Orders 
-using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
+using "localfs"
 (("path"="nc1://data/metadata/orderData.json"),("format"="adm"));
 
 create index ordCustId if not exists on Orders(cid);

@@ -17,7 +17,7 @@ create dataset TwitterData(Tweet)
 
 
 load dataset TwitterData 
-using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
+using "localfs"
 (("path"="nc1://data/twitter/extrasmalltweets.txt"),("format"="adm")) pre-sorted;
 
 create index rtree_index_point on TwitterData(loc) type rtree;

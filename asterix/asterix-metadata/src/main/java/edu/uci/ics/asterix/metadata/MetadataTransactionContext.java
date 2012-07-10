@@ -17,6 +17,8 @@ package edu.uci.ics.asterix.metadata;
 
 import java.util.ArrayList;
 
+import edu.uci.ics.asterix.external.dataset.adapter.AdapterIdentifier;
+import edu.uci.ics.asterix.metadata.entities.Adapter;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
 import edu.uci.ics.asterix.metadata.entities.Datatype;
 import edu.uci.ics.asterix.metadata.entities.Dataverse;
@@ -88,11 +90,16 @@ public class MetadataTransactionContext extends MetadataCache {
         logAndApply(new MetadataLogicalOperation(function, true));
     }
 
-    public void dropDataverse(String dataverseName) {
-        Dataverse dataverse = new Dataverse(dataverseName, null);
-        droppedCache.addDataverseIfNotExists(dataverse);
-        logAndApply(new MetadataLogicalOperation(dataverse, false));
-    }
+	public void addAdapter(Adapter adapter) {
+		droppedCache.dropAdapter(adapter);
+		logAndApply(new MetadataLogicalOperation(adapter, true));
+	}
+
+	public void dropDataverse(String dataverseName) {
+		Dataverse dataverse = new Dataverse(dataverseName, null);
+		droppedCache.addDataverseIfNotExists(dataverse);
+		logAndApply(new MetadataLogicalOperation(dataverse, false));
+	}
 
     public void dropDataset(String dataverseName, String datasetName) {
         Dataset dataset = new Dataset(dataverseName, datasetName, null, null, null);
@@ -113,15 +120,23 @@ public class MetadataTransactionContext extends MetadataCache {
     }
 
     public void dropFunction(String dataverseName, String functionName, int arity) {
-        Function function = new Function(dataverseName, functionName, arity, null, null, null, null, null);
+        Function function = new Function(dataverseName, functionName, arity, null, null, null, null, null, null);
         droppedCache.addFunctionIfNotExists(function);
         logAndApply(new MetadataLogicalOperation(function, false));
     }
 
-    public void logAndApply(MetadataLogicalOperation op) {
-        opLog.add(op);
-        doOperation(op);
-    }
+	public void dropAdapter(String dataverseName, String adapterName) {
+		AdapterIdentifier adapterIdentifier = new AdapterIdentifier(
+				dataverseName, adapterName);
+		Adapter adapter = new Adapter(adapterIdentifier, null, null);
+		droppedCache.addAdapterIfNotExists(adapter);
+		logAndApply(new MetadataLogicalOperation(adapter, false));
+	}
+
+	public void logAndApply(MetadataLogicalOperation op) {
+		opLog.add(op);
+		doOperation(op);
+	}
 
     public boolean dataverseIsDropped(String dataverseName) {
         return droppedCache.getDataverse(dataverseName) != null;
@@ -145,13 +160,14 @@ public class MetadataTransactionContext extends MetadataCache {
         return droppedCache.getNodeGroup(nodeGroup) != null;
     }
 
-    public boolean functionIsDropped(String dataverseName, String functionName, int arity) {
-        return droppedCache.getFunction(dataverseName, functionName, arity) != null;
-    }
+	public boolean functionIsDropped(String dataverseName, String functionName,
+			int arity) {
+		return droppedCache.getFunction(dataverseName, functionName, arity) != null;
+	}
 
-    public ArrayList<MetadataLogicalOperation> getOpLog() {
-        return opLog;
-    }
+	public ArrayList<MetadataLogicalOperation> getOpLog() {
+		return opLog;
+	}
 
     @Override
     public void clear() {

@@ -8,15 +8,17 @@ import edu.uci.ics.asterix.common.functions.FunctionConstants;
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.AOrderedListSerializerDeserializer;
 import edu.uci.ics.asterix.formats.nontagged.AqlSerializerDeserializerProvider;
 import edu.uci.ics.asterix.om.base.ANull;
+import edu.uci.ics.asterix.om.functions.IFunctionDescriptor;
+import edu.uci.ics.asterix.om.functions.IFunctionDescriptorFactory;
 import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.asterix.om.types.BuiltinType;
 import edu.uci.ics.asterix.om.types.EnumDeserializer;
 import edu.uci.ics.asterix.om.util.NonTaggedFormatUtil;
 import edu.uci.ics.asterix.runtime.evaluators.base.AbstractScalarFunctionDynamicDescriptor;
+import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluatorFactory;
-import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
+import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluator;
+import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluatorFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.ArrayBackedValueStorage;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.IDataOutputProvider;
@@ -28,9 +30,14 @@ public class GetItemDescriptor extends AbstractScalarFunctionDynamicDescriptor {
     private static final long serialVersionUID = 1L;
     private final static FunctionIdentifier FID = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "get-item", 2,
             true);
+    public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
+        public IFunctionDescriptor createFunctionDescriptor() {
+            return new GetItemDescriptor();
+        }
+    };
 
     @Override
-    public IEvaluatorFactory createEvaluatorFactory(final IEvaluatorFactory[] args) {
+    public ICopyEvaluatorFactory createEvaluatorFactory(final ICopyEvaluatorFactory[] args) {
         return new GetItemEvalFactory(args);
     }
 
@@ -39,32 +46,32 @@ public class GetItemDescriptor extends AbstractScalarFunctionDynamicDescriptor {
         return FID;
     }
 
-    private static class GetItemEvalFactory implements IEvaluatorFactory {
+    private static class GetItemEvalFactory implements ICopyEvaluatorFactory {
 
         private static final long serialVersionUID = 1L;
 
-        private IEvaluatorFactory listEvalFactory;
-        private IEvaluatorFactory indexEvalFactory;
+        private ICopyEvaluatorFactory listEvalFactory;
+        private ICopyEvaluatorFactory indexEvalFactory;
         private final static byte SER_ORDEREDLIST_TYPE_TAG = ATypeTag.ORDEREDLIST.serialize();
         private final static byte SER_NULL_TYPE_TAG = ATypeTag.NULL.serialize();
         private byte serItemTypeTag;
         private ATypeTag itemTag;
         private boolean selfDescList = false;
 
-        public GetItemEvalFactory(IEvaluatorFactory[] args) {
+        public GetItemEvalFactory(ICopyEvaluatorFactory[] args) {
             this.listEvalFactory = args[0];
             this.indexEvalFactory = args[1];
         }
 
         @Override
-        public IEvaluator createEvaluator(final IDataOutputProvider output) throws AlgebricksException {
-            return new IEvaluator() {
+        public ICopyEvaluator createEvaluator(final IDataOutputProvider output) throws AlgebricksException {
+            return new ICopyEvaluator() {
 
                 private DataOutput out = output.getDataOutput();
                 private ArrayBackedValueStorage outInputList = new ArrayBackedValueStorage();
                 private ArrayBackedValueStorage outInputIdx = new ArrayBackedValueStorage();
-                private IEvaluator evalList = listEvalFactory.createEvaluator(outInputList);
-                private IEvaluator evalIdx = indexEvalFactory.createEvaluator(outInputIdx);
+                private ICopyEvaluator evalList = listEvalFactory.createEvaluator(outInputList);
+                private ICopyEvaluator evalIdx = indexEvalFactory.createEvaluator(outInputIdx);
                 @SuppressWarnings("unchecked")
                 private ISerializerDeserializer<ANull> nullSerde = AqlSerializerDeserializerProvider.INSTANCE
                         .getSerializerDeserializer(BuiltinType.ANULL);
@@ -80,7 +87,7 @@ public class GetItemDescriptor extends AbstractScalarFunctionDynamicDescriptor {
                         evalList.evaluate(tuple);
                         outInputIdx.reset();
                         evalIdx.evaluate(tuple);
-                        byte[] serOrderedList = outInputList.getBytes();
+                        byte[] serOrderedList = outInputList.getByteArray();
 
                         if (serOrderedList[0] == SER_NULL_TYPE_TAG) {
                             nullSerde.serialize(ANull.NULL, out);
@@ -92,7 +99,7 @@ public class GetItemDescriptor extends AbstractScalarFunctionDynamicDescriptor {
                                     + EnumDeserializer.ATYPETAGDESERIALIZER.deserialize(serOrderedList[0]));
                         }
 
-                        itemIndex = IntegerSerializerDeserializer.getInt(outInputIdx.getBytes(), 1);
+                        itemIndex = IntegerSerializerDeserializer.getInt(outInputIdx.getByteArray(), 1);
                         if (itemIndex >= AOrderedListSerializerDeserializer.getNumberOfItems(serOrderedList)) {
                             out.writeByte(SER_NULL_TYPE_TAG);
                             return;

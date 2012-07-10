@@ -13,6 +13,7 @@ import edu.uci.ics.asterix.aql.expression.Query;
 import edu.uci.ics.asterix.aql.expression.visitor.AQLPrintVisitor;
 import edu.uci.ics.asterix.aql.rewrites.AqlRewriter;
 import edu.uci.ics.asterix.aql.translator.DdlTranslator;
+import edu.uci.ics.asterix.common.api.AsterixAppContextInfoImpl;
 import edu.uci.ics.asterix.common.config.GlobalConfig;
 import edu.uci.ics.asterix.common.config.OptimizationConfUtil;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
@@ -44,6 +45,9 @@ import edu.uci.ics.asterix.translator.DmlTranslator.CompiledInsertStatement;
 import edu.uci.ics.asterix.translator.DmlTranslator.CompiledLoadFromFileStatement;
 import edu.uci.ics.asterix.translator.DmlTranslator.CompiledWriteFromQueryResultStatement;
 import edu.uci.ics.asterix.translator.DmlTranslator.ICompiledDmlStatement;
+import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksPartitionConstraint;
+import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
+import edu.uci.ics.hyracks.algebricks.common.utils.Pair;
 import edu.uci.ics.hyracks.algebricks.compiler.api.HeuristicCompilerFactoryBuilder;
 import edu.uci.ics.hyracks.algebricks.compiler.api.ICompiler;
 import edu.uci.ics.hyracks.algebricks.compiler.api.ICompilerFactory;
@@ -55,16 +59,14 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IExpressionEvalSi
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IExpressionTypeComputer;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IMergeAggregationExpressionFactory;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.INullableTypeComputer;
+import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.LogicalExpressionJobGenToExpressionRuntimeProviderAdapter;
 import edu.uci.ics.hyracks.algebricks.core.algebra.prettyprint.LogicalOperatorPrettyPrintVisitor;
 import edu.uci.ics.hyracks.algebricks.core.algebra.prettyprint.PlanPrettyPrinter;
-import edu.uci.ics.hyracks.algebricks.core.api.constraints.AlgebricksPartitionConstraint;
-import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.rewriter.base.AbstractRuleController;
 import edu.uci.ics.hyracks.algebricks.core.rewriter.base.AlgebricksOptimizationContext;
 import edu.uci.ics.hyracks.algebricks.core.rewriter.base.IAlgebraicRewriteRule;
 import edu.uci.ics.hyracks.algebricks.core.rewriter.base.IOptimizationContextFactory;
 import edu.uci.ics.hyracks.algebricks.core.rewriter.base.PhysicalOptimizationConfig;
-import edu.uci.ics.hyracks.algebricks.core.utils.Pair;
 import edu.uci.ics.hyracks.api.client.IHyracksClientConnection;
 import edu.uci.ics.hyracks.api.job.JobId;
 import edu.uci.ics.hyracks.api.job.JobSpecification;
@@ -150,7 +152,7 @@ public class APIFramework {
         MetadataManager.INSTANCE.lock(mdTxnCtx, LockMode.EXCLUSIVE);
         try {
             DdlTranslator ddlt = new DdlTranslator(mdTxnCtx, query.getPrologDeclList(), out, pc, pdf);
-            ddlt.translate(false);
+            ddlt.translate(hcc, false);
             MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
             return ddlt.getCompiledDeclarations().getDataverseName();
         } catch (Exception e) {
@@ -190,7 +192,7 @@ public class APIFramework {
                 switch (stmt.getKind()) {
                     case LOAD_FROM_FILE: {
                         CompiledLoadFromFileStatement stmtLoad = (CompiledLoadFromFileStatement) stmt;
-                        dmlJobs.addAll(DatasetOperations.createLoadDatasetJobSpec(stmtLoad, metadata));
+                        dmlJobs.add(DatasetOperations.createLoadDatasetJobSpec(stmtLoad, metadata));
                         break;
                     }
                     case WRITE_FROM_QUERY_RESULT: {
@@ -232,7 +234,7 @@ public class APIFramework {
                     }
                     case CREATE_INDEX: {
                         CompiledCreateIndexStatement cis = (CompiledCreateIndexStatement) stmt;
-                        JobSpecification jobSpec = IndexOperations.buildCreateIndexJobSpec(cis, metadata);
+                        JobSpecification jobSpec = IndexOperations.buildSecondaryIndexLoadingJobSpec(cis, metadata);
                         dmlJobs.add(new Job(jobSpec));
                         break;
                     }
@@ -389,8 +391,8 @@ public class APIFramework {
 
         }
         long txnId = TransactionIDFactory.generateTransactionId();
-        AqlExpressionToPlanTranslator t = new AqlExpressionToPlanTranslator(txnId, mdTxnCtx, rw.getVarCounter(),
-                outputDatasetName, dmlKind);
+        AqlExpressionToPlanTranslator t = new AqlExpressionToPlanTranslator(txnId, mdTxnCtx, dataverseName,
+                rw.getVarCounter(), outputDatasetName, dmlKind);
 
         ILogicalPlanAndMetadata planAndMetadata = t.translate(rwQ, metadataDecls);
         boolean isWriteTransaction = false;
@@ -507,11 +509,12 @@ public class APIFramework {
         }
 
         AlgebricksPartitionConstraint clusterLocs = planAndMetadata.getClusterLocations();
-        builder.setBinaryBooleanInspector(format.getBinaryBooleanInspector());
-        builder.setBinaryIntegerInspector(format.getBinaryIntegerInspector());
+        builder.setBinaryBooleanInspectorFactory(format.getBinaryBooleanInspectorFactory());
+        builder.setBinaryIntegerInspectorFactory(format.getBinaryIntegerInspectorFactory());
         builder.setClusterLocations(clusterLocs);
         builder.setComparatorFactoryProvider(format.getBinaryComparatorFactoryProvider());
-        builder.setExprJobGen(AqlLogicalExpressionJobGen.INSTANCE);
+        builder.setExpressionRuntimeProvider(new LogicalExpressionJobGenToExpressionRuntimeProviderAdapter(
+                AqlLogicalExpressionJobGen.INSTANCE));
         builder.setHashFunctionFactoryProvider(format.getBinaryHashFunctionFactoryProvider());
         builder.setNullWriterFactory(format.getNullWriterFactory());
         builder.setPrinterProvider(format.getPrinterFactoryProvider());
@@ -552,9 +555,8 @@ public class APIFramework {
             DisplayFormat pdf) throws Exception {
         for (int i = 0; i < specs.length; i++) {
             specs[i].setMaxReattempts(0);
-            JobId jobId = hcc.createJob(GlobalConfig.HYRACKS_APP_NAME, specs[i]);
+            JobId jobId = hcc.startJob(GlobalConfig.HYRACKS_APP_NAME, specs[i]);
             long startTime = System.currentTimeMillis();
-            hcc.start(jobId);
             hcc.waitForCompletion(jobId);
             long endTime = System.currentTimeMillis();
             double duration = (endTime - startTime) / 1000.00;
@@ -567,10 +569,9 @@ public class APIFramework {
             throws Exception {
         for (int i = 0; i < jobs.length; i++) {
             jobs[i].getJobSpec().setMaxReattempts(0);
-            JobId jobId = hcc.createJob(GlobalConfig.HYRACKS_APP_NAME, jobs[i].getJobSpec());
             long startTime = System.currentTimeMillis();
             try {
-                hcc.start(jobId);
+                JobId jobId = hcc.startJob(GlobalConfig.HYRACKS_APP_NAME, jobs[i].getJobSpec());
                 if (jobs[i].getSubmissionMode() == SubmissionMode.ASYNCHRONOUS) {
                     continue;
                 }

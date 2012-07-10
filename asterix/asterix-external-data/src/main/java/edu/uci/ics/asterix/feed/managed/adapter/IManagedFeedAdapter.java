@@ -14,9 +14,7 @@
  */
 package edu.uci.ics.asterix.feed.managed.adapter;
 
-import edu.uci.ics.asterix.external.data.adapter.api.IDatasourceReadAdapter;
-
-public interface IManagedFeedAdapter extends IDatasourceReadAdapter {
+public interface IManagedFeedAdapter  {
 
 	public enum OperationState {
 		SUSPENDED,
@@ -29,11 +27,9 @@ public interface IManagedFeedAdapter extends IDatasourceReadAdapter {
 		STOPPED, INACTIVE
 	}
 	
-	public void beforeSuspend() throws Exception;
+	public void suspend() throws Exception;
 
-	public void beforeResume() throws Exception;
-
-	public void beforeStop() throws Exception;
+	public void resume() throws Exception;
 
 	public void stop() throws Exception;
 

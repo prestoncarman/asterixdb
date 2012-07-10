@@ -12,6 +12,7 @@ import edu.uci.ics.asterix.aql.base.Statement.Kind;
 import edu.uci.ics.asterix.aql.expression.BeginFeedStatement;
 import edu.uci.ics.asterix.aql.expression.CallExpr;
 import edu.uci.ics.asterix.aql.expression.ControlFeedStatement;
+import edu.uci.ics.asterix.aql.expression.ControlFeedStatement.OperationType;
 import edu.uci.ics.asterix.aql.expression.CreateIndexStatement;
 import edu.uci.ics.asterix.aql.expression.DeleteStatement;
 import edu.uci.ics.asterix.aql.expression.FLWOGRExpression;
@@ -27,7 +28,6 @@ import edu.uci.ics.asterix.aql.expression.RecordConstructor;
 import edu.uci.ics.asterix.aql.expression.VariableExpr;
 import edu.uci.ics.asterix.aql.expression.WhereClause;
 import edu.uci.ics.asterix.aql.expression.WriteFromQueryResultStatement;
-import edu.uci.ics.asterix.aql.expression.ControlFeedStatement.OperationType;
 import edu.uci.ics.asterix.aql.literal.StringLiteral;
 import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
 import edu.uci.ics.asterix.common.config.DatasetConfig.IndexType;
@@ -35,15 +35,16 @@ import edu.uci.ics.asterix.metadata.IDatasetDetails;
 import edu.uci.ics.asterix.metadata.MetadataException;
 import edu.uci.ics.asterix.metadata.MetadataManager;
 import edu.uci.ics.asterix.metadata.MetadataTransactionContext;
-import edu.uci.ics.asterix.metadata.declared.AqlCompiledDatasetDecl;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
+import edu.uci.ics.asterix.metadata.entities.Adapter;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
 import edu.uci.ics.asterix.metadata.entities.FeedDatasetDetails;
+import edu.uci.ics.asterix.metadata.entities.Index;
 import edu.uci.ics.asterix.om.functions.AsterixFunction;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
-import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
+import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 
 public class DmlTranslator extends AbstractAqlTranslator {
 
@@ -70,18 +71,33 @@ public class DmlTranslator extends AbstractAqlTranslator {
         return compiledDmlStatements;
     }
 
-    private List<ICompiledDmlStatement> compileDmlStatements() throws AlgebricksException {
+    private List<ICompiledDmlStatement> compileDmlStatements() throws AlgebricksException, MetadataException {
         List<ICompiledDmlStatement> dmlStatements = new ArrayList<ICompiledDmlStatement>();
         for (Statement stmt : aqlStatements) {
             //validateOperation(compiledDeclarations, stmt);
             switch (stmt.getKind()) {
                 case LOAD_FROM_FILE: {
-                    LoadFromFileStatement st1 = (LoadFromFileStatement) stmt;
-                    CompiledLoadFromFileStatement cls = new CompiledLoadFromFileStatement(st1.getDatasetName()
-                            .getValue(), st1.getAdapter(), st1.getProperties(), st1.dataIsAlreadySorted());
+                    LoadFromFileStatement loadStmt = (LoadFromFileStatement) stmt;
+                    CompiledLoadFromFileStatement cls = new CompiledLoadFromFileStatement(loadStmt.getDatasetName()
+                            .getValue(), loadStmt.getAdapter(), loadStmt.getProperties(),
+                            loadStmt.dataIsAlreadySorted());
                     dmlStatements.add(cls);
+                    // Also load the dataset's secondary indexes.
+                    List<Index> datasetIndexes = MetadataManager.INSTANCE.getDatasetIndexes(mdTxnCtx,
+                            compiledDeclarations.getDataverseName(), loadStmt.getDatasetName().getValue());
+                    for (Index index : datasetIndexes) {
+                        if (!index.isSecondaryIndex()) {
+                            continue;
+                        }
+                        // Create CompiledCreateIndexStatement from metadata entity 'index'.
+                        CompiledCreateIndexStatement cis = new CompiledCreateIndexStatement(index.getIndexName(),
+                                index.getDatasetName(), index.getKeyFieldNames(), index.getGramLength(),
+                                index.getIndexType());
+                        dmlStatements.add(cis);
+                    }
                     break;
                 }
+
                 case WRITE_FROM_QUERY_RESULT: {
                     WriteFromQueryResultStatement st1 = (WriteFromQueryResultStatement) stmt;
                     CompiledWriteFromQueryResultStatement clfrqs = new CompiledWriteFromQueryResultStatement(st1
@@ -89,15 +105,34 @@ public class DmlTranslator extends AbstractAqlTranslator {
                     dmlStatements.add(clfrqs);
                     break;
                 }
+
                 case CREATE_INDEX: {
                     CreateIndexStatement cis = (CreateIndexStatement) stmt;
+                    // Assumptions: We first processed the DDL, which added the secondary index to the metadata.
+                    // If the index's dataset is being loaded in this 'session', then let the load add
+                    // the CompiledCreateIndexStatement to dmlStatements, and don't add it again here.
+                    // It's better to have the load handle this because:
+                    // 1. There may be more secondary indexes to load, which were possibly created in an earlier session.
+                    // 2. If the create index stmt came before the load stmt, then we would first create an empty index only to load it again later.
+                    // This may cause problems because the index would be considered loaded (even though it was loaded empty).
+                    for (Statement s : aqlStatements) {
+                        if (s.getKind() != Kind.LOAD_FROM_FILE) {
+                            continue;
+                        }
+                        LoadFromFileStatement loadStmt = (LoadFromFileStatement) s;
+                        if (loadStmt.getDatasetName().equals(cis.getDatasetName())) {
+                            cis.setNeedToCreate(false);
+                        }
+                    }
                     if (cis.getNeedToCreate()) {
                         CompiledCreateIndexStatement ccis = new CompiledCreateIndexStatement(cis.getIndexName()
-                                .getValue(), cis.getDatasetName().getValue(), cis.getFieldExprs(), cis.getIndexType());
+                                .getValue(), cis.getDatasetName().getValue(), cis.getFieldExprs(), cis.getGramLength(),
+                                cis.getIndexType());
                         dmlStatements.add(ccis);
                     }
                     break;
                 }
+
                 case INSERT: {
                     InsertStatement is = (InsertStatement) stmt;
                     CompiledInsertStatement clfrqs = new CompiledInsertStatement(is.getDatasetName().getValue(),
@@ -150,21 +185,24 @@ public class DmlTranslator extends AbstractAqlTranslator {
     }
 
     public static interface ICompiledDmlStatement {
-
         public abstract Kind getKind();
     }
 
     public static class CompiledCreateIndexStatement implements ICompiledDmlStatement {
-        private String indexName;
-        private String datasetName;
-        private List<String> keyFields;
-        private IndexType indexType;
+        private final String indexName;
+        private final String datasetName;
+        private final List<String> keyFields;
+        private final IndexType indexType;
+
+        // Specific to NGram index.
+        private final int gramLength;
 
         public CompiledCreateIndexStatement(String indexName, String datasetName, List<String> keyFields,
-                IndexType indexType) {
+                int gramLength, IndexType indexType) {
             this.indexName = indexName;
             this.datasetName = datasetName;
             this.keyFields = keyFields;
+            this.gramLength = gramLength;
             this.indexType = indexType;
         }
 
@@ -178,6 +216,10 @@ public class DmlTranslator extends AbstractAqlTranslator {
 
         public List<String> getKeyFields() {
             return keyFields;
+        }
+
+        public int getGramLength() {
+            return gramLength;
         }
 
         public IndexType getIndexType() {
@@ -421,11 +463,11 @@ public class DmlTranslator extends AbstractAqlTranslator {
                 clauseList.add(dieClause);
             }
 
-            AqlCompiledDatasetDecl aqlDataset = compiledDeclarations.findDataset(datasetName);
-            if (aqlDataset == null) {
+            Dataset dataset = compiledDeclarations.findDataset(datasetName);
+            if (dataset == null) {
                 throw new AlgebricksException("Unknown dataset " + datasetName);
             }
-            String itemTypeName = aqlDataset.getItemTypeName();
+            String itemTypeName = dataset.getItemTypeName();
             IAType itemType = compiledDeclarations.findType(itemTypeName);
             ARecordType recType = (ARecordType) itemType;
             String[] fieldNames = recType.getFieldNames();

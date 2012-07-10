@@ -37,7 +37,7 @@ import edu.uci.ics.hyracks.dataflow.common.data.accessors.ArrayBackedValueStorag
 public class FeedDatasetDetails extends InternalDatasetDetails {
 
     private static final long serialVersionUID = 1L;
-    private final String adapter;
+    private final String adapterFactory;
     private final Map<String, String> properties;
     private String functionIdentifier;
     private FeedState feedState;
@@ -53,11 +53,11 @@ public class FeedDatasetDetails extends InternalDatasetDetails {
     }
 
     public FeedDatasetDetails(FileStructure fileStructure, PartitioningStrategy partitioningStrategy,
-            List<String> partitioningKey, List<String> primaryKey, String groupName, String adapter,
+            List<String> partitioningKey, List<String> primaryKey, String groupName, String adapterFactory,
             Map<String, String> properties, String functionIdentifier, String feedState) {
         super(fileStructure, partitioningStrategy, partitioningKey, primaryKey, groupName);
         this.properties = properties;
-        this.adapter = adapter;
+        this.adapterFactory = adapterFactory;
         this.functionIdentifier = functionIdentifier;
         this.feedState = feedState.equals(FeedState.ACTIVE.toString()) ? FeedState.ACTIVE : FeedState.INACTIVE;
     }
@@ -92,7 +92,7 @@ public class FeedDatasetDetails extends InternalDatasetDetails {
 
         // write field 2
         listBuilder.reset((AOrderedListType) MetadataRecordTypes.FEED_DETAILS_RECORDTYPE.getFieldTypes()[2]);
-        for (String field : partitioningKey) {
+        for (String field : partitioningKeys) {
             itemValue.reset();
             aString.setValue(field);
             stringSerde.serialize(aString, itemValue.getDataOutput());
@@ -104,7 +104,7 @@ public class FeedDatasetDetails extends InternalDatasetDetails {
 
         // write field 3
         listBuilder.reset((AOrderedListType) MetadataRecordTypes.FEED_DETAILS_RECORDTYPE.getFieldTypes()[3]);
-        for (String field : primaryKey) {
+        for (String field : primaryKeys) {
             itemValue.reset();
             aString.setValue(field);
             stringSerde.serialize(aString, itemValue.getDataOutput());
@@ -122,7 +122,7 @@ public class FeedDatasetDetails extends InternalDatasetDetails {
 
         // write field 5
         fieldValue.reset();
-        aString.setValue(getAdapter());
+        aString.setValue(getAdapterFactory());
         stringSerde.serialize(aString, fieldValue.getDataOutput());
         feedRecordBuilder.addField(MetadataRecordTypes.FEED_DETAILS_ARECORD_ADAPTER_FIELD_INDEX, fieldValue);
 
@@ -196,8 +196,8 @@ public class FeedDatasetDetails extends InternalDatasetDetails {
         this.feedState = feedState;
     }
 
-    public String getAdapter() {
-        return adapter;
+    public String getAdapterFactory() {
+        return adapterFactory;
     }
 
     public Map<String, String> getProperties() {

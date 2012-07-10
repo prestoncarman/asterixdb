@@ -1,3 +1,18 @@
+/*
+ * Copyright 2009-2010 by The Regents of the University of California
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * you may obtain a copy of the License from
+ * 
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package edu.uci.ics.asterix.optimizer.rules;
 
 import java.io.DataInputStream;
@@ -23,6 +38,8 @@ import edu.uci.ics.asterix.om.base.IAObject;
 import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
 import edu.uci.ics.asterix.om.types.ARecordType;
+import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
+import edu.uci.ics.hyracks.algebricks.common.utils.Pair;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IOptimizationContext;
@@ -33,23 +50,23 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractLogicalEx
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AggregateFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IVariableTypeEnvironment;
+import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.LogicalExpressionJobGenToExpressionRuntimeProviderAdapter;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.StatefulFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.UnnestingFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.IOperatorSchema;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluatorFactory;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.jobgen.impl.JobGenContext;
 import edu.uci.ics.hyracks.algebricks.core.algebra.visitors.ILogicalExpressionReferenceTransform;
 import edu.uci.ics.hyracks.algebricks.core.algebra.visitors.ILogicalExpressionVisitor;
-import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
+import edu.uci.ics.hyracks.algebricks.core.jobgen.impl.JobGenContext;
 import edu.uci.ics.hyracks.algebricks.core.rewriter.base.IAlgebraicRewriteRule;
-import edu.uci.ics.hyracks.algebricks.core.utils.Pair;
+import edu.uci.ics.hyracks.algebricks.runtime.base.IScalarEvaluator;
+import edu.uci.ics.hyracks.algebricks.runtime.base.IScalarEvaluatorFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
+import edu.uci.ics.hyracks.data.std.api.IPointable;
+import edu.uci.ics.hyracks.data.std.primitive.VoidPointable;
 import edu.uci.ics.hyracks.dataflow.common.comm.util.ByteBufferInputStream;
-import edu.uci.ics.hyracks.dataflow.common.data.accessors.ArrayBackedValueStorage;
 
 public class ConstantFoldingRule implements IAlgebraicRewriteRule {
 
@@ -87,10 +104,11 @@ public class ConstantFoldingRule implements IAlgebraicRewriteRule {
     private static final JobGenContext _jobGenCtx = new JobGenContext(null, null, null,
             AqlSerializerDeserializerProvider.INSTANCE, AqlBinaryHashFunctionFactoryProvider.INSTANCE,
             AqlBinaryComparatorFactoryProvider.INSTANCE, AqlTypeTraitProvider.INSTANCE,
-            AqlBinaryBooleanInspectorImpl.INSTANCE, AqlBinaryIntegerInspector.INSTANCE,
+            AqlBinaryBooleanInspectorImpl.FACTORY, AqlBinaryIntegerInspector.FACTORY,
             AqlPrinterFactoryProvider.INSTANCE, AqlNullWriterFactory.INSTANCE, null,
-            AqlLogicalExpressionJobGen.INSTANCE, AqlExpressionTypeComputer.INSTANCE, AqlNullableTypeComputer.INSTANCE,
-            null, null, null, GlobalConfig.DEFAULT_FRAME_SIZE, null);
+            new LogicalExpressionJobGenToExpressionRuntimeProviderAdapter(AqlLogicalExpressionJobGen.INSTANCE),
+            AqlExpressionTypeComputer.INSTANCE, AqlNullableTypeComputer.INSTANCE, null, null, null,
+            GlobalConfig.DEFAULT_FRAME_SIZE, null);
 
     private static final IOperatorSchema[] _emptySchemas = new IOperatorSchema[] {};
 
@@ -100,19 +118,19 @@ public class ConstantFoldingRule implements IAlgebraicRewriteRule {
     }
 
     @Override
-    public boolean rewritePost(Mutable<ILogicalOperator> opRef, IOptimizationContext context) throws AlgebricksException {
+    public boolean rewritePost(Mutable<ILogicalOperator> opRef, IOptimizationContext context)
+            throws AlgebricksException {
         ILogicalOperator op = opRef.getValue();
         if (context.checkIfInDontApplySet(this, op)) {
             return false;
         }
-        // context.addToDontApplySet(this, op);
         return op.acceptExpressionTransform(cfv);
     }
 
     private class ConstantFoldingVisitor implements ILogicalExpressionVisitor<Pair<Boolean, ILogicalExpression>, Void>,
             ILogicalExpressionReferenceTransform {
 
-        private ArrayBackedValueStorage resStore = new ArrayBackedValueStorage();
+        private IPointable p = VoidPointable.FACTORY.createPointable();
         private ByteBufferInputStream bbis = new ByteBufferInputStream();
         private DataInputStream dis = new DataInputStream(bbis);
 
@@ -138,13 +156,17 @@ public class ConstantFoldingRule implements IAlgebraicRewriteRule {
             return new Pair<Boolean, ILogicalExpression>(false, expr);
         }
 
-        @SuppressWarnings("unchecked")
         @Override
         public Pair<Boolean, ILogicalExpression> visitScalarFunctionCallExpression(ScalarFunctionCallExpression expr,
                 Void arg) throws AlgebricksException {
             boolean changed = changeRec(expr, arg);
             if (!checkArgs(expr)) {
                 return new Pair<Boolean, ILogicalExpression>(changed, expr);
+            }
+            // TODO: currently ARecord is always a closed record
+            if (expr.getFunctionIdentifier().equals(AsterixBuiltinFunctions.OPEN_RECORD_CONSTRUCTOR)
+                    || expr.getFunctionIdentifier().equals(AsterixBuiltinFunctions.CAST_RECORD)) {
+                return new Pair<Boolean, ILogicalExpression>(false, null);
             }
             if (expr.getFunctionIdentifier().equals(AsterixBuiltinFunctions.FIELD_ACCESS_BY_NAME)) {
                 ARecordType rt = (ARecordType) _emptyTypeEnv.getType(expr.getArguments().get(0).getValue());
@@ -156,14 +178,15 @@ public class ConstantFoldingRule implements IAlgebraicRewriteRule {
                     return new Pair<Boolean, ILogicalExpression>(changed, expr);
                 }
             }
-            IEvaluatorFactory fact = _jobGenCtx.getExpressionJobGen().createEvaluatorFactory(expr, _emptyTypeEnv,
-                    _emptySchemas, _jobGenCtx);
-            IEvaluator eval = fact.createEvaluator(resStore);
-            resStore.reset();
-            eval.evaluate(null);
+            IScalarEvaluatorFactory fact = _jobGenCtx.getExpressionRuntimeProvider().createEvaluatorFactory(expr,
+                    _emptyTypeEnv, _emptySchemas, _jobGenCtx);
+            IScalarEvaluator eval = fact.createScalarEvaluator(null);
+            eval.evaluate(null, p);
             Object t = _emptyTypeEnv.getType(expr);
+
+            @SuppressWarnings("rawtypes")
             ISerializerDeserializer serde = _jobGenCtx.getSerializerDeserializerProvider().getSerializerDeserializer(t);
-            bbis.setByteBuffer(ByteBuffer.wrap(resStore.getBytes(), resStore.getStartIndex(), resStore.getLength()), 0);
+            bbis.setByteBuffer(ByteBuffer.wrap(p.getByteArray(), p.getStartOffset(), p.getLength()), 0);
             IAObject o;
             try {
                 o = (IAObject) serde.deserialize(dis);

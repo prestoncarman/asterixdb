@@ -23,6 +23,19 @@ public class FunctionDecl implements Statement {
         this.funcBody = funcBody;
     }
 
+    @Override
+    public int hashCode() {
+        return ident.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof FunctionDecl)) {
+            return false;
+        }
+        return ident.equals(((FunctionDecl) o).getIdent());
+    }
+
     public AsterixFunction getIdent() {
         return ident;
     }

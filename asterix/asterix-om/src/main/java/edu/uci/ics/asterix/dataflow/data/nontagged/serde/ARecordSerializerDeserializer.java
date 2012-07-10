@@ -1,3 +1,18 @@
+/*
+ * Copyright 2009-2010 by The Regents of the University of California
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * you may obtain a copy of the License from
+ * 
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package edu.uci.ics.asterix.dataflow.data.nontagged.serde;
 
 import java.io.DataInput;
@@ -17,14 +32,13 @@ import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.asterix.om.types.AUnionType;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.asterix.om.util.NonTaggedFormatUtil;
-import edu.uci.ics.hyracks.algebricks.core.api.exceptions.NotImplementedException;
+import edu.uci.ics.hyracks.algebricks.common.exceptions.NotImplementedException;
 import edu.uci.ics.hyracks.api.dataflow.value.IBinaryComparator;
 import edu.uci.ics.hyracks.api.dataflow.value.IBinaryHashFunction;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 import edu.uci.ics.hyracks.data.std.primitive.UTF8StringPointable;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.ArrayBackedValueStorage;
-import edu.uci.ics.hyracks.dataflow.common.data.util.StringUtils;
 
 public class ARecordSerializerDeserializer implements ISerializerDeserializer<ARecord> {
     private static final long serialVersionUID = 1L;
@@ -34,9 +48,9 @@ public class ARecordSerializerDeserializer implements ISerializerDeserializer<AR
     private ARecordType recordType;
     private int numberOfSchemaFields = 0;
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings("rawtypes")
     private ISerializerDeserializer serializers[];
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings("rawtypes")
     private ISerializerDeserializer deserializers[];
 
     private ARecordSerializerDeserializer() {
@@ -124,10 +138,11 @@ public class ARecordSerializerDeserializer implements ISerializerDeserializer<AR
                     openFields[i] = AObjectSerializerDeserializer.INSTANCE.deserialize(in);
                     fieldTypes[i] = openFields[i].getType();
                 }
-                this.recordType = new ARecordType(null, fieldNames, fieldTypes, true);
+                ARecordType openPartRecType = new ARecordType(null, fieldNames, fieldTypes, true);
                 if (numberOfSchemaFields > 0) {
-                    ARecordType mergedRecordType = mergeRecordTypes(this.recordType, recordType);
-                    return new ARecord(mergedRecordType, mergeFields(closedFields, openFields));
+                    ARecordType mergedRecordType = mergeRecordTypes(this.recordType, openPartRecType);
+                    IAObject[] mergedFields = mergeFields(closedFields, openFields);
+                    return new ARecord(mergedRecordType, mergedFields);
                 } else {
                     return new ARecord(this.recordType, openFields);
                 }
@@ -140,16 +155,14 @@ public class ARecordSerializerDeserializer implements ISerializerDeserializer<AR
     }
 
     private IAObject[] mergeFields(IAObject[] closedFields, IAObject[] openFields) {
-
         IAObject[] fields = new IAObject[closedFields.length + openFields.length];
-
         int i = 0;
-        for (; i < closedFields.length; i++)
+        for (; i < closedFields.length; i++) {
             fields[i] = closedFields[i];
-
-        for (int j = 0; j < openFields.length; j++)
-            fields[i] = closedFields[j];
-
+        }
+        for (int j = 0; j < openFields.length; j++) {
+            fields[closedFields.length + j] = openFields[j];
+        }
         return fields;
     }
 
@@ -254,11 +267,13 @@ public class ARecordSerializerDeserializer implements ISerializerDeserializer<AR
             return -1; // this record does not have an open part
 
         int numberOfOpenField = AInt32SerializerDeserializer.getInt(serRecord, openPartOffset);
-        int utflength = UTF8StringPointable.getUTFLen(fieldName, 1);
-        
-        IBinaryHashFunction utf8HashFunction = AqlBinaryHashFunctionFactoryProvider.UTF8STRING_POINTABLE_INSTANCE.createBinaryHashFunction();
+        int utflength = UTF8StringPointable.getUTFLength(fieldName, 1);
 
-        IBinaryComparator utf8BinaryComparator = AqlBinaryComparatorFactoryProvider.UTF8STRING_POINTABLE_INSTANCE.createBinaryComparator();
+        IBinaryHashFunction utf8HashFunction = AqlBinaryHashFunctionFactoryProvider.UTF8STRING_POINTABLE_INSTANCE
+                .createBinaryHashFunction();
+
+        IBinaryComparator utf8BinaryComparator = AqlBinaryComparatorFactoryProvider.UTF8STRING_POINTABLE_INSTANCE
+                .createBinaryComparator();
 
         int fieldNameHashCode = utf8HashFunction.hash(fieldName, 1, utflength);
 

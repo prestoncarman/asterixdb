@@ -10,7 +10,7 @@ create type Tweet as open {
 }
 
 create external dataset TwitterData(Tweet)
-using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
+using "localfs"
 (("path"="nc1://data/twitter/extrasmalltweets.txt"),("format"="adm"));
 
 write output to nc1:"rttest/groupby-orderby-count.adm";

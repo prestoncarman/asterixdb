@@ -20,13 +20,16 @@ create type CSXType as open {
   misc: string
 }
 
-create nodegroup group1  if not exists on nc1, nc2;
+create dataset DBLP(DBLPType) partitioned by key id;
+create dataset CSX(CSXType) partitioned by key id;
 
-create dataset DBLP(DBLPType) partitioned by key id on group1;
-create dataset CSX(CSXType) partitioned by key id on group1;
+load dataset DBLP
+using "localfs"
+(("path"="nc1://data/pub-small/dblp-small-id.txt"),("format"="delimited-text"),("delimiter"=":"));
 
-load dataset DBLP from nc1:'data/pub-small/dblp-small-id.txt' delimited by ':';
-load dataset CSX from nc1:'data/pub-small/csx-small-id.txt' delimited by ':';
+load dataset CSX
+using "localfs"
+(("path"="nc1://data/pub-small/csx-small-id.txt"),("format"="delimited-text"),("delimiter"=":"));
 
 write output to nc1:'rttest/fuzzyjoin_dblp-csx-aqlplus_2.adm';
 

@@ -1,9 +1,10 @@
 package edu.uci.ics.asterix.feed.intake;
 
+import java.net.MalformedURLException;
 import java.net.URL;
-import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
+import java.util.Queue;
 
 import com.sun.syndication.feed.synd.SyndEntryImpl;
 import com.sun.syndication.feed.synd.SyndFeed;
@@ -15,17 +16,33 @@ import com.sun.syndication.fetcher.impl.HashMapFeedInfoCache;
 import com.sun.syndication.fetcher.impl.HttpURLFeedFetcher;
 
 import edu.uci.ics.asterix.external.dataset.adapter.RSSFeedAdapter;
+import edu.uci.ics.asterix.om.base.AMutableRecord;
+import edu.uci.ics.asterix.om.base.AMutableString;
+import edu.uci.ics.asterix.om.base.IAObject;
+import edu.uci.ics.asterix.om.types.ARecordType;
+import edu.uci.ics.asterix.om.types.BuiltinType;
+import edu.uci.ics.asterix.om.types.IAType;
 
 @SuppressWarnings("rawtypes")
-public class RSSFeedClient  implements IFeedClient {
+public class RSSFeedClient extends PullBasedFeedClient {
 
 	private final String feedURL;
-	private int timeInterval = 1;
-	private Character delimiter = '|';
 	private long id = 0;
 	private String id_prefix;
 	private boolean feedModified = false;
-	private RSSFeedAdapter adapter;
+
+	private String[] fieldNames = { "id", "title", "description", "link" };
+	private IAType[] fieldTypes = { BuiltinType.ASTRING, BuiltinType.ASTRING,
+			BuiltinType.ASTRING, BuiltinType.ASTRING };
+	private Queue<SyndEntryImpl> rssFeedBuffer = new LinkedList<SyndEntryImpl>();
+
+	IAObject[] mutableFields;
+
+	private final FeedFetcherCache feedInfoCache;
+	private final FeedFetcher fetcher;
+	private final FetcherEventListenerImpl listener;
+	private final URL feedUrl;
+	String[] tupleFieldValues;
 
 	public boolean isFeedModified() {
 		return feedModified;
@@ -36,64 +53,57 @@ public class RSSFeedClient  implements IFeedClient {
 	}
 
 	public RSSFeedClient(RSSFeedAdapter adapter, String feedURL,
-			String id_prefix) {
-		this.adapter = adapter;
+			String id_prefix) throws MalformedURLException {
 		this.feedURL = feedURL;
 		this.id_prefix = id_prefix;
-	}
+		feedUrl = new URL(feedURL);
+		feedInfoCache = HashMapFeedInfoCache.getInstance();
+		fetcher = new HttpURLFeedFetcher(feedInfoCache);
+		listener = new FetcherEventListenerImpl(this);
+		fetcher.addFetcherEventListener(listener);
 
-	private void initialize(Map<String, String> params) {
-		if (params.get(adapter.KEY_INTERVAL) != null) {
-			this.timeInterval = Integer.parseInt(params
-					.get(adapter.KEY_INTERVAL));
-		}
+		mutableFields = new IAObject[] { new AMutableString(null),
+				new AMutableString(null), new AMutableString(null),
+				new AMutableString(null) };
+		recordType = new ARecordType("FeedRecordType", fieldNames, fieldTypes,
+				false);
+		mutableRecord = new AMutableRecord(recordType, mutableFields);
+		tupleFieldValues = new String[recordType.getFieldNames().length];
 	}
 
 	@Override
-	public boolean next(List<String> feeds) {
-		try {
-			if (adapter.isStopRequested()) {
-				return false;
-			}
-			if (adapter.isAlterRequested()) {
-				initialize(adapter.getAlteredParams());
-				adapter.postAlteration();
-			}
-			Thread.sleep(timeInterval * 1000);
-			feeds.clear();
-			try {
-				getFeed(feeds);
-			} catch (Exception te) {
-				te.printStackTrace();
-				System.out.println("Failed to get feed: " + te.getMessage());
-			}
-		} catch (Exception e) {
-			e.printStackTrace();
+	public boolean setNextRecord() throws Exception {
+		SyndEntryImpl feedEntry = getNextRSSFeed();
+		if (feedEntry == null) {
+			return false;
 		}
+		tupleFieldValues[0] = id_prefix + ":" + id;
+		tupleFieldValues[1] = feedEntry.getTitle();
+		tupleFieldValues[2] = feedEntry.getDescription().getValue();
+		tupleFieldValues[3] = feedEntry.getLink();
+		int numFields = recordType.getFieldNames().length;
+		for (int i = 0; i < numFields; i++) {
+			((AMutableString) mutableFields[i]).setValue(tupleFieldValues[i]);
+			mutableRecord.setValueAtPos(i, mutableFields[i]);
+		}
+		id++;
 		return true;
 	}
 
-	public String formFeedTuple(Object entry) {
-		StringBuilder builder = new StringBuilder();
-		builder.append(id_prefix + ":" + id);
-		builder.append(delimiter);
-		builder.append(((SyndEntryImpl) entry).getTitle());
-		builder.append(delimiter);
-		builder.append(((SyndEntryImpl) entry).getLink());
-		id++;
-		return new String(builder);
+	private SyndEntryImpl getNextRSSFeed() throws Exception {
+		if (rssFeedBuffer.isEmpty()) {
+			fetchFeed();
+		}
+		if (rssFeedBuffer.isEmpty()) {
+			return null;
+		} else {
+			return rssFeedBuffer.remove();
+		}
 	}
 
-	private void getFeed(List<String> feeds) {
+	private void fetchFeed() {
 		try {
-			URL feedUrl = new URL(feedURL);
-			FeedFetcherCache feedInfoCache = HashMapFeedInfoCache.getInstance();
-			FeedFetcher fetcher = new HttpURLFeedFetcher(feedInfoCache);
-
-			FetcherEventListenerImpl listener = new FetcherEventListenerImpl(
-					this);
-			fetcher.addFetcherEventListener(listener);
-			System.err.println("Retrieving feed " + feedUrl);
+			System.err.println("Retrieving feed " + feedURL);
 			// Retrieve the feed.
 			// We will get a Feed Polled Event and then a
 			// Feed Retrieved event (assuming the feed is valid)
@@ -105,14 +115,7 @@ public class RSSFeedClient  implements IFeedClient {
 						+ " entries.");
 
 				List fetchedFeeds = feed.getEntries();
-				Iterator feedIterator = fetchedFeeds.iterator();
-				while (feedIterator.hasNext()) {
-					SyndEntryImpl feedEntry = (SyndEntryImpl) feedIterator
-							.next();
-					String feedContent = formFeedTuple(feedEntry);
-					feeds.add(escapeChars(feedContent));
-					System.out.println(feedContent);
-				}
+				rssFeedBuffer.addAll(fetchedFeeds);
 			}
 		} catch (Exception ex) {
 			System.out.println("ERROR: " + ex.getMessage());
@@ -120,20 +123,19 @@ public class RSSFeedClient  implements IFeedClient {
 		}
 	}
 
-	private String escapeChars(String content) {
-		if (content.contains("\n")) {
-			return content.replace("\n", " ");
-		}
-		return content;
+	@Override
+	public void resetOnFailure(Exception e) {
+		// TODO Auto-generated method stub
+
 	}
 
 }
 
 class FetcherEventListenerImpl implements FetcherListener {
 
-	private final IFeedClient feedClient;
+	private final IPullBasedFeedClient feedClient;
 
-	public FetcherEventListenerImpl(IFeedClient feedClient) {
+	public FetcherEventListenerImpl(IPullBasedFeedClient feedClient) {
 		this.feedClient = feedClient;
 	}
 

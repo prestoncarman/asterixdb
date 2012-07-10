@@ -6,16 +6,14 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
+import edu.uci.ics.asterix.common.context.AsterixIndexRegistryProvider;
+import edu.uci.ics.asterix.common.context.AsterixStorageManagerInterface;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
-import edu.uci.ics.asterix.context.AsterixStorageManagerInterface;
-import edu.uci.ics.asterix.context.AsterixTreeRegistryProvider;
 import edu.uci.ics.asterix.dataflow.data.nontagged.comparators.AObjectAscBinaryComparatorFactory;
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.AObjectSerializerDeserializer;
-import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
 import edu.uci.ics.asterix.om.base.AString;
 import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.jobgen.impl.JobGenHelper;
 import edu.uci.ics.hyracks.api.client.HyracksConnection;
 import edu.uci.ics.hyracks.api.client.IHyracksClientConnection;
 import edu.uci.ics.hyracks.api.constraints.PartitionConstraintHelper;
@@ -42,9 +40,9 @@ import edu.uci.ics.hyracks.dataflow.std.misc.ConstantTupleSourceOperatorDescript
 import edu.uci.ics.hyracks.dataflow.std.misc.PrinterOperatorDescriptor;
 import edu.uci.ics.hyracks.storage.am.btree.dataflow.BTreeDataflowHelperFactory;
 import edu.uci.ics.hyracks.storage.am.btree.dataflow.BTreeSearchOperatorDescriptor;
-import edu.uci.ics.hyracks.storage.am.common.api.ITreeIndexFrameFactory;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.IIndex;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.IIndexRegistryProvider;
+import edu.uci.ics.hyracks.storage.am.common.impls.NoOpOperationCallbackProvider;
 import edu.uci.ics.hyracks.storage.common.IStorageManagerInterface;
 
 public class TestKeywordIndexJob {
@@ -68,7 +66,7 @@ public class TestKeywordIndexJob {
 
         // ---------- START GENERAL BTREE STUFF
 
-        IIndexRegistryProvider<IIndex> btreeRegistryProvider = AsterixTreeRegistryProvider.INSTANCE;
+        IIndexRegistryProvider<IIndex> indexRegistryProvider = AsterixIndexRegistryProvider.INSTANCE;
         IStorageManagerInterface storageManager = AsterixStorageManagerInterface.INSTANCE;
 
         // ---------- END GENERAL BTREE STUFF
@@ -106,34 +104,30 @@ public class TestKeywordIndexJob {
 
         ITypeTraits[] secondaryTypeTraits = new ITypeTraits[2];
         secondaryTypeTraits[0] = new ITypeTraits() {
-            
+
             @Override
             public boolean isFixedLength() {
                 return false;
             }
-            
+
             @Override
             public int getFixedLength() {
                 return -1;
             }
         };
-        
+
         secondaryTypeTraits[1] = new ITypeTraits() {
-            
+
             @Override
             public boolean isFixedLength() {
                 return true;
             }
-            
+
             @Override
             public int getFixedLength() {
                 return 5;
             }
         };
-
-        ITreeIndexFrameFactory interiorFrameFactory = AqlMetadataProvider
-                .createBTreeNSMInteriorFrameFactory(secondaryTypeTraits);
-        ITreeIndexFrameFactory leafFrameFactory = AqlMetadataProvider.createBTreeNSMLeafFrameFactory(secondaryTypeTraits);
 
         ISerializerDeserializer[] secondaryRecFields = new ISerializerDeserializer[2];
         secondaryRecFields[0] = AObjectSerializerDeserializer.INSTANCE;
@@ -150,9 +144,9 @@ public class TestKeywordIndexJob {
                 new FileSplit("nc1", new FileReference(new File("/tmp/nc1/demo1112/Customers_idx_NameInvIndex"))),
                 new FileSplit("nc2", new FileReference(new File("/tmp/nc2/demo1112/Customers_idx_NameInvIndex"))) });
         BTreeSearchOperatorDescriptor secondarySearchOp = new BTreeSearchOperatorDescriptor(spec, secondaryRecDesc,
-                storageManager, btreeRegistryProvider, secondarySplitProvider, interiorFrameFactory, leafFrameFactory,
-                secondaryTypeTraits, secondaryComparatorFactories, true, lowKeyFields, highKeyFields, true, true,
-                new BTreeDataflowHelperFactory());
+                storageManager, indexRegistryProvider, secondarySplitProvider, secondaryTypeTraits,
+                secondaryComparatorFactories, lowKeyFields, highKeyFields, true, true,
+                new BTreeDataflowHelperFactory(), false, NoOpOperationCallbackProvider.INSTANCE);
         String[] secondarySearchOpLocationConstraint = new String[nodeGroup.size()];
         for (int p = 0; p < nodeGroup.size(); p++) {
             secondarySearchOpLocationConstraint[p] = nodeGroup.get(p);
@@ -224,10 +218,9 @@ public class TestKeywordIndexJob {
 
         TestKeywordIndexJob tij = new TestKeywordIndexJob();
         JobSpecification jobSpec = tij.createJobSpec();
-        JobId jobId = hcc.createJob("asterix", jobSpec);
 
         long start = System.currentTimeMillis();
-        hcc.start(jobId);
+        JobId jobId = hcc.startJob("asterix", jobSpec);
         hcc.waitForCompletion(jobId);
         long end = System.currentTimeMillis();
         System.err.println(start + " " + end + " " + (end - start));

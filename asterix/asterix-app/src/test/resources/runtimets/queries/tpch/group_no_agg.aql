@@ -9,15 +9,13 @@ create type RegionType as closed {
   r_comment: string
 }
 
-create nodegroup group1 if not exists  on nc1;
-
 create dataset Regions_group_no_agg(RegionType) 
-  partitioned by key r_regionkey on group1;
+  partitioned by key r_regionkey;
 
 write output to nc1:"rttest/tpch_group_no_agg.adm";
 
 load dataset Regions_group_no_agg 
-using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
+using "localfs"
 (("path"="nc1://data/tpch0.001/region.tbl"),("format"="delimited-text"),("delimiter"="|")) pre-sorted;
 
 for $r in dataset('Regions_group_no_agg')

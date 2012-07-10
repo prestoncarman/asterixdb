@@ -6,6 +6,8 @@ import java.util.List;
 import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.commons.lang3.mutable.MutableObject;
 
+import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
+import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IOptimizationContext;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
@@ -13,7 +15,6 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AggregateFunction
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IMergeAggregationExpressionFactory;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
-import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
 
 public class AqlMergeAggregationExpressionFactory implements IMergeAggregationExpressionFactory {
 
@@ -29,7 +30,7 @@ public class AqlMergeAggregationExpressionFactory implements IMergeAggregationEx
         List<Mutable<ILogicalExpression>> arguments = new ArrayList<Mutable<ILogicalExpression>>();
         Mutable<ILogicalExpression> mutableExpression = new MutableObject<ILogicalExpression>(tempVarExpr);
         arguments.add(mutableExpression);
-        ILogicalExpression aggExpr = FunctionUtils.makeAggregateFunctionExpression(fid, arguments);
+        ILogicalExpression aggExpr = AsterixBuiltinFunctions.makeAggregateFunctionExpression(fid, arguments);
         return aggExpr;
     }
 }

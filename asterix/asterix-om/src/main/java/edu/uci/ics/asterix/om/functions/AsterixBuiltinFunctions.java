@@ -22,6 +22,7 @@ import edu.uci.ics.asterix.om.typecomputer.impl.APolygonTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.ARectangleTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.AStringTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.BinaryBooleanOrNullFunctionTypeComputer;
+import edu.uci.ics.asterix.om.typecomputer.impl.CastRecordResultTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.ClosedRecordConstructorResultType;
 import edu.uci.ics.asterix.om.typecomputer.impl.FieldAccessByIndexResultType;
 import edu.uci.ics.asterix.om.typecomputer.impl.InjectFailureTypeComputer;
@@ -65,6 +66,7 @@ import edu.uci.ics.asterix.om.types.AbstractCollectionType;
 import edu.uci.ics.asterix.om.types.BuiltinType;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.asterix.om.types.TypeHelper;
+import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AggregateFunctionCallExpression;
@@ -73,7 +75,6 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.functions.AlgebricksBuiltinFu
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.IFunctionInfo;
 import edu.uci.ics.hyracks.algebricks.core.algebra.metadata.IMetadataProvider;
-import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
 
 public class AsterixBuiltinFunctions {
 
@@ -81,7 +82,6 @@ public class AsterixBuiltinFunctions {
         SI
     }
 
-    private final static Map<AsterixFunction, IFunctionInfo> asterixFunctionToInfo = new HashMap<AsterixFunction, IFunctionInfo>();
     private final static Map<FunctionIdentifier, IFunctionInfo> asterixFunctionIdToInfo = new HashMap<FunctionIdentifier, IFunctionInfo>();
 
     // it is supposed to be an identity mapping
@@ -241,6 +241,10 @@ public class AsterixBuiltinFunctions {
             "similarity-jaccard", 2, true);
     public final static FunctionIdentifier SIMILARITY_JACCARD_CHECK = new FunctionIdentifier(
             FunctionConstants.ASTERIX_NS, "similarity-jaccard-check", 3, true);
+    public final static FunctionIdentifier SIMILARITY_JACCARD_SORTED = new FunctionIdentifier(
+            FunctionConstants.ASTERIX_NS, "similarity-jaccard-sorted", 2, true);
+    public final static FunctionIdentifier SIMILARITY_JACCARD_SORTED_CHECK = new FunctionIdentifier(
+            FunctionConstants.ASTERIX_NS, "similarity-jaccard-sorted-check", 3, true);
     public final static FunctionIdentifier SIMILARITY_JACCARD_PREFIX = new FunctionIdentifier(
             FunctionConstants.ASTERIX_NS, "similarity-jaccard-prefix", 6, true);
     public final static FunctionIdentifier SIMILARITY_JACCARD_PREFIX_CHECK = new FunctionIdentifier(
@@ -250,6 +254,10 @@ public class AsterixBuiltinFunctions {
             "edit-distance", 2, true);
     public final static FunctionIdentifier EDIT_DISTANCE_CHECK = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "edit-distance-check", 3, true);
+    public final static FunctionIdentifier EDIT_DISTANCE_LIST_IS_FILTERABLE = new FunctionIdentifier(
+            FunctionConstants.ASTERIX_NS, "edit-distance-list-is-filterable", 2, true);
+    public final static FunctionIdentifier EDIT_DISTANCE_STRING_IS_FILTERABLE = new FunctionIdentifier(
+            FunctionConstants.ASTERIX_NS, "edit-distance-string-is-filterable", 4, true);
 
     // tokenizers:
     public final static FunctionIdentifier WORD_TOKENS = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
@@ -334,6 +342,8 @@ public class AsterixBuiltinFunctions {
             true);
     public final static FunctionIdentifier INJECT_FAILURE = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "inject-failure", 2, true);
+    public final static FunctionIdentifier CAST_RECORD = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "cast-record", 1, true);
 
     public static final FunctionIdentifier EQ = AlgebricksBuiltinFunctions.EQ;
     public static final FunctionIdentifier LE = AlgebricksBuiltinFunctions.LE;
@@ -351,11 +361,15 @@ public class AsterixBuiltinFunctions {
         IFunctionInfo finfo = asterixFunctionIdToInfo.get(fid);
         if (finfo == null) {
             finfo = new AsterixFunctionInfo(fid);
-            if(fid.isBuiltin()){
+            if (fid.isBuiltin()) {
                 asterixFunctionIdToInfo.put(fid, finfo);
             }
         }
         return finfo;
+    }
+
+    public static AsterixFunctionInfo lookupFunction(FunctionIdentifier fid) {
+        return (AsterixFunctionInfo) asterixFunctionIdToInfo.get(fid);
     }
 
     static {
@@ -413,6 +427,8 @@ public class AsterixBuiltinFunctions {
         add(DURATION_CONSTRUCTOR, OptionalADurationTypeComputer.INSTANCE);
         add(EDIT_DISTANCE, AInt32TypeComputer.INSTANCE);
         add(EDIT_DISTANCE_CHECK, OrderedListOfAnyTypeComputer.INSTANCE);
+        add(EDIT_DISTANCE_STRING_IS_FILTERABLE, ABooleanTypeComputer.INSTANCE);
+        add(EDIT_DISTANCE_LIST_IS_FILTERABLE, ABooleanTypeComputer.INSTANCE);
         add(EMBED_TYPE, new IResultTypeComputer() {
             @Override
             public IAType computeType(ILogicalExpression expression, IVariableTypeEnvironment env,
@@ -488,6 +504,8 @@ public class AsterixBuiltinFunctions {
         add(SERIAL_SUM, NonTaggedSumTypeComputer.INSTANCE);
         add(SIMILARITY_JACCARD, AFloatTypeComputer.INSTANCE);
         add(SIMILARITY_JACCARD_CHECK, OrderedListOfAnyTypeComputer.INSTANCE);
+        add(SIMILARITY_JACCARD_SORTED, AFloatTypeComputer.INSTANCE);
+        add(SIMILARITY_JACCARD_SORTED_CHECK, OrderedListOfAnyTypeComputer.INSTANCE);
         add(SIMILARITY_JACCARD_PREFIX, AFloatTypeComputer.INSTANCE);
         add(SIMILARITY_JACCARD_PREFIX_CHECK, OrderedListOfAnyTypeComputer.INSTANCE);
         add(SPATIAL_AREA, ADoubleTypeComputer.INSTANCE);
@@ -538,6 +556,7 @@ public class AsterixBuiltinFunctions {
         add(SWITCH_CASE, NonTaggedSwitchCaseComputer.INSTANCE);
         add(REG_EXP, ABooleanTypeComputer.INSTANCE);
         add(INJECT_FAILURE, InjectFailureTypeComputer.INSTANCE);
+        add(CAST_RECORD, CastRecordResultTypeComputer.INSTANCE);
 
         add(TID, AInt32TypeComputer.INSTANCE);
         add(TIME_CONSTRUCTOR, OptionalATimeTypeComputer.INSTANCE);
@@ -672,8 +691,6 @@ public class AsterixBuiltinFunctions {
         IFunctionInfo finfo = getAsterixFunctionInfo(fi);
         return finfo == null ? null : finfo.getFunctionIdentifier();
     }
-    
-    
 
     public static AggregateFunctionCallExpression makeAggregateFunctionExpression(FunctionIdentifier fi,
             List<Mutable<ILogicalExpression>> args) {
@@ -693,7 +710,7 @@ public class AsterixBuiltinFunctions {
 
     public static boolean isAggregateFunctionSerializable(FunctionIdentifier fi) {
         IFunctionInfo finfo = getAsterixFunctionInfo(fi);
-        return aggregateToSerializableAggregate.get(finfo) != null ;
+        return aggregateToSerializableAggregate.get(finfo) != null;
     }
 
     public static AggregateFunctionCallExpression makeSerializableAggregateFunctionExpression(FunctionIdentifier fi,
@@ -702,8 +719,9 @@ public class AsterixBuiltinFunctions {
         IFunctionInfo finfo = getAsterixFunctionInfo(fi);
         IFunctionInfo serializableFinfo = aggregateToSerializableAggregate.get(finfo);
         if (serializableFinfo == null)
-            throw new IllegalStateException("no serializable implementation for aggregate function " + serializableFinfo);
-       
+            throw new IllegalStateException("no serializable implementation for aggregate function "
+                    + serializableFinfo);
+
         IFunctionInfo fiLocal = aggregateToLocalAggregate.get(serializableFinfo);
         IFunctionInfo fiGlobal = aggregateToGlobalAggregate.get(serializableFinfo);
 
@@ -731,7 +749,6 @@ public class AsterixBuiltinFunctions {
         builtinFunctionsSet.put(functionInfo, functionInfo);
         funTypeComputer.put(functionInfo, typeComputer);
         asterixFunctionIdToInfo.put(fi, functionInfo);
-       // AsterixFunction asterixFunction = new AsterixFunction(fi.getName(), fi.getArity());
     }
 
     private static void addAgg(FunctionIdentifier fi) {

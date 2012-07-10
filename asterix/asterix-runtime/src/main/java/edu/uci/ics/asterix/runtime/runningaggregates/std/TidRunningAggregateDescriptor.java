@@ -6,13 +6,15 @@ import edu.uci.ics.asterix.common.functions.FunctionConstants;
 import edu.uci.ics.asterix.formats.nontagged.AqlSerializerDeserializerProvider;
 import edu.uci.ics.asterix.om.base.AInt32;
 import edu.uci.ics.asterix.om.base.AMutableInt32;
+import edu.uci.ics.asterix.om.functions.IFunctionDescriptor;
+import edu.uci.ics.asterix.om.functions.IFunctionDescriptorFactory;
 import edu.uci.ics.asterix.om.types.BuiltinType;
 import edu.uci.ics.asterix.runtime.runningaggregates.base.AbstractRunningAggregateFunctionDynamicDescriptor;
+import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluatorFactory;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IRunningAggregateFunction;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IRunningAggregateFunctionFactory;
-import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
+import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluatorFactory;
+import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyRunningAggregateFunction;
+import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyRunningAggregateFunctionFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.IDataOutputProvider;
@@ -22,23 +24,28 @@ public class TidRunningAggregateDescriptor extends AbstractRunningAggregateFunct
 
     private static final long serialVersionUID = 1L;
     private final static FunctionIdentifier FID = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "tid", 0, true);
-
+    public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
+        public IFunctionDescriptor createFunctionDescriptor() {
+            return new TidRunningAggregateDescriptor();
+        }
+    };
+    
     @Override
-    public IRunningAggregateFunctionFactory createRunningAggregateFunctionFactory(IEvaluatorFactory[] args)
+    public ICopyRunningAggregateFunctionFactory createRunningAggregateFunctionFactory(ICopyEvaluatorFactory[] args)
             throws AlgebricksException {
 
-        return new IRunningAggregateFunctionFactory() {
+        return new ICopyRunningAggregateFunctionFactory() {
 
             private static final long serialVersionUID = 1L;
 
             @SuppressWarnings("unchecked")
             @Override
-            public IRunningAggregateFunction createRunningAggregateFunction(IDataOutputProvider provider)
+            public ICopyRunningAggregateFunction createRunningAggregateFunction(IDataOutputProvider provider)
                     throws AlgebricksException {
 
                 final DataOutput out = provider.getDataOutput();
 
-                return new IRunningAggregateFunction() {
+                return new ICopyRunningAggregateFunction() {
 
                     int cnt;
                     ISerializerDeserializer<AInt32> serde = AqlSerializerDeserializerProvider.INSTANCE

@@ -3,7 +3,6 @@ drop dataverse test if exists;
 create dataverse test;
 use dataverse test;
 
-
 create type AddressType as closed {
   street: string,
   city: string,
@@ -25,10 +24,8 @@ create type UserType as open {
   }}
 }
 
-create nodegroup group1  if not exists on nc1, nc2;
-
 create external dataset User(UserType) 
-using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
+using "localfs"
 (("path"="nc1://data/events/tiny/user.adm"),("format"="adm"));
 
 write output to nc1:"rttest/dapd_q1.adm";

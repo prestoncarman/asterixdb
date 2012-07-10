@@ -11,9 +11,9 @@ import edu.uci.ics.asterix.om.types.AUnionType;
 import edu.uci.ics.asterix.om.types.EnumDeserializer;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.asterix.om.util.NonTaggedFormatUtil;
-import edu.uci.ics.hyracks.algebricks.core.algebra.data.IPrinter;
-import edu.uci.ics.hyracks.algebricks.core.algebra.data.IPrinterFactory;
-import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
+import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
+import edu.uci.ics.hyracks.algebricks.data.IPrinter;
+import edu.uci.ics.hyracks.algebricks.data.IPrinterFactory;
 
 public class ARecordPrinterFactory implements IPrinterFactory {
 
@@ -123,7 +123,7 @@ public class ARecordPrinterFactory implements IPrinterFactory {
                                     fieldValueLength = NonTaggedFormatUtil.getFieldValueLength(b,
                                             fieldOffsets[fieldNumber], tag, false);
                                     fieldPrinters[fieldNumber].print(b, fieldOffsets[fieldNumber] - 1,
-                                            fieldOffsets[fieldNumber], ps);
+                                            fieldValueLength, ps);
                                 }
                             } else {
                                 tag = fieldTypes[fieldNumber].getTypeTag();

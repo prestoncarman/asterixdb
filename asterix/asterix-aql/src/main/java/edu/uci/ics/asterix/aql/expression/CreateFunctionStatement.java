@@ -8,7 +8,6 @@ import edu.uci.ics.asterix.aql.expression.visitor.IAqlExpressionVisitor;
 import edu.uci.ics.asterix.aql.expression.visitor.IAqlVisitorWithVoidReturn;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
 import edu.uci.ics.asterix.om.functions.AsterixFunction;
-import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 
 public class CreateFunctionStatement implements Statement {
 
@@ -16,17 +15,13 @@ public class CreateFunctionStatement implements Statement {
     private String functionBody;
     private boolean ifNotExists;
     private List<String> paramList;
-    private final String dependencies;
-    private final String returnType;
-    private final String language;
-    private final String functionKind;
 
-    public AsterixFunction getAsterixFunction() {
+    public AsterixFunction getFunctionIdentifier() {
         return asterixFunction;
     }
 
-    public void setFunctionIdentifier(AsterixFunction asterixFunction) {
-        this.asterixFunction = asterixFunction;
+    public void setFunctionIdentifier(AsterixFunction AsterixFunction) {
+        this.asterixFunction = AsterixFunction;
     }
 
     public String getFunctionBody() {
@@ -41,20 +36,16 @@ public class CreateFunctionStatement implements Statement {
         this.ifNotExists = ifNotExists;
     }
 
-    public CreateFunctionStatement(AsterixFunction asterixFunction, List<String> parameterList, String functionBody,
-            String dependencies, String returnType, String language, String functionKind, boolean ifNotExists) {
-
-        this.asterixFunction = asterixFunction;
+    public CreateFunctionStatement(AsterixFunction AsterixFunction, List<VarIdentifier> parameterList, String functionBody,
+            boolean ifNotExists) {
+        
+        this.asterixFunction = AsterixFunction;
         this.functionBody = functionBody;
         this.ifNotExists = ifNotExists;
         this.paramList = new ArrayList<String>();
-        for (String var : parameterList) {
-            this.paramList.add(var);
+        for (VarIdentifier varId : parameterList) {
+            this.paramList.add(varId.getValue());
         }
-        this.dependencies = dependencies;
-        this.returnType = returnType;
-        this.language = language;
-        this.functionKind = functionKind;
     }
 
     public boolean getIfNotExists() {
@@ -70,24 +61,8 @@ public class CreateFunctionStatement implements Statement {
         return paramList;
     }
 
-    public String getDependencies() {
-        return dependencies;
-    }
-
-    public String getReturnType() {
-        return returnType;
-    }
-
-    public String getLanguage() {
-        return language;
-    }
-
     public void setParamList(List<String> paramList) {
         this.paramList = paramList;
-    }
-
-    public String getFunctionKind() {
-        return functionKind;
     }
 
     @Override

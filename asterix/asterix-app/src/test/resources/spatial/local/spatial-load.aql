@@ -14,5 +14,5 @@ declare dataset MyData(MyRecord)
   partitioned by key id on group1;
 
 load dataset MyData 
-using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
+using "localfs"
 (("path"="nc1:///tmp/data.json"),("format"="adm")) pre-sorted;

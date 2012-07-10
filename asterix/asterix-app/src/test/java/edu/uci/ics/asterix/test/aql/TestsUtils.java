@@ -6,8 +6,8 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.io.Reader;
 import java.io.UnsupportedEncodingException;
@@ -48,7 +48,7 @@ public class TestsUtils {
 
     public static void runScriptAndCompareWithResult(IHyracksClientConnection hcc, File scriptFile, PrintWriter print,
             File expectedFile, File actualFile) throws Exception {
-        Reader query = new BufferedReader(new FileReader(scriptFile));
+        Reader query = new BufferedReader(new InputStreamReader(new FileInputStream(scriptFile), "UTF-8"));
         AsterixJavaClient asterix = new AsterixJavaClient(hcc, query, print);
         try {
             asterix.compile(true, false, true, true, false, true, false);
@@ -58,8 +58,10 @@ public class TestsUtils {
             query.close();
         }
         asterix.execute();
-        BufferedReader readerExpected = new BufferedReader(new FileReader(expectedFile));
-        BufferedReader readerActual = new BufferedReader(new FileReader(actualFile));
+        BufferedReader readerExpected = new BufferedReader(new InputStreamReader(new FileInputStream(expectedFile),
+                "UTF-8"));
+        BufferedReader readerActual = new BufferedReader(
+                new InputStreamReader(new FileInputStream(actualFile), "UTF-8"));
         String lineExpected, lineActual;
         int num = 1;
         try {
@@ -71,7 +73,7 @@ public class TestsUtils {
                             + "\n> ");
                 }
 
-                if (!lineExpected.split("Timestamp")[0].equals(lineActual.split("Timestamp")[0])) {
+                if (!equalStrings(lineExpected.split("Timestamp")[0], lineActual.split("Timestamp")[0])) {
                     fail("Result for " + scriptFile + " changed at line " + num + ":\n< " + lineExpected + "\n> "
                             + lineActual);
                 }
@@ -122,8 +124,10 @@ public class TestsUtils {
         }
         fos.close();
 
-        BufferedReader readerExpected = new BufferedReader(new FileReader(expectedFile));
-        BufferedReader readerActual = new BufferedReader(new FileReader(actualFile));
+        BufferedReader readerExpected = new BufferedReader(new InputStreamReader(new FileInputStream(expectedFile),
+                "UTF-8"));
+        BufferedReader readerActual = new BufferedReader(
+                new InputStreamReader(new FileInputStream(actualFile), "UTF-8"));
         String lineExpected, lineActual;
         int num = 1;
         try {
@@ -203,9 +207,6 @@ public class TestsUtils {
     private static boolean equalStrings(String s1, String s2) {
         String[] rowsOne = s1.split("\n");
         String[] rowsTwo = s2.split("\n");
-
-        if (rowsOne.length != rowsTwo.length)
-            return false;
 
         for (int i = 0; i < rowsOne.length; i++) {
             String row1 = rowsOne[i];

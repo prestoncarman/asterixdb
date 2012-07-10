@@ -20,6 +20,8 @@ import edu.uci.ics.asterix.om.base.AInt64;
 import edu.uci.ics.asterix.om.base.AMutableDouble;
 import edu.uci.ics.asterix.om.base.AMutableInt64;
 import edu.uci.ics.asterix.om.base.ANull;
+import edu.uci.ics.asterix.om.functions.IFunctionDescriptor;
+import edu.uci.ics.asterix.om.functions.IFunctionDescriptorFactory;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.asterix.om.types.AUnionType;
@@ -29,13 +31,13 @@ import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.asterix.runtime.aggregates.base.AbstractSerializableAggregateFunctionDynamicDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.common.AccessibleByteArrayEval;
 import edu.uci.ics.asterix.runtime.evaluators.common.ClosedRecordConstructorEvalFactory.ClosedRecordConstructorEval;
+import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
+import edu.uci.ics.hyracks.algebricks.common.exceptions.NotImplementedException;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluatorFactory;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.ISerializableAggregateFunction;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.ISerializableAggregateFunctionFactory;
-import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
-import edu.uci.ics.hyracks.algebricks.core.api.exceptions.NotImplementedException;
+import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluator;
+import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluatorFactory;
+import edu.uci.ics.hyracks.algebricks.runtime.base.ICopySerializableAggregateFunction;
+import edu.uci.ics.hyracks.algebricks.runtime.base.ICopySerializableAggregateFunctionFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
 import edu.uci.ics.hyracks.dataflow.common.comm.io.ByteArrayAccessibleOutputStream;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.ArrayBackedValueStorage;
@@ -46,6 +48,11 @@ public class SerializableLocalAvgAggregateDescriptor extends AbstractSerializabl
     private static final long serialVersionUID = 1L;
     public final static FunctionIdentifier FID = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "local-avg-serial", 1, true);
+    public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
+        public IFunctionDescriptor createFunctionDescriptor() {
+            return new SerializableLocalAvgAggregateDescriptor();
+        }
+    };
 
     @Override
     public FunctionIdentifier getIdentifier() {
@@ -53,22 +60,22 @@ public class SerializableLocalAvgAggregateDescriptor extends AbstractSerializabl
     }
 
     @Override
-    public ISerializableAggregateFunctionFactory createAggregateFunctionFactory(IEvaluatorFactory[] args)
+    public ICopySerializableAggregateFunctionFactory createAggregateFunctionFactory(ICopyEvaluatorFactory[] args)
             throws AlgebricksException {
-        final IEvaluatorFactory[] evals = args;
+        final ICopyEvaluatorFactory[] evals = args;
         List<IAType> unionList = new ArrayList<IAType>();
         unionList.add(BuiltinType.ANULL);
         unionList.add(BuiltinType.ADOUBLE);
         final ARecordType recType = new ARecordType(null, new String[] { "sum", "count" }, new IAType[] {
                 new AUnionType(unionList, "OptionalDouble"), BuiltinType.AINT64 }, true);
 
-        return new ISerializableAggregateFunctionFactory() {
+        return new ICopySerializableAggregateFunctionFactory() {
             private static final long serialVersionUID = 1L;
 
-            public ISerializableAggregateFunction createAggregateFunction() throws AlgebricksException {
-                return new ISerializableAggregateFunction() {
+            public ICopySerializableAggregateFunction createAggregateFunction() throws AlgebricksException {
+                return new ICopySerializableAggregateFunction() {
                     private ArrayBackedValueStorage inputVal = new ArrayBackedValueStorage();
-                    private IEvaluator eval = evals[0].createEvaluator(inputVal);
+                    private ICopyEvaluator eval = evals[0].createEvaluator(inputVal);
                     private ClosedRecordConstructorEval recordEval;
 
                     private AMutableDouble aDouble = new AMutableDouble(0);
@@ -89,8 +96,8 @@ public class SerializableLocalAvgAggregateDescriptor extends AbstractSerializabl
                     private DataOutput sumBytesOutput = new DataOutputStream(sumBytes);
                     private ByteArrayAccessibleOutputStream countBytes = new ByteArrayAccessibleOutputStream();
                     private DataOutput countBytesOutput = new DataOutputStream(countBytes);
-                    private IEvaluator evalSum = new AccessibleByteArrayEval(avgBytes.getDataOutput(), sumBytes);
-                    private IEvaluator evalCount = new AccessibleByteArrayEval(avgBytes.getDataOutput(), countBytes);
+                    private ICopyEvaluator evalSum = new AccessibleByteArrayEval(avgBytes.getDataOutput(), sumBytes);
+                    private ICopyEvaluator evalCount = new AccessibleByteArrayEval(avgBytes.getDataOutput(), countBytes);
 
                     @Override
                     public void init(DataOutput state) throws AlgebricksException {
@@ -114,35 +121,35 @@ public class SerializableLocalAvgAggregateDescriptor extends AbstractSerializabl
                         if (inputVal.getLength() > 0) {
                             ++count;
                             ATypeTag typeTag = EnumDeserializer.ATYPETAGDESERIALIZER
-                                    .deserialize(inputVal.getBytes()[0]);
+                                    .deserialize(inputVal.getByteArray()[0]);
                             switch (typeTag) {
                                 case INT8: {
-                                    byte val = AInt8SerializerDeserializer.getByte(inputVal.getBytes(), 1);
+                                    byte val = AInt8SerializerDeserializer.getByte(inputVal.getByteArray(), 1);
                                     sum += val;
                                     break;
                                 }
                                 case INT16: {
-                                    short val = AInt16SerializerDeserializer.getShort(inputVal.getBytes(), 1);
+                                    short val = AInt16SerializerDeserializer.getShort(inputVal.getByteArray(), 1);
                                     sum += val;
                                     break;
                                 }
                                 case INT32: {
-                                    int val = AInt32SerializerDeserializer.getInt(inputVal.getBytes(), 1);
+                                    int val = AInt32SerializerDeserializer.getInt(inputVal.getByteArray(), 1);
                                     sum += val;
                                     break;
                                 }
                                 case INT64: {
-                                    long val = AInt64SerializerDeserializer.getLong(inputVal.getBytes(), 1);
+                                    long val = AInt64SerializerDeserializer.getLong(inputVal.getByteArray(), 1);
                                     sum += val;
                                     break;
                                 }
                                 case FLOAT: {
-                                    float val = AFloatSerializerDeserializer.getFloat(inputVal.getBytes(), 1);
+                                    float val = AFloatSerializerDeserializer.getFloat(inputVal.getByteArray(), 1);
                                     sum += val;
                                     break;
                                 }
                                 case DOUBLE: {
-                                    double val = ADoubleSerializerDeserializer.getDouble(inputVal.getBytes(), 1);
+                                    double val = ADoubleSerializerDeserializer.getDouble(inputVal.getByteArray(), 1);
                                     sum += val;
                                     break;
                                 }
@@ -169,7 +176,7 @@ public class SerializableLocalAvgAggregateDescriptor extends AbstractSerializabl
                         boolean metNull = BufferSerDeUtil.getBoolean(state, start + 16);
                         if (recordEval == null)
                             recordEval = new ClosedRecordConstructorEval(recType,
-                                    new IEvaluator[] { evalSum, evalCount }, avgBytes, result);
+                                    new ICopyEvaluator[] { evalSum, evalCount }, avgBytes, result);
                         if (count == 0) {
                             if (GlobalConfig.DEBUG) {
                                 GlobalConfig.ASTERIX_LOGGER.finest("AVG aggregate ran over empty input.");

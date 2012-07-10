@@ -21,15 +21,15 @@ import java.util.List;
 
 import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
 import edu.uci.ics.asterix.common.config.DatasetConfig.IndexType;
+import edu.uci.ics.asterix.common.context.AsterixAppRuntimeContext;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
-import edu.uci.ics.asterix.dataflow.base.IAsterixApplicationContextInfo;
 import edu.uci.ics.asterix.formats.nontagged.AqlSerializerDeserializerProvider;
 import edu.uci.ics.asterix.metadata.api.IMetadataIndex;
 import edu.uci.ics.asterix.metadata.api.IMetadataNode;
 import edu.uci.ics.asterix.metadata.api.IValueExtractor;
-import edu.uci.ics.asterix.metadata.bootstrap.AsterixProperties;
 import edu.uci.ics.asterix.metadata.bootstrap.MetadataPrimaryIndexes;
 import edu.uci.ics.asterix.metadata.bootstrap.MetadataSecondaryIndexes;
+import edu.uci.ics.asterix.metadata.entities.Adapter;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
 import edu.uci.ics.asterix.metadata.entities.Datatype;
 import edu.uci.ics.asterix.metadata.entities.Dataverse;
@@ -38,6 +38,7 @@ import edu.uci.ics.asterix.metadata.entities.Index;
 import edu.uci.ics.asterix.metadata.entities.InternalDatasetDetails;
 import edu.uci.ics.asterix.metadata.entities.Node;
 import edu.uci.ics.asterix.metadata.entities.NodeGroup;
+import edu.uci.ics.asterix.metadata.entitytupletranslators.AdapterTupleTranslator;
 import edu.uci.ics.asterix.metadata.entitytupletranslators.DatasetTupleTranslator;
 import edu.uci.ics.asterix.metadata.entitytupletranslators.DatatypeTupleTranslator;
 import edu.uci.ics.asterix.metadata.entitytupletranslators.DataverseTupleTranslator;
@@ -74,29 +75,28 @@ import edu.uci.ics.hyracks.storage.am.common.api.ITreeIndexCursor;
 import edu.uci.ics.hyracks.storage.am.common.api.ITreeIndexFrame;
 import edu.uci.ics.hyracks.storage.am.common.api.TreeIndexException;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.IIndex;
-import edu.uci.ics.hyracks.storage.am.common.dataflow.IIndexRegistryProvider;
+import edu.uci.ics.hyracks.storage.am.common.dataflow.IndexRegistry;
 import edu.uci.ics.hyracks.storage.am.common.ophelpers.IndexOp;
 import edu.uci.ics.hyracks.storage.am.common.ophelpers.MultiComparator;
 
 public class MetadataNode implements IMetadataNode {
-
     private static final long serialVersionUID = 1L;
-    private static IIndexRegistryProvider<IIndex> btreeRegistryProvider;
-    public static MetadataNode INSTANCE;
+
     // TODO: Temporary transactional resource id for metadata.
-    private static byte[] metadataResourceId = MetadataNode.class.toString().getBytes();
+    private static final byte[] metadataResourceId = MetadataNode.class.toString().getBytes();
 
-    @SuppressWarnings("unchecked")
-    private ISerializerDeserializer<AString> stringSerde = AqlSerializerDeserializerProvider.INSTANCE
-            .getSerializerDeserializer(BuiltinType.ASTRING);
-
+    private IndexRegistry<IIndex> indexRegistry;
     private TransactionProvider transactionProvider;
 
-    public MetadataNode(AsterixProperties asterixProperity, IAsterixApplicationContextInfo appContext,
-            TransactionProvider transactionProvider) {
+    public static final MetadataNode INSTANCE = new MetadataNode();
+
+    private MetadataNode() {
         super();
-        this.transactionProvider = transactionProvider;
-        btreeRegistryProvider = appContext.getTreeRegisterProvider();
+    }
+
+    public void initialize(AsterixAppRuntimeContext runtimeContext) {
+        this.transactionProvider = runtimeContext.getTransactionProvider();
+        this.indexRegistry = runtimeContext.getIndexRegistry();
     }
 
     @Override
@@ -154,7 +154,7 @@ public class MetadataNode implements IMetadataNode {
             DatasetTupleTranslator tupleReaderWriter = new DatasetTupleTranslator(true);
             ITupleReference datasetTuple = tupleReaderWriter.getTupleFromMetadataEntity(dataset);
             insertTupleIntoIndex(txnId, MetadataPrimaryIndexes.DATASET_DATASET, datasetTuple);
-            if (dataset.getType() == DatasetType.INTERNAL || dataset.getType() == DatasetType.FEED) {
+            if (dataset.getDatasetType() == DatasetType.INTERNAL || dataset.getDatasetType() == DatasetType.FEED) {
                 // Add the primary index for the dataset.
                 InternalDatasetDetails id = (InternalDatasetDetails) dataset.getDatasetDetails();
                 Index primaryIndex = new Index(dataset.getDataverseName(), dataset.getDatasetName(),
@@ -165,7 +165,7 @@ public class MetadataNode implements IMetadataNode {
                 insertTupleIntoIndex(txnId, MetadataSecondaryIndexes.GROUPNAME_ON_DATASET_INDEX, nodeGroupTuple);
             }
             // Add entry in datatype secondary index.
-            ITupleReference dataTypeTuple = createTuple(dataset.getDataverseName(), dataset.getDatatypeName(),
+            ITupleReference dataTypeTuple = createTuple(dataset.getDataverseName(), dataset.getItemTypeName(),
                     dataset.getDatasetName());
             insertTupleIntoIndex(txnId, MetadataSecondaryIndexes.DATATYPENAME_ON_DATASET_INDEX, dataTypeTuple);
         } catch (BTreeDuplicateKeyException e) {
@@ -254,7 +254,7 @@ public class MetadataNode implements IMetadataNode {
 
     private void insertTupleIntoIndex(long txnId, IMetadataIndex index, ITupleReference tuple) throws Exception {
         int fileId = index.getFileId();
-        BTree btree = (BTree) btreeRegistryProvider.getRegistry(null).get(fileId);
+        BTree btree = (BTree) indexRegistry.get(fileId);
         btree.open(fileId);
         ITreeIndexAccessor indexAccessor = btree.createAccessor();
         TransactionContext txnCtx = transactionProvider.getTransactionManager().getTransactionContext(txnId);
@@ -322,7 +322,7 @@ public class MetadataNode implements IMetadataNode {
             ITupleReference datasetTuple = getTupleToBeDeleted(txnId, MetadataPrimaryIndexes.DATASET_DATASET, searchKey);
             deleteTupleFromIndex(txnId, MetadataPrimaryIndexes.DATASET_DATASET, datasetTuple);
             // Delete entry from secondary index 'group'.
-            if (dataset.getType() == DatasetType.INTERNAL || dataset.getType() == DatasetType.FEED) {
+            if (dataset.getDatasetType() == DatasetType.INTERNAL || dataset.getDatasetType() == DatasetType.FEED) {
                 InternalDatasetDetails id = (InternalDatasetDetails) dataset.getDatasetDetails();
                 ITupleReference groupNameSearchKey = createTuple(id.getNodeGroupName(), dataverseName, datasetName);
                 // Searches the index for the tuple to be deleted. Acquires an S
@@ -332,14 +332,14 @@ public class MetadataNode implements IMetadataNode {
                 deleteTupleFromIndex(txnId, MetadataSecondaryIndexes.GROUPNAME_ON_DATASET_INDEX, groupNameTuple);
             }
             // Delete entry from secondary index 'type'.
-            ITupleReference dataTypeSearchKey = createTuple(dataverseName, dataset.getDatatypeName(), datasetName);
+            ITupleReference dataTypeSearchKey = createTuple(dataverseName, dataset.getItemTypeName(), datasetName);
             // Searches the index for the tuple to be deleted. Acquires an S
             // lock on the DATATYPENAME_ON_DATASET_INDEX index.
             ITupleReference dataTypeTuple = getTupleToBeDeleted(txnId,
                     MetadataSecondaryIndexes.DATATYPENAME_ON_DATASET_INDEX, dataTypeSearchKey);
             deleteTupleFromIndex(txnId, MetadataSecondaryIndexes.DATATYPENAME_ON_DATASET_INDEX, dataTypeTuple);
             // Delete entry(s) from the 'indexes' dataset.
-            if (dataset.getType() == DatasetType.INTERNAL || dataset.getType() == DatasetType.FEED) {
+            if (dataset.getDatasetType() == DatasetType.INTERNAL || dataset.getDatasetType() == DatasetType.FEED) {
                 List<Index> datasetIndexes = getDatasetIndexes(txnId, dataverseName, datasetName);
                 for (Index index : datasetIndexes) {
                     dropIndex(txnId, dataverseName, datasetName, index.getIndexName());
@@ -499,7 +499,7 @@ public class MetadataNode implements IMetadataNode {
 
     private void deleteTupleFromIndex(long txnId, IMetadataIndex index, ITupleReference tuple) throws Exception {
         int fileId = index.getFileId();
-        BTree btree = (BTree) btreeRegistryProvider.getRegistry(null).get(fileId);
+        BTree btree = (BTree) indexRegistry.get(fileId);
         btree.open(fileId);
 
         ITreeIndexAccessor indexAccessor = btree.createAccessor();
@@ -772,7 +772,7 @@ public class MetadataNode implements IMetadataNode {
         transactionProvider.getLockManager().lock(txnCtx, index.getResourceId(), LockMode.SHARED);
         IBinaryComparatorFactory[] comparatorFactories = index.getKeyBinaryComparatorFactory();
         int fileId = index.getFileId();
-        BTree btree = (BTree) btreeRegistryProvider.getRegistry(null).get(fileId);
+        BTree btree = (BTree) indexRegistry.get(fileId);
         btree.open(fileId);
         ITreeIndexFrame leafFrame = btree.getLeafFrameFactory().createFrame();
         ITreeIndexAccessor indexAccessor = btree.createAccessor();
@@ -782,7 +782,7 @@ public class MetadataNode implements IMetadataNode {
             searchCmps[i] = comparatorFactories[i].createBinaryComparator();
         }
         MultiComparator searchCmp = new MultiComparator(searchCmps);
-        RangePredicate rangePred = new RangePredicate(true, searchKey, searchKey, true, true, searchCmp, searchCmp);
+        RangePredicate rangePred = new RangePredicate(searchKey, searchKey, true, true, searchCmp, searchCmp);
         indexAccessor.search(rangeCursor, rangePred);
 
         try {
@@ -801,6 +801,8 @@ public class MetadataNode implements IMetadataNode {
     // TODO: Can use Hyrack's TupleUtils for this, once we switch to a newer
     // Hyracks version.
     public ITupleReference createTuple(String... fields) throws HyracksDataException {
+        ISerializerDeserializer<AString> stringSerde = AqlSerializerDeserializerProvider.INSTANCE
+                .getSerializerDeserializer(BuiltinType.ASTRING);
         AMutableString aString = new AMutableString("");
         ArrayTupleBuilder tupleBuilder = new ArrayTupleBuilder(fields.length);
         for (String s : fields) {
@@ -812,4 +814,70 @@ public class MetadataNode implements IMetadataNode {
         tuple.reset(tupleBuilder.getFieldEndOffsets(), tupleBuilder.getByteArray());
         return tuple;
     }
+
+    @Override
+    public void addAdapter(long txnId, Adapter adapter) throws MetadataException, RemoteException {
+        try {
+            // Insert into the 'Adapter' dataset.
+            AdapterTupleTranslator tupleReaderWriter = new AdapterTupleTranslator(true);
+            ITupleReference adapterTuple = tupleReaderWriter.getTupleFromMetadataEntity(adapter);
+            insertTupleIntoIndex(txnId, MetadataPrimaryIndexes.ADAPTER_DATASET, adapterTuple);
+
+        } catch (BTreeDuplicateKeyException e) {
+            throw new MetadataException("A adapter with this name " + adapter.getAdapterIdentifier().getAdapterName()
+                    + " already exists in dataverse '" + adapter.getAdapterIdentifier().getNamespace() + "'.", e);
+        } catch (Exception e) {
+            throw new MetadataException(e);
+        }
+
+    }
+
+    @Override
+    public void dropAdapter(long txnId, String dataverseName, String adapterName) throws MetadataException,
+            RemoteException {
+        Adapter adapter;
+        try {
+            adapter = getAdapter(txnId, dataverseName, adapterName);
+        } catch (Exception e) {
+            throw new MetadataException(e);
+        }
+        if (adapter == null) {
+            throw new MetadataException("Cannot drop adapter '" + adapter + "' because it doesn't exist.");
+        }
+        try {
+            // Delete entry from the 'Adapter' dataset.
+            ITupleReference searchKey = createTuple(dataverseName, adapterName);
+            // Searches the index for the tuple to be deleted. Acquires an S
+            // lock on the 'Adapter' dataset.
+            ITupleReference datasetTuple = getTupleToBeDeleted(txnId, MetadataPrimaryIndexes.ADAPTER_DATASET, searchKey);
+            deleteTupleFromIndex(txnId, MetadataPrimaryIndexes.ADAPTER_DATASET, datasetTuple);
+
+            // TODO: Change this to be a BTree specific exception, e.g.,
+            // BTreeKeyDoesNotExistException.
+        } catch (TreeIndexException e) {
+            throw new MetadataException("Cannot drop adapter '" + adapterName, e);
+        } catch (Exception e) {
+            throw new MetadataException(e);
+        }
+
+    }
+
+    @Override
+    public Adapter getAdapter(long txnId, String dataverseName, String adapterName) throws MetadataException,
+            RemoteException {
+        try {
+            ITupleReference searchKey = createTuple(dataverseName, adapterName);
+            AdapterTupleTranslator tupleReaderWriter = new AdapterTupleTranslator(false);
+            List<Adapter> results = new ArrayList<Adapter>();
+            IValueExtractor<Adapter> valueExtractor = new MetadataEntityValueExtractor<Adapter>(tupleReaderWriter);
+            searchIndex(txnId, MetadataPrimaryIndexes.ADAPTER_DATASET, searchKey, valueExtractor, results);
+            if (results.isEmpty()) {
+                return null;
+            }
+            return results.get(0);
+        } catch (Exception e) {
+            throw new MetadataException(e);
+        }
+    }
+
 }

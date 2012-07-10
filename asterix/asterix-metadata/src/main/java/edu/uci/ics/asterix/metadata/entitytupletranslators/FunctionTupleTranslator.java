@@ -20,6 +20,7 @@ import java.io.DataInput;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.List;
 
 import edu.uci.ics.asterix.builders.IAOrderedListBuilder;
@@ -89,18 +90,8 @@ public class FunctionTupleTranslator extends AbstractTupleTranslator<Function> {
         String functionBody = ((AString) functionRecord
                 .getValueByPos(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_BODY_FIELD_INDEX)).getStringValue();
 
-        String returnType = ((AString) functionRecord
-                .getValueByPos(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_RETURN_TYPE_FIELD_INDEX)).getStringValue();
-
-        String depedencies = ((AString) functionRecord
-                .getValueByPos(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_DEPENDENCIES_FIELD_INDEX))
-                .getStringValue();
-
-        String language = ((AString) functionRecord
-                .getValueByPos(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_LANGUAGE_FIELD_INDEX)).getStringValue();
-
-        return new Function(dataverseName, functionName, Integer.parseInt(arity), params, functionBody, returnType,
-                depedencies, language);
+        return new Function(dataverseName, functionName, Integer.parseInt(arity), params, functionBody, functionBody,
+                functionBody, functionBody, null);
 
     }
 
@@ -163,21 +154,9 @@ public class FunctionTupleTranslator extends AbstractTupleTranslator<Function> {
 
         // write field 5
         fieldValue.reset();
-        aString.setValue(function.getReturnType());
+        aString.setValue(Calendar.getInstance().getTime().toString());
         stringSerde.serialize(aString, fieldValue.getDataOutput());
-        recordBuilder.addField(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_RETURN_TYPE_FIELD_INDEX, fieldValue);
-
-        // write field 6
-        fieldValue.reset();
-        aString.setValue(function.getDependencies());
-        stringSerde.serialize(aString, fieldValue.getDataOutput());
-        recordBuilder.addField(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_DEPENDENCIES_FIELD_INDEX, fieldValue);
-
-        // write field 7
-        fieldValue.reset();
-        aString.setValue(function.getLanguage());
-        stringSerde.serialize(aString, fieldValue.getDataOutput());
-        recordBuilder.addField(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_LANGUAGE_FIELD_INDEX, fieldValue);
+        recordBuilder.addField(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_TIMESTAMP_FIELD_INDEX, fieldValue);
 
         // write record
         recordBuilder.write(tupleBuilder.getDataOutput(), true);

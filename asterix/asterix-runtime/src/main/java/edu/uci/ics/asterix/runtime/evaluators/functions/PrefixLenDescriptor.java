@@ -8,14 +8,16 @@ import edu.uci.ics.asterix.dataflow.data.nontagged.serde.ADoubleSerializerDeseri
 import edu.uci.ics.asterix.formats.nontagged.AqlSerializerDeserializerProvider;
 import edu.uci.ics.asterix.om.base.AInt32;
 import edu.uci.ics.asterix.om.base.AMutableInt32;
+import edu.uci.ics.asterix.om.functions.IFunctionDescriptor;
+import edu.uci.ics.asterix.om.functions.IFunctionDescriptorFactory;
 import edu.uci.ics.asterix.om.types.BuiltinType;
 import edu.uci.ics.asterix.runtime.evaluators.base.AbstractScalarFunctionDynamicDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.common.SimilarityFiltersCache;
 import edu.uci.ics.fuzzyjoin.similarity.SimilarityFilters;
+import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.runtime.base.IEvaluatorFactory;
-import edu.uci.ics.hyracks.algebricks.core.api.exceptions.AlgebricksException;
+import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluator;
+import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluatorFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.ArrayBackedValueStorage;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.IDataOutputProvider;
@@ -27,23 +29,28 @@ public class PrefixLenDescriptor extends AbstractScalarFunctionDynamicDescriptor
     private static final long serialVersionUID = 1L;
     private final static FunctionIdentifier FID = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "prefix-len", 3,
             true);
+    public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
+        public IFunctionDescriptor createFunctionDescriptor() {
+            return new PrefixLenDescriptor();
+        }
+    };
 
     @Override
-    public IEvaluatorFactory createEvaluatorFactory(final IEvaluatorFactory[] args) throws AlgebricksException {
+    public ICopyEvaluatorFactory createEvaluatorFactory(final ICopyEvaluatorFactory[] args) throws AlgebricksException {
 
-        return new IEvaluatorFactory() {
+        return new ICopyEvaluatorFactory() {
             private static final long serialVersionUID = 1L;
 
             @Override
-            public IEvaluator createEvaluator(final IDataOutputProvider output) throws AlgebricksException {
+            public ICopyEvaluator createEvaluator(final IDataOutputProvider output) throws AlgebricksException {
 
-                return new IEvaluator() {
+                return new ICopyEvaluator() {
 
                     private final DataOutput out = output.getDataOutput();
                     private final ArrayBackedValueStorage inputVal = new ArrayBackedValueStorage();
-                    private final IEvaluator evalLen = args[0].createEvaluator(inputVal);
-                    private final IEvaluator evalSimilarity = args[1].createEvaluator(inputVal);
-                    private final IEvaluator evalThreshold = args[2].createEvaluator(inputVal);
+                    private final ICopyEvaluator evalLen = args[0].createEvaluator(inputVal);
+                    private final ICopyEvaluator evalSimilarity = args[1].createEvaluator(inputVal);
+                    private final ICopyEvaluator evalThreshold = args[2].createEvaluator(inputVal);
 
                     private final SimilarityFiltersCache similarityFiltersCache = new SimilarityFiltersCache();
 
@@ -58,19 +65,19 @@ public class PrefixLenDescriptor extends AbstractScalarFunctionDynamicDescriptor
                         // length
                         inputVal.reset();
                         evalLen.evaluate(tuple);
-                        int length = IntegerSerializerDeserializer.getInt(inputVal.getBytes(), 1);
+                        int length = IntegerSerializerDeserializer.getInt(inputVal.getByteArray(), 1);
 
                         // similarity threshold
                         inputVal.reset();
                         evalThreshold.evaluate(tuple);
                         float similarityThreshold = (float) ADoubleSerializerDeserializer.getDouble(
-                                inputVal.getBytes(), 1);
+                                inputVal.getByteArray(), 1);
 
                         // similarity name
                         inputVal.reset();
                         evalSimilarity.evaluate(tuple);
                         SimilarityFilters similarityFilters = similarityFiltersCache.get(similarityThreshold,
-                                inputVal.getBytes());
+                                inputVal.getByteArray());
 
                         int prefixLength = similarityFilters.getPrefixLength(length);
                         res.setValue(prefixLength);

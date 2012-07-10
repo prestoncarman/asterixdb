@@ -83,7 +83,9 @@ public final class AqlRewriter {
     private String dataverseName;
 
     private enum DfsColor {
-        WHITE, GRAY, BLACK
+        WHITE,
+        GRAY,
+        BLACK
     }
 
     public AqlRewriter(Query topExpr, int varCounter, MetadataTransactionContext txnContext, String dataverseName) {
@@ -155,37 +157,34 @@ public final class AqlRewriter {
 
         List<AsterixFunction> functionCalls = getFunctionCalls(expression);
         for (AsterixFunction funId : functionCalls) {
-            if (FunctionUtils.isBuiltinCompilerFunction(new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            if (AsterixBuiltinFunctions.isBuiltinCompilerFunction(new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
                     funId.getFunctionName(), false))) {
                 continue;
             }
 
-            if (FunctionUtils.isBuiltinCompilerFunction(new FunctionIdentifier(AlgebricksBuiltinFunctions.ALGEBRICKS_NS,
-                    funId.getFunctionName(), false))) {
+            if (AsterixBuiltinFunctions.isBuiltinCompilerFunction(new FunctionIdentifier(
+                    AlgebricksBuiltinFunctions.ALGEBRICKS_NS, funId.getFunctionName(), false))) {
                 continue;
             }
-            
+
             if (declaredFunctions != null && declaredFunctions.contains(funId)) {
                 continue;
             }
 
-            FunctionDecl functionDecl = getFunctionDecl(funId);
+            Function function = MetadataManager.INSTANCE.getFunction(mdTxnCtx, dataverseName, funId.getFunctionName(),
+                    funId.getArity());
+            if (function == null) {
+                throw new AsterixException(" function " + functionDecls.get(functionDecls.size() - 1).getIdent()
+                        + " depends upon function " + funId + " which is undefined");
+            }
+            FunctionDecl functionDecl = FunctionUtils.getFunctionDecl(function);
             if (functionDecls.contains(functionDecl)) {
-                throw new AsterixException(" Detected recursvity!");
+                throw new AsterixException("ERROR:Recursive invocation "
+                        + functionDecls.get(functionDecls.size() - 1).getIdent() + " <==> " + functionDecl.getIdent());
             }
             functionDecls.add(functionDecl);
             buildOtherUdfs(functionDecl.getFuncBody(), functionDecls, declaredFunctions);
         }
-    }
-
-    private FunctionDecl getFunctionDecl(AsterixFunction funId) throws AsterixException {
-        Function function = MetadataManager.INSTANCE.getFunction(mdTxnCtx, dataverseName, funId.getFunctionName(), funId
-                .getArity());
-        if (function == null) {
-            throw new AsterixException(" unknown function " + funId);
-        }
-        return FunctionUtils.getFunctionDecl(function);
-
     }
 
     private List<AsterixFunction> getFunctionCalls(Expression expression) throws AsterixException {

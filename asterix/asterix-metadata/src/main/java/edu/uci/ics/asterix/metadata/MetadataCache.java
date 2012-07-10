@@ -20,7 +20,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import edu.uci.ics.asterix.external.dataset.adapter.AdapterIdentifier;
 import edu.uci.ics.asterix.metadata.api.IMetadataEntity;
+import edu.uci.ics.asterix.metadata.entities.Adapter;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
 import edu.uci.ics.asterix.metadata.entities.Datatype;
 import edu.uci.ics.asterix.metadata.entities.Dataverse;
@@ -45,7 +47,9 @@ public class MetadataCache {
 	protected final Map<String, NodeGroup> nodeGroups = new HashMap<String, NodeGroup>();
 	// Key is function Identifier . Key of value map is function name.
 	protected final Map<FunctionIdentifier, Function> functions = new HashMap<FunctionIdentifier, Function>();
-
+	// Key is adapter Identifier.  
+	protected final Map<AdapterIdentifier, Adapter> adapters = new HashMap<AdapterIdentifier, Adapter>();
+	
 	// Atomically executes all metadata operations in ctx's log.
 	public void commit(MetadataTransactionContext ctx) {
 		// Forward roll the operations written in ctx's log.
@@ -298,4 +302,25 @@ public class MetadataCache {
 			return functions.remove(fId);
 		}
 	}
+
+	public Object addAdapterIfNotExists(Adapter adapter) {
+		synchronized (adapters) {
+			Adapter adapterObject = adapters
+					.get(adapter.getAdapterIdentifier());
+			if (adapterObject != null) {
+				return adapters.put(adapter.getAdapterIdentifier(), adapter);
+			}
+			return null;
+		}
+	}
+
+	public Object dropAdapter(Adapter adapter) {
+		synchronized (adapters) {
+			if (adapters.get(adapter.getAdapterIdentifier()) != null) {
+				return adapters.remove(adapter.getAdapterIdentifier());
+			}
+			return null;
+		}
+	}
+
 }

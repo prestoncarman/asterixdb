@@ -19,10 +19,8 @@ create type CustomerType as open {
 }
 
 
-create nodegroup group1 if not exists on nc1;
-
 create external dataset Customers(CustomerType) 
-using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
+using "localfs"
 (("path"="nc1://data/semistructured/tiny01/customer.adm"),("format"="adm"));
 
 write output to nc1:"rttest/semistructured_count-nullable.adm";
