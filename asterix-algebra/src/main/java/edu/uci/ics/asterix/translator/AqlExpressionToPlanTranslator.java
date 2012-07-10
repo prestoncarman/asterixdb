@@ -743,10 +743,11 @@ public class AqlExpressionToPlanTranslator extends AbstractAqlTranslator impleme
         ILogicalOperator firstOp = null;
         Mutable<ILogicalOperator> lastOp = null;
 
+        LogicalVariable uVar = null;
         for (QuantifiedPair qt : qe.getQuantifiedList()) {
             Pair<ILogicalExpression, Mutable<ILogicalOperator>> eo1 = aqlExprToAlgExpression(qt.getExpr(), topOp);
             topOp = eo1.second;
-            LogicalVariable uVar = context.newVar(qt.getVarExpr());
+            uVar = context.newVar(qt.getVarExpr());
             ILogicalOperator u = new UnnestOperator(uVar, new MutableObject<ILogicalExpression>(
                     makeUnnestExpression(eo1.first)));
 
@@ -763,7 +764,6 @@ public class AqlExpressionToPlanTranslator extends AbstractAqlTranslator impleme
         // in the hope of enabling joins & other optimiz.
         firstOp.getInputs().add(topOp);
         topOp = lastOp;
-
         Pair<ILogicalExpression, Mutable<ILogicalOperator>> eo2 = aqlExprToAlgExpression(qe.getSatisfiesExpr(), topOp);
 
         AggregateFunctionCallExpression fAgg;
@@ -771,8 +771,9 @@ public class AqlExpressionToPlanTranslator extends AbstractAqlTranslator impleme
         if (qe.getQuantifier() == Quantifier.SOME) {
             s = new SelectOperator(new MutableObject<ILogicalExpression>(eo2.first));
             s.getInputs().add(eo2.second);
-            fAgg = AsterixBuiltinFunctions.makeAggregateFunctionExpression(AsterixBuiltinFunctions.NON_EMPTY_STREAM,
-                    new ArrayList<Mutable<ILogicalExpression>>());
+            List<Mutable<ILogicalExpression>> aggFuncArgs = new ArrayList<Mutable<ILogicalExpression>>(1);
+            aggFuncArgs.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(uVar)));
+            fAgg = AsterixBuiltinFunctions.makeAggregateFunctionExpression(AsterixBuiltinFunctions.LISTIFY, aggFuncArgs);
         } else { // EVERY
             List<Mutable<ILogicalExpression>> satExprList = new ArrayList<Mutable<ILogicalExpression>>(1);
             satExprList.add(new MutableObject<ILogicalExpression>(eo2.first));
@@ -1074,38 +1075,38 @@ public class AqlExpressionToPlanTranslator extends AbstractAqlTranslator impleme
                         new AsterixConstantValue(ConstantHelper.objectFromLiteral(val.getValue()))), topOp);
             }
             default: {
-                // Mutable<ILogicalOperator> src = new
-                // Mutable<ILogicalOperator>();
-                // Mutable<ILogicalOperator> src = topOp;
-                if (expressionNeedsNoNesting(expr)) {
-                    Pair<ILogicalOperator, LogicalVariable> p = expr.accept(this, topOp);
-                    ILogicalExpression exp = ((AssignOperator) p.first).getExpressions().get(0).getValue();
-                    return new Pair<ILogicalExpression, Mutable<ILogicalOperator>>(exp, p.first.getInputs().get(0));
-                } else {
-                    Mutable<ILogicalOperator> src = new MutableObject<ILogicalOperator>();
-
-                    Pair<ILogicalOperator, LogicalVariable> p = expr.accept(this, src);
-
-                    if (((AbstractLogicalOperator) p.first).getOperatorTag() == LogicalOperatorTag.SUBPLAN) {
-                        // src.setOperator(topOp.getOperator());
-                        Mutable<ILogicalOperator> top2 = new MutableObject<ILogicalOperator>(p.first);
-                        return new Pair<ILogicalExpression, Mutable<ILogicalOperator>>(new VariableReferenceExpression(
-                                p.second), top2);
-                    } else {
-                        SubplanOperator s = new SubplanOperator();
-                        s.getInputs().add(topOp);
-                        src.setValue(new NestedTupleSourceOperator(new MutableObject<ILogicalOperator>(s)));
-                        Mutable<ILogicalOperator> planRoot = new MutableObject<ILogicalOperator>(p.first);
-                        s.setRootOp(planRoot);
-                        return new Pair<ILogicalExpression, Mutable<ILogicalOperator>>(new VariableReferenceExpression(
-                                p.second), new MutableObject<ILogicalOperator>(s));
-                    }
-                }
+            	if (expressionNeedsNoNesting(expr)) {
+            		Pair<ILogicalOperator, LogicalVariable> p = expr.accept(this, topOp);
+            		ILogicalExpression exp = ((AssignOperator) p.first).getExpressions().get(0).getValue();
+            		return new Pair<ILogicalExpression, Mutable<ILogicalOperator>>(exp, p.first.getInputs().get(0));
+            	}
+            	Mutable<ILogicalOperator> src = new MutableObject<ILogicalOperator>();
+            	Pair<ILogicalOperator, LogicalVariable> p = expr.accept(this, src);
+            	if (((AbstractLogicalOperator) p.first).getOperatorTag() == LogicalOperatorTag.SUBPLAN) {
+            		Mutable<ILogicalOperator> top2 = new MutableObject<ILogicalOperator>(p.first);
+            		return new Pair<ILogicalExpression, Mutable<ILogicalOperator>>(new VariableReferenceExpression(
+            				p.second), top2);
+            	}
+            	ILogicalOperator s = new SubplanOperator(p.first);
+            	s.getInputs().add(topOp);
+            	src.setValue(new NestedTupleSourceOperator(new MutableObject<ILogicalOperator>(s)));
+            	ILogicalExpression returnExpr = null;
+            	// ALEX HUHU
+            	if (expr.getKind() == Kind.QUANTIFIED_EXPRESSION) {
+            		QuantifiedExpression quantExpr = (QuantifiedExpression) expr;
+            		if (quantExpr.getQuantifier() == Quantifier.SOME) {
+            			Mutable<ILogicalExpression> varRef = new MutableObject<ILogicalExpression>(new VariableReferenceExpression(p.second));
+            			ScalarFunctionCallExpression lenFunc = new ScalarFunctionCallExpression(FunctionUtils.getFunctionInfo(AsterixBuiltinFunctions.LEN), varRef);
+            			returnExpr = new ScalarFunctionCallExpression(FunctionUtils.getFunctionInfo(AlgebricksBuiltinFunctions.GT), new MutableObject<ILogicalExpression>(lenFunc), new MutableObject<ILogicalExpression>(new ConstantExpression(new AsterixConstantValue(new AInt32(0)))));
+            		}
+            	} else {
+            		returnExpr = new VariableReferenceExpression(p.second);
+            	}
+            	return new Pair<ILogicalExpression, Mutable<ILogicalOperator>>(returnExpr, new MutableObject<ILogicalOperator>(s));
             }
         }
-
     }
-
+    
     private Pair<ILogicalOperator, LogicalVariable> produceFlwrResult(boolean noForClause, boolean isTop,
             Mutable<ILogicalOperator> resOpRef, LogicalVariable resVar) {
         if (isTop) {
