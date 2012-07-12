@@ -326,6 +326,7 @@ public class APIFramework {
             MetadataManager.INSTANCE.abortTransaction(mdTxnCtx);
             throw e;
         } catch (Exception e) {
+            e.printStackTrace();
             MetadataManager.INSTANCE.abortTransaction(mdTxnCtx);
             throw new AsterixException(e);
         }

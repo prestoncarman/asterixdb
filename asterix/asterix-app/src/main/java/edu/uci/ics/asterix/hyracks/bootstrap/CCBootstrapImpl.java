@@ -34,6 +34,7 @@ import edu.uci.ics.asterix.metadata.MetadataManager;
 import edu.uci.ics.asterix.metadata.api.IAsterixStateProxy;
 import edu.uci.ics.asterix.metadata.bootstrap.AsterixProperties;
 import edu.uci.ics.asterix.metadata.bootstrap.AsterixStateProxy;
+import edu.uci.ics.asterix.metadata.bootstrap.ExternalLibraryBootstrap;
 import edu.uci.ics.hyracks.api.application.ICCApplicationContext;
 import edu.uci.ics.hyracks.api.application.ICCBootstrap;
 
@@ -71,6 +72,9 @@ public class CCBootstrapImpl implements ICCBootstrap {
         // Setup and start the API server
         setupAPIServer();
         apiServer.start();
+
+        //Install external libraries (if any)
+        installExternalLibrary();
     }
 
     @Override
@@ -79,7 +83,7 @@ public class CCBootstrapImpl implements ICCBootstrap {
             LOGGER.info("Stopping Asterix cluster controller");
         }
         AsterixStateProxy.unregisterRemoteObject();
-        
+
         webServer.stop();
         apiServer.shutdown();
     }
@@ -125,4 +129,9 @@ public class CCBootstrapImpl implements ICCBootstrap {
 
         apiServer = new ThreadedServer(DEFAULT_API_SERVER_PORT, new APIClientThreadFactory(appCtx));
     }
+
+    private static void installExternalLibrary() throws Exception {
+        ExternalLibraryBootstrap.setUpExternaLibraries(null, false);
+    }
+
 }

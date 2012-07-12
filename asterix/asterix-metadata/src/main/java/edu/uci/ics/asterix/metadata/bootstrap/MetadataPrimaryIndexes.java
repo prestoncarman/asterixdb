@@ -82,7 +82,7 @@ public class MetadataPrimaryIndexes {
 		FUNCTION_DATASET = new MetadataIndex("Function", null, 4,
 				new IAType[] { BuiltinType.ASTRING, BuiltinType.ASTRING,
 						BuiltinType.ASTRING }, new String[] { "DataverseName",
-						"FunctionName", "FunctionArity" },
+						"Name", "Arity" },
 				MetadataRecordTypes.FUNCTION_RECORDTYPE);
 
 		ADAPTER_DATASET = new MetadataIndex("Adapter", null, 3, new IAType[] {

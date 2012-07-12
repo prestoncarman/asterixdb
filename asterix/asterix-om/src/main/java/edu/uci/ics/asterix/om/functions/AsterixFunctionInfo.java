@@ -18,20 +18,18 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionC
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.IFunctionInfo;
 
-public  class AsterixFunctionInfo implements IFunctionInfo {
+public class AsterixFunctionInfo implements IFunctionInfo {
 
     protected final FunctionIdentifier functionIdentifier;
-    protected FunctionKind kind;
-    
+
     public AsterixFunctionInfo(String namespace, AsterixFunction asterixFunction, boolean isBuiltin) {
         this.functionIdentifier = new FunctionIdentifier(namespace, asterixFunction.getFunctionName(),
                 asterixFunction.getArity(), isBuiltin);
     }
-    
+
     public AsterixFunctionInfo(String namespace, AsterixFunction asterixFunction, FunctionKind kind, boolean isBuiltin) {
         this.functionIdentifier = new FunctionIdentifier(namespace, asterixFunction.getFunctionName(),
                 asterixFunction.getArity(), isBuiltin);
-        this.kind = kind;
     }
 
     public AsterixFunctionInfo(FunctionIdentifier functionIdentifier) {

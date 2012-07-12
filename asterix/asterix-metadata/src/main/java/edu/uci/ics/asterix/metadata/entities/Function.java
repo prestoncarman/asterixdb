@@ -18,7 +18,6 @@ import java.util.List;
 
 import edu.uci.ics.asterix.metadata.MetadataCache;
 import edu.uci.ics.asterix.metadata.api.IMetadataEntity;
-import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression.FunctionKind;
 
 public class Function implements IMetadataEntity {
 
@@ -27,26 +26,24 @@ public class Function implements IMetadataEntity {
 
     public static final String RETURNTYPE_VOID = "VOID";
     public static final String NOT_APPLICABLE = "N/A";
-    
+
     private final String dataverseName;
     private final String functionName;
     private final int arity;
     private final List<String> params;
     private final String functionBody;
-    private final String dependencies;
     private final String returnType;
     private final String language;
-    private final FunctionKind functionKind;
+    private final String functionKind;
 
-    public Function(String dataverseName, String functionName, int arity, List<String> params, String functionBody,
-            String returnType, String dependencies, String language, FunctionKind functionKind) {
+    public Function(String dataverseName, String functionName, int arity, List<String> params, String returnType,
+            String functionBody, String language, String functionKind) {
         this.dataverseName = dataverseName;
         this.functionName = functionName;
         this.arity = arity;
         this.params = params;
         this.functionBody = functionBody;
-        this.returnType = returnType == null? RETURNTYPE_VOID : returnType;
-        this.dependencies = dependencies == null ? NOT_APPLICABLE : dependencies;
+        this.returnType = returnType == null ? RETURNTYPE_VOID : returnType;
         this.language = language;
         this.functionKind = functionKind;
     }
@@ -71,10 +68,6 @@ public class Function implements IMetadataEntity {
         return functionBody;
     }
 
-    public String getDependencies() {
-        return dependencies;
-    }
-
     public String getReturnType() {
         return returnType;
     }
@@ -83,7 +76,7 @@ public class Function implements IMetadataEntity {
         return language;
     }
 
-    public FunctionKind getFunctionKind() {
+    public String getFunctionKind() {
         return functionKind;
     }
 

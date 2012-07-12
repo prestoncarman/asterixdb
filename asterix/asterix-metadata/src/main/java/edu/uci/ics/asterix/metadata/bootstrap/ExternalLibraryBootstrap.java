@@ -35,6 +35,7 @@ import edu.uci.ics.asterix.metadata.MetadataManager;
 import edu.uci.ics.asterix.metadata.MetadataTransactionContext;
 import edu.uci.ics.asterix.metadata.entities.Adapter;
 import edu.uci.ics.asterix.metadata.entities.Dataverse;
+import edu.uci.ics.asterix.metadata.entities.Function;
 import edu.uci.ics.asterix.runtime.external.ExternalLibraryManager;
 import edu.uci.ics.asterix.runtime.formats.NonTaggedDataFormat;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionManagementConstants.LockManagerConstants.LockMode;
@@ -92,6 +93,16 @@ public class ExternalLibraryBootstrap {
             }
             for (ILibraryElement element : library.getElements()) {
                 switch (element.getType()) {
+
+                    case FUNCTION:
+                        FunctionElement fe = (FunctionElement) element;
+                        Function function = new Function(library.getDataverse(),
+                                library.getName() + "." + fe.getName(), fe.getArgumentList().size(),
+                                fe.getArgumentList(), fe.getReturnType(), fe.getDefintion(),  library.getLanguage(),
+                                fe.getFunctionType());
+                        MetadataManager.INSTANCE.addFunction(mdTxnCtx, function);
+                        break;
+
                     case ADAPTER:
                         AdapterElement ae = (AdapterElement) element;
                         AdapterIdentifier aid = new AdapterIdentifier(library.getDataverse(), library.getName() + "."

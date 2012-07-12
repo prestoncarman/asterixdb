@@ -412,8 +412,8 @@ public class DdlTranslator extends AbstractAqlTranslator {
                     CreateFunctionStatement cfs = (CreateFunctionStatement) stmt;
                     Function function = new Function(compiledDeclarations.getDataverseName(), cfs
                             .getFunctionIdentifier().getFunctionName(), cfs.getFunctionIdentifier().getArity(),
-                            cfs.getParamList(), cfs.getFunctionBody(), Function.RETURNTYPE_VOID, null,
-                            Function.LANGUAGE_AQL, FunctionKind.SCALAR);
+                            cfs.getParamList(), Function.RETURNTYPE_VOID, cfs.getFunctionBody(),  Function.LANGUAGE_AQL,
+                            FunctionKind.SCALAR.toString());
 
                     MetadataManager.INSTANCE.addFunction(mdTxnCtx, function);
                     break;

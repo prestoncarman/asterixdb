@@ -177,13 +177,17 @@ public final class AqlRewriter {
                 throw new AsterixException(" function " + functionDecls.get(functionDecls.size() - 1).getIdent()
                         + " depends upon function " + funId + " which is undefined");
             }
-            FunctionDecl functionDecl = FunctionUtils.getFunctionDecl(function);
-            if (functionDecls.contains(functionDecl)) {
-                throw new AsterixException("ERROR:Recursive invocation "
-                        + functionDecls.get(functionDecls.size() - 1).getIdent() + " <==> " + functionDecl.getIdent());
+
+            if (function.getLanguage().equalsIgnoreCase(Function.LANGUAGE_AQL)) {
+                FunctionDecl functionDecl = FunctionUtils.getFunctionDecl(function);
+                if (functionDecls.contains(functionDecl)) {
+                    throw new AsterixException("ERROR:Recursive invocation "
+                            + functionDecls.get(functionDecls.size() - 1).getIdent() + " <==> "
+                            + functionDecl.getIdent());
+                }
+                functionDecls.add(functionDecl);
+                buildOtherUdfs(functionDecl.getFuncBody(), functionDecls, declaredFunctions);
             }
-            functionDecls.add(functionDecl);
-            buildOtherUdfs(functionDecl.getFuncBody(), functionDecls, declaredFunctions);
         }
     }
 

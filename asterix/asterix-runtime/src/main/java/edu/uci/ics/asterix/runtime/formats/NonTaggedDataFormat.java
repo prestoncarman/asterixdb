@@ -10,6 +10,7 @@ import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.commons.lang3.mutable.MutableObject;
 
 import edu.uci.ics.asterix.common.config.GlobalConfig;
+import edu.uci.ics.asterix.common.exceptions.AsterixException;
 import edu.uci.ics.asterix.common.exceptions.AsterixRuntimeException;
 import edu.uci.ics.asterix.common.parse.IParseFileSplitsDecl;
 import edu.uci.ics.asterix.dataflow.data.nontagged.AqlNullWriterFactory;
@@ -30,6 +31,7 @@ import edu.uci.ics.asterix.om.base.IAObject;
 import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
 import edu.uci.ics.asterix.om.functions.FunctionManagerHolder;
+import edu.uci.ics.asterix.om.functions.IExternalFunctionInfo;
 import edu.uci.ics.asterix.om.functions.IFunctionDescriptor;
 import edu.uci.ics.asterix.om.functions.IFunctionDescriptorFactory;
 import edu.uci.ics.asterix.om.functions.IFunctionManager;
@@ -133,6 +135,9 @@ import edu.uci.ics.asterix.runtime.evaluators.functions.SwitchCaseDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.UnorderedListConstructorDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.WordTokensDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.YearDescriptor;
+import edu.uci.ics.asterix.runtime.external.ExternalFunctionDescriptorProvider;
+import edu.uci.ics.asterix.runtime.external.ExternalFunctionProvider;
+import edu.uci.ics.asterix.runtime.external.RuntimeExternalFunctionUtil;
 import edu.uci.ics.asterix.runtime.operators.file.AdmSchemafullRecordParserFactory;
 import edu.uci.ics.asterix.runtime.operators.file.NtDelimitedDataTupleParserFactory;
 import edu.uci.ics.asterix.runtime.runningaggregates.std.TidRunningAggregateDescriptor;
@@ -463,8 +468,19 @@ public class NonTaggedDataFormat implements IDataFormat {
     public IFunctionDescriptor resolveFunction(ILogicalExpression expr, IVariableTypeEnvironment context)
             throws AlgebricksException {
         FunctionIdentifier fnId = ((AbstractFunctionCallExpression) expr).getFunctionIdentifier();
-        IFunctionManager mgr = FunctionManagerHolder.getFunctionManager();
-        IFunctionDescriptor fd = mgr.lookupFunction(fnId);
+        IFunctionDescriptor fd = null;
+        if (AsterixBuiltinFunctions.isBuiltinCompilerFunction(fnId)) {
+            IFunctionManager mgr = FunctionManagerHolder.getFunctionManager();
+            fd = mgr.lookupFunction(fnId);
+        } else {
+            try {
+                fd = ExternalFunctionDescriptorProvider
+                        .getExternalFunctionDescriptor((IExternalFunctionInfo) ((AbstractFunctionCallExpression) expr)
+                                .getFunctionInfo());
+            } catch (AsterixException ae) {
+                throw new AlgebricksException(ae);
+            }
+        }
         if (fd == null) {
             throw new AsterixRuntimeException("Unresolved function " + fnId);
         }

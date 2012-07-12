@@ -1,5 +1,5 @@
 /*
- * Copyright 2009-2010 by The Regents of the University of California
+ * Copyright 2009-2012 by The Regents of the University of California
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
@@ -20,7 +20,6 @@ import java.io.DataInput;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Calendar;
 import java.util.List;
 
 import edu.uci.ics.asterix.builders.IAOrderedListBuilder;
@@ -87,11 +86,19 @@ public class FunctionTupleTranslator extends AbstractTupleTranslator<Function> {
             params.add(((AString) cursor.get()).getStringValue());
         }
 
-        String functionBody = ((AString) functionRecord
-                .getValueByPos(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_BODY_FIELD_INDEX)).getStringValue();
+        String returnType = ((AString) functionRecord
+                .getValueByPos(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_RETURN_TYPE_FIELD_INDEX)).getStringValue();
 
-        return new Function(dataverseName, functionName, Integer.parseInt(arity), params, functionBody, functionBody,
-                functionBody, functionBody, null);
+        String definition = ((AString) functionRecord
+                .getValueByPos(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_DEFINITION_FIELD_INDEX)).getStringValue();
+
+        String language = ((AString) functionRecord
+                .getValueByPos(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_LANGUAGE_FIELD_INDEX)).getStringValue();
+
+        String functionKind = ((AString) functionRecord
+                .getValueByPos(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_KIND_FIELD_INDEX)).getStringValue();
+        return new Function(dataverseName, functionName, Integer.parseInt(arity), params, returnType, definition,
+                language, functionKind);
 
     }
 
@@ -148,15 +155,27 @@ public class FunctionTupleTranslator extends AbstractTupleTranslator<Function> {
 
         // write field 4
         fieldValue.reset();
-        aString.setValue(function.getFunctionBody());
+        aString.setValue(function.getReturnType());
         stringSerde.serialize(aString, fieldValue.getDataOutput());
-        recordBuilder.addField(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_BODY_FIELD_INDEX, fieldValue);
+        recordBuilder.addField(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_RETURN_TYPE_FIELD_INDEX, fieldValue);
 
         // write field 5
         fieldValue.reset();
-        aString.setValue(Calendar.getInstance().getTime().toString());
+        aString.setValue(function.getFunctionBody());
         stringSerde.serialize(aString, fieldValue.getDataOutput());
-        recordBuilder.addField(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_TIMESTAMP_FIELD_INDEX, fieldValue);
+        recordBuilder.addField(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_DEFINITION_FIELD_INDEX, fieldValue);
+
+        // write field 6
+        fieldValue.reset();
+        aString.setValue(function.getLanguage());
+        stringSerde.serialize(aString, fieldValue.getDataOutput());
+        recordBuilder.addField(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_LANGUAGE_FIELD_INDEX, fieldValue);
+
+        // write field 7
+        fieldValue.reset();
+        aString.setValue(function.getFunctionKind());
+        stringSerde.serialize(aString, fieldValue.getDataOutput());
+        recordBuilder.addField(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_KIND_FIELD_INDEX, fieldValue);
 
         // write record
         recordBuilder.write(tupleBuilder.getDataOutput(), true);

@@ -90,6 +90,7 @@ import edu.uci.ics.asterix.metadata.declared.FileSplitDataSink;
 import edu.uci.ics.asterix.metadata.declared.FileSplitSinkId;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
 import edu.uci.ics.asterix.metadata.entities.Function;
+import edu.uci.ics.asterix.metadata.functions.ExternalFunctionCompilerUtil;
 import edu.uci.ics.asterix.metadata.utils.DatasetUtils;
 import edu.uci.ics.asterix.om.base.AInt32;
 import edu.uci.ics.asterix.om.base.AString;
@@ -170,8 +171,8 @@ public class AqlExpressionToPlanTranslator extends AbstractAqlTranslator impleme
 
     private static LogicalVariable METADATA_DUMMY_VAR = new LogicalVariable(-1);
 
-    public AqlExpressionToPlanTranslator(long txnId, MetadataTransactionContext mdTxnCtx, String dataverse, int currentVarCounter,
-            String outputDatasetName, Statement.Kind dmlKind) {
+    public AqlExpressionToPlanTranslator(long txnId, MetadataTransactionContext mdTxnCtx, String dataverse,
+            int currentVarCounter, String outputDatasetName, Statement.Kind dmlKind) {
         this.mdTxnCtx = mdTxnCtx;
         this.dataverse = dataverse;
         this.txnId = txnId;
@@ -481,20 +482,32 @@ public class AqlExpressionToPlanTranslator extends AbstractAqlTranslator impleme
                 false);
         AsterixFunctionInfo afi = AsterixBuiltinFunctions.lookupFunction(fi);
         FunctionIdentifier builtinAquafi = afi == null ? null : afi.getFunctionIdentifier();
-
+        AbstractFunctionCallExpression f = null;
+        
         if (builtinAquafi != null) {
             fi = builtinAquafi;
+            f = handleBuiltinFunction(builtinAquafi, args);
         } else {
             fi = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, fid.getFunctionName(), false);
             FunctionIdentifier builtinAsterixFi = AsterixBuiltinFunctions.getBuiltinFunctionIdentifier(fi);
             if (builtinAsterixFi != null) {
-                fi = builtinAsterixFi;
+                f = handleBuiltinFunction(builtinAsterixFi, args);
             } else {
-                // user defined function
-                handleUserDefinedFunction(fid);
+                f = handleUserDefinedFunction(fid, args);
             }
         }
-        AbstractFunctionCallExpression f;
+
+        AssignOperator op = new AssignOperator(v, new MutableObject<ILogicalExpression>(f));
+        if (topOp != null) {
+            op.getInputs().add(topOp);
+        }
+
+        return new Pair<ILogicalOperator, LogicalVariable>(op, v);
+    }
+
+    private AbstractFunctionCallExpression handleBuiltinFunction(FunctionIdentifier fi,
+            List<Mutable<ILogicalExpression>> args) {
+        AbstractFunctionCallExpression f = null;
         if (AsterixBuiltinFunctions.isBuiltinAggregateFunction(fi)) {
             f = AsterixBuiltinFunctions.makeAggregateFunctionExpression(fi, args);
         } else if (AsterixBuiltinFunctions.isBuiltinUnnestingFunction(fi)) {
@@ -505,23 +518,27 @@ public class AqlExpressionToPlanTranslator extends AbstractAqlTranslator impleme
         } else {
             f = new ScalarFunctionCallExpression(FunctionUtils.getFunctionInfo(fi), args);
         }
-        AssignOperator op = new AssignOperator(v, new MutableObject<ILogicalExpression>(f));
-        if (topOp != null) {
-            op.getInputs().add(topOp);
-        }
-
-        return new Pair<ILogicalOperator, LogicalVariable>(op, v);
+        return f;
     }
-    
-    private Pair<ILogicalOperator, LogicalVariable> handleUserDefinedFunction(AsterixFunction asterixFunction) throws MetadataException{
-        Pair<ILogicalOperator, LogicalVariable> result = null;
-        Function function = MetadataManager.INSTANCE.getFunction(mdTxnCtx, dataverse, asterixFunction.getFunctionName(), asterixFunction.getArity());
-        if(function == null){
+
+    private AbstractFunctionCallExpression handleUserDefinedFunction(AsterixFunction asterixFunction,
+            List<Mutable<ILogicalExpression>> args) throws MetadataException {
+        Function function = MetadataManager.INSTANCE.getFunction(mdTxnCtx, dataverse,
+                asterixFunction.getFunctionName(), asterixFunction.getArity());
+        if (function == null) {
             throw new MetadataException("Unknown function " + asterixFunction);
         }
-        return result;
+
+        AbstractFunctionCallExpression f = null;
+        if (function.getFunctionKind().equalsIgnoreCase(FunctionKind.SCALAR.toString())) {
+            IFunctionInfo finfo = ExternalFunctionCompilerUtil.getExternalFunctionInfo(mdTxnCtx, function);
+            f = new ScalarFunctionCallExpression(finfo, args);
+        } else {
+            throw new MetadataException(" Functions of kind " + function.getFunctionKind() + " are not supported");
+        }
+
+        return f;
     }
-    
 
     @Override
     public Pair<ILogicalOperator, LogicalVariable> visitFunctionDecl(FunctionDecl fd,

@@ -1,3 +1,17 @@
+/*
+ * Copyright 2009-2011 by The Regents of the University of California
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * you may obtain a copy of the License from
+ * 
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package edu.uci.ics.asterix.aql.util;
 
 import java.io.StringReader;
@@ -10,15 +24,8 @@ import edu.uci.ics.asterix.aql.expression.VarIdentifier;
 import edu.uci.ics.asterix.aql.parser.AQLParser;
 import edu.uci.ics.asterix.aql.parser.ParseException;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
-import edu.uci.ics.asterix.common.functions.FunctionConstants;
-import edu.uci.ics.asterix.metadata.MetadataException;
-import edu.uci.ics.asterix.metadata.MetadataManager;
-import edu.uci.ics.asterix.metadata.MetadataTransactionContext;
 import edu.uci.ics.asterix.metadata.entities.Function;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
-import edu.uci.ics.asterix.om.functions.AsterixFunction;
-import edu.uci.ics.asterix.om.functions.AsterixFunctionInfo;
-import edu.uci.ics.hyracks.algebricks.core.algebra.functions.AlgebricksBuiltinFunctions;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.IFunctionInfo;
 
@@ -57,11 +64,12 @@ public class FunctionUtils {
         FunctionDecl decl = (FunctionDecl) query.getPrologDeclList().get(0);
         return decl;
     }
-    
+
     public static IFunctionInfo getFunctionInfo(FunctionIdentifier fi) {
         return AsterixBuiltinFunctions.getAsterixFunctionInfo(fi);
     }
 
+    /*
     public static IFunctionInfo getFunctionInfo(MetadataTransactionContext mdTxnCtx, String dataverseName,
             AsterixFunction asterixFunction) throws MetadataException {
         FunctionIdentifier fid = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
@@ -75,12 +83,56 @@ public class FunctionUtils {
             Function function = MetadataManager.INSTANCE.getFunction(mdTxnCtx, dataverseName,
                     asterixFunction.getFunctionName(), asterixFunction.getArity());
             if (function != null) {
-                finfo = new AsterixFunctionInfo(dataverseName, asterixFunction, false);
-                // todo: for external functions, we shall construct another kind
-                // of function info (that extends AsterixFunctionInfo)
-                // and has additional information.
+                if (function.getLanguage().equalsIgnoreCase(Function.LANGUAGE_AQL)) {
+                    finfo = new AsterixFunctionInfo(dataverseName, asterixFunction, false);
+                } else if (function.getLanguage().equalsIgnoreCase(Function.LANGUAGE_JAVA)) {
+                    finfo = getExternalFunctionInfo(mdTxnCtx, function);
+                } else {
+                    throw new MetadataException(" external function in " + function.getLanguage()
+                            + " language  are not supported");
+                }
             }
         }
         return finfo; // could be null
     }
+
+    private static IFunctionInfo getExternalFunctionInfo(MetadataTransactionContext mdTxnCtx, Function function)
+            throws MetadataException {
+        switch (FunctionKind.valueOf(function.getFunctionKind())) {
+            case SCALAR:
+                final IAType type;
+                String returnType = function.getReturnType();
+                BuiltinType builtinType = AsterixBuiltinTypeMap.getBuiltinTypes().get(returnType);
+                if (builtinType != null) {
+                    type = builtinType.getType();
+                } else {
+                    Datatype datatype = MetadataManager.INSTANCE.getDatatype(mdTxnCtx, function.getDataverseName(),
+                            returnType);
+                    if (datatype != null) {
+                        type = datatype.getDatatype();
+                    } else {
+                        throw new MetadataException(" Unknown return type :" + function.getReturnType());
+                    }
+                }
+                AsterixExternalScalarFunctionInfo asInfo = new AsterixExternalScalarFunctionInfo(
+                        function.getDataverseName(), new AsterixFunction(function.getFunctionName(), function
+                                .getParams().size()), FunctionKind.SCALAR, function.getFunctionBody(),
+                        function.getLanguage(), new IResultTypeComputer() {
+
+                            @Override
+                            public IAType computeType(ILogicalExpression expression, IVariableTypeEnvironment env,
+                                    IMetadataProvider<?, ?> metadataProvider) throws AlgebricksException {
+                                return type;
+                            }
+                        });
+                return asInfo;
+            case AGGREGATE:
+            case UNNEST:
+            case STATEFUL:
+                throw new MetadataException(" function of kind :" + function.getFunctionKind() + " are not supported");
+            default:
+                throw new MetadataException(" Unknown function kind :" + function.getFunctionKind());
+        }
+    }*/
+
 }
