@@ -1,5 +1,5 @@
 /*
- * Copyright 2009-2011 by The Regents of the University of California
+q * Copyright 2009-2011 by The Regents of the University of California
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
@@ -424,7 +424,7 @@ public class DdlTranslator extends AbstractAqlTranslator {
                     FunctionDropStatement stmtDropFunction = (FunctionDropStatement) stmt;
                     String functionName = stmtDropFunction.getFunctionName();
                     FunctionIdentifier fId = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, functionName,
-                            stmtDropFunction.getArity(), false);
+                            stmtDropFunction.getArity());
                     if (AsterixBuiltinArtifactMap.isSystemProtectedArtifact(ARTIFACT_KIND.FUNCTION, fId)) {
                         throw new AsterixException("Invalid Operation cannot drop function " + functionName
                                 + " (protected by system)");

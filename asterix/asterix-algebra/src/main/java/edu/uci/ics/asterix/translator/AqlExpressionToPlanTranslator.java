@@ -478,8 +478,7 @@ public class AqlExpressionToPlanTranslator extends AbstractAqlTranslator impleme
             }
         }
 
-        FunctionIdentifier fi = new FunctionIdentifier(AlgebricksBuiltinFunctions.ALGEBRICKS_NS, fid.getFunctionName(),
-                false);
+        FunctionIdentifier fi = new FunctionIdentifier(AlgebricksBuiltinFunctions.ALGEBRICKS_NS, fid.getFunctionName());
         AsterixFunctionInfo afi = AsterixBuiltinFunctions.lookupFunction(fi);
         FunctionIdentifier builtinAquafi = afi == null ? null : afi.getFunctionIdentifier();
         AbstractFunctionCallExpression f = null;
@@ -488,7 +487,7 @@ public class AqlExpressionToPlanTranslator extends AbstractAqlTranslator impleme
             fi = builtinAquafi;
             f = handleBuiltinFunction(builtinAquafi, args);
         } else {
-            fi = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, fid.getFunctionName(), false);
+            fi = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, fid.getFunctionName());
             if (AsterixBuiltinFunctions.isBuiltinCompilerFunction(fi)) {
                 FunctionIdentifier builtinAsterixFi = AsterixBuiltinFunctions.getBuiltinFunctionIdentifier(fi);
                 f = handleBuiltinFunction(builtinAsterixFi, args);

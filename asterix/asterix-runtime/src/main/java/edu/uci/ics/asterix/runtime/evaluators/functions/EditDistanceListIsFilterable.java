@@ -34,7 +34,7 @@ public class EditDistanceListIsFilterable extends AbstractScalarFunctionDynamicD
 
     private static final long serialVersionUID = 1L;
     private final static FunctionIdentifier FID = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
-            "edit-distance-list-is-filterable", 2, true);
+            "edit-distance-list-is-filterable", 2);
     public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
         public IFunctionDescriptor createFunctionDescriptor() {
             return new EditDistanceListIsFilterable();

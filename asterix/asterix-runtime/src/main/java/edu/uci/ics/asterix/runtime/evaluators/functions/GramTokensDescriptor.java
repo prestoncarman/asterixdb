@@ -20,7 +20,7 @@ public class GramTokensDescriptor extends AbstractScalarFunctionDynamicDescripto
 
     private static final long serialVersionUID = 1L;
     private final static FunctionIdentifier FID = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "gram-tokens",
-            3, true);
+            3);
     public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
         public IFunctionDescriptor createFunctionDescriptor() {
             return new GramTokensDescriptor();

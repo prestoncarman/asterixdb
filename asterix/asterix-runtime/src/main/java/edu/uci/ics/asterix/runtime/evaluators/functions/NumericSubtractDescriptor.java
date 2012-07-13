@@ -38,7 +38,7 @@ public class NumericSubtractDescriptor extends AbstractScalarFunctionDynamicDesc
 
     private static final long serialVersionUID = 1L;
     public final static FunctionIdentifier FID = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
-            "numeric-subtract", 2, true);
+            "numeric-subtract", 2);
     public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
         public IFunctionDescriptor createFunctionDescriptor() {
             return new NumericSubtractDescriptor();

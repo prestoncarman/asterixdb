@@ -29,7 +29,7 @@ public class SpatialAreaDescriptor extends AbstractScalarFunctionDynamicDescript
 
     private static final long serialVersionUID = 1L;
     public final static FunctionIdentifier FID = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "spatial-area",
-            1, true);
+            1);
     public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
         public IFunctionDescriptor createFunctionDescriptor() {
             return new SpatialAreaDescriptor();

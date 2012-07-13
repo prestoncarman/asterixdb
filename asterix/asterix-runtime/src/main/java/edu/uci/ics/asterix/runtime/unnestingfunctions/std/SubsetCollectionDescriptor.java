@@ -32,7 +32,7 @@ public class SubsetCollectionDescriptor extends AbstractUnnestingFunctionDynamic
 
     private static final long serialVersionUID = 1L;
     private final static FunctionIdentifier FID = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
-            "subset-collection", 3, true);
+            "subset-collection", 3);
 
     private final static byte SER_ORDEREDLIST_TYPE_TAG = ATypeTag.ORDEREDLIST.serialize();
     private final static byte SER_UNORDEREDLIST_TYPE_TAG = ATypeTag.UNORDEREDLIST.serialize();

@@ -38,7 +38,7 @@ public class NumericDivideDescriptor extends AbstractScalarFunctionDynamicDescri
 
     private static final long serialVersionUID = 1L;
     public final static FunctionIdentifier FID = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "numeric-divide",
-            2, true);
+            2);
     public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
         public IFunctionDescriptor createFunctionDescriptor() {
             return new NumericDivideDescriptor();

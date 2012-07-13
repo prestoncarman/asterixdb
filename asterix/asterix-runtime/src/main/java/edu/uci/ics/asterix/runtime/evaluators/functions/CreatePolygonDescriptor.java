@@ -20,7 +20,7 @@ public class CreatePolygonDescriptor extends AbstractScalarFunctionDynamicDescri
 
     private static final long serialVersionUID = 1L;
     public final static FunctionIdentifier FID = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "create-polygon",
-            FunctionIdentifier.VARARGS, true);
+            FunctionIdentifier.VARARGS);
     public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
         public IFunctionDescriptor createFunctionDescriptor() {
             return new CreatePolygonDescriptor();

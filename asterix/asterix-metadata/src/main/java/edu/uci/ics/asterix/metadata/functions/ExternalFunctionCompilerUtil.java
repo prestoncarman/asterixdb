@@ -83,7 +83,7 @@ public class ExternalFunctionCompilerUtil implements Serializable{
     private static IFunctionInfo getScalarFunctionInfo(MetadataTransactionContext txnCtx, Function function)
             throws MetadataException {
         FunctionIdentifier fid = new FunctionIdentifier(function.getDataverseName(), function.getFunctionName(),
-                function.getFunctionArity(), false);
+                function.getFunctionArity());
         IResultTypeComputer typeComputer = getResultTypeComputer(txnCtx, function);
         List<IAType> arguments = new ArrayList<IAType>();
         IAType returnType = null;

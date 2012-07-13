@@ -38,7 +38,7 @@ public class NumericAddDescriptor extends AbstractScalarFunctionDynamicDescripto
 
     private static final long serialVersionUID = 1L;
     public final static FunctionIdentifier FID = new FunctionIdentifier(AlgebricksBuiltinFunctions.ALGEBRICKS_NS,
-            "numeric-add", 2, true);
+            "numeric-add", 2);
     public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
         public IFunctionDescriptor createFunctionDescriptor() {
             return new NumericAddDescriptor();

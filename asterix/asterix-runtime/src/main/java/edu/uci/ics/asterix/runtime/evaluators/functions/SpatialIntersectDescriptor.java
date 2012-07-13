@@ -37,7 +37,7 @@ public class SpatialIntersectDescriptor extends AbstractScalarFunctionDynamicDes
 
     private static final long serialVersionUID = 1L;
     public final static FunctionIdentifier FID = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
-            "spatial-intersect", 2, true);
+            "spatial-intersect", 2);
     public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
         public IFunctionDescriptor createFunctionDescriptor() {
             return new SpatialIntersectDescriptor();

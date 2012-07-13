@@ -226,8 +226,7 @@ public class MetadataCache {
 
 	public Function getFunction(String dataverse, String functionName, int arity) {
 		synchronized (functions) {
-			return functions.get(new FunctionIdentifier(dataverse,
-					functionName, arity, false));
+            return functions.get(new FunctionIdentifier(dataverse, functionName, arity));
 		}
 	}
 
@@ -280,7 +279,7 @@ public class MetadataCache {
 		synchronized (functions) {
 			FunctionIdentifier fId = new FunctionIdentifier(
 					function.getDataverseName(), function.getFunctionName(),
-					function.getFunctionArity(), false);
+					function.getFunctionArity());
 
 			Function fun = functions.get(fId);
 			if (fun == null) {
@@ -292,9 +291,8 @@ public class MetadataCache {
 
 	public Object dropFunction(Function function) {
 		synchronized (functions) {
-			FunctionIdentifier fId = new FunctionIdentifier(
-					function.getDataverseName(), function.getFunctionName(),
-					function.getFunctionArity(), false);
+            FunctionIdentifier fId = new FunctionIdentifier(function.getDataverseName(), function.getFunctionName(),
+                    function.getFunctionArity());
 			Function fun = functions.get(fId);
 			if (fun == null) {
 				return null;

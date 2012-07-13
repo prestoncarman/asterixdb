@@ -31,7 +31,7 @@ public class SpatialCellDescriptor extends AbstractScalarFunctionDynamicDescript
 
     private static final long serialVersionUID = 1L;
     public final static FunctionIdentifier FID = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "spatial-cell",
-            4, true);
+            4);
     public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
         public IFunctionDescriptor createFunctionDescriptor() {
             return new SpatialCellDescriptor();

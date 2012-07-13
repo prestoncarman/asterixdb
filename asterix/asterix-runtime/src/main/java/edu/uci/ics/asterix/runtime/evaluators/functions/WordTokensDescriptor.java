@@ -21,7 +21,7 @@ public class WordTokensDescriptor extends AbstractScalarFunctionDynamicDescripto
 
     private static final long serialVersionUID = 1L;
     private final static FunctionIdentifier FID = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "word-tokens",
-            1, true);
+            1);
     public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
         public IFunctionDescriptor createFunctionDescriptor() {
             return new WordTokensDescriptor();

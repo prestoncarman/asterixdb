@@ -16,7 +16,7 @@ public class SimilarityJaccardSortedDescriptor extends AbstractScalarFunctionDyn
 
     private static final long serialVersionUID = 1L;
     private final static FunctionIdentifier FID = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
-            "similarity-jaccard-sorted", 2, true);
+            "similarity-jaccard-sorted", 2);
     public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
         public IFunctionDescriptor createFunctionDescriptor() {
             return new SimilarityJaccardSortedDescriptor();

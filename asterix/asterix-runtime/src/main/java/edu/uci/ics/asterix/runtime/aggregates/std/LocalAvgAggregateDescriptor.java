@@ -48,7 +48,7 @@ public class LocalAvgAggregateDescriptor extends AbstractAggregateFunctionDynami
 
     private static final long serialVersionUID = 1L;
     public final static FunctionIdentifier FID = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "agg-local-avg",
-            1, true);
+            1);
     public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
         public IFunctionDescriptor createFunctionDescriptor() {
             return new LocalAvgAggregateDescriptor();

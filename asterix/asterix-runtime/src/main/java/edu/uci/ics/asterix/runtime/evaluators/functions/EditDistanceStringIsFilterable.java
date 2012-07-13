@@ -34,7 +34,7 @@ public class EditDistanceStringIsFilterable extends AbstractScalarFunctionDynami
 
     private static final long serialVersionUID = 1L;
     private final static FunctionIdentifier FID = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
-            "edit-distance-string-is-filterable", 4, true);
+            "edit-distance-string-is-filterable", 4);
     public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
         public IFunctionDescriptor createFunctionDescriptor() {
             return new EditDistanceStringIsFilterable();

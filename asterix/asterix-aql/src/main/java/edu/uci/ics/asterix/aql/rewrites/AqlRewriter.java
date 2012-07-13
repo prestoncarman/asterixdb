@@ -158,12 +158,12 @@ public final class AqlRewriter {
         List<AsterixFunction> functionCalls = getFunctionCalls(expression);
         for (AsterixFunction funId : functionCalls) {
             if (AsterixBuiltinFunctions.isBuiltinCompilerFunction(new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
-                    funId.getFunctionName(), false))) {
+                    funId.getFunctionName()))) {
                 continue;
             }
 
             if (AsterixBuiltinFunctions.isBuiltinCompilerFunction(new FunctionIdentifier(
-                    AlgebricksBuiltinFunctions.ALGEBRICKS_NS, funId.getFunctionName(), false))) {
+                    AlgebricksBuiltinFunctions.ALGEBRICKS_NS, funId.getFunctionName()))) {
                 continue;
             }
 

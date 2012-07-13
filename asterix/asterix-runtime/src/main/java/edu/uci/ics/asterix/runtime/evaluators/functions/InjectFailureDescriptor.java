@@ -21,7 +21,7 @@ public class InjectFailureDescriptor extends AbstractScalarFunctionDynamicDescri
 
     private static final long serialVersionUID = 1L;
     private final static FunctionIdentifier FID = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
-            "inject-failure", 2, true);
+            "inject-failure", 2);
     public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
         public IFunctionDescriptor createFunctionDescriptor() {
             return new InjectFailureDescriptor();

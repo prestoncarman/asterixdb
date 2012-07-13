@@ -28,7 +28,7 @@ public class FieldAccessByNameDescriptor extends AbstractScalarFunctionDynamicDe
 
     private static final long serialVersionUID = 1L;
     private static final FunctionIdentifier FID = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
-            "field-access-by-name", 2, true);
+            "field-access-by-name", 2);
     public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
         public IFunctionDescriptor createFunctionDescriptor() {
             return new FieldAccessByNameDescriptor();

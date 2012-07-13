@@ -26,12 +26,12 @@ public class AsterixFunctionInfo implements IFunctionInfo, Serializable {
 
     public AsterixFunctionInfo(String namespace, AsterixFunction asterixFunction, boolean isBuiltin) {
         this.functionIdentifier = new FunctionIdentifier(namespace, asterixFunction.getFunctionName(),
-                asterixFunction.getArity(), isBuiltin);
+                asterixFunction.getArity());
     }
 
     public AsterixFunctionInfo(String namespace, AsterixFunction asterixFunction, FunctionKind kind, boolean isBuiltin) {
         this.functionIdentifier = new FunctionIdentifier(namespace, asterixFunction.getFunctionName(),
-                asterixFunction.getArity(), isBuiltin);
+                asterixFunction.getArity());
     }
 
     public AsterixFunctionInfo(FunctionIdentifier functionIdentifier) {
