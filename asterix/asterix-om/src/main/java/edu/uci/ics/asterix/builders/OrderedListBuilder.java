@@ -89,10 +89,20 @@ public class OrderedListBuilder implements IAOrderedListBuilder {
             }
             if (writeTypeTag) {
                 out.writeByte(ORDEREDLIST_TYPE_TAG);
+                System.out.println(" wrote type tag : " + ORDEREDLIST_TYPE_TAG);
             }
             out.writeByte(itemTypeTag.serialize());
+            System.out.println(" wrote item tag : " + itemTypeTag.serialize());
             out.write(offsetArray, 0, metadataInfoSize);
+            System.out.println(" wrote offset array ");
+            for (int i = 0; i < offsetArray.length; i++) {
+                System.out.println(offsetArray[i] + " ");
+            }
             out.write(outputStream.toByteArray(), 0, outputStream.size());
+            System.out.println("wrote contents");
+            for (int i = 0; i < outputStream.toByteArray().length; i++) {
+                System.out.println(outputStream.toByteArray()[i] + " ");
+            }
         } catch (IOException e) {
             throw new HyracksDataException(e);
         }

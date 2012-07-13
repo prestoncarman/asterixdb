@@ -14,6 +14,7 @@
  */
 package edu.uci.ics.asterix.metadata.functions;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -46,7 +47,7 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.IFunctionInfo;
 import edu.uci.ics.hyracks.algebricks.core.algebra.metadata.IMetadataProvider;
 
-public class ExternalFunctionCompilerUtil {
+public class ExternalFunctionCompilerUtil implements Serializable{
 
     private static Map<String, IResultTypeComputer> resultTypeComputers = new HashMap<String, IResultTypeComputer>();
 
@@ -157,7 +158,8 @@ public class ExternalFunctionCompilerUtil {
                     public IAType computeType(ILogicalExpression expression, IVariableTypeEnvironment env,
                             IMetadataProvider<?, ?> metadataProvider) throws AlgebricksException {
 
-                        return new AOrderedListType(type, type.getTypeName());
+                        return new AOrderedListType(((AOrderedListType) type).getItemType(), ((AOrderedListType) type)
+                                .getItemType().getTypeName());
                     }
 
                 };

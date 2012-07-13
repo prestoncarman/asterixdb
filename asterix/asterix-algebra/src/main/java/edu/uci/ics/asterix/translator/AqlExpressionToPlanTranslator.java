@@ -483,14 +483,14 @@ public class AqlExpressionToPlanTranslator extends AbstractAqlTranslator impleme
         AsterixFunctionInfo afi = AsterixBuiltinFunctions.lookupFunction(fi);
         FunctionIdentifier builtinAquafi = afi == null ? null : afi.getFunctionIdentifier();
         AbstractFunctionCallExpression f = null;
-        
+
         if (builtinAquafi != null) {
             fi = builtinAquafi;
             f = handleBuiltinFunction(builtinAquafi, args);
         } else {
             fi = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, fid.getFunctionName(), false);
-            FunctionIdentifier builtinAsterixFi = AsterixBuiltinFunctions.getBuiltinFunctionIdentifier(fi);
-            if (builtinAsterixFi != null) {
+            if (AsterixBuiltinFunctions.isBuiltinCompilerFunction(fi)) {
+                FunctionIdentifier builtinAsterixFi = AsterixBuiltinFunctions.getBuiltinFunctionIdentifier(fi);
                 f = handleBuiltinFunction(builtinAsterixFi, args);
             } else {
                 f = handleUserDefinedFunction(fid, args);

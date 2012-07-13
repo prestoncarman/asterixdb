@@ -44,6 +44,7 @@ public abstract class ExternalFunction implements IExternalFunction {
             clazz = Class.forName(classname, true, libraryClassLoader);
             externalFunctionFactory = (IFunctionFactory) clazz.newInstance();
             externalFunction = externalFunctionFactory.getExternalFunction();
+            externalFunction.initialize();
         } catch (Exception e) {
             throw new AlgebricksException(" Unable to load/instantiate class " + classname, e);
         }

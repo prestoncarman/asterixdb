@@ -174,8 +174,14 @@ public final class AqlRewriter {
             Function function = MetadataManager.INSTANCE.getFunction(mdTxnCtx, dataverseName, funId.getFunctionName(),
                     funId.getArity());
             if (function == null) {
-                throw new AsterixException(" function " + functionDecls.get(functionDecls.size() - 1).getIdent()
-                        + " depends upon function " + funId + " which is undefined");
+                StringBuilder messageBuilder = new StringBuilder();
+                if (functionDecls.size() > 0) {
+                    messageBuilder.append(" function " + functionDecls.get(functionDecls.size() - 1).getIdent()
+                            + " depends upon function " + funId + " which is undefined");
+                } else {
+                    messageBuilder.append(" function " + funId.getFunctionName() + " is undefined ");
+                }
+                throw new AsterixException(messageBuilder.toString());
             }
 
             if (function.getLanguage().equalsIgnoreCase(Function.LANGUAGE_AQL)) {

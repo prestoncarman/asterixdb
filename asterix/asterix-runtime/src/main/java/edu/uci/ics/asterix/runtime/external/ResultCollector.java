@@ -14,6 +14,7 @@
  */
 package edu.uci.ics.asterix.runtime.external;
 
+import java.io.DataOutput;
 import java.nio.ByteBuffer;
 
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
@@ -136,6 +137,11 @@ public class ResultCollector implements IResultCollector {
         } catch (HyracksDataException hde) {
             throw new AsterixException(hde);
         }
+    }
+
+    @Override
+    public DataOutput getDataOutput() {
+        return outputProvider.getDataOutput();
     }
 
 }

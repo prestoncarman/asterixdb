@@ -14,6 +14,8 @@
  */
 package edu.uci.ics.asterix.runtime.external;
 
+import java.io.DataOutput;
+
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
 import edu.uci.ics.asterix.om.base.AOrderedList;
 import edu.uci.ics.asterix.om.base.ARecord;
@@ -34,4 +36,6 @@ public interface IResultCollector {
     public void writeListResult(AOrderedList list) throws AsterixException;
 
     public IAObject getComplexTypeResultHolder();
+    
+    public DataOutput getDataOutput();
 }
