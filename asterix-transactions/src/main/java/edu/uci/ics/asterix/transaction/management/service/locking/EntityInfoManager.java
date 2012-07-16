@@ -22,7 +22,7 @@ import java.util.ArrayList;
  * EntityInfoManager provides EntityInfo arrays backed by ByteBuffer.
  * The array grows when the slots are overflowed.
  * Also, the array shrinks according to the following shrink policy
- * : Shrink when the resource under-utilization lasts for a certain threshold time. 
+ * : Shrink when the resource under-utilization lasts for a certain threshold time.
  * 
  * @author kisskys
  */
@@ -36,96 +36,96 @@ public class EntityInfoManager {
     private boolean isShrinkTimerOn;
     private int occupiedSlots;
 
-//    ////////////////////////////////////////////////
-//    // begin of unit test
-//    ////////////////////////////////////////////////
-//
-//    public static final int SHRINK_TIMER_THRESHOLD = 0; //for unit test
-//
-//    /**
-//     * @param args
-//     */
-//    public static void main(String[] args) {
-//        final int DataSize = 5000;
-//
-//        int i, j;
-//        int slots = ChildEntityInfoArrayManager.NUM_OF_SLOTS;
-//        int data[] = new int[DataSize];
-//        EntityInfoManager eiMgr = new EntityInfoManager();
-//
-//        //allocate: 50
-//        System.out.println("allocate: 50");
-//        for (i = 0; i < 5; i++) {
-//            for (j = i * slots; j < i * slots + slots; j++) {
-//                data[j] = eiMgr.allocate();
-//            }
-//
-//            System.out.println(eiMgr.prettyPrint());
-//        }
-//
-//        //deallocate from the last child to the first child
-//        System.out.println("deallocate from the last child to the first child");
-//        for (i = 4; i >= 0; i--) {
-//            for (j = i * slots + slots - 1; j >= i * slots; j--) {
-//                eiMgr.deallocate(data[j]);
-//            }
-//            System.out.println(eiMgr.prettyPrint());
-//        }
-//
-//        //allocate: 50
-//        System.out.println("allocate: 50");
-//        for (i = 0; i < 5; i++) {
-//            for (j = i * slots; j < i * slots + slots; j++) {
-//                data[j] = eiMgr.allocate();
-//            }
-//
-//            System.out.println(eiMgr.prettyPrint());
-//        }
-//
-//        //deallocate from the first child to last child
-//        System.out.println("deallocate from the first child to last child");
-//        for (i = 0; i < 5; i++) {
-//            for (j = i * slots; j < i * slots + slots; j++) {
-//                eiMgr.deallocate(data[j]);
-//            }
-//
-//            System.out.println(eiMgr.prettyPrint());
-//        }
-//
-//        //allocate: 50
-//        System.out.println("allocate: 50");
-//        for (i = 0; i < 5; i++) {
-//            for (j = i * slots; j < i * slots + slots; j++) {
-//                data[j] = eiMgr.allocate();
-//            }
-//
-//            System.out.println(eiMgr.prettyPrint());
-//        }
-//
-//        //deallocate from the first child to 4th child
-//        System.out.println("deallocate from the first child to 4th child");
-//        for (i = 0; i < 4; i++) {
-//            for (j = i * slots; j < i * slots + slots; j++) {
-//                eiMgr.deallocate(data[j]);
-//            }
-//
-//            System.out.println(eiMgr.prettyPrint());
-//        }
-//
-//        //allocate: 40
-//        System.out.println("allocate: 40");
-//        for (i = 0; i < 4; i++) {
-//            for (j = i * slots; j < i * slots + slots; j++) {
-//                data[j] = eiMgr.allocate();
-//            }
-//
-//            System.out.println(eiMgr.prettyPrint());
-//        }
-//    }
-//    
-//    ////////////////////////////////////////////////
-//    // end of unit test
-//    ////////////////////////////////////////////////
+    //    ////////////////////////////////////////////////
+    //    // begin of unit test
+    //    ////////////////////////////////////////////////
+    //
+    //    public static final int SHRINK_TIMER_THRESHOLD = 0; //for unit test
+    //
+    //    /**
+    //     * @param args
+    //     */
+    //    public static void main(String[] args) {
+    //        final int DataSize = 5000;
+    //
+    //        int i, j;
+    //        int slots = ChildEntityInfoArrayManager.NUM_OF_SLOTS;
+    //        int data[] = new int[DataSize];
+    //        EntityInfoManager eiMgr = new EntityInfoManager();
+    //
+    //        //allocate: 50
+    //        System.out.println("allocate: 50");
+    //        for (i = 0; i < 5; i++) {
+    //            for (j = i * slots; j < i * slots + slots; j++) {
+    //                data[j] = eiMgr.allocate();
+    //            }
+    //
+    //            System.out.println(eiMgr.prettyPrint());
+    //        }
+    //
+    //        //deallocate from the last child to the first child
+    //        System.out.println("deallocate from the last child to the first child");
+    //        for (i = 4; i >= 0; i--) {
+    //            for (j = i * slots + slots - 1; j >= i * slots; j--) {
+    //                eiMgr.deallocate(data[j]);
+    //            }
+    //            System.out.println(eiMgr.prettyPrint());
+    //        }
+    //
+    //        //allocate: 50
+    //        System.out.println("allocate: 50");
+    //        for (i = 0; i < 5; i++) {
+    //            for (j = i * slots; j < i * slots + slots; j++) {
+    //                data[j] = eiMgr.allocate();
+    //            }
+    //
+    //            System.out.println(eiMgr.prettyPrint());
+    //        }
+    //
+    //        //deallocate from the first child to last child
+    //        System.out.println("deallocate from the first child to last child");
+    //        for (i = 0; i < 5; i++) {
+    //            for (j = i * slots; j < i * slots + slots; j++) {
+    //                eiMgr.deallocate(data[j]);
+    //            }
+    //
+    //            System.out.println(eiMgr.prettyPrint());
+    //        }
+    //
+    //        //allocate: 50
+    //        System.out.println("allocate: 50");
+    //        for (i = 0; i < 5; i++) {
+    //            for (j = i * slots; j < i * slots + slots; j++) {
+    //                data[j] = eiMgr.allocate();
+    //            }
+    //
+    //            System.out.println(eiMgr.prettyPrint());
+    //        }
+    //
+    //        //deallocate from the first child to 4th child
+    //        System.out.println("deallocate from the first child to 4th child");
+    //        for (i = 0; i < 4; i++) {
+    //            for (j = i * slots; j < i * slots + slots; j++) {
+    //                eiMgr.deallocate(data[j]);
+    //            }
+    //
+    //            System.out.println(eiMgr.prettyPrint());
+    //        }
+    //
+    //        //allocate: 40
+    //        System.out.println("allocate: 40");
+    //        for (i = 0; i < 4; i++) {
+    //            for (j = i * slots; j < i * slots + slots; j++) {
+    //                data[j] = eiMgr.allocate();
+    //            }
+    //
+    //            System.out.println(eiMgr.prettyPrint());
+    //        }
+    //    }
+    //    
+    //    ////////////////////////////////////////////////
+    //    // end of unit test
+    //    ////////////////////////////////////////////////
 
     public EntityInfoManager() {
         pArray = new ArrayList<ChildEntityInfoArrayManager>();
@@ -229,7 +229,7 @@ public class EntityInfoManager {
         int size = pArray.size();
         int maxDecreaseCount = size / 2;
         ChildEntityInfoArrayManager child;
-        for ( i = size-1; i >= 0; i--) {
+        for (i = size - 1; i >= 0; i--) {
             child = pArray.get(i);
             if (child.isEmpty() || child.isDeinitialized()) {
                 if (bContiguous) {
@@ -250,13 +250,13 @@ public class EntityInfoManager {
                 bContiguous = false;
             }
         }
-        
+
         //reset allocChild when the child is removed or deinitialized.
         size = pArray.size();
         if (allocChild >= size || pArray.get(allocChild).isDeinitialized()) {
             //set allocChild to any initialized one.
             //It is guaranteed that there is at least one initialized child.
-            for (i=0; i<size;i++) {
+            for (i = 0; i < size; i++) {
                 if (!pArray.get(i).isDeinitialized()) {
                     allocChild = i;
                     break;
@@ -293,6 +293,90 @@ public class EntityInfoManager {
         }
         return s.toString();
     }
+
+    //////////////////////////////////////////////////////////////////
+    //   set/get method for each field of EntityInfo
+    //////////////////////////////////////////////////////////////////
+
+    public void setJobId(int slotNum, int id) {
+        pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).setJobId(
+                slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS, id);
+    }
+
+    public int getJobId(int slotNum) {
+        return pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).getJobId(
+                slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS);
+    }
+
+    public void setDatasetId(int slotNum, int id) {
+        pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).setDatasetId(
+                slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS, id);
+    }
+
+    public int getDatasetId(int slotNum) {
+        return pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).getDatasetId(
+                slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS);
+    }
+
+    public void setPKHashVal(int slotNum, int hashVal) {
+        pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).setPKHashVal(
+                slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS, hashVal);
+    }
+
+    public int getPKHashVal(int slotNum) {
+        return pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).getPKHashVal(
+                slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS);
+    }
+
+    public void setLockMode(int slotNum, byte mode) {
+        pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).setLockMode(
+                slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS, mode);
+    }
+
+    public byte getLockMode(int slotNum) {
+        return pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).getLockMode(
+                slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS);
+    }
+
+    public void setLockCount(int slotNum, byte count) {
+        pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).setLockCount(
+                slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS, count);
+    }
+
+    public byte getLockCount(int slotNum) {
+        return pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).getLockCount(
+                slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS);
+    }
+
+    public void setNextDatasetActor(int slotNum, int nextActorSlotNum) {
+        pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).setNextDatasetActor(
+                slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS, nextActorSlotNum);
+    }
+
+    public int getNextDatasetActor(int slotNum) {
+        return pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).getNextDatasetActor(
+                slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS);
+    }
+
+    public void setNextEntityActor(int slotNum, int nextActorSlotNum) {
+        pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).setNextEntityActor(
+                slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS, nextActorSlotNum);
+    }
+
+    public int getNextEntityActor(int slotNum) {
+        return pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).getNextEntityActor(
+                slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS);
+    }
+
+    public void setPrevJobResource(int slotNum, int prevResourceSlotNum) {
+        pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).setPrevJobResource(
+                slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS, prevResourceSlotNum);
+    }
+
+    public int getPrevJobResource(int slotNum) {
+        return pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).getPrevJobResource(
+                slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS);
+    }
 }
 
 /******************************************
@@ -311,7 +395,7 @@ public class EntityInfoManager {
 class ChildEntityInfoArrayManager {
     public static final int ENTITY_INFO_SIZE = 26; //26bytes
     public static final int NUM_OF_SLOTS = 1024; //number of entities in a buffer
-//    public static final int NUM_OF_SLOTS = 10; //for unit test
+    //    public static final int NUM_OF_SLOTS = 10; //for unit test
     public static final int BUFFER_SIZE = ENTITY_INFO_SIZE * NUM_OF_SLOTS;
 
     //byte offset of each field of EntityInfo

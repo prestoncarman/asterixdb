@@ -290,6 +290,60 @@ public class EntityLockInfoManager {
         }
         return s.toString();
     }
+    
+    //////////////////////////////////////////////////////////////////
+    //   set/get method for each field of EntityLockInfo
+    //////////////////////////////////////////////////////////////////
+
+    public void setXCount(int slotNum, int count) {
+        pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).setXCount(
+                slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS, count);
+    }
+
+    public int getXCount(int slotNum) {
+        return pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).getXCount(
+                slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS);
+    }
+
+    public void setSCount(int slotNum, int count) {
+        pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).setSCount(
+                slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS, count);
+    }
+
+    public int getSCount(int slotNum) {
+        return pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).getSCount(
+                slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS);
+    }
+
+    public void setFirstHolder(int slotNum, int holder) {
+        pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).setFirstHolder(
+                slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS, holder);
+    }
+
+    public int getFirstHolder(int slotNum) {
+        return pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).getFirstHolder(
+                slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS);
+    }
+
+    public void setFirstWaiter(int slotNum, int waiter) {
+        pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).setFirstWaiter(
+                slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS, waiter);
+    }
+
+    public int getFirstWaiter(int slotNum) {
+        return pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).getFirstWaiter(
+                slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS);
+    }
+
+    public void setUpgrader(int slotNum, int upgrader) {
+        pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).setUpgrader(
+                slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS, upgrader);
+    }
+
+    public byte getUpgrader(int slotNum) {
+        return pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).getUpgrader(
+                slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS);
+    }
 }
 
 /******************************************
