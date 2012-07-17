@@ -8,13 +8,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.StringTokenizer;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 
+import javax.servlet.ServletContext;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import edu.uci.ics.asterix.common.config.GlobalConfig;
+import edu.uci.ics.asterix.common.context.AsterixIndexRegistryProvider;
+import edu.uci.ics.asterix.common.context.AsterixStorageManagerInterface;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
+import edu.uci.ics.asterix.formats.nontagged.AqlBinaryHashFunctionFactoryProvider;
 import edu.uci.ics.asterix.formats.nontagged.AqlSerializerDeserializerProvider;
 import edu.uci.ics.asterix.kvs.GetCall;
 import edu.uci.ics.asterix.kvs.IKVCall;
@@ -79,17 +85,18 @@ import edu.uci.ics.hyracks.storage.common.IStorageManagerInterface;
 public class KVServlet extends HttpServlet {
 	private static final long serialVersionUID = 1L;
 	
-	private static long queryArrivalTime = -1;			//TODO used for benchmarking - Should be removed eventually
-	private static long prevQueryDepartureTime = -1;	//TODO used for benchmarking - Should be removed eventually
 	private PrintWriter queryPw;
 	private String qDumpPathPrefix;
-	int qDumpId;
-	int qCounter = 0;
-	private PrintWriter waitPw;
-	private String wDumpPathPrefix;
-	int wDumpId;
-	int wCounter = 0;
-	private final int pace = 500;
+	AtomicInteger qDumpIdAt;
+	
+	
+	private String arrivalFilesPrefix;
+	private PrintWriter arrivalPw;
+	private AtomicInteger arrivalIdCounter;
+	
+	
+	private AtomicInteger queryCounter;
+	private final int pace = 50000;
 	private long firstQueryTime = -1;
 	
 	
@@ -101,36 +108,26 @@ public class KVServlet extends HttpServlet {
     	sId = new KVServiceID();
     	p = new KVCallProcessor();
     	
-    	qDumpPathPrefix = "/data/pouria/dump/q/qd-"; //"/home/pouria/dump/q/qd-";
-    	qDumpId = 0;
-    	queryPw = new PrintWriter(qDumpPathPrefix+(qDumpId++) );
-    	wDumpPathPrefix = "/data/pouria/dump/w/wd-"; //"/home/pouria/dump/w/wd-";
-    	wDumpId = 0;
-    	waitPw = new PrintWriter(wDumpPathPrefix+(wDumpId++));
+    	qDumpPathPrefix = /*"/data/pouria/dump/q/qd-";	*/ "/home/pouria/dump/q/qd-";
+    	qDumpIdAt = new AtomicInteger(0);
+    	queryPw = new PrintWriter(qDumpPathPrefix+(qDumpIdAt.getAndIncrement()) );
+    	
+    	arrivalFilesPrefix = /* "/data/pouria/dump/a/ad-";	*/ "/home/pouria/dump/a/ad-";
+    	arrivalIdCounter = new AtomicInteger(0);
+    	arrivalPw = new PrintWriter(arrivalFilesPrefix+(arrivalIdCounter.getAndIncrement()));
+    	
+    	queryCounter = new AtomicInteger(0);
     	
     }
     
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         
     	//-------
-    	long t = System.currentTimeMillis();
-    	if(queryArrivalTime != -1){
-    		throw new ServletException("Rewritting query arival time");
-    	}
-    
-    	if(prevQueryDepartureTime != -1){
-    		waitPw.println( (t-prevQueryDepartureTime) );
-    		wCounter++;
-    		if(wCounter % pace == 0){
-    			waitPw.close();
-    			waitPw = new PrintWriter(wDumpPathPrefix+(wDumpId++));
-    		}
-    	}
-    	prevQueryDepartureTime = -1;
-    	queryArrivalTime = t;
+    	long start = System.currentTimeMillis();
     	
+    	arrivalPw.println(start);
     	if(firstQueryTime == -1){
-            firstQueryTime = t;
+            firstQueryTime = start;
     	}
 
     	//-------
@@ -216,18 +213,23 @@ public class KVServlet extends HttpServlet {
     	try {
     		LinkedBlockingQueue<Object[]> outputQueue = new LinkedBlockingQueue<Object[]>();
     		KVServiceProvider.INSTANCE.registerOutputQueue(queryId, outputQueue);
-    		KVServiceProvider.INSTANCE.storeStartTime(queryId, queryArrivalTime);
-    		p.processGet(keyFields,/* hcc,*/ queryId, dvName, dsName);
+    		p.processGet(keyFields, queryId, dvName, dsName);
     		Object[] result = outputQueue.take();
-    		long e = System.currentTimeMillis();
-    		long b = KVServiceProvider.INSTANCE.getStartTime(queryId);
+    		long end = System.currentTimeMillis();
     		r = p.interpretResult(result);
     		
-    		queryPw.println( (e - b) );
-    		qCounter++;
-    		if(qCounter % pace == 0){
+    		queryPw.println( (end-start) );
+    		int c = queryCounter.incrementAndGet();
+    		if(c % pace == 0){
     			queryPw.close();
-    			queryPw = new PrintWriter(qDumpPathPrefix+(qDumpId++) );
+    			queryPw = new PrintWriter(qDumpPathPrefix+(qDumpIdAt.getAndIncrement()) );
+    			
+    			arrivalPw.close();
+        		arrivalPw = new PrintWriter(arrivalFilesPrefix+(arrivalIdCounter.getAndIncrement()));
+    		
+        		double totalTime = System.currentTimeMillis() - firstQueryTime;
+                double thr = ((double) c) / totalTime;
+                System.out.println("\n>>>>>\nTotal Time\t"+totalTime+"\nTotal opr\t"+c+"\nThroughput\t"+(thr*1000)+"\n\n" );
     		}
     		
     		
@@ -247,15 +249,6 @@ public class KVServlet extends HttpServlet {
 
     	KVServiceProvider.INSTANCE.removeOutputQueue(queryId);
     	out.println(r);
-    	
-    	
-    	queryArrivalTime = -1;
-    	prevQueryDepartureTime = System.currentTimeMillis();
-    	if(qCounter % 10000 == 0){
-            double totalTime = System.currentTimeMillis() - firstQueryTime;
-            double thr = ((double) qCounter) / totalTime;
-            System.out.println("\n>>>>>\nTotal Time\t"+totalTime+"\nTotal opr\t"+qCounter+"\nThroughput\t"+(thr*1000)+"\n\n" );
-    	}
 
     }
 
@@ -319,6 +312,52 @@ public class KVServlet extends HttpServlet {
     	}
     	return l;
     }
+    
+  //---- THESE METHODS ARE ADDED FOR BENCHMARKING, YOU SHOULD REMOVE THEM ---------------------
+    private static final String HYRACKS_CONNECTION_ATTR = "edu.uci.ics.asterix.HYRACKS_CONNECTION";
+    
+    protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+    	//TODO This method should eventually be removed (Registration will happen through web-Interface during DS-Creation)
+    	String uri = req.getRequestURI();
+    	StringTokenizer uriSt = new StringTokenizer(uri, "/");
+    	uriSt.nextToken();	//kvs (Ignoring service identifier)
+    	String dvName = uriSt.nextToken();
+    	String dsName = uriSt.nextToken();
+    	long delay = Long.parseLong( uriSt.nextToken() );
+    	int sizeLimit = Integer.parseInt( uriSt.nextToken() );
+    	String ccIp = uriSt.nextToken().trim();
+    	
+    	IHyracksClientConnection hcc = getHcc(ccIp);
+    	String r = "";
+    	try {
+			r = p.processReg(hcc, dvName, dsName, delay, sizeLimit);
+		} catch (Exception e) {
+			r = "Unsuccessfull Service Registration for Dataset: "+dsName+" in Dataverse "+dvName;
+			e.printStackTrace();
+		}
+		PrintWriter out = resp.getWriter();
+		out.println(r);
+    }
+    
+    private synchronized IHyracksClientConnection getHcc(String ccIp){
+    	//TODO Look at APIServlet and generalize this part (using finals)
+        ServletContext context = getServletContext();
+        IHyracksClientConnection hcc;
+        synchronized (context) {
+            hcc = (IHyracksClientConnection) context.getAttribute(HYRACKS_CONNECTION_ATTR);
+            if (hcc == null) {
+                try {
+					hcc = new HyracksConnection(ccIp, 1098);
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+                context.setAttribute(HYRACKS_CONNECTION_ATTR, hcc);
+            }
+        }
+        return hcc;
+    }
+    //---------------------------------------------------------------------
+    
 }
 
 class KVCallProcessor{
@@ -358,6 +397,99 @@ class KVCallProcessor{
 		default:
 			return r.append( "Unknown Response Type\n" ).toString();
 		}
-		
 	}
+	
+	//---- THESE METHODS ARE ADDED FOR BENCHMARKING, YOU SHOULD REMOVE THEM ---------------------
+	//---- You eventually need to add the service registration upon restart (not just create) ---
+	public String processReg(IHyracksClientConnection hcc, String dataverseName, String datasetName, long delay, int sizeLimit) throws Exception{
+		MetadataManager.INSTANCE.init();
+		MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
+		MetadataManager.INSTANCE.lock(mdTxnCtx, LockMode.SHARED);
+		AqlCompiledMetadataDeclarations acmd = KVUtils.generateACMD(mdTxnCtx, dataverseName);
+		
+		acmd.connectToDataverse(dataverseName);
+		AqlCompiledDatasetDecl acdd = KVUtils.generateACDD(acmd, datasetName);
+		
+		IAType[] keyTypes = KVUtils.getKeyTypes(acdd);
+		List<String> partitionKeys = KVUtils.getPartitioningKeys(acdd);
+		String ixName = KVUtils.getPixName(acdd);
+		Pair<IFileSplitProvider, AlgebricksPartitionConstraint> fsap = KVUtils.getFileSpltAndConstraint(acmd, datasetName, ixName);
+		ConstantFileSplitProvider fs = (ConstantFileSplitProvider) fsap.first;
+		AlgebricksAbsolutePartitionConstraint partConst = (AlgebricksAbsolutePartitionConstraint) fsap.second;
+		
+		ARecordType record = KVUtils.getItemType(acmd, acdd);
+		
+		Triple<ITypeTraits[], IBinaryComparatorFactory[], ISerializerDeserializer[]> triple = KVUtils.getTreeOutputRec(acmd, acdd);
+		ITypeTraits[] tt = triple.first;
+		IBinaryComparatorFactory[] bcf = triple.second;
+		ISerializerDeserializer[] isd = triple.third;
+		
+		acmd.disconnectFromDataverse();
+		MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
+		
+		JobSpecification spec = generateServiceJobSpec(dataverseName, datasetName, keyTypes, tt, bcf, fs, isd, record, partitionKeys, partConst, delay, sizeLimit);
+		
+		JobId jobId = hcc.createJob(GlobalConfig.HYRACKS_APP_NAME, spec);
+		spec.setMaxReattempts(0);
+		System.out.println("Going to Start a Job in REG");
+		hcc.start(jobId);
+		
+		return "REG call executed Successfully";
+	}
+	
+	private JobSpecification generateServiceJobSpec(String dvName, String dsName, IAType[] keyType, ITypeTraits[] typeTraits, IBinaryComparatorFactory[] comparatorFactories, IFileSplitProvider fileSplitProvider, ISerializerDeserializer[] res, ARecordType record, List<String> partitioningKeys, AlgebricksAbsolutePartitionConstraint parts, long delay, int sizeLimit) throws Exception{
+
+		JobSpecification spec = new JobSpecification();
+		delay = delay/4;
+		KVRequestDispatcherOperatorDescriptor reqDisp = 
+			new KVRequestDispatcherOperatorDescriptor(spec, keyType, dvName, dsName, record, partitioningKeys, delay, sizeLimit);	//TODO Change it to use all keys (We need dynamic tb for manager based on num of fields)
+
+		IStorageManagerInterface storageManager = AsterixStorageManagerInterface.INSTANCE;
+		IIndexRegistryProvider<IIndex> indexRegistryProvider = AsterixIndexRegistryProvider.INSTANCE;
+
+		ISerializerDeserializer[] kvRespSerDe = new ISerializerDeserializer[res.length + 3];	//PID, QID, RespType fields added
+	    kvRespSerDe[0] = AqlSerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.AINT32);
+	    kvRespSerDe[1] = AqlSerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.AINT32);
+	    kvRespSerDe[2] = AqlSerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.AINT32);
+	    for(int i=3; i<kvRespSerDe.length; i++){
+	    	kvRespSerDe[i] = res[i-3];
+	    }
+	    RecordDescriptor kvRespRecDesc = new RecordDescriptor(kvRespSerDe);
+
+
+	    KVRequestHandlerOperatorDescriptor reqHandler = 
+			new KVRequestHandlerOperatorDescriptor(spec, kvRespRecDesc, 
+					storageManager, indexRegistryProvider, fileSplitProvider, 
+						 typeTraits, 
+							comparatorFactories, new BTreeDataflowHelperFactory(), keyType.length, delay, sizeLimit);
+	
+	
+	    KVSResponseDispatcherOperatorDescriptor respDisp = new KVSResponseDispatcherOperatorDescriptor(spec);
+
+	    PartitionConstraintHelper.addAbsoluteLocationConstraint(spec, reqDisp, parts.getLocations() );
+		PartitionConstraintHelper.addAbsoluteLocationConstraint(spec, reqHandler, parts.getLocations() );
+		PartitionConstraintHelper.addAbsoluteLocationConstraint(spec, respDisp, parts.getLocations() );
+
+
+		IBinaryHashFunctionFactory[] hashFactories1 = new IBinaryHashFunctionFactory[keyType.length];
+		int[] keysIx = new int[keyType.length];
+		for(int i=0; i<keysIx.length; i++){
+			keysIx[i] = (3+i);
+			hashFactories1[i] = AqlBinaryHashFunctionFactoryProvider.INSTANCE.getBinaryHashFunctionFactory(keyType[i] );	
+		}
+		
+		ITuplePartitionComputerFactory tpcf1 = new FieldHashPartitionComputerFactory(keysIx, hashFactories1);
+		IConnectorDescriptor con1 = new MToNPartitioningTimeTriggeredConnectorDescriptor(spec, tpcf1, delay, sizeLimit);
+		
+		IBinaryHashFunctionFactory[] hashFactories2 = new IBinaryHashFunctionFactory[]{AqlBinaryHashFunctionFactoryProvider.INSTANCE.getBinaryHashFunctionFactory(BuiltinType.AINT32)};	
+		ITuplePartitionComputerFactory tpcf2 = new FieldHashPartitionComputerFactory(new int[]{0}, hashFactories2);
+		IConnectorDescriptor con2 = new MToNPartitioningTimeTriggeredConnectorDescriptor(spec, tpcf2, delay, sizeLimit);
+
+		spec.connect(con1, reqDisp, 0, reqHandler, 0);
+	    spec.connect(con2, reqHandler, 0, respDisp, 0);
+	    spec.addRoot(respDisp); 
+	    return spec;
+	}
+	
+	//-------------------------------------------------------------------------------------------
 }

@@ -46,7 +46,9 @@ public class KVSResponseDispatcherOperatorNodePushable extends AbstractUnaryInpu
 			
 			LinkedBlockingQueue<Object[]> outputQueue = KVServiceProvider.INSTANCE.getOutputQueue(qId);
 			if(outputQueue == null){
-				throw new IllegalStateException("No queue for query "+qId);
+			//	throw new IllegalStateException("No queue for query "+qId);
+				System.out.println("No queue for query "+qId+", ignored at this point in RespDispatcher");
+				continue;
 			}
 			try {
 				outputQueue.put( frameDeser.deserializeRecord() );

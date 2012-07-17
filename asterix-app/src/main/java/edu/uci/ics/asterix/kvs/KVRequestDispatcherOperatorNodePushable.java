@@ -41,6 +41,7 @@ public class KVRequestDispatcherOperatorNodePushable extends AbstractUnaryOutput
         appender = new FrameTupleAppender(ctx.getFrameSize());
         appender.reset(frame, true);
         //String ncId = ctx.getJobletContext().getApplicationContext().getNodeId(); //<<< How to get nodeId
+        System.out.println("KVReqDispatcher init in partion "+pId);
         KVServiceProvider.INSTANCE.registerQueryQueue(sId, queue, record);
         this.maxWaitTime = maxWaitTime;
         this.minFlushSize = flushSize;
