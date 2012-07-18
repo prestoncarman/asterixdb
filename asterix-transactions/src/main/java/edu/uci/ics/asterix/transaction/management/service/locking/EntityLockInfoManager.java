@@ -35,6 +35,7 @@ public class EntityLockInfoManager {
     private long shrinkTimer;
     private boolean isShrinkTimerOn;
     private int occupiedSlots;
+    private EntityInfoManager entityInfoManager;
 
 //        ////////////////////////////////////////////////
 //        // begin of unit test
@@ -127,12 +128,13 @@ public class EntityLockInfoManager {
 //        // end of unit test
 //        ////////////////////////////////////////////////
 
-    public EntityLockInfoManager() {
+    public EntityLockInfoManager(EntityInfoManager entityInfoManager) {
         pArray = new ArrayList<ChildEntityLockInfoArrayManager>();
         pArray.add(new ChildEntityLockInfoArrayManager());
         allocChild = 0;
         occupiedSlots = 0;
         isShrinkTimerOn = false;
+        this.entityInfoManager = entityInfoManager;
     }
 
     public int allocate() {
@@ -281,7 +283,7 @@ public class EntityLockInfoManager {
                 s.append(j).append(": ");
                 s.append("\t" + child.getXCount(j));
                 s.append("\t" + child.getSCount(j));
-                s.append("\t" + child.getFirstHolder(j));
+                s.append("\t" + child.getLastHolder(j));
                 s.append("\t" + child.getFirstWaiter(j));
                 s.append("\t" + child.getUpgrader(j));
                 s.append("\n");
@@ -315,13 +317,13 @@ public class EntityLockInfoManager {
                 slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS);
     }
 
-    public void setFirstHolder(int slotNum, int holder) {
-        pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).setFirstHolder(
+    public void setLastHolder(int slotNum, int holder) {
+        pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).setLastHolder(
                 slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS, holder);
     }
 
-    public int getFirstHolder(int slotNum) {
-        return pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).getFirstHolder(
+    public int getLastHolder(int slotNum) {
+        return pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).getLastHolder(
                 slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS);
     }
 
@@ -365,7 +367,7 @@ class ChildEntityLockInfoArrayManager {
     //byte offset of each field of EntityLockInfo
     public static final int XCOUNT_OFFSET = 0;
     public static final int SCOUNT_OFFSET = 4;
-    public static final int FIRST_HOLDER_OFFSET = 8;
+    public static final int LAST_HOLDER_OFFSET = 8;
     public static final int FIRST_WAITER_OFFSET = 12;
     public static final int UPGRADER_OFFSET = 16;
 
@@ -458,12 +460,12 @@ class ChildEntityLockInfoArrayManager {
         return buffer.getInt(slotNum * ENTITY_LOCK_INFO_SIZE + SCOUNT_OFFSET);
     }
 
-    public void setFirstHolder(int slotNum, int holder) {
-        buffer.putInt(slotNum * ENTITY_LOCK_INFO_SIZE + FIRST_HOLDER_OFFSET, holder);
+    public void setLastHolder(int slotNum, int holder) {
+        buffer.putInt(slotNum * ENTITY_LOCK_INFO_SIZE + LAST_HOLDER_OFFSET, holder);
     }
 
-    public int getFirstHolder(int slotNum) {
-        return buffer.getInt(slotNum * ENTITY_LOCK_INFO_SIZE + FIRST_HOLDER_OFFSET);
+    public int getLastHolder(int slotNum) {
+        return buffer.getInt(slotNum * ENTITY_LOCK_INFO_SIZE + LAST_HOLDER_OFFSET);
     }
 
     public void setFirstWaiter(int slotNum, int waiter) {
