@@ -7,12 +7,12 @@ import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.runtime.evaluators.base.AbstractScalarFunctionDynamicDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.common.ClosedRecordConstructorEvalFactory;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
-import edu.uci.ics.hyracks.algebricks.runtime.base.IEvaluatorFactory;
+import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluatorFactory;
 
 public class ClosedRecordConstructorDescriptor extends AbstractScalarFunctionDynamicDescriptor {
 
     protected static final FunctionIdentifier FID_CLOSED = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
-            "closed-record-constructor", FunctionIdentifier.VARARGS, true);
+            "closed-record-constructor", FunctionIdentifier.VARARGS);
     public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
         public IFunctionDescriptor createFunctionDescriptor() {
             return new ClosedRecordConstructorDescriptor();
@@ -33,7 +33,7 @@ public class ClosedRecordConstructorDescriptor extends AbstractScalarFunctionDyn
     }
 
     @Override
-    public IEvaluatorFactory createEvaluatorFactory(final IEvaluatorFactory[] args) {
+    public ICopyEvaluatorFactory createEvaluatorFactory(final ICopyEvaluatorFactory[] args) {
         return new ClosedRecordConstructorEvalFactory(args, recType);
     }
 

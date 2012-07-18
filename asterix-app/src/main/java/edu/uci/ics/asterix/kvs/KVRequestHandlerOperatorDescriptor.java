@@ -8,6 +8,7 @@ import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
 import edu.uci.ics.hyracks.api.dataflow.value.ITypeTraits;
 import edu.uci.ics.hyracks.api.dataflow.value.RecordDescriptor;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
+import edu.uci.ics.hyracks.api.job.IOperatorDescriptorRegistry;
 import edu.uci.ics.hyracks.api.job.JobSpecification;
 import edu.uci.ics.hyracks.dataflow.std.file.FileSplit;
 import edu.uci.ics.hyracks.dataflow.std.file.IFileSplitProvider;
@@ -27,12 +28,12 @@ public class KVRequestHandlerOperatorDescriptor extends AbstractTreeIndexOperato
 	private final long flushPeriod;
 	private final int flushSize;
 	
-	public KVRequestHandlerOperatorDescriptor(JobSpecification spec, RecordDescriptor recDesc,
+	public KVRequestHandlerOperatorDescriptor(IOperatorDescriptorRegistry spec, RecordDescriptor recDesc,
 			IStorageManagerInterface storageManager, IIndexRegistryProvider<IIndex> indexRegistryProvider,
             IFileSplitProvider fileSplitProvider, ITypeTraits[] typeTraits,
             IBinaryComparatorFactory[] comparatorFactories, IIndexDataflowHelperFactory dataflowHelperFactory, int numOfKeys, long flushPeriod, int flushSize) {
 		
-		super(spec, 1, 1, recDesc, storageManager, indexRegistryProvider, fileSplitProvider, typeTraits, comparatorFactories, dataflowHelperFactory, NoOpOperationCallbackProvider.INSTANCE);
+		super(spec, 1, 1, recDesc, storageManager, indexRegistryProvider, fileSplitProvider, typeTraits, comparatorFactories, dataflowHelperFactory,  null, false, NoOpOperationCallbackProvider.INSTANCE);
 		this.numOfKeys = numOfKeys;
 		this.flushPeriod = flushPeriod;
 		this.flushSize = flushSize;

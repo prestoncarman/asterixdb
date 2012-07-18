@@ -28,7 +28,7 @@ import edu.uci.ics.asterix.common.context.AsterixIndexRegistryProvider;
 import edu.uci.ics.asterix.common.context.AsterixStorageManagerInterface;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
 import edu.uci.ics.asterix.formats.base.IDataFormat;
-
+//<<<<<<< .working
 import edu.uci.ics.asterix.formats.nontagged.AqlBinaryComparatorFactoryProvider;
 import edu.uci.ics.asterix.formats.nontagged.AqlBinaryHashFunctionFactoryProvider;
 import edu.uci.ics.asterix.formats.nontagged.AqlSerializerDeserializerProvider;
@@ -40,12 +40,17 @@ import edu.uci.ics.asterix.kvs.KVUtils;
 import edu.uci.ics.asterix.kvs.MToNPartitioningTimeTriggeredConnectorDescriptor;
 import edu.uci.ics.asterix.metadata.MetadataException;
 
-import edu.uci.ics.asterix.metadata.declared.AqlCompiledDatasetDecl;
-import edu.uci.ics.asterix.metadata.declared.AqlCompiledExternalDatasetDetails;
-import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl;
-import edu.uci.ics.asterix.metadata.declared.AqlCompiledInternalDatasetDetails;
+//import edu.uci.ics.asterix.metadata.declared.AqlCompiledDatasetDecl;
+//import edu.uci.ics.asterix.metadata.declared.AqlCompiledExternalDatasetDetails;
+//import edu.uci.ics.asterix.metadata.declared.AqlCompiledIndexDecl;
+//=======
+//>>>>>>> .merge-right.r520
+//import edu.uci.ics.asterix.metadata.declared.AqlCompiledInternalDatasetDetails;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
 import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
+import edu.uci.ics.asterix.metadata.entities.Dataset;
+import edu.uci.ics.asterix.metadata.entities.ExternalDatasetDetails;
+import edu.uci.ics.asterix.metadata.entities.Index;
 import edu.uci.ics.asterix.metadata.utils.DatasetUtils;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.BuiltinType;
@@ -58,6 +63,7 @@ import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksPartitionCons
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.common.utils.Pair;
 import edu.uci.ics.hyracks.algebricks.common.utils.Triple;
+import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.LogicalExpressionJobGenToExpressionRuntimeProviderAdapter;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
 
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder.OrderKind;
@@ -70,8 +76,9 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.OrderOperat
 
 import edu.uci.ics.hyracks.algebricks.core.jobgen.impl.ConnectorPolicyAssignmentPolicy;
 import edu.uci.ics.hyracks.algebricks.core.rewriter.base.PhysicalOptimizationConfig;
-import edu.uci.ics.hyracks.algebricks.runtime.base.IEvaluatorFactory;
+import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluatorFactory;
 import edu.uci.ics.hyracks.algebricks.runtime.base.IPushRuntimeFactory;
+import edu.uci.ics.hyracks.algebricks.runtime.base.IScalarEvaluatorFactory;
 import edu.uci.ics.hyracks.algebricks.runtime.operators.meta.AlgebricksMetaOperatorDescriptor;
 import edu.uci.ics.hyracks.algebricks.runtime.operators.std.AssignRuntimeFactory;
 import edu.uci.ics.hyracks.api.constraints.PartitionConstraintHelper;
@@ -121,32 +128,38 @@ public class DatasetOperations {
         IIndexRegistryProvider<IIndex> indexRegistryProvider = AsterixIndexRegistryProvider.INSTANCE;
         IStorageManagerInterface storageManager = AsterixStorageManagerInterface.INSTANCE;
 
-        AqlCompiledDatasetDecl adecl = metadata.findDataset(datasetName);
-        if (adecl == null) {
+        Dataset dataset = metadata.findDataset(datasetName);
+        if (dataset == null) {
             throw new AlgebricksException("DROP DATASET: No metadata for dataset " + datasetName);
         }
-        if (adecl.getDatasetType() == DatasetType.EXTERNAL) {
+        if (dataset.getDatasetType() == DatasetType.EXTERNAL) {
             return new JobSpecification[0];
         }
 
-        List<AqlCompiledIndexDecl> secondaryIndexes = DatasetUtils.getSecondaryIndexes(adecl);
-
+        List<Index> datasetIndexes = metadata.getDatasetIndexes(dataset.getDataverseName(), dataset.getDatasetName());
+        int numSecondaryIndexes = 0;
+        for (Index index : datasetIndexes) {
+            if (index.isSecondaryIndex()) {
+                numSecondaryIndexes++;
+            }
+        }
         JobSpecification[] specs;
-
-        if (secondaryIndexes != null && !secondaryIndexes.isEmpty()) {
-            int n = secondaryIndexes.size();
-            specs = new JobSpecification[n + 1];
+        if (numSecondaryIndexes > 0) {
+            specs = new JobSpecification[numSecondaryIndexes + 1];
             int i = 0;
             // First, drop secondary indexes.
-            for (AqlCompiledIndexDecl acid : secondaryIndexes) {
-                specs[i] = new JobSpecification();
-                Pair<IFileSplitProvider, AlgebricksPartitionConstraint> idxSplitsAndConstraint = metadata
-                        .splitProviderAndPartitionConstraintsForInternalOrFeedDataset(datasetName, acid.getIndexName());
-                TreeIndexDropOperatorDescriptor secondaryBtreeDrop = new TreeIndexDropOperatorDescriptor(specs[i],
-                        storageManager, indexRegistryProvider, idxSplitsAndConstraint.first);
-                AlgebricksPartitionConstraintHelper.setPartitionConstraintInJobSpec(specs[i], secondaryBtreeDrop,
-                        idxSplitsAndConstraint.second);
-                i++;
+            for (Index index : datasetIndexes) {
+                if (index.isSecondaryIndex()) {
+                    specs[i] = new JobSpecification();
+                    Pair<IFileSplitProvider, AlgebricksPartitionConstraint> idxSplitsAndConstraint = metadata
+                            .splitProviderAndPartitionConstraintsForInternalOrFeedDataset(datasetName,
+                                    index.getIndexName());
+                    TreeIndexDropOperatorDescriptor secondaryBtreeDrop = new TreeIndexDropOperatorDescriptor(specs[i],
+                            storageManager, indexRegistryProvider, idxSplitsAndConstraint.first);
+                    AlgebricksPartitionConstraintHelper.setPartitionConstraintInJobSpec(specs[i], secondaryBtreeDrop,
+                            idxSplitsAndConstraint.second);
+                    i++;
+                }
             }
         } else {
             specs = new JobSpecification[1];
@@ -166,39 +179,130 @@ public class DatasetOperations {
         return specs;
     }
 
-    // TODO: Lots of common code in this file. Refactor everything after merging in asterix-fix-issue-9.
-    public static JobSpecification createDatasetJobSpec(String datasetName,
-            AqlCompiledMetadataDeclarations metadata) throws AsterixException, AlgebricksException {AqlCompiledDatasetDecl compiledDatasetDecl = metadata.findDataset(datasetName);
-            if (compiledDatasetDecl == null) {
-                throw new AsterixException("Could not find dataset " + datasetName);
-            }
-            JobSpecification spec = new JobSpecification();
-            IBinaryComparatorFactory[] comparatorFactories = DatasetUtils.computeKeysBinaryComparatorFactories(
-                    compiledDatasetDecl, metadata.getFormat().getBinaryComparatorFactoryProvider());
-            ITypeTraits[] typeTraits = DatasetUtils.computeTupleTypeTraits(compiledDatasetDecl, metadata);
-            Pair<IFileSplitProvider, AlgebricksPartitionConstraint> splitsAndConstraint = metadata
-                    .splitProviderAndPartitionConstraintsForInternalOrFeedDataset(datasetName, datasetName);
-            FileSplit[] fs = splitsAndConstraint.first.getFileSplits();
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < fs.length; i++) {
-                sb.append(stringOf(fs[i]) + " ");
-            }
-            LOGGER.info("CREATING File Splits: " + sb.toString());
-            IIndexRegistryProvider<IIndex> indexRegistryProvider = AsterixIndexRegistryProvider.INSTANCE;
-            IStorageManagerInterface storageManager = AsterixStorageManagerInterface.INSTANCE;
-            TreeIndexCreateOperatorDescriptor indexCreateOp = new TreeIndexCreateOperatorDescriptor(spec,
-                    storageManager, indexRegistryProvider, splitsAndConstraint.first, typeTraits, comparatorFactories,
-                    new BTreeDataflowHelperFactory(), NoOpOperationCallbackProvider.INSTANCE);
-            AlgebricksPartitionConstraintHelper.setPartitionConstraintInJobSpec(spec, indexCreateOp,
-                    splitsAndConstraint.second);
-            spec.addRoot(indexCreateOp);
-            return spec;
+    public static JobSpecification createDatasetJobSpec(String datasetName, AqlCompiledMetadataDeclarations metadata)
+    throws AsterixException, AlgebricksException {
+    	Dataset dataset = metadata.findDataset(datasetName);
+    	if (dataset == null) {
+    		throw new AsterixException("Could not find dataset " + datasetName);
+    	}
+    	ARecordType itemType = (ARecordType) metadata.findType(dataset.getItemTypeName());
+    	JobSpecification spec = new JobSpecification();
+    	IBinaryComparatorFactory[] comparatorFactories = DatasetUtils.computeKeysBinaryComparatorFactories(dataset,
+    			itemType, metadata.getFormat().getBinaryComparatorFactoryProvider());
+    	ITypeTraits[] typeTraits = DatasetUtils.computeTupleTypeTraits(dataset, itemType);
+    	Pair<IFileSplitProvider, AlgebricksPartitionConstraint> splitsAndConstraint = metadata
+    	.splitProviderAndPartitionConstraintsForInternalOrFeedDataset(datasetName, datasetName);
+    	FileSplit[] fs = splitsAndConstraint.first.getFileSplits();
+    	StringBuilder sb = new StringBuilder();
+    	for (int i = 0; i < fs.length; i++) {
+    		sb.append(stringOf(fs[i]) + " ");
+    	}
+    	LOGGER.info("CREATING File Splits: " + sb.toString());
+    	IIndexRegistryProvider<IIndex> indexRegistryProvider = AsterixIndexRegistryProvider.INSTANCE;
+    	IStorageManagerInterface storageManager = AsterixStorageManagerInterface.INSTANCE;
+    	TreeIndexCreateOperatorDescriptor indexCreateOp = new TreeIndexCreateOperatorDescriptor(spec, storageManager,
+    			indexRegistryProvider, splitsAndConstraint.first, typeTraits, comparatorFactories,
+    			new BTreeDataflowHelperFactory(), NoOpOperationCallbackProvider.INSTANCE);
+    	AlgebricksPartitionConstraintHelper.setPartitionConstraintInJobSpec(spec, indexCreateOp,
+    			splitsAndConstraint.second);
+    	spec.addRoot(indexCreateOp);
+    	return spec;
     }
     
     public static JobSpecification createKeyValueServiceJobSpec(String datasetName, Map<String, String> keyServiceParams, AqlCompiledMetadataDeclarations metadata) throws Exception{
-    	 
+    	String dataverseName = metadata.getDataverseName();
+    	Dataset compiledDatasetDecl = metadata.findDataset(datasetName);
+    	if (compiledDatasetDecl == null) {
+    		throw new AsterixException("Could not find dataset " + datasetName + " for keyservice registration");
+    	}
+    	if (compiledDatasetDecl.getDatasetType() != DatasetType.INTERNAL) {
+    		throw new AsterixException("Cannot register  dataset  (" + datasetName + ")" + "of type "
+    				+ compiledDatasetDecl.getDatasetType() + " for keyservice");
+    	}
+    	long delay = KVUtils.DEFAULT_DELAY;
+    	int sizeLimit = KVUtils.DEFAULT_LIMIT;
+    	if(keyServiceParams != null){
+    		String d = keyServiceParams.get(KVUtils.DELAY_PARAM_TAG);
+    		String l = keyServiceParams.get(KVUtils.LIMIT_PARAM_TAG);
+    		if(d != null){
+    			delay = Long.parseLong( d ); 
+    		}
+    		if(l != null){
+    			sizeLimit = Integer.parseInt( l );
+    		}
+    	}
+
+        //AqlCompiledInternalDatasetDetails acidd = (AqlCompiledInternalDatasetDetails) compiledDatasetDecl.getAqlCompiledDatasetDetails();
+ 		//List<Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType>> pfList = acidd.getPartitioningFunctions();
+    	/*
+    	int i=0;
+ 		IAType[] keyTypes = new IAType[pfList.size()];
+ 		for(Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType> t : pfList){
+ 			keyTypes[i] = t.third;
+ 			i++;
+ 		}
+ 		*/
+    	ARecordType itemType = (ARecordType) metadata.findType(compiledDatasetDecl.getItemTypeName());
+    	IAType[] keyTypes = DatasetUtils.computePartitioningKeyType(compiledDatasetDecl, itemType);
+ 		//List<String> partitionKeys = acidd.getPartitioningExprs();
+ 		//String ixName = DatasetUtils.getPrimaryIndex(compiledDatasetDecl).getIndexName();
+    	Index pIx = metadata.getDatasetPrimaryIndex(dataverseName, datasetName);
+    	List<String> pkNames = pIx.getKeyFieldNames();
     	
-    	 
+    	
+ 		Pair<IFileSplitProvider, AlgebricksPartitionConstraint> fsap = metadata.splitProviderAndPartitionConstraintsForInternalOrFeedDataset(datasetName, pIx.getIndexName());
+ 		ConstantFileSplitProvider fs = (ConstantFileSplitProvider) fsap.first;
+		AlgebricksAbsolutePartitionConstraint partConst = (AlgebricksAbsolutePartitionConstraint) fsap.second;
+		
+		//String itemTypeName = compiledDatasetDecl.getItemTypeName();
+		//IAType itemType = metadata.findType(itemTypeName);
+		//ARecordType record = ((ARecordType) itemType);
+		
+		//----
+		/*
+		int numPrimaryKeys = DatasetUtils.getPartitioningFunctions(compiledDatasetDecl).size();
+		ITypeTraits[] typeTraits = new ITypeTraits[pkSize + 1];
+        ISerializerDeserializer[] recordFields = new ISerializerDeserializer[pkSize + 1];
+        IBinaryComparatorFactory[] comparatorFactories = new IBinaryComparatorFactory[pkSize];
+        
+        ISerializerDeserializer payloadSerde = metadata.getFormat().getSerdeProvider().getSerializerDeserializer(itemType);	
+        recordFields[pkSize] = payloadSerde;	
+        typeTraits[pkSize] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(itemType);
+        
+        int j = 0;
+        for (Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType> evalFactoryAndType : DatasetUtils.getPartitioningFunctions(compiledDatasetDecl)) {
+            IAType keyType = evalFactoryAndType.third;
+            ISerializerDeserializer keySerde = metadata.getFormat().getSerdeProvider()
+                    .getSerializerDeserializer(keyType);
+            recordFields[j] = keySerde;    
+            comparatorFactories[j] = AqlBinaryComparatorFactoryProvider.INSTANCE.getBinaryComparatorFactory(keyType, true);
+            typeTraits[j] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(keyType);
+            ++j;
+        }
+        */
+		ITypeTraits[] typeTraits = DatasetUtils.computeTupleTypeTraits(compiledDatasetDecl, itemType);
+        ISerializerDeserializer[] recordSerde = DatasetUtils.computeTupleSerde(compiledDatasetDecl, itemType);
+        IBinaryComparatorFactory[] comparatorFactories = DatasetUtils.computeKeysBinaryComparatorFactories(compiledDatasetDecl, itemType, AqlBinaryComparatorFactoryProvider.INSTANCE);
+		
+		
+        //Triple<ITypeTraits[], IBinaryComparatorFactory[], ISerializerDeserializer[]> triple = new Triple<ITypeTraits[], IBinaryComparatorFactory[], ISerializerDeserializer[]>(typeTraits, comparatorFactories, recordFields);
+		
+		//----
+        
+        //ITypeTraits[] tt = triple.first;
+		//IBinaryComparatorFactory[] bcf = triple.second;
+		//ISerializerDeserializer[] isd = triple.third;
+		//String dataverseName = metadata.getDataverseName();
+		
+		JobSpecification spec = generateKeyServiceJobSpec(dataverseName, datasetName, 
+															keyTypes, typeTraits, comparatorFactories, fs,
+																recordSerde, itemType, pkNames, partConst, 
+																	delay, sizeLimit);
+		return spec;
+    }
+ 
+    /*
+    public static JobSpecification createKeyValueServiceJobSpec(String datasetName, Map<String, String> keyServiceParams, AqlCompiledMetadataDeclarations metadata) throws Exception{
     	AqlCompiledDatasetDecl compiledDatasetDecl = metadata.findDataset(datasetName);
     	if (compiledDatasetDecl == null) {
     		throw new AsterixException("Could not find dataset " + datasetName + " for keyservice registration");
@@ -263,7 +367,17 @@ public class DatasetOperations {
             comparatorFactories[j] = AqlBinaryComparatorFactoryProvider.INSTANCE.getBinaryComparatorFactory(keyType, true);
             typeTraits[j] = AqlTypeTraitProvider.INSTANCE.getTypeTrait(keyType);
             ++j;
+=======
+	*/
+/*	
+    public static JobSpecification createDatasetJobSpec(String datasetName, AqlCompiledMetadataDeclarations metadata)
+            throws AsterixException, AlgebricksException {
+        Dataset dataset = metadata.findDataset(datasetName);
+        if (dataset == null) {
+            throw new AsterixException("Could not find dataset " + datasetName);
+>>>>>>> .merge-right.r520
         }
+<<<<<<< .working
         
         Triple<ITypeTraits[], IBinaryComparatorFactory[], ISerializerDeserializer[]> triple = new Triple<ITypeTraits[], IBinaryComparatorFactory[], ISerializerDeserializer[]>(typeTraits, comparatorFactories, recordFields);
 		
@@ -277,52 +391,74 @@ public class DatasetOperations {
 		
 		JobSpecification spec = generateKeyServiceJobSpec(dataverseName, datasetName, keyTypes, tt, bcf, fs, isd, record, partitionKeys, partConst, delay, sizeLimit);
 		return spec;
+=======
+        ARecordType itemType = (ARecordType) metadata.findType(dataset.getItemTypeName());
+        JobSpecification spec = new JobSpecification();
+        IBinaryComparatorFactory[] comparatorFactories = DatasetUtils.computeKeysBinaryComparatorFactories(dataset,
+                itemType, metadata.getFormat().getBinaryComparatorFactoryProvider());
+        ITypeTraits[] typeTraits = DatasetUtils.computeTupleTypeTraits(dataset, itemType);
+        Pair<IFileSplitProvider, AlgebricksPartitionConstraint> splitsAndConstraint = metadata
+                .splitProviderAndPartitionConstraintsForInternalOrFeedDataset(datasetName, datasetName);
+        FileSplit[] fs = splitsAndConstraint.first.getFileSplits();
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < fs.length; i++) {
+            sb.append(stringOf(fs[i]) + " ");
+        }
+        LOGGER.info("CREATING File Splits: " + sb.toString());
+        IIndexRegistryProvider<IIndex> indexRegistryProvider = AsterixIndexRegistryProvider.INSTANCE;
+        IStorageManagerInterface storageManager = AsterixStorageManagerInterface.INSTANCE;
+        TreeIndexCreateOperatorDescriptor indexCreateOp = new TreeIndexCreateOperatorDescriptor(spec, storageManager,
+                indexRegistryProvider, splitsAndConstraint.first, typeTraits, comparatorFactories,
+                new BTreeDataflowHelperFactory(), NoOpOperationCallbackProvider.INSTANCE);
+        AlgebricksPartitionConstraintHelper.setPartitionConstraintInJobSpec(spec, indexCreateOp,
+                splitsAndConstraint.second);
+        spec.addRoot(indexCreateOp);
+        return spec;
+>>>>>>> .merge-right.r520
     }
-    
-    @SuppressWarnings("unchecked")
+*/
+
+    @SuppressWarnings("rawtypes")
     public static Job createLoadDatasetJobSpec(CompiledLoadFromFileStatement loadStmt,
             AqlCompiledMetadataDeclarations metadata) throws AsterixException, AlgebricksException {
         String datasetName = loadStmt.getDatasetName();
-        AqlCompiledDatasetDecl compiledDatasetDecl = metadata.findDataset(datasetName);
-        if (compiledDatasetDecl == null) {
+        Dataset dataset = metadata.findDataset(datasetName);
+        if (dataset == null) {
             throw new AsterixException("Could not find dataset " + datasetName);
         }
-        if (compiledDatasetDecl.getDatasetType() != DatasetType.INTERNAL
-                && compiledDatasetDecl.getDatasetType() != DatasetType.FEED) {
+        if (dataset.getDatasetType() != DatasetType.INTERNAL && dataset.getDatasetType() != DatasetType.FEED) {
             throw new AsterixException("Cannot load data into dataset  (" + datasetName + ")" + "of type "
-                    + compiledDatasetDecl.getDatasetType());
+                    + dataset.getDatasetType());
         }
         JobSpecification spec = new JobSpecification();
 
-        ARecordType itemType = (ARecordType) metadata.findType(compiledDatasetDecl.getItemTypeName());
+        ARecordType itemType = (ARecordType) metadata.findType(dataset.getItemTypeName());
         IDataFormat format = metadata.getFormat();
         ISerializerDeserializer payloadSerde = format.getSerdeProvider().getSerializerDeserializer(itemType);
 
-        IBinaryHashFunctionFactory[] hashFactories = DatasetUtils.computeKeysBinaryHashFunFactories(
-                compiledDatasetDecl, metadata.getFormat().getBinaryHashFunctionFactoryProvider());
-        IBinaryComparatorFactory[] comparatorFactories = DatasetUtils.computeKeysBinaryComparatorFactories(
-                compiledDatasetDecl, metadata.getFormat().getBinaryComparatorFactoryProvider());
-        ITypeTraits[] typeTraits = DatasetUtils.computeTupleTypeTraits(compiledDatasetDecl, metadata);
+        IBinaryHashFunctionFactory[] hashFactories = DatasetUtils.computeKeysBinaryHashFunFactories(dataset, itemType,
+                metadata.getFormat().getBinaryHashFunctionFactoryProvider());
+        IBinaryComparatorFactory[] comparatorFactories = DatasetUtils.computeKeysBinaryComparatorFactories(dataset,
+                itemType, metadata.getFormat().getBinaryComparatorFactoryProvider());
+        ITypeTraits[] typeTraits = DatasetUtils.computeTupleTypeTraits(dataset, itemType);
 
-        AqlCompiledExternalDatasetDetails externalDatasetDetails = new AqlCompiledExternalDatasetDetails(
-                loadStmt.getAdapter(), loadStmt.getProperties());
+        ExternalDatasetDetails externalDatasetDetails = new ExternalDatasetDetails(loadStmt.getAdapter(),
+                loadStmt.getProperties());
         Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> p = AqlMetadataProvider
                 .buildExternalDataScannerRuntime(spec, itemType, externalDatasetDetails, format);
         IOperatorDescriptor scanner = p.first;
         AlgebricksPartitionConstraint scannerPc = p.second;
-        RecordDescriptor recDesc = computePayloadKeyRecordDescriptor(compiledDatasetDecl, payloadSerde,
+        RecordDescriptor recDesc = computePayloadKeyRecordDescriptor(dataset, itemType, payloadSerde,
                 metadata.getFormat());
         AlgebricksPartitionConstraintHelper.setPartitionConstraintInJobSpec(spec, scanner, scannerPc);
 
-        AssignRuntimeFactory assign = makeAssignRuntimeFactory(compiledDatasetDecl);
+        AssignRuntimeFactory assign = makeAssignRuntimeFactory(dataset, itemType, metadata.getFormat());
         AlgebricksMetaOperatorDescriptor asterixOp = new AlgebricksMetaOperatorDescriptor(spec, 1, 1,
                 new IPushRuntimeFactory[] { assign }, new RecordDescriptor[] { recDesc });
 
         AlgebricksPartitionConstraintHelper.setPartitionConstraintInJobSpec(spec, asterixOp, scannerPc);
 
-        List<Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType>> partitioningFunctions = DatasetUtils
-                .getPartitioningFunctions(compiledDatasetDecl);
-        int numKeys = partitioningFunctions.size();
+        int numKeys = DatasetUtils.getPartitioningKeys(dataset).size();
         int[] keys = new int[numKeys];
         for (int i = 0; i < numKeys; i++) {
             keys[i] = i + 1;
@@ -380,14 +516,14 @@ public class DatasetOperations {
         return fs.getNodeName() + ":" + fs.getLocalFile().toString();
     }
 
-    private static AssignRuntimeFactory makeAssignRuntimeFactory(AqlCompiledDatasetDecl compiledDatasetDecl) {
-        List<Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType>> partitioningFunctions = DatasetUtils
-                .getPartitioningFunctions(compiledDatasetDecl);
-        int numKeys = partitioningFunctions.size();
-        IEvaluatorFactory[] evalFactories = new IEvaluatorFactory[numKeys];
+    private static AssignRuntimeFactory makeAssignRuntimeFactory(Dataset dataset, ARecordType itemType,
+            IDataFormat format) throws AlgebricksException {
+        List<String> partitioningKeys = DatasetUtils.getPartitioningKeys(dataset);
+        int numKeys = partitioningKeys.size();
+        ICopyEvaluatorFactory[] evalFactories = new ICopyEvaluatorFactory[numKeys];
         for (int i = 0; i < numKeys; i++) {
-            Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType> evalFactoryAndType = partitioningFunctions
-                    .get(i);
+            Triple<ICopyEvaluatorFactory, ScalarFunctionCallExpression, IAType> evalFactoryAndType = format
+                    .partitioningEvaluatorFactory(itemType, partitioningKeys.get(i));
             evalFactories[i] = evalFactoryAndType.first;
         }
         int[] outColumns = new int[numKeys];
@@ -398,25 +534,29 @@ public class DatasetOperations {
             outColumns[i] = i + 1;
             projectionList[i + 1] = i + 1;
         }
-        return new AssignRuntimeFactory(outColumns, evalFactories, projectionList);
+        IScalarEvaluatorFactory[] sefs = new IScalarEvaluatorFactory[evalFactories.length];
+        for (int i = 0; i < evalFactories.length; ++i) {
+            sefs[i] = new LogicalExpressionJobGenToExpressionRuntimeProviderAdapter.ScalarEvaluatorFactoryAdapter(
+                    evalFactories[i]);
+        }
+        return new AssignRuntimeFactory(outColumns, sefs, projectionList);
     }
 
-    private static RecordDescriptor computePayloadKeyRecordDescriptor(AqlCompiledDatasetDecl compiledDatasetDecl,
+    @SuppressWarnings("rawtypes")
+    private static RecordDescriptor computePayloadKeyRecordDescriptor(Dataset dataset, ARecordType itemType,
             ISerializerDeserializer payloadSerde, IDataFormat dataFormat) throws AlgebricksException {
-        List<Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType>> partitioningFunctions = DatasetUtils
-                .getPartitioningFunctions(compiledDatasetDecl);
-        int numKeys = partitioningFunctions.size();
+        List<String> partitioningKeys = DatasetUtils.getPartitioningKeys(dataset);
+        int numKeys = partitioningKeys.size();
         ISerializerDeserializer[] recordFields = new ISerializerDeserializer[1 + numKeys];
         recordFields[0] = payloadSerde;
         for (int i = 0; i < numKeys; i++) {
-            Triple<IEvaluatorFactory, ScalarFunctionCallExpression, IAType> evalFactoryAndType = partitioningFunctions
-                    .get(i);
-            IAType keyType = evalFactoryAndType.third;
+            IAType keyType = itemType.getFieldType(partitioningKeys.get(i));
             ISerializerDeserializer keySerde = dataFormat.getSerdeProvider().getSerializerDeserializer(keyType);
             recordFields[i + 1] = keySerde;
         }
         return new RecordDescriptor(recordFields);
     }
+//<<<<<<< .working
     
     private static JobSpecification generateKeyServiceJobSpec(String dvName, String dsName, IAType[] keyType, ITypeTraits[] typeTraits, IBinaryComparatorFactory[] comparatorFactories, IFileSplitProvider fileSplitProvider, ISerializerDeserializer[] res, ARecordType record, List<String> partitioningKeys, AlgebricksAbsolutePartitionConstraint parts, long delay, int sizeLimit) throws Exception{
 		
@@ -475,4 +615,6 @@ public class DatasetOperations {
 	}
     
 
+//=======
+//>>>>>>> .merge-right.r520
 }

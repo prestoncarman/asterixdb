@@ -50,9 +50,9 @@ public class InternalDatasetDetails implements IDatasetDetails {
 
     protected final FileStructure fileStructure;
     protected final PartitioningStrategy partitioningStrategy;
-    protected final List<String> partitioningKey;
-    protected final List<String> primaryKey;
-    protected final String groupName;
+    protected final List<String> partitioningKeys;
+    protected final List<String> primaryKeys;
+    protected final String nodeGroupName;
     
     protected final boolean withKeyService;
     protected final Map<String, String> keyServiceParams;
@@ -61,9 +61,9 @@ public class InternalDatasetDetails implements IDatasetDetails {
             List<String> partitioningKey, List<String> primaryKey, String groupName) {
         this.fileStructure = fileStructure;
         this.partitioningStrategy = partitioningStrategy;
-        this.partitioningKey = partitioningKey;
-        this.primaryKey = primaryKey;
-        this.groupName = groupName;
+        this.partitioningKeys = partitioningKey;
+        this.primaryKeys = primaryKey;
+        this.nodeGroupName = groupName;
         this.withKeyService = false;
         this.keyServiceParams = null;
     }
@@ -72,23 +72,23 @@ public class InternalDatasetDetails implements IDatasetDetails {
             List<String> partitioningKey, List<String> primaryKey, String groupName, boolean withKeyService, Map<String, String> keyServiceParams) {
         this.fileStructure = fileStructure;
         this.partitioningStrategy = partitioningStrategy;
-        this.partitioningKey = partitioningKey;
-        this.primaryKey = primaryKey;
-        this.groupName = groupName;
+        this.partitioningKeys = partitioningKey;
+        this.primaryKeys = primaryKey;
+        this.nodeGroupName = groupName;
         this.withKeyService = withKeyService;
         this.keyServiceParams = keyServiceParams;
     }
 
     public String getNodeGroupName() {
-        return this.groupName;
+        return nodeGroupName;
     }
 
     public List<String> getPartitioningKey() {
-        return this.partitioningKey;
+        return partitioningKeys;
     }
 
     public List<String> getPrimaryKey() {
-        return primaryKey;
+        return primaryKeys;
     }
 
     public FileStructure getFileStructure() {
@@ -142,7 +142,7 @@ public class InternalDatasetDetails implements IDatasetDetails {
         // write field 2
         listBuilder
                 .reset((AOrderedListType) MetadataRecordTypes.INTERNAL_DETAILS_RECORDTYPE.getFieldTypes()[MetadataRecordTypes.INTERNAL_DETAILS_ARECORD_PARTITIONKEY_FIELD_INDEX]);
-        for (String field : partitioningKey) {
+        for (String field : partitioningKeys) {
             itemValue.reset();
             aString.setValue(field);
             stringSerde.serialize(aString, itemValue.getDataOutput());
@@ -156,7 +156,7 @@ public class InternalDatasetDetails implements IDatasetDetails {
         // write field 3
         listBuilder
                 .reset((AOrderedListType) MetadataRecordTypes.INTERNAL_DETAILS_RECORDTYPE.getFieldTypes()[MetadataRecordTypes.INTERNAL_DETAILS_ARECORD_PRIMARYKEY_FIELD_INDEX]);
-        for (String field : primaryKey) {
+        for (String field : primaryKeys) {
             itemValue.reset();
             aString.setValue(field);
             stringSerde.serialize(aString, itemValue.getDataOutput());

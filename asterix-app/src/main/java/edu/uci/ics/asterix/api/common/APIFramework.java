@@ -59,6 +59,7 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IExpressionEvalSi
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IExpressionTypeComputer;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IMergeAggregationExpressionFactory;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.INullableTypeComputer;
+import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.LogicalExpressionJobGenToExpressionRuntimeProviderAdapter;
 import edu.uci.ics.hyracks.algebricks.core.algebra.prettyprint.LogicalOperatorPrettyPrintVisitor;
 import edu.uci.ics.hyracks.algebricks.core.algebra.prettyprint.PlanPrettyPrinter;
 import edu.uci.ics.hyracks.algebricks.core.rewriter.base.AbstractRuleController;
@@ -508,11 +509,12 @@ public class APIFramework {
         }
 
         AlgebricksPartitionConstraint clusterLocs = planAndMetadata.getClusterLocations();
-        builder.setBinaryBooleanInspector(format.getBinaryBooleanInspector());
-        builder.setBinaryIntegerInspector(format.getBinaryIntegerInspector());
+        builder.setBinaryBooleanInspectorFactory(format.getBinaryBooleanInspectorFactory());
+        builder.setBinaryIntegerInspectorFactory(format.getBinaryIntegerInspectorFactory());
         builder.setClusterLocations(clusterLocs);
         builder.setComparatorFactoryProvider(format.getBinaryComparatorFactoryProvider());
-        builder.setExprJobGen(AqlLogicalExpressionJobGen.INSTANCE);
+        builder.setExpressionRuntimeProvider(new LogicalExpressionJobGenToExpressionRuntimeProviderAdapter(
+                AqlLogicalExpressionJobGen.INSTANCE));
         builder.setHashFunctionFactoryProvider(format.getBinaryHashFunctionFactoryProvider());
         builder.setNullWriterFactory(format.getNullWriterFactory());
         builder.setPrinterProvider(format.getPrinterFactoryProvider());
@@ -553,9 +555,8 @@ public class APIFramework {
             DisplayFormat pdf) throws Exception {
         for (int i = 0; i < specs.length; i++) {
             specs[i].setMaxReattempts(0);
-            JobId jobId = hcc.createJob(GlobalConfig.HYRACKS_APP_NAME, specs[i]);
+            JobId jobId = hcc.startJob(GlobalConfig.HYRACKS_APP_NAME, specs[i]);
             long startTime = System.currentTimeMillis();
-            hcc.start(jobId);
             hcc.waitForCompletion(jobId);
             long endTime = System.currentTimeMillis();
             double duration = (endTime - startTime) / 1000.00;
@@ -568,10 +569,9 @@ public class APIFramework {
             throws Exception {
         for (int i = 0; i < jobs.length; i++) {
             jobs[i].getJobSpec().setMaxReattempts(0);
-            JobId jobId = hcc.createJob(GlobalConfig.HYRACKS_APP_NAME, jobs[i].getJobSpec());
             long startTime = System.currentTimeMillis();
             try {
-                hcc.start(jobId);
+                JobId jobId = hcc.startJob(GlobalConfig.HYRACKS_APP_NAME, jobs[i].getJobSpec());
                 if (jobs[i].getSubmissionMode() == SubmissionMode.ASYNCHRONOUS) {
                     continue;
                 }

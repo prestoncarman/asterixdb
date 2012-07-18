@@ -24,8 +24,8 @@ import edu.uci.ics.fuzzyjoin.similarity.SimilarityFilters;
 import edu.uci.ics.fuzzyjoin.similarity.SimilarityMetric;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
-import edu.uci.ics.hyracks.algebricks.runtime.base.IEvaluator;
-import edu.uci.ics.hyracks.algebricks.runtime.base.IEvaluatorFactory;
+import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluator;
+import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluatorFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.ArrayBackedValueStorage;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.IDataOutputProvider;
@@ -35,8 +35,7 @@ import edu.uci.ics.hyracks.dataflow.common.data.marshalling.IntegerSerializerDes
 public class SimilarityDescriptor extends AbstractScalarFunctionDynamicDescriptor {
 
     private static final long serialVersionUID = 1L;
-    private final static FunctionIdentifier FID = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "similarity", 7,
-            true);
+    private final static FunctionIdentifier FID = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "similarity", 7);
 
     private final static byte SER_ORDEREDLIST_TYPE_TAG = ATypeTag.ORDEREDLIST.serialize();
     private final static byte SER_UNORDEREDLIST_TYPE_TAG = ATypeTag.UNORDEREDLIST.serialize();
@@ -47,25 +46,25 @@ public class SimilarityDescriptor extends AbstractScalarFunctionDynamicDescripto
     };
 
     @Override
-    public IEvaluatorFactory createEvaluatorFactory(final IEvaluatorFactory[] args) throws AlgebricksException {
+    public ICopyEvaluatorFactory createEvaluatorFactory(final ICopyEvaluatorFactory[] args) throws AlgebricksException {
 
-        return new IEvaluatorFactory() {
+        return new ICopyEvaluatorFactory() {
             private static final long serialVersionUID = 1L;
 
             @Override
-            public IEvaluator createEvaluator(final IDataOutputProvider output) throws AlgebricksException {
+            public ICopyEvaluator createEvaluator(final IDataOutputProvider output) throws AlgebricksException {
 
-                return new IEvaluator() {
+                return new ICopyEvaluator() {
 
                     private final DataOutput out = output.getDataOutput();
                     private final ArrayBackedValueStorage inputVal = new ArrayBackedValueStorage();
-                    private final IEvaluator evalLen1 = args[0].createEvaluator(inputVal);
-                    private final IEvaluator evalTokens1 = args[1].createEvaluator(inputVal);
-                    private final IEvaluator evalLen2 = args[2].createEvaluator(inputVal);
-                    private final IEvaluator evalTokens2 = args[3].createEvaluator(inputVal);
-                    private final IEvaluator evalTokenPrefix = args[4].createEvaluator(inputVal);
-                    private final IEvaluator evalSimilarity = args[5].createEvaluator(inputVal);
-                    private final IEvaluator evalThreshold = args[6].createEvaluator(inputVal);
+                    private final ICopyEvaluator evalLen1 = args[0].createEvaluator(inputVal);
+                    private final ICopyEvaluator evalTokens1 = args[1].createEvaluator(inputVal);
+                    private final ICopyEvaluator evalLen2 = args[2].createEvaluator(inputVal);
+                    private final ICopyEvaluator evalTokens2 = args[3].createEvaluator(inputVal);
+                    private final ICopyEvaluator evalTokenPrefix = args[4].createEvaluator(inputVal);
+                    private final ICopyEvaluator evalSimilarity = args[5].createEvaluator(inputVal);
+                    private final ICopyEvaluator evalThreshold = args[6].createEvaluator(inputVal);
 
                     private final SimilarityFiltersCache similarityFiltersCache = new SimilarityFiltersCache();
 
@@ -85,21 +84,21 @@ public class SimilarityDescriptor extends AbstractScalarFunctionDynamicDescripto
                         inputVal.reset();
                         evalThreshold.evaluate(tuple);
                         float similarityThreshold = (float) ADoubleSerializerDeserializer.getDouble(
-                                inputVal.getBytes(), 1);
+                                inputVal.getByteArray(), 1);
 
                         // similarity name
                         inputVal.reset();
                         evalSimilarity.evaluate(tuple);
                         SimilarityFilters similarityFilters = similarityFiltersCache.get(similarityThreshold,
-                                inputVal.getBytes());
+                                inputVal.getByteArray());
 
                         inputVal.reset();
                         evalLen1.evaluate(tuple);
-                        int length1 = IntegerSerializerDeserializer.getInt(inputVal.getBytes(), 1);
+                        int length1 = IntegerSerializerDeserializer.getInt(inputVal.getByteArray(), 1);
 
                         inputVal.reset();
                         evalLen2.evaluate(tuple);
-                        int length2 = IntegerSerializerDeserializer.getInt(inputVal.getBytes(), 1);
+                        int length2 = IntegerSerializerDeserializer.getInt(inputVal.getByteArray(), 1);
 
                         float sim = 0;
 
@@ -114,7 +113,7 @@ public class SimilarityDescriptor extends AbstractScalarFunctionDynamicDescripto
                             inputVal.reset();
                             evalTokens1.evaluate(tuple);
 
-                            byte[] serList = inputVal.getBytes();
+                            byte[] serList = inputVal.getByteArray();
                             if (serList[0] != SER_ORDEREDLIST_TYPE_TAG && serList[0] != SER_UNORDEREDLIST_TYPE_TAG) {
                                 throw new AlgebricksException("Scan collection is not defined for values of type"
                                         + EnumDeserializer.ATYPETAGDESERIALIZER.deserialize(serList[0]));
@@ -122,8 +121,8 @@ public class SimilarityDescriptor extends AbstractScalarFunctionDynamicDescripto
 
                             int lengthTokens1;
                             if (serList[0] == SER_ORDEREDLIST_TYPE_TAG) {
-                                lengthTokens1 = AOrderedListSerializerDeserializer
-                                        .getNumberOfItems(inputVal.getBytes());
+                                lengthTokens1 = AOrderedListSerializerDeserializer.getNumberOfItems(inputVal
+                                        .getByteArray());
                                 // read tokens
                                 for (i = 0; i < lengthTokens1; i++) {
                                     int itemOffset;
@@ -136,7 +135,7 @@ public class SimilarityDescriptor extends AbstractScalarFunctionDynamicDescripto
                                 }
                             } else {
                                 lengthTokens1 = AUnorderedListSerializerDeserializer.getNumberOfItems(inputVal
-                                        .getBytes());
+                                        .getByteArray());
                                 // read tokens
                                 for (i = 0; i < lengthTokens1; i++) {
                                     int itemOffset;
@@ -158,7 +157,7 @@ public class SimilarityDescriptor extends AbstractScalarFunctionDynamicDescripto
                             inputVal.reset();
                             evalTokens2.evaluate(tuple);
 
-                            serList = inputVal.getBytes();
+                            serList = inputVal.getByteArray();
                             if (serList[0] != SER_ORDEREDLIST_TYPE_TAG && serList[0] != SER_UNORDEREDLIST_TYPE_TAG) {
                                 throw new AlgebricksException("Scan collection is not defined for values of type"
                                         + EnumDeserializer.ATYPETAGDESERIALIZER.deserialize(serList[0]));
@@ -166,8 +165,8 @@ public class SimilarityDescriptor extends AbstractScalarFunctionDynamicDescripto
 
                             int lengthTokens2;
                             if (serList[0] == SER_ORDEREDLIST_TYPE_TAG) {
-                                lengthTokens2 = AOrderedListSerializerDeserializer
-                                        .getNumberOfItems(inputVal.getBytes());
+                                lengthTokens2 = AOrderedListSerializerDeserializer.getNumberOfItems(inputVal
+                                        .getByteArray());
                                 // read tokens
                                 for (i = 0; i < lengthTokens2; i++) {
                                     int itemOffset;
@@ -180,7 +179,7 @@ public class SimilarityDescriptor extends AbstractScalarFunctionDynamicDescripto
                                 }
                             } else {
                                 lengthTokens2 = AUnorderedListSerializerDeserializer.getNumberOfItems(inputVal
-                                        .getBytes());
+                                        .getByteArray());
                                 // read tokens
                                 for (i = 0; i < lengthTokens2; i++) {
                                     int itemOffset;
@@ -200,7 +199,7 @@ public class SimilarityDescriptor extends AbstractScalarFunctionDynamicDescripto
                             // -- - token prefix - --
                             inputVal.reset();
                             evalTokenPrefix.evaluate(tuple);
-                            int tokenPrefix = IntegerSerializerDeserializer.getInt(inputVal.getBytes(), 1);
+                            int tokenPrefix = IntegerSerializerDeserializer.getInt(inputVal.getByteArray(), 1);
 
                             //
                             // -- - position filter - --

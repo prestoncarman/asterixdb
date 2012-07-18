@@ -14,8 +14,8 @@ import edu.uci.ics.asterix.om.types.BuiltinType;
 import edu.uci.ics.asterix.runtime.evaluators.base.AbstractScalarFunctionDynamicDescriptor;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
-import edu.uci.ics.hyracks.algebricks.runtime.base.IEvaluator;
-import edu.uci.ics.hyracks.algebricks.runtime.base.IEvaluatorFactory;
+import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluator;
+import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluatorFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.IBinaryComparator;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.ArrayBackedValueStorage;
@@ -25,7 +25,7 @@ import edu.uci.ics.hyracks.dataflow.common.data.accessors.IFrameTupleReference;
 public class ANullConstructorDescriptor extends AbstractScalarFunctionDynamicDescriptor {
 
     private static final long serialVersionUID = 1L;
-    public final static FunctionIdentifier FID = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "null", 1, false);
+    public final static FunctionIdentifier FID = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "null", 1);
     private final static byte SER_STRING_TYPE_TAG = ATypeTag.STRING.serialize();
     public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
         public IFunctionDescriptor createFunctionDescriptor() {
@@ -34,21 +34,21 @@ public class ANullConstructorDescriptor extends AbstractScalarFunctionDynamicDes
     };
 
     @Override
-    public IEvaluatorFactory createEvaluatorFactory(final IEvaluatorFactory[] args) {
-        return new IEvaluatorFactory() {
+    public ICopyEvaluatorFactory createEvaluatorFactory(final ICopyEvaluatorFactory[] args) {
+        return new ICopyEvaluatorFactory() {
             private static final long serialVersionUID = 1L;
 
             @Override
-            public IEvaluator createEvaluator(final IDataOutputProvider output) throws AlgebricksException {
-                return new IEvaluator() {
+            public ICopyEvaluator createEvaluator(final IDataOutputProvider output) throws AlgebricksException {
+                return new ICopyEvaluator() {
 
                     private DataOutput out = output.getDataOutput();
                     private ArrayBackedValueStorage outInput = new ArrayBackedValueStorage();
-                    private IEvaluator eval = args[0].createEvaluator(outInput);
+                    private ICopyEvaluator eval = args[0].createEvaluator(outInput);
                     private String errorMessage = "This can not be an instance of null";
                     private final byte[] NULL = { 0, 4, 'n', 'u', 'l', 'l' };
                     IBinaryComparator utf8BinaryComparator = AqlBinaryComparatorFactoryProvider.UTF8STRING_POINTABLE_INSTANCE
-                    .createBinaryComparator();
+                            .createBinaryComparator();
                     @SuppressWarnings("unchecked")
                     private ISerializerDeserializer<ANull> nullSerde = AqlSerializerDeserializerProvider.INSTANCE
                             .getSerializerDeserializer(BuiltinType.ANULL);
@@ -59,7 +59,7 @@ public class ANullConstructorDescriptor extends AbstractScalarFunctionDynamicDes
                         try {
                             outInput.reset();
                             eval.evaluate(tuple);
-                            byte[] serString = outInput.getBytes();
+                            byte[] serString = outInput.getByteArray();
                             if (serString[0] == SER_STRING_TYPE_TAG) {
                                 if (utf8BinaryComparator.compare(serString, 1, outInput.getLength(), NULL, 0, 6) == 0) {
                                     nullSerde.serialize(ANull.NULL, out);

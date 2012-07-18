@@ -75,7 +75,7 @@ public class KVRequestHandlerOperatorNodePushable extends AbstractUnaryInputUnar
 		this.ctx = ctx;
 		init = false;
 		callTypes = KVCallType.values();
-		recDesc = recordDescProvider.getInputRecordDescriptor(opDesc.getOperatorId(), 0);
+		recDesc = recordDescProvider.getInputRecordDescriptor(opDesc.getActivityId(), 0);
 		this.partition = partition;
 		
 		this.maxWaitTime = maxWaitTime;

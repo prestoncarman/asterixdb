@@ -24,7 +24,7 @@ public class KVSResponseDispatcherOperatorNodePushable extends AbstractUnaryInpu
 	
 	public KVSResponseDispatcherOperatorNodePushable(IHyracksTaskContext ctx, AbstractSingleActivityOperatorDescriptor opDesc, final IRecordDescriptorProvider recordDescProvider){
 		this.ctx = ctx;
-		recDesc = recordDescProvider.getInputRecordDescriptor(opDesc.getOperatorId(), 0);
+		recDesc = recordDescProvider.getInputRecordDescriptor(opDesc.getActivityId(), 0);
 		frameDeser = new FrameDeserializer(ctx.getFrameSize(), recDesc);
 	}
 	

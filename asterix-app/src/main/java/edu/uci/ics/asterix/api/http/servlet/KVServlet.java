@@ -3,6 +3,7 @@ package edu.uci.ics.asterix.api.http.servlet;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -20,6 +21,7 @@ import edu.uci.ics.asterix.common.config.GlobalConfig;
 import edu.uci.ics.asterix.common.context.AsterixIndexRegistryProvider;
 import edu.uci.ics.asterix.common.context.AsterixStorageManagerInterface;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
+import edu.uci.ics.asterix.file.DatasetOperations;
 import edu.uci.ics.asterix.formats.nontagged.AqlBinaryHashFunctionFactoryProvider;
 import edu.uci.ics.asterix.formats.nontagged.AqlSerializerDeserializerProvider;
 import edu.uci.ics.asterix.kvs.GetCall;
@@ -36,7 +38,6 @@ import edu.uci.ics.asterix.kvs.PutCall;
 import edu.uci.ics.asterix.metadata.MetadataException;
 import edu.uci.ics.asterix.metadata.MetadataManager;
 import edu.uci.ics.asterix.metadata.MetadataTransactionContext;
-import edu.uci.ics.asterix.metadata.declared.AqlCompiledDatasetDecl;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
 import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
 import edu.uci.ics.asterix.om.base.AInt32;
@@ -323,8 +324,8 @@ public class KVServlet extends HttpServlet {
     	uriSt.nextToken();	//kvs (Ignoring service identifier)
     	String dvName = uriSt.nextToken();
     	String dsName = uriSt.nextToken();
-    	long delay = Long.parseLong( uriSt.nextToken() );
-    	int sizeLimit = Integer.parseInt( uriSt.nextToken() );
+    	String delay = uriSt.nextToken(); //Long.parseLong( uriSt.nextToken() );
+    	String sizeLimit = uriSt.nextToken(); //Integer.parseInt( uriSt.nextToken() );
     	String ccIp = uriSt.nextToken().trim();
     	
     	IHyracksClientConnection hcc = getHcc(ccIp);
@@ -401,12 +402,12 @@ class KVCallProcessor{
 	
 	//---- THESE METHODS ARE ADDED FOR BENCHMARKING, YOU SHOULD REMOVE THEM ---------------------
 	//---- You eventually need to add the service registration upon restart (not just create) ---
-	public String processReg(IHyracksClientConnection hcc, String dataverseName, String datasetName, long delay, int sizeLimit) throws Exception{
+	public String processReg(IHyracksClientConnection hcc, String dataverseName, String datasetName, String delay, String sizeLimit) throws Exception{
 		MetadataManager.INSTANCE.init();
 		MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
 		MetadataManager.INSTANCE.lock(mdTxnCtx, LockMode.SHARED);
 		AqlCompiledMetadataDeclarations acmd = KVUtils.generateACMD(mdTxnCtx, dataverseName);
-		
+		/*
 		acmd.connectToDataverse(dataverseName);
 		AqlCompiledDatasetDecl acdd = KVUtils.generateACDD(acmd, datasetName);
 		
@@ -428,11 +429,18 @@ class KVCallProcessor{
 		MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
 		
 		JobSpecification spec = generateServiceJobSpec(dataverseName, datasetName, keyTypes, tt, bcf, fs, isd, record, partitionKeys, partConst, delay, sizeLimit);
+		*/
+		Map<String, String> kvParams = new HashMap<String, String>();
+		kvParams.put(KVUtils.DELAY_PARAM_TAG, delay);
+		kvParams.put(KVUtils.LIMIT_PARAM_TAG, sizeLimit);
+		JobSpecification spec = DatasetOperations.createKeyValueServiceJobSpec(datasetName, kvParams, acmd);
 		
-		JobId jobId = hcc.createJob(GlobalConfig.HYRACKS_APP_NAME, spec);
+		
+		//JobId jobId = hcc.createJob(GlobalConfig.HYRACKS_APP_NAME, spec);
 		spec.setMaxReattempts(0);
 		System.out.println("Going to Start a Job in REG");
-		hcc.start(jobId);
+		//hcc.start(jobId);
+		hcc.startJob(GlobalConfig.HYRACKS_APP_NAME, spec);
 		
 		return "REG call executed Successfully";
 	}

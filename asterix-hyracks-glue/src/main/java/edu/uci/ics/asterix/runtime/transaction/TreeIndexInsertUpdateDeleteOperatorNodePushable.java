@@ -34,9 +34,12 @@ import edu.uci.ics.hyracks.api.dataflow.value.RecordDescriptor;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 import edu.uci.ics.hyracks.dataflow.common.comm.io.FrameTupleAccessor;
 import edu.uci.ics.hyracks.dataflow.common.comm.util.FrameUtils;
+import edu.uci.ics.hyracks.dataflow.common.data.accessors.FrameTupleReference;
 import edu.uci.ics.hyracks.dataflow.std.base.AbstractUnaryInputUnaryOutputOperatorNodePushable;
 import edu.uci.ics.hyracks.storage.am.common.api.IIndexAccessor;
 import edu.uci.ics.hyracks.storage.am.common.api.ITreeIndex;
+import edu.uci.ics.hyracks.storage.am.common.api.ITupleFilter;
+import edu.uci.ics.hyracks.storage.am.common.api.ITupleFilterFactory;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.AbstractTreeIndexOperatorDescriptor;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.IIndex;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.PermutingFrameTupleReference;
@@ -44,16 +47,19 @@ import edu.uci.ics.hyracks.storage.am.common.dataflow.TreeIndexDataflowHelper;
 import edu.uci.ics.hyracks.storage.am.common.ophelpers.IndexOp;
 
 public class TreeIndexInsertUpdateDeleteOperatorNodePushable extends AbstractUnaryInputUnaryOutputOperatorNodePushable {
+    private final IHyracksTaskContext ctx;
     private FrameTupleAccessor accessor;
     private TreeIndexDataflowHelper treeIndexHelper;
     private final IRecordDescriptorProvider recordDescProvider;
     private final IndexOp op;
     private final PermutingFrameTupleReference tuple = new PermutingFrameTupleReference();
+    private FrameTupleReference frameTuple;
     private ByteBuffer writeBuffer;
     private IIndexAccessor indexAccessor;
     private ILockManager lockManager;
     private final TransactionContext txnContext;
     private TreeLogger treeLogger;
+    private ITupleFilter tupleFilter;
     private final TransactionProvider transactionProvider;
 
     /* TODO: Index operators should live in Hyracks. Right now, they are needed here in Asterix
@@ -64,14 +70,13 @@ public class TreeIndexInsertUpdateDeleteOperatorNodePushable extends AbstractUna
     public TreeIndexInsertUpdateDeleteOperatorNodePushable(TransactionContext txnContext,
             AbstractTreeIndexOperatorDescriptor opDesc, IHyracksTaskContext ctx, int partition, int[] fieldPermutation,
             IRecordDescriptorProvider recordDescProvider, IndexOp op) {
-        boolean createIfNotExists = (op == IndexOp.INSERT);
+        this.ctx = ctx;
         treeIndexHelper = (TreeIndexDataflowHelper) opDesc.getIndexDataflowHelperFactory().createIndexDataflowHelper(
                 opDesc, ctx, partition);
         this.recordDescProvider = recordDescProvider;
         this.op = op;
         tuple.setFieldPermutation(fieldPermutation);
         this.txnContext = txnContext;
-
         AsterixAppRuntimeContext runtimeContext = (AsterixAppRuntimeContext) ctx.getJobletContext()
                 .getApplicationContext().getApplicationObject();
         transactionProvider = runtimeContext.getTransactionProvider();
@@ -96,7 +101,7 @@ public class TreeIndexInsertUpdateDeleteOperatorNodePushable extends AbstractUna
     public void open() throws HyracksDataException {
         AbstractTreeIndexOperatorDescriptor opDesc = (AbstractTreeIndexOperatorDescriptor) treeIndexHelper
                 .getOperatorDescriptor();
-        RecordDescriptor inputRecDesc = recordDescProvider.getInputRecordDescriptor(opDesc.getOperatorId(), 0);
+        RecordDescriptor inputRecDesc = recordDescProvider.getInputRecordDescriptor(opDesc.getActivityId(), 0);
         accessor = new FrameTupleAccessor(treeIndexHelper.getHyracksTaskContext().getFrameSize(), inputRecDesc);
         writeBuffer = treeIndexHelper.getHyracksTaskContext().allocateFrame();
         writer.open();
@@ -104,6 +109,11 @@ public class TreeIndexInsertUpdateDeleteOperatorNodePushable extends AbstractUna
             treeIndexHelper.init(false);
             ITreeIndex treeIndex = (ITreeIndex) treeIndexHelper.getIndex();
             indexAccessor = treeIndex.createAccessor();
+            ITupleFilterFactory tupleFilterFactory = opDesc.getTupleFilterFactory();
+            if (tupleFilterFactory != null) {
+                tupleFilter = tupleFilterFactory.createTupleFilter(ctx);
+                frameTuple = new FrameTupleReference();
+            }
             initializeTransactionSupport();
         } catch (Exception e) {
             // cleanup in case of failure
@@ -121,6 +131,12 @@ public class TreeIndexInsertUpdateDeleteOperatorNodePushable extends AbstractUna
         int tupleCount = accessor.getTupleCount();
         try {
             for (int i = 0; i < tupleCount; i++) {
+                if (tupleFilter != null) {
+                    frameTuple.reset(accessor, i);
+                    if (!tupleFilter.accept(frameTuple)) {
+                        continue;
+                    }
+                }
                 tuple.reset(accessor, i);
                 switch (op) {
                     case INSERT: {
@@ -180,9 +196,9 @@ public class TreeIndexInsertUpdateDeleteOperatorNodePushable extends AbstractUna
     @Override
     public void fail() throws HyracksDataException {
         try {
-        	writer.fail();
+            writer.fail();
         } finally {
-        	txnContext.addCloseableResource(new ICloseable() {
+            txnContext.addCloseableResource(new ICloseable() {
                 @Override
                 public void close(TransactionContext txnContext) throws ACIDException {
                     try {

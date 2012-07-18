@@ -11,8 +11,6 @@ import edu.uci.ics.asterix.formats.nontagged.AqlTypeTraitProvider;
 import edu.uci.ics.asterix.metadata.MetadataException;
 import edu.uci.ics.asterix.metadata.MetadataManager;
 import edu.uci.ics.asterix.metadata.MetadataTransactionContext;
-import edu.uci.ics.asterix.metadata.declared.AqlCompiledDatasetDecl;
-import edu.uci.ics.asterix.metadata.declared.AqlCompiledInternalDatasetDetails;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
 import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
@@ -34,7 +32,6 @@ import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
 import edu.uci.ics.hyracks.api.dataflow.value.ITypeTraits;
 import edu.uci.ics.hyracks.dataflow.std.file.IFileSplitProvider;
 import edu.uci.ics.hyracks.storage.am.common.api.ITreeIndexFrameFactory;
-import edu.uci.ics.hyracks.algebricks.runtime.base.IEvaluatorFactory;
 
 public class KVUtils {
 	public static final String DELAY_PARAM_TAG = "delay";
@@ -58,9 +55,11 @@ public class KVUtils {
         return metadataTranslator.computeMetadataDeclarations(true);
 	}
 	
+	/*
 	public static AqlCompiledDatasetDecl generateACDD(AqlCompiledMetadataDeclarations acmd, String datasetName){
 		return acmd.findDataset(datasetName);
 	}
+	
 	
 	public static ARecordType getItemType(AqlCompiledMetadataDeclarations acmd, AqlCompiledDatasetDecl acdd) throws AlgebricksException{
 		String itemTypeName = acdd.getItemTypeName();
@@ -141,5 +140,6 @@ public class KVUtils {
 		AqlCompiledInternalDatasetDetails compInternalDsDetails = ((AqlCompiledInternalDatasetDetails) (acdd.getAqlCompiledDatasetDetails()));
 		return compInternalDsDetails.getPartitioningExprs();
 	}
-
+	*/
+	
 }
