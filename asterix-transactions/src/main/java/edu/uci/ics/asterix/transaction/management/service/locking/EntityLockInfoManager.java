@@ -18,6 +18,8 @@ package edu.uci.ics.asterix.transaction.management.service.locking;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 
+import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionManagementConstants.LockManagerConstants.LockMode;
+
 /**
  * EntityLockInfoManager provides EntityLockInfo arrays backed by ByteBuffer.
  * The array grows when the slots are overflowed.
@@ -37,96 +39,96 @@ public class EntityLockInfoManager {
     private int occupiedSlots;
     private EntityInfoManager entityInfoManager;
 
-//        ////////////////////////////////////////////////
-//        // begin of unit test
-//        ////////////////////////////////////////////////
-//    
-//        public static final int SHRINK_TIMER_THRESHOLD = 0; //for unit test
-//    
-//        /**
-//         * @param args
-//         */
-//        public static void main(String[] args) {
-//            final int DataSize = 5000;
-//    
-//            int i, j;
-//            int slots = ChildEntityLockInfoArrayManager.NUM_OF_SLOTS;
-//            int data[] = new int[DataSize];
-//            EntityLockInfoManager eliMgr = new EntityLockInfoManager();
-//    
-//            //allocate: 50
-//            System.out.println("allocate: 50");
-//            for (i = 0; i < 5; i++) {
-//                for (j = i * slots; j < i * slots + slots; j++) {
-//                    data[j] = eliMgr.allocate();
-//                }
-//    
-//                System.out.println(eliMgr.prettyPrint());
-//            }
-//    
-//            //deallocate from the last child to the first child
-//            System.out.println("deallocate from the last child to the first child");
-//            for (i = 4; i >= 0; i--) {
-//                for (j = i * slots + slots - 1; j >= i * slots; j--) {
-//                    eliMgr.deallocate(data[j]);
-//                }
-//                System.out.println(eliMgr.prettyPrint());
-//            }
-//    
-//            //allocate: 50
-//            System.out.println("allocate: 50");
-//            for (i = 0; i < 5; i++) {
-//                for (j = i * slots; j < i * slots + slots; j++) {
-//                    data[j] = eliMgr.allocate();
-//                }
-//    
-//                System.out.println(eliMgr.prettyPrint());
-//            }
-//    
-//            //deallocate from the first child to last child
-//            System.out.println("deallocate from the first child to last child");
-//            for (i = 0; i < 5; i++) {
-//                for (j = i * slots; j < i * slots + slots; j++) {
-//                    eliMgr.deallocate(data[j]);
-//                }
-//    
-//                System.out.println(eliMgr.prettyPrint());
-//            }
-//    
-//            //allocate: 50
-//            System.out.println("allocate: 50");
-//            for (i = 0; i < 5; i++) {
-//                for (j = i * slots; j < i * slots + slots; j++) {
-//                    data[j] = eliMgr.allocate();
-//                }
-//    
-//                System.out.println(eliMgr.prettyPrint());
-//            }
-//    
-//            //deallocate from the first child to 4th child
-//            System.out.println("deallocate from the first child to 4th child");
-//            for (i = 0; i < 4; i++) {
-//                for (j = i * slots; j < i * slots + slots; j++) {
-//                    eliMgr.deallocate(data[j]);
-//                }
-//    
-//                System.out.println(eliMgr.prettyPrint());
-//            }
-//    
-//            //allocate: 40
-//            System.out.println("allocate: 40");
-//            for (i = 0; i < 4; i++) {
-//                for (j = i * slots; j < i * slots + slots; j++) {
-//                    data[j] = eliMgr.allocate();
-//                }
-//    
-//                System.out.println(eliMgr.prettyPrint());
-//            }
-//        }
-//        
-//        ////////////////////////////////////////////////
-//        // end of unit test
-//        ////////////////////////////////////////////////
+    //        ////////////////////////////////////////////////
+    //        // begin of unit test
+    //        ////////////////////////////////////////////////
+    //    
+    //        public static final int SHRINK_TIMER_THRESHOLD = 0; //for unit test
+    //    
+    //        /**
+    //         * @param args
+    //         */
+    //        public static void main(String[] args) {
+    //            final int DataSize = 5000;
+    //    
+    //            int i, j;
+    //            int slots = ChildEntityLockInfoArrayManager.NUM_OF_SLOTS;
+    //            int data[] = new int[DataSize];
+    //            EntityLockInfoManager eliMgr = new EntityLockInfoManager();
+    //    
+    //            //allocate: 50
+    //            System.out.println("allocate: 50");
+    //            for (i = 0; i < 5; i++) {
+    //                for (j = i * slots; j < i * slots + slots; j++) {
+    //                    data[j] = eliMgr.allocate();
+    //                }
+    //    
+    //                System.out.println(eliMgr.prettyPrint());
+    //            }
+    //    
+    //            //deallocate from the last child to the first child
+    //            System.out.println("deallocate from the last child to the first child");
+    //            for (i = 4; i >= 0; i--) {
+    //                for (j = i * slots + slots - 1; j >= i * slots; j--) {
+    //                    eliMgr.deallocate(data[j]);
+    //                }
+    //                System.out.println(eliMgr.prettyPrint());
+    //            }
+    //    
+    //            //allocate: 50
+    //            System.out.println("allocate: 50");
+    //            for (i = 0; i < 5; i++) {
+    //                for (j = i * slots; j < i * slots + slots; j++) {
+    //                    data[j] = eliMgr.allocate();
+    //                }
+    //    
+    //                System.out.println(eliMgr.prettyPrint());
+    //            }
+    //    
+    //            //deallocate from the first child to last child
+    //            System.out.println("deallocate from the first child to last child");
+    //            for (i = 0; i < 5; i++) {
+    //                for (j = i * slots; j < i * slots + slots; j++) {
+    //                    eliMgr.deallocate(data[j]);
+    //                }
+    //    
+    //                System.out.println(eliMgr.prettyPrint());
+    //            }
+    //    
+    //            //allocate: 50
+    //            System.out.println("allocate: 50");
+    //            for (i = 0; i < 5; i++) {
+    //                for (j = i * slots; j < i * slots + slots; j++) {
+    //                    data[j] = eliMgr.allocate();
+    //                }
+    //    
+    //                System.out.println(eliMgr.prettyPrint());
+    //            }
+    //    
+    //            //deallocate from the first child to 4th child
+    //            System.out.println("deallocate from the first child to 4th child");
+    //            for (i = 0; i < 4; i++) {
+    //                for (j = i * slots; j < i * slots + slots; j++) {
+    //                    eliMgr.deallocate(data[j]);
+    //                }
+    //    
+    //                System.out.println(eliMgr.prettyPrint());
+    //            }
+    //    
+    //            //allocate: 40
+    //            System.out.println("allocate: 40");
+    //            for (i = 0; i < 4; i++) {
+    //                for (j = i * slots; j < i * slots + slots; j++) {
+    //                    data[j] = eliMgr.allocate();
+    //                }
+    //    
+    //                System.out.println(eliMgr.prettyPrint());
+    //            }
+    //        }
+    //        
+    //        ////////////////////////////////////////////////
+    //        // end of unit test
+    //        ////////////////////////////////////////////////
 
     public EntityLockInfoManager(EntityInfoManager entityInfoManager) {
         pArray = new ArrayList<ChildEntityLockInfoArrayManager>();
@@ -292,27 +294,188 @@ public class EntityLockInfoManager {
         }
         return s.toString();
     }
-    
+
+    public void addHolder(int slotNum, int holder) {
+        entityInfoManager.setPrevEntityActor(holder, getLastHolder(slotNum));
+        setLastHolder(slotNum, holder);
+    }
+
+    /**
+     * Remove holder from linked list of Actor.
+     * Also, remove the corresponding resource from linked list of resource
+     * in order to minimize JobInfo's resource link traversal.
+     * 
+     * @param slotNum
+     * @param holder
+     * @param jobInfo
+     */
+    public void removeHolder(int slotNum, int holder, JobInfo jobInfo) {
+        int prev = getLastHolder(slotNum);
+        int current = -1;
+        int next;
+
+        //remove holder from linked list of Actor
+        while (prev != holder) {
+            if (LockManager.IS_DEBUG_MODE) {
+                if (prev == -1) {
+                    //shouldn't occur: debugging purpose
+                    try {
+                        throw new Exception();
+                    } catch (Exception e) {
+                        // TODO Auto-generated catch block
+                        e.printStackTrace();
+                    }
+                }
+            }
+
+            current = prev;
+            prev = entityInfoManager.getPrevEntityActor(current);
+        }
+
+        if (current != -1) {
+            //current->prev = prev->prev
+            entityInfoManager.setPrevEntityActor(current, entityInfoManager.getPrevEntityActor(prev));
+        } else {
+            //lastHolder = prev->prev
+            setLastHolder(slotNum, entityInfoManager.getPrevEntityActor(prev));
+        }
+
+        //Notice!!
+        //remove the corresponding resource from linked list of resource.
+        //it is guaranteed that there is no waiter or upgrader in the JobInfo when this function is called.
+        prev = entityInfoManager.getPrevJobResource(holder);
+        next = entityInfoManager.getNextJobResource(holder);
+
+        if (prev != -1) {
+            entityInfoManager.setNextJobResource(prev, next);
+        }
+
+        if (next != -1) {
+            entityInfoManager.setPrevJobResource(next, prev);
+        } else {
+            //This entityInfo(i.e., holder) is the last resource held by this job.
+            jobInfo.setlastHoldingResource(holder);
+        }
+    }
+
+    public void addWaiter(int slotNum, int waiter) {
+
+    }
+
+    public void removeWaiter(int slotNum, int waiter) {
+
+    }
+
+    public void addUpgrader(int slotNum, int upgrader) {
+
+    }
+
+    public void removeUpgrader(int slotNum, int upgrader) {
+
+    }
+
+    /**
+     * wake up upgraders first, then waiters.
+     */
+    public void wakeupWaiter(int slotNum) {
+
+    }
+
+    public boolean isUpgradeCompatible(int slotNum, byte lockMode, int entityInfo) {
+        switch (lockMode) {
+            case LockMode.X:
+                return getSCount(slotNum) - entityInfoManager.getEntityLockCount(entityInfo) == 0;
+
+            default:
+                throw new IllegalStateException("Invalid upgrade lock mode");
+        }
+    }
+
+    public boolean isCompatible(int slotNum, byte lockMode) {
+        switch (lockMode) {
+            case LockMode.X:
+                return getSCount(slotNum) == 0 && getXCount(slotNum) == 0;
+
+            case LockMode.S:
+                return getXCount(slotNum) == 0;
+
+            default:
+                throw new IllegalStateException("Invalid upgrade lock mode");
+        }
+    }
+
+    public void increaseLockCount(int slotNum, byte lockMode) {
+        switch (lockMode) {
+            case LockMode.X:
+                setXCount(slotNum, (short) (getXCount(slotNum) + 1));
+                break;
+            case LockMode.S:
+                setSCount(slotNum, (short) (getSCount(slotNum) + 1));
+                break;
+            default:
+                throw new IllegalStateException("Invalid entity lock mode " + lockMode);
+        }
+    }
+
+    public void decreaseLockCount(int slotNum, byte lockMode) {
+        switch (lockMode) {
+            case LockMode.X:
+                setXCount(slotNum, (short) (getXCount(slotNum) - 1));
+                break;
+            case LockMode.S:
+                setSCount(slotNum, (short) (getSCount(slotNum) - 1));
+                break;
+            default:
+                throw new IllegalStateException("Invalid entity lock mode " + lockMode);
+        }
+    }
+
+    public void increaseLockCount(int slotNum, byte lockMode, short count) {
+        switch (lockMode) {
+            case LockMode.X:
+                setXCount(slotNum, (short) (getXCount(slotNum) + count));
+                break;
+            case LockMode.S:
+                setSCount(slotNum, (short) (getSCount(slotNum) + count));
+                break;
+            default:
+                throw new IllegalStateException("Invalid entity lock mode " + lockMode);
+        }
+    }
+
+    public void decreaseLockCount(int slotNum, byte lockMode, short count) {
+        switch (lockMode) {
+            case LockMode.X:
+                setXCount(slotNum, (short) (getXCount(slotNum) - count));
+                break;
+            case LockMode.S:
+                setSCount(slotNum, (short) (getSCount(slotNum) - count));
+                break;
+            default:
+                throw new IllegalStateException("Invalid entity lock mode " + lockMode);
+        }
+    }
+
     //////////////////////////////////////////////////////////////////
     //   set/get method for each field of EntityLockInfo
     //////////////////////////////////////////////////////////////////
 
-    public void setXCount(int slotNum, int count) {
+    public void setXCount(int slotNum, short count) {
         pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).setXCount(
                 slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS, count);
     }
 
-    public int getXCount(int slotNum) {
+    public short getXCount(int slotNum) {
         return pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).getXCount(
                 slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS);
     }
 
-    public void setSCount(int slotNum, int count) {
+    public void setSCount(int slotNum, short count) {
         pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).setSCount(
                 slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS, count);
     }
 
-    public int getSCount(int slotNum) {
+    public short getSCount(int slotNum) {
         return pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).getSCount(
                 slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS);
     }
@@ -349,31 +512,31 @@ public class EntityLockInfoManager {
 }
 
 /******************************************
- * EntityLockInfo (20 bytes)
+ * EntityLockInfo (16 bytes)
  * ****************************************
- * int XCount : used to represent the count of X mode lock if it is allocated. Otherwise, it represents next free slot.
- * int SCount
- * int firstHolder
+ * short XCount : used to represent the count of X mode lock if it is allocated. Otherwise, it represents next free slot.
+ * short SCount
+ * int lastHolder
  * int firstWaiter
  * int upgrader : may exist only one since there are only S and X mode lock in Entity-level
  *******************************************/
 
 class ChildEntityLockInfoArrayManager {
-    public static final int ENTITY_LOCK_INFO_SIZE = 20; //20bytes
+    public static final int ENTITY_LOCK_INFO_SIZE = 16; //16bytes
     public static final int NUM_OF_SLOTS = 1024; //number of entityLockInfos in a buffer
     //public static final int NUM_OF_SLOTS = 10; //for unit test
     public static final int BUFFER_SIZE = ENTITY_LOCK_INFO_SIZE * NUM_OF_SLOTS;
 
     //byte offset of each field of EntityLockInfo
     public static final int XCOUNT_OFFSET = 0;
-    public static final int SCOUNT_OFFSET = 4;
-    public static final int LAST_HOLDER_OFFSET = 8;
-    public static final int FIRST_WAITER_OFFSET = 12;
-    public static final int UPGRADER_OFFSET = 16;
+    public static final int SCOUNT_OFFSET = 2;
+    public static final int LAST_HOLDER_OFFSET = 4;
+    public static final int FIRST_WAITER_OFFSET = 8;
+    public static final int UPGRADER_OFFSET = 12;
 
-    //byte offset of nextFreeSlotNum which shares the same space with XCount field
-    //If a slot is in use, the space is used for XCount. Otherwise, it is used for nextFreeSlotNum. 
-    public static final int NEXT_FREE_SLOT_OFFSET = 0;
+    //byte offset of nextFreeSlotNum which shares the same space with LastHolder field
+    //If a slot is in use, the space is used for LastHolder. Otherwise, it is used for nextFreeSlotNum. 
+    public static final int NEXT_FREE_SLOT_OFFSET = 4;
 
     private ByteBuffer buffer;
     private int freeSlotNum;
@@ -444,20 +607,20 @@ class ChildEntityLockInfoArrayManager {
         return buffer.getInt(slotNum * ENTITY_LOCK_INFO_SIZE + NEXT_FREE_SLOT_OFFSET);
     }
 
-    public void setXCount(int slotNum, int count) {
-        buffer.putInt(slotNum * ENTITY_LOCK_INFO_SIZE + XCOUNT_OFFSET, count);
+    public void setXCount(int slotNum, short count) {
+        buffer.putShort(slotNum * ENTITY_LOCK_INFO_SIZE + XCOUNT_OFFSET, count);
     }
 
-    public int getXCount(int slotNum) {
-        return buffer.getInt(slotNum * ENTITY_LOCK_INFO_SIZE + XCOUNT_OFFSET);
+    public short getXCount(int slotNum) {
+        return buffer.getShort(slotNum * ENTITY_LOCK_INFO_SIZE + XCOUNT_OFFSET);
     }
 
-    public void setSCount(int slotNum, int count) {
-        buffer.putInt(slotNum * ENTITY_LOCK_INFO_SIZE + SCOUNT_OFFSET, count);
+    public void setSCount(int slotNum, short count) {
+        buffer.putShort(slotNum * ENTITY_LOCK_INFO_SIZE + SCOUNT_OFFSET, count);
     }
 
-    public int getSCount(int slotNum) {
-        return buffer.getInt(slotNum * ENTITY_LOCK_INFO_SIZE + SCOUNT_OFFSET);
+    public short getSCount(int slotNum) {
+        return buffer.getShort(slotNum * ENTITY_LOCK_INFO_SIZE + SCOUNT_OFFSET);
     }
 
     public void setLastHolder(int slotNum, int holder) {

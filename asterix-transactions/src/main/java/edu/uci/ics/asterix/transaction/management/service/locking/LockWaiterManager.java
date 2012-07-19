@@ -289,6 +289,11 @@ public class LockWaiterManager {
         }
         return s.toString();
     }
+    
+    public LockWaiter getLockWatier(int slotNum) {
+        return pArray.get(slotNum / ChildLockWaiterArrayManager.NUM_OF_SLOTS).getLockWaiter(
+                slotNum % ChildLockWaiterArrayManager.NUM_OF_SLOTS);
+    }
 }
 
 class ChildLockWaiterArrayManager {
