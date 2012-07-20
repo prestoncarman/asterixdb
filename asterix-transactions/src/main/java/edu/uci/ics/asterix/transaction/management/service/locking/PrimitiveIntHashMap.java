@@ -27,20 +27,20 @@ import java.util.ArrayList;
  *
  */
 public class PrimitiveIntHashMap {
-    public static final int CHILD_BUCKETS = 1<<9; //INIT_NUM_OF_BUCKETS;
-    public static final int NUM_OF_SLOTS = 1<<3; //NUM_OF_SLOTS_IN_A_BUCKET;
-    public static final int SHRINK_TIMER_THRESHOLD = 120000; //2min
+    private final int CHILD_BUCKETS; //INIT_NUM_OF_BUCKETS;
+    private final int NUM_OF_SLOTS; //NUM_OF_SLOTS_IN_A_BUCKET;
+    private final int SHRINK_TIMER_THRESHOLD;
     
     private int occupiedSlots;
     private ArrayList<ChildIntArrayManager> pArray; //parent array
     private int hashMod;
     private long shrinkTimer;
     private boolean isShrinkTimerOn;
+    private int iterBucketIndex;
+    private int iterSlotIndex;
+    private int iterChildIndex;
+    private KeyValuePair iterPair;
 
-//    public static final int CHILD_BUCKETS = 1<<4; //INIT_NUM_OF_BUCKETS;
-//    public static final int NUM_OF_SLOTS = 1<<3; //NUM_OF_SLOTS_IN_A_BUCKET;
-//    public static final int SHRINK_TIMER_THRESHOLD = 5;
-    
 //    ////////////////////////////////////////////////
 //    // begin of unit test
 //    ////////////////////////////////////////////////
@@ -54,7 +54,8 @@ public class PrimitiveIntHashMap {
 //        int num = 5;
 //        int key[] = new int[500];
 //        int val[] = new int[500];
-//        PrimitiveIntHashMap map = new PrimitiveIntHashMap();
+//        KeyValuePair pair;
+//        PrimitiveIntHashMap map = new PrimitiveIntHashMap(1<<4, 1<<3, 5);
 //        
 //        for (j=0; j < num; j++) {
 //            
@@ -75,6 +76,15 @@ public class PrimitiveIntHashMap {
 //                map.put(key[i], val[i]);
 //            }
 //            
+//            map.beginIterate();
+//            pair = map.getNextKeyValue();
+//            i = 0;
+//            while (pair != null) {
+//                i++;
+//                System.out.println("["+i+"] key:"+ pair.key + ", val:"+ pair.value);
+//                pair = map.getNextKeyValue();
+//            }
+//            
 //            //System.out.println(map.prettyPrint());
 //            
 //            for (i=k-20; i< k; i++) { //skip X70~X79
@@ -91,6 +101,15 @@ public class PrimitiveIntHashMap {
 //                } catch (InterruptedException e) {
 //                    e.printStackTrace();
 //                }
+//            }
+//            
+//            map.beginIterate();
+//            pair = map.getNextKeyValue();
+//            i = 0;
+//            while (pair != null) {
+//                i++;
+//                System.out.println("["+i+"] key:"+ pair.key + ", val:"+ pair.value);
+//                pair = map.getNextKeyValue();
 //            }
 //            
 //            //remove data to map
@@ -111,6 +130,15 @@ public class PrimitiveIntHashMap {
 //                System.out.println(""+i+"=> key:"+ key[i] + ", val:"+val[i] +", result: " + map.get(key[i]));  
 //            }
 //        }
+//        
+//        map.beginIterate();
+//        pair = map.getNextKeyValue();
+//        i = 0;
+//        while (pair != null) {
+//            i++;
+//            System.out.println("["+i+"] key:"+ pair.key + ", val:"+ pair.value);
+//            pair = map.getNextKeyValue();
+//        }
 //    }
 //
 //    ////////////////////////////////////////////////
@@ -118,10 +146,25 @@ public class PrimitiveIntHashMap {
 //    ////////////////////////////////////////////////
     
     public PrimitiveIntHashMap() {
+        CHILD_BUCKETS = 1<<9; //INIT_NUM_OF_BUCKETS;
+        NUM_OF_SLOTS = 1<<3; //NUM_OF_SLOTS_IN_A_BUCKET;
+        SHRINK_TIMER_THRESHOLD = 120000; //2min
         pArray = new ArrayList<ChildIntArrayManager>();
-        pArray.add(new ChildIntArrayManager());
+        pArray.add(new ChildIntArrayManager(this));
         hashMod = CHILD_BUCKETS;
         occupiedSlots = 0;
+        iterPair = new KeyValuePair();
+    }
+    
+    public PrimitiveIntHashMap(int childBuckets, int numOfSlots, int shrinkTimerThreshold) {
+        CHILD_BUCKETS = childBuckets;
+        NUM_OF_SLOTS = numOfSlots;
+        SHRINK_TIMER_THRESHOLD = shrinkTimerThreshold;
+        pArray = new ArrayList<ChildIntArrayManager>();
+        pArray.add(new ChildIntArrayManager(this));
+        hashMod = CHILD_BUCKETS;
+        occupiedSlots = 0;
+        iterPair = new KeyValuePair();
     }
     
     public void put(int key, int value) {
@@ -150,7 +193,7 @@ public class PrimitiveIntHashMap {
         
         //grow buckets by adding more child
         for (i=0; i<size; i++) { 
-            pArray.add(new ChildIntArrayManager());
+            pArray.add(new ChildIntArrayManager(this));
         }
         
         //increase hashMod
@@ -292,15 +335,96 @@ public class PrimitiveIntHashMap {
         }
         return s.toString();
     }
+    
+    public int getNumOfSlots() {
+        return NUM_OF_SLOTS;
+    }
+    
+    public int getNumOfChildBuckets() {
+        return CHILD_BUCKETS;
+    }
+    
+    public void beginIterate() {
+        iterChildIndex = 0;
+        iterBucketIndex = 0;
+        iterSlotIndex = 1;
+    }
+    
+    public KeyValuePair getNextKeyValue() {
+        for (; iterChildIndex < pArray.size(); iterChildIndex++, iterBucketIndex = 0) {
+            for (; iterBucketIndex < CHILD_BUCKETS; iterBucketIndex++, iterSlotIndex = 1) {
+                if (iterSlotIndex ==1 && pArray.get(iterChildIndex).cArray[iterBucketIndex][0] == 0) {
+                    continue;
+                }
+                for (; iterSlotIndex < NUM_OF_SLOTS; iterSlotIndex++) {
+                    iterPair.key = pArray.get(iterChildIndex).cArray[iterBucketIndex][iterSlotIndex*2];
+                    if (iterPair.key == -1) {
+                        continue;
+                    }
+                    iterPair.value = pArray.get(iterChildIndex).cArray[iterBucketIndex][iterSlotIndex*2+1];
+                    iterSlotIndex++;
+                    return iterPair;
+                }
+            }
+        }
+        return null;
+    }
+    
+    public int getNextKey() {
+        for (; iterChildIndex < pArray.size(); iterChildIndex++, iterBucketIndex = 0) {
+            for (; iterBucketIndex < CHILD_BUCKETS; iterBucketIndex++, iterSlotIndex = 1) {
+                if (iterSlotIndex ==1 && pArray.get(iterChildIndex).cArray[iterBucketIndex][0] == 0) {
+                    continue;
+                }
+                for (; iterSlotIndex < NUM_OF_SLOTS; iterSlotIndex++) {
+                    iterPair.key = pArray.get(iterChildIndex).cArray[iterBucketIndex][iterSlotIndex*2];
+                    if (iterPair.key == -1) {
+                        continue;
+                    }
+                    iterSlotIndex++;
+                    return iterPair.key;
+                }
+            }
+        }
+        return -1;
+    }
+    
+    public int getNextValue() {
+        for (; iterChildIndex < pArray.size(); iterChildIndex++, iterBucketIndex = 0) {
+            for (; iterBucketIndex < CHILD_BUCKETS; iterBucketIndex++, iterSlotIndex = 1) {
+                if (iterSlotIndex ==1 && pArray.get(iterChildIndex).cArray[iterBucketIndex][0] == 0) {
+                    continue;
+                }
+                for (; iterSlotIndex < NUM_OF_SLOTS; iterSlotIndex++) {
+                    iterPair.key = pArray.get(iterChildIndex).cArray[iterBucketIndex][iterSlotIndex*2];
+                    if (iterPair.key == -1) {
+                        continue;
+                    }
+                    iterPair.value = pArray.get(iterChildIndex).cArray[iterBucketIndex][iterSlotIndex*2+1];
+                    iterSlotIndex++;
+                    return iterPair.value;
+                }
+            }
+        }
+        return -1;
+    }
+    
+    public static class KeyValuePair {
+        public int key;
+        public int value; 
+    }
 }
 
 class ChildIntArrayManager {
-    public static final int DIM1_SIZE = PrimitiveIntHashMap.CHILD_BUCKETS;
-    public static final int DIM2_SIZE = PrimitiveIntHashMap.NUM_OF_SLOTS * 2; //2: Array of [key, value] pair
-    public static final int NUM_OF_SLOTS = PrimitiveIntHashMap.NUM_OF_SLOTS;
+    private final int DIM1_SIZE; 
+    private final int DIM2_SIZE; 
+    private final int NUM_OF_SLOTS;
     public int[][] cArray; //child array
     
-    public ChildIntArrayManager() {
+    public ChildIntArrayManager(PrimitiveIntHashMap parentHashMap) {
+        DIM1_SIZE = parentHashMap.getNumOfChildBuckets();
+        DIM2_SIZE = parentHashMap.getNumOfSlots() * 2; //2: Array of [key, value] pair
+        NUM_OF_SLOTS = parentHashMap.getNumOfSlots() ;
         initialize();
     }
 
