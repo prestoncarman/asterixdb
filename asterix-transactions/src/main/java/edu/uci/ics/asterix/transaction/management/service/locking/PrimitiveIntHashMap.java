@@ -344,6 +344,22 @@ public class PrimitiveIntHashMap {
         return CHILD_BUCKETS;
     }
     
+    public void clear(boolean needShrink) {
+        int size = pArray.size();
+        for (int i=size-1; i >= 0; i--) {
+            if (needShrink && i != 0) {
+                pArray.remove(i);
+            } else {
+                pArray.get(i).clear();
+            }
+        }
+        occupiedSlots = 0;
+    }
+    
+    ///////////////////////////////////////
+    // iterate method
+    ///////////////////////////////////////
+    
     public void beginIterate() {
         iterChildIndex = 0;
         iterBucketIndex = 0;
@@ -434,6 +450,21 @@ class ChildIntArrayManager {
         for (i = 0; i < DIM1_SIZE; i++) {
             //cArray[i][0] is used as a counter to count how many slots are used in this bucket.
             //cArray[i][1] is not used.
+            cArray[i][0] = 0;
+            for (j = 1; j < NUM_OF_SLOTS; j++) {
+                cArray[i][j*2] = -1; // -1 represent that the slot is empty
+            }
+        }
+    }
+    
+    public void clear() {
+        int i, j;
+        for (i = 0; i < DIM1_SIZE; i++) {
+            //cArray[i][0] is used as a counter to count how many slots are used in this bucket.
+            //cArray[i][1] is not used.
+            if (cArray[i][0] == 0) {
+                continue;
+            }
             cArray[i][0] = 0;
             for (j = 1; j < NUM_OF_SLOTS; j++) {
                 cArray[i][j*2] = -1; // -1 represent that the slot is empty
