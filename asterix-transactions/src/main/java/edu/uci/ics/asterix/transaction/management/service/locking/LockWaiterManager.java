@@ -290,7 +290,7 @@ public class LockWaiterManager {
         return s.toString();
     }
     
-    public LockWaiter getLockWatier(int slotNum) {
+    public LockWaiter getLockWaiter(int slotNum) {
         return pArray.get(slotNum / ChildLockWaiterArrayManager.NUM_OF_SLOTS).getLockWaiter(
                 slotNum % ChildLockWaiterArrayManager.NUM_OF_SLOTS);
     }
@@ -328,6 +328,8 @@ class ChildLockWaiterArrayManager {
     public int allocate() {
         int currentSlot = freeSlotNum;
         freeSlotNum = childArray[currentSlot].getNextFreeSlot();
+        childArray[currentSlot].setWait(true);
+        childArray[currentSlot].setVictim(false);
         occupiedSlots++;
         return currentSlot;
     }

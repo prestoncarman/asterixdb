@@ -38,6 +38,7 @@ public class EntityLockInfoManager {
     private boolean isShrinkTimerOn;
     private int occupiedSlots;
     private EntityInfoManager entityInfoManager;
+    LockWaiterManager lockWaiterManager;
 
     //        ////////////////////////////////////////////////
     //        // begin of unit test
@@ -130,7 +131,7 @@ public class EntityLockInfoManager {
     //        // end of unit test
     //        ////////////////////////////////////////////////
 
-    public EntityLockInfoManager(EntityInfoManager entityInfoManager) {
+    public EntityLockInfoManager(EntityInfoManager entityInfoManager, LockWaiterManager lockWaiterManager) {
         pArray = new ArrayList<ChildEntityLockInfoArrayManager>();
         pArray.add(new ChildEntityLockInfoArrayManager());
         allocChild = 0;
@@ -358,20 +359,87 @@ public class EntityLockInfoManager {
         }
     }
 
-    public void addWaiter(int slotNum, int waiter) {
-
+    public void addWaiter(int slotNum, int waiterObjId) {
+        int lastEntityInfo = 0;
+        int lastObjId;
+        LockWaiter lastObj;
+        int firstWaiter = getFirstWaiter(slotNum);
+        
+        if (firstWaiter != -1) {
+            //find the lastWaiter
+            lastObjId = firstWaiter;
+            while (lastObjId != -1) {
+                lastObj = lockWaiterManager.getLockWaiter(lastObjId);
+                lastEntityInfo = lastObj.getEntityInfoSlot();
+                lastObjId = entityInfoManager.getNextEntityActor(lastEntityInfo);
+            }
+            //last->next = new_waiter
+            entityInfoManager.setNextEntityActor(lastEntityInfo, waiterObjId);
+        } else {
+            //set first waiter
+            setFirstWaiter(slotNum, waiterObjId);
+        }
+        //new_waiter->next = -1
+        lastObj = lockWaiterManager.getLockWaiter(waiterObjId);
+        lastEntityInfo = lastObj.getEntityInfoSlot();
+        entityInfoManager.setNextEntityActor(lastEntityInfo, -1);
     }
 
-    public void removeWaiter(int slotNum, int waiter) {
+    public void removeWaiter(int slotNum, int waiterObjId) {
+        int currentObjId = getFirstWaiter(slotNum);
+        LockWaiter currentObj;
+        int currentEntityInfo = -1;
+        LockWaiter prevObj;
+        int prevEntityInfo = -1;
+        int nextObjId;
 
+        while (currentObjId != waiterObjId) {
+
+            if (LockManager.IS_DEBUG_MODE) {
+                if (currentObjId == -1) {
+                    //shouldn't occur: debugging purpose
+                    try {
+                        throw new Exception();
+                    } catch (Exception e) {
+                        // TODO Auto-generated catch block
+                        e.printStackTrace();
+                    }
+                }
+            }
+
+            prevObj = lockWaiterManager.getLockWaiter(currentObjId);
+            prevEntityInfo = prevObj.getEntityInfoSlot();
+            currentObjId = entityInfoManager.getNextEntityActor(prevEntityInfo);
+        }
+
+        //get current waiter object
+        currentObj = lockWaiterManager.getLockWaiter(currentObjId);
+        currentEntityInfo = currentObj.getEntityInfoSlot();
+        
+        //get next waiterObjId
+        nextObjId = entityInfoManager.getNextEntityActor(currentEntityInfo);
+        
+        if (prevEntityInfo != -1) {
+            //prev->next = next
+            entityInfoManager.setNextEntityActor(prevEntityInfo, nextObjId);
+        } else {
+            //removed first waiter. firstWaiter = current->next
+            setFirstWaiter(slotNum, nextObjId);
+        }
     }
 
-    public void addUpgrader(int slotNum, int upgrader) {
-
+    public void addUpgrader(int slotNum, int waiterObjId) {
+        //EEEEEEEEEEEEEEEEE
+        //Assumption: There can be only one upgrader in entity-granule lock. Otherwise, more than an upgrader mean deadlock.
+        //Check: 
+        // - multiple upgrader may exist whether multiple threads in a job can try to upgrade lock on multiple resources.
+        // - check the lock() in LockManager
+        
+        setUpgrader(slotNum, waiterObjId);
     }
 
-    public void removeUpgrader(int slotNum, int upgrader) {
-
+    public void removeUpgrader(int slotNum, int waiterObjId) {
+        setUpgrader(slotNum, -1);
     }
 
     /**
@@ -560,6 +628,12 @@ class ChildEntityLockInfoArrayManager {
     public int allocate() {
         int currentSlot = freeSlotNum;
         freeSlotNum = getNextFreeSlot(currentSlot);
+        //initialize values
+        setXCount(currentSlot, (short)0);
+        setSCount(currentSlot, (short)0);
+        setLastHolder(currentSlot, -1);
+        setFirstWaiter(currentSlot, -1);
+        setUpgrader(currentSlot, -1);
         occupiedSlots++;
         return currentSlot;
     }
