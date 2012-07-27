@@ -1,5 +1,5 @@
 /*
- * Copyright 2009-2010 by The Regents of the University of California
+ * Copyright 2009-2011 by The Regents of the University of California
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
@@ -12,23 +12,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package edu.uci.ics.asterix.aql.base;
+package edu.uci.ics.asterix.om.base.temporal;
 
-import java.io.Serializable;
+public interface ICharSequenceAccessor<T> {
 
-public interface ILiteral extends Serializable {
-    public enum Type {
-        STRING,
-        INTEGER,
-        NULL,
-        TRUE,
-        FALSE,
-        FLOAT,
-        DOUBLE
-    }
+    public char getCharAt(int index);
 
-    public Type getLiteralType();
-
-    public String getStringValue();
+    public int getLength();
 
 }
