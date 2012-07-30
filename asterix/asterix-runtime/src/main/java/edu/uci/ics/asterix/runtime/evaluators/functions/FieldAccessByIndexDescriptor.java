@@ -19,7 +19,7 @@ public class FieldAccessByIndexDescriptor extends AbstractScalarFunctionDynamicD
             return new FieldAccessByIndexDescriptor();
         }
     };
-    
+
     private ARecordType recType;
 
     public void reset(ARecordType recType) {

@@ -238,7 +238,7 @@ public class MetadataNode implements IMetadataNode {
             insertTupleIntoIndex(txnId, MetadataPrimaryIndexes.FUNCTION_DATASET, functionTuple);
 
         } catch (BTreeDuplicateKeyException e) {
-            throw new MetadataException("A function with this name " + function.getFunctionName() + " and arity "
+            throw new MetadataException("A dataset with this name " + function.getFunctionName() + " and arity "
                     + function.getFunctionArity() + " already exists in dataverse '" + function.getDataverseName()
                     + "'.", e);
         } catch (Exception e) {

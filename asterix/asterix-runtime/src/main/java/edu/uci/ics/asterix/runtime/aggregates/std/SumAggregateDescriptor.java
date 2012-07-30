@@ -33,8 +33,8 @@ import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyAggregateFunctionFactory
 import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluator;
 import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluatorFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
-import edu.uci.ics.hyracks.dataflow.common.data.accessors.ArrayBackedValueStorage;
-import edu.uci.ics.hyracks.dataflow.common.data.accessors.IDataOutputProvider;
+import edu.uci.ics.hyracks.data.std.api.IDataOutputProvider;
+import edu.uci.ics.hyracks.data.std.util.ArrayBackedValueStorage;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.IFrameTupleReference;
 
 public class SumAggregateDescriptor extends AbstractAggregateFunctionDynamicDescriptor {
@@ -96,8 +96,8 @@ public class SumAggregateDescriptor extends AbstractAggregateFunctionDynamicDesc
                         inputVal.reset();
                         eval.evaluate(tuple);
                         if (inputVal.getLength() > 0) {
-                            ATypeTag typeTag = EnumDeserializer.ATYPETAGDESERIALIZER
-                                    .deserialize(inputVal.getByteArray()[0]);
+                            ATypeTag typeTag = EnumDeserializer.ATYPETAGDESERIALIZER.deserialize(inputVal
+                                    .getByteArray()[0]);
                             switch (typeTag) {
                                 case INT8: {
                                     metInt8s = true;

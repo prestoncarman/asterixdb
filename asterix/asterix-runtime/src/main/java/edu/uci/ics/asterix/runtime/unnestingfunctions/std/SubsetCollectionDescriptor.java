@@ -23,8 +23,8 @@ import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluatorFactory;
 import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyUnnestingFunction;
 import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyUnnestingFunctionFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
-import edu.uci.ics.hyracks.dataflow.common.data.accessors.ArrayBackedValueStorage;
-import edu.uci.ics.hyracks.dataflow.common.data.accessors.IDataOutputProvider;
+import edu.uci.ics.hyracks.data.std.api.IDataOutputProvider;
+import edu.uci.ics.hyracks.data.std.util.ArrayBackedValueStorage;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.IFrameTupleReference;
 import edu.uci.ics.hyracks.dataflow.common.data.marshalling.IntegerSerializerDeserializer;
 
@@ -37,7 +37,7 @@ public class SubsetCollectionDescriptor extends AbstractUnnestingFunctionDynamic
     private final static byte SER_ORDEREDLIST_TYPE_TAG = ATypeTag.ORDEREDLIST.serialize();
     private final static byte SER_UNORDEREDLIST_TYPE_TAG = ATypeTag.UNORDEREDLIST.serialize();
     private final static byte SER_NULL_TYPE_TAG = ATypeTag.NULL.serialize();
-    
+
     public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
         public IFunctionDescriptor createFunctionDescriptor() {
             return new SubsetCollectionDescriptor();
@@ -51,7 +51,8 @@ public class SubsetCollectionDescriptor extends AbstractUnnestingFunctionDynamic
             private static final long serialVersionUID = 1L;
 
             @Override
-            public ICopyUnnestingFunction createUnnestingFunction(IDataOutputProvider provider) throws AlgebricksException {
+            public ICopyUnnestingFunction createUnnestingFunction(IDataOutputProvider provider)
+                    throws AlgebricksException {
 
                 final DataOutput out = provider.getDataOutput();
 

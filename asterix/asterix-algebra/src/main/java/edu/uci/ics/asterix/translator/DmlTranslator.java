@@ -124,6 +124,7 @@ public class DmlTranslator extends AbstractAqlTranslator {
                             cis.setNeedToCreate(false);
                         }
                     }
+
                     if (cis.getNeedToCreate()) {
                         CompiledCreateIndexStatement ccis = new CompiledCreateIndexStatement(cis.getIndexName()
                                 .getValue(), cis.getDatasetName().getValue(), cis.getFieldExprs(), cis.getGramLength(),
@@ -491,5 +492,5 @@ public class DmlTranslator extends AbstractAqlTranslator {
         }
 
     }
-   
+
 }

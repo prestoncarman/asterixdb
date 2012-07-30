@@ -181,15 +181,14 @@ public class AqlCompiledMetadataDeclarations {
         }
     }
 
-
     public List<Index> getDatasetIndexes(String dataverseName, String datasetName) throws AlgebricksException {
-    	try {
+        try {
             return metadataManager.getDatasetIndexes(mdTxnCtx, dataverseName, datasetName);
         } catch (MetadataException e) {
             throw new AlgebricksException(e);
         }
     }
-    
+
     public Index getDatasetPrimaryIndex(String dataverseName, String datasetName) throws AlgebricksException {
         try {
             return metadataManager.getIndex(mdTxnCtx, dataverseName, datasetName, datasetName);
@@ -205,7 +204,7 @@ public class AqlCompiledMetadataDeclarations {
             throw new AlgebricksException(e);
         }
     }
-    
+
     public void setOutputFile(FileSplit outputFile) {
         this.outputFile = outputFile;
     }
@@ -296,7 +295,7 @@ public class AqlCompiledMetadataDeclarations {
         Adapter adapter = null;
         // search in default namespace (built-in adapter)
         adapter = metadataManager.getAdapter(mdTxnCtx, FunctionConstants.ASTERIX_NS, adapterName);
-        
+
         // search in dataverse (user-defined adapter)
         if (adapter == null) {
             adapter = metadataManager.getAdapter(mdTxnCtx, dataverseName, adapterName);

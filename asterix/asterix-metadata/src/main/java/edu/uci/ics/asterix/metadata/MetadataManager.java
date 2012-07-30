@@ -65,346 +65,333 @@ import edu.uci.ics.asterix.transaction.management.service.transaction.Transactio
  * with transaction ids of regular jobs or other metadata transactions.
  */
 public class MetadataManager implements IMetadataManager {
-	// Set in init().
-	public static MetadataManager INSTANCE;
+    // Set in init().
+    public static MetadataManager INSTANCE;
 
-	private final MetadataCache cache = new MetadataCache();
-	private IAsterixStateProxy proxy;
-	private IMetadataNode metadataNode;
+    private final MetadataCache cache = new MetadataCache();
+    private IAsterixStateProxy proxy;
+    private IMetadataNode metadataNode;
 
-	public MetadataManager(IAsterixStateProxy proxy) {
-		if (proxy == null) {
-			throw new Error("Null proxy given to MetadataManager.");
-		}
-		this.proxy = proxy;
-		this.metadataNode = null;
-	}
+    public MetadataManager(IAsterixStateProxy proxy) {
+        if (proxy == null) {
+            throw new Error("Null proxy given to MetadataManager.");
+        }
+        this.proxy = proxy;
+        this.metadataNode = null;
+    }
 
-	@Override
-	public void init() throws RemoteException {
-		// Could be synchronized on any object. Arbitrarily chose proxy.
-		synchronized (proxy) {
-			if (metadataNode != null) {
-				return;
-			}
-			metadataNode = proxy.getMetadataNode();
-			if (metadataNode == null) {
-				throw new Error("Failed to get the MetadataNode.\n"
-						+ "The MetadataNode was configured to run on NC: "
-						+ proxy.getAsterixProperties().getMetadataNodeName());
-			}
-		}
-	}
+    @Override
+    public void init() throws RemoteException {
+        // Could be synchronized on any object. Arbitrarily chose proxy.
+        synchronized (proxy) {
+            if (metadataNode != null) {
+                return;
+            }
+            metadataNode = proxy.getMetadataNode();
+            if (metadataNode == null) {
+                throw new Error("Failed to get the MetadataNode.\n" + "The MetadataNode was configured to run on NC: "
+                        + proxy.getAsterixProperties().getMetadataNodeName());
+            }
+        }
+    }
 
-	@Override
-	public MetadataTransactionContext beginTransaction()
-			throws RemoteException, ACIDException {
-		long txnId = TransactionIDFactory.generateTransactionId();
-		metadataNode.beginTransaction(txnId);
-		return new MetadataTransactionContext(txnId);
-	}
+    @Override
+    public MetadataTransactionContext beginTransaction() throws RemoteException, ACIDException {
+        long txnId = TransactionIDFactory.generateTransactionId();
+        metadataNode.beginTransaction(txnId);
+        return new MetadataTransactionContext(txnId);
+    }
 
-	@Override
-	public void commitTransaction(MetadataTransactionContext ctx)
-			throws RemoteException, ACIDException {
-		metadataNode.commitTransaction(ctx.getTxnId());
-		cache.commit(ctx);
-	}
+    @Override
+    public void commitTransaction(MetadataTransactionContext ctx) throws RemoteException, ACIDException {
+        metadataNode.commitTransaction(ctx.getTxnId());
+        cache.commit(ctx);
+    }
 
-	@Override
-	public void abortTransaction(MetadataTransactionContext ctx)
-			throws RemoteException, ACIDException {
-		metadataNode.abortTransaction(ctx.getTxnId());
-	}
+    @Override
+    public void abortTransaction(MetadataTransactionContext ctx) throws RemoteException, ACIDException {
+        metadataNode.abortTransaction(ctx.getTxnId());
+    }
 
-	@Override
-	public void lock(MetadataTransactionContext ctx, int lockMode)
-			throws RemoteException, ACIDException {
-		metadataNode.lock(ctx.getTxnId(), lockMode);
-	}
+    @Override
+    public void lock(MetadataTransactionContext ctx, int lockMode) throws RemoteException, ACIDException {
+        metadataNode.lock(ctx.getTxnId(), lockMode);
+    }
 
-	@Override
-	public void unlock(MetadataTransactionContext ctx) throws RemoteException,
-			ACIDException {
-		metadataNode.unlock(ctx.getTxnId());
-	}
+    @Override
+    public void unlock(MetadataTransactionContext ctx) throws RemoteException, ACIDException {
+        metadataNode.unlock(ctx.getTxnId());
+    }
 
-	@Override
-	public void addDataverse(MetadataTransactionContext ctx, Dataverse dataverse)
-			throws MetadataException {
-		try {
-			metadataNode.addDataverse(ctx.getTxnId(), dataverse);
-		} catch (RemoteException e) {
-			throw new MetadataException(e);
-		}
-		ctx.addDataverse(dataverse);
-	}
+    @Override
+    public void addDataverse(MetadataTransactionContext ctx, Dataverse dataverse) throws MetadataException {
+        try {
+            metadataNode.addDataverse(ctx.getTxnId(), dataverse);
+        } catch (RemoteException e) {
+            throw new MetadataException(e);
+        }
+        ctx.addDataverse(dataverse);
+    }
 
-	@Override
-	public void dropDataverse(MetadataTransactionContext ctx,
-			String dataverseName) throws MetadataException {
-		try {
-			metadataNode.dropDataverse(ctx.getTxnId(), dataverseName);
-		} catch (RemoteException e) {
-			throw new MetadataException(e);
-		}
-		ctx.dropDataverse(dataverseName);
-	}
+    @Override
+    public void dropDataverse(MetadataTransactionContext ctx, String dataverseName) throws MetadataException {
+        try {
+            metadataNode.dropDataverse(ctx.getTxnId(), dataverseName);
+        } catch (RemoteException e) {
+            throw new MetadataException(e);
+        }
+        ctx.dropDataverse(dataverseName);
+    }
 
-	@Override
-	public Dataverse getDataverse(MetadataTransactionContext ctx,
-			String dataverseName) throws MetadataException {
-		// First look in the context to see if this transaction created the
-		// requested dataverse itself (but the dataverse is still uncommitted).
-		Dataverse dataverse = ctx.getDataverse(dataverseName);
-		if (dataverse != null) {
-			// Don't add this dataverse to the cache, since it is still
-			// uncommitted.
-			return dataverse;
-		}
-		if (ctx.dataverseIsDropped(dataverseName)) {
-			// Dataverse has been dropped by this transaction but could still be
-			// in the cache.
-			return null;
-		}
-		dataverse = cache.getDataverse(dataverseName);
-		if (dataverse != null) {
-			// Dataverse is already in the cache, don't add it again.
-			return dataverse;
-		}
-		try {
-			dataverse = metadataNode
-					.getDataverse(ctx.getTxnId(), dataverseName);
-		} catch (RemoteException e) {
-			throw new MetadataException(e);
-		}
-		// We fetched the dataverse from the MetadataNode. Add it to the cache
-		// when this transaction commits.
-		if (dataverse != null) {
-			ctx.addDataverse(dataverse);
-		}
-		return dataverse;
-	}
+    @Override
+    public Dataverse getDataverse(MetadataTransactionContext ctx, String dataverseName) throws MetadataException {
+        // First look in the context to see if this transaction created the
+        // requested dataverse itself (but the dataverse is still uncommitted).
+        Dataverse dataverse = ctx.getDataverse(dataverseName);
+        if (dataverse != null) {
+            // Don't add this dataverse to the cache, since it is still
+            // uncommitted.
+            return dataverse;
+        }
+        if (ctx.dataverseIsDropped(dataverseName)) {
+            // Dataverse has been dropped by this transaction but could still be
+            // in the cache.
+            return null;
+        }
+        dataverse = cache.getDataverse(dataverseName);
+        if (dataverse != null) {
+            // Dataverse is already in the cache, don't add it again.
+            return dataverse;
+        }
+        try {
+            dataverse = metadataNode.getDataverse(ctx.getTxnId(), dataverseName);
+        } catch (RemoteException e) {
+            throw new MetadataException(e);
+        }
+        // We fetched the dataverse from the MetadataNode. Add it to the cache
+        // when this transaction commits.
+        if (dataverse != null) {
+            ctx.addDataverse(dataverse);
+        }
+        return dataverse;
+    }
 
-	@Override
-	public List<Dataset> getDataverseDatasets(MetadataTransactionContext ctx,
-			String dataverseName) throws MetadataException {
-		List<Dataset> dataverseDatasets;
-		try {
-			// Assuming that the transaction can read its own writes on the
-			// metadata node.
-			dataverseDatasets = metadataNode.getDataverseDatasets(
-					ctx.getTxnId(), dataverseName);
-		} catch (RemoteException e) {
-			throw new MetadataException(e);
-		}
-		// Don't update the cache to avoid checking against the transaction's
-		// uncommitted datasets.
-		return dataverseDatasets;
-	}
+    @Override
+    public List<Dataset> getDataverseDatasets(MetadataTransactionContext ctx, String dataverseName)
+            throws MetadataException {
+        List<Dataset> dataverseDatasets;
+        try {
+            // Assuming that the transaction can read its own writes on the
+            // metadata node.
+            dataverseDatasets = metadataNode.getDataverseDatasets(ctx.getTxnId(), dataverseName);
+        } catch (RemoteException e) {
+            throw new MetadataException(e);
+        }
+        // Don't update the cache to avoid checking against the transaction's
+        // uncommitted datasets.
+        return dataverseDatasets;
+    }
 
-	@Override
-	public void addDataset(MetadataTransactionContext ctx, Dataset dataset)
-			throws MetadataException {
-		try {
-			metadataNode.addDataset(ctx.getTxnId(), dataset);
-		} catch (RemoteException e) {
-			throw new MetadataException(e);
-		}
-		ctx.addDataset(dataset);
-	}
+    @Override
+    public void addDataset(MetadataTransactionContext ctx, Dataset dataset) throws MetadataException {
+        try {
+            metadataNode.addDataset(ctx.getTxnId(), dataset);
+        } catch (RemoteException e) {
+            throw new MetadataException(e);
+        }
+        ctx.addDataset(dataset);
+    }
 
-	@Override
-	public void dropDataset(MetadataTransactionContext ctx,
-			String dataverseName, String datasetName) throws MetadataException {
-		try {
-			metadataNode
-					.dropDataset(ctx.getTxnId(), dataverseName, datasetName);
-		} catch (RemoteException e) {
-			throw new MetadataException(e);
-		}
-		ctx.dropDataset(dataverseName, datasetName);
-	}
+    @Override
+    public void dropDataset(MetadataTransactionContext ctx, String dataverseName, String datasetName)
+            throws MetadataException {
+        try {
+            metadataNode.dropDataset(ctx.getTxnId(), dataverseName, datasetName);
+        } catch (RemoteException e) {
+            throw new MetadataException(e);
+        }
+        ctx.dropDataset(dataverseName, datasetName);
+    }
 
-	@Override
-	public Dataset getDataset(MetadataTransactionContext ctx,
-			String dataverseName, String datasetName) throws MetadataException {
-		// First look in the context to see if this transaction created the
-		// requested dataset itself (but the dataset is still uncommitted).
-		Dataset dataset = ctx.getDataset(dataverseName, datasetName);
-		if (dataset != null) {
-			// Don't add this dataverse to the cache, since it is still
-			// uncommitted.
-			return dataset;
-		}
-		if (ctx.datasetIsDropped(dataverseName, datasetName)) {
-			// Dataset has been dropped by this transaction but could still be
-			// in the cache.
-			return null;
-		}
-		if (ctx.getDataverse(dataverseName) != null) {
-			// This transaction has dropped and subsequently created the same
-			// dataverse.
-			return null;
-		}
-		dataset = cache.getDataset(dataverseName, datasetName);
-		if (dataset != null) {
-			// Dataset is already in the cache, don't add it again.
-			return dataset;
-		}
-		try {
-			dataset = metadataNode.getDataset(ctx.getTxnId(), dataverseName,
-					datasetName);
-		} catch (RemoteException e) {
-			throw new MetadataException(e);
-		}
-		// We fetched the dataset from the MetadataNode. Add it to the cache
-		// when this transaction commits.
-		if (dataset != null) {
-			ctx.addDataset(dataset);
-		}
-		return dataset;
-	}
+    @Override
+    public Dataset getDataset(MetadataTransactionContext ctx, String dataverseName, String datasetName)
+            throws MetadataException {
+        // First look in the context to see if this transaction created the
+        // requested dataset itself (but the dataset is still uncommitted).
+        Dataset dataset = ctx.getDataset(dataverseName, datasetName);
+        if (dataset != null) {
+            // Don't add this dataverse to the cache, since it is still
+            // uncommitted.
+            return dataset;
+        }
+        if (ctx.datasetIsDropped(dataverseName, datasetName)) {
+            // Dataset has been dropped by this transaction but could still be
+            // in the cache.
+            return null;
+        }
+        if (ctx.getDataverse(dataverseName) != null) {
+            // This transaction has dropped and subsequently created the same
+            // dataverse.
+            return null;
+        }
+        dataset = cache.getDataset(dataverseName, datasetName);
+        if (dataset != null) {
+            // Dataset is already in the cache, don't add it again.
+            return dataset;
+        }
+        try {
+            dataset = metadataNode.getDataset(ctx.getTxnId(), dataverseName, datasetName);
+        } catch (RemoteException e) {
+            throw new MetadataException(e);
+        }
+        // We fetched the dataset from the MetadataNode. Add it to the cache
+        // when this transaction commits.
+        if (dataset != null) {
+            ctx.addDataset(dataset);
+        }
+        return dataset;
+    }
 
-	@Override
-	public List<Index> getDatasetIndexes(MetadataTransactionContext ctx,
-			String dataverseName, String datasetName) throws MetadataException {
-		List<Index> datsetIndexes;
-		try {
-			datsetIndexes = metadataNode.getDatasetIndexes(ctx.getTxnId(),
-					dataverseName, datasetName);
-		} catch (RemoteException e) {
-			throw new MetadataException(e);
-		}
-		return datsetIndexes;
-	}
+    @Override
+    public List<Index> getDatasetIndexes(MetadataTransactionContext ctx, String dataverseName, String datasetName)
+            throws MetadataException {
+        List<Index> datsetIndexes;
+        try {
+            datsetIndexes = metadataNode.getDatasetIndexes(ctx.getTxnId(), dataverseName, datasetName);
+        } catch (RemoteException e) {
+            throw new MetadataException(e);
+        }
+        return datsetIndexes;
+    }
 
-	@Override
-	public void addDatatype(MetadataTransactionContext ctx, Datatype datatype)
-			throws MetadataException {
-		try {
-			metadataNode.addDatatype(ctx.getTxnId(), datatype);
-		} catch (RemoteException e) {
-			throw new MetadataException(e);
-		}
-		ctx.addDatatype(datatype);
-	}
+    @Override
+    public void addDatatype(MetadataTransactionContext ctx, Datatype datatype) throws MetadataException {
+        try {
+            metadataNode.addDatatype(ctx.getTxnId(), datatype);
+        } catch (RemoteException e) {
+            throw new MetadataException(e);
+        }
+        ctx.addDatatype(datatype);
+    }
 
-	@Override
-	public void dropDatatype(MetadataTransactionContext ctx,
-			String dataverseName, String datatypeName) throws MetadataException {
-		try {
-			metadataNode.dropDatatype(ctx.getTxnId(), dataverseName,
-					datatypeName);
-		} catch (RemoteException e) {
-			throw new MetadataException(e);
-		}
-		ctx.dropDataDatatype(dataverseName, datatypeName);
-	}
+    @Override
+    public void dropDatatype(MetadataTransactionContext ctx, String dataverseName, String datatypeName)
+            throws MetadataException {
+        try {
+            metadataNode.dropDatatype(ctx.getTxnId(), dataverseName, datatypeName);
+        } catch (RemoteException e) {
+            throw new MetadataException(e);
+        }
+        ctx.dropDataDatatype(dataverseName, datatypeName);
+    }
 
-	@Override
-	public Datatype getDatatype(MetadataTransactionContext ctx,
-			String dataverseName, String datatypeName) throws MetadataException {
-		// First look in the context to see if this transaction created the
-		// requested datatype itself (but the datatype is still uncommitted).
-		Datatype datatype = ctx.getDatatype(dataverseName, datatypeName);
-		if (datatype != null) {
-			// Don't add this dataverse to the cache, since it is still
-			// uncommitted.
-			return datatype;
-		}
-		if (ctx.datatypeIsDropped(dataverseName, datatypeName)) {
-			// Datatype has been dropped by this transaction but could still be
-			// in the cache.
-			return null;
-		}
-		if (ctx.getDataverse(dataverseName) != null) {
-			// This transaction has dropped and subsequently created the same
-			// dataverse.
-			return null;
-		}
-		datatype = cache.getDatatype(dataverseName, datatypeName);
-		if (datatype != null) {
-			// Datatype is already in the cache, don't add it again.
-			return datatype;
-		}
-		try {
-			datatype = metadataNode.getDatatype(ctx.getTxnId(), dataverseName,
-					datatypeName);
-		} catch (RemoteException e) {
-			throw new MetadataException(e);
-		}
-		// We fetched the datatype from the MetadataNode. Add it to the cache
-		// when this transaction commits.
-		if (datatype != null) {
-			ctx.addDatatype(datatype);
-		}
-		return datatype;
-	}
+    @Override
+    public Datatype getDatatype(MetadataTransactionContext ctx, String dataverseName, String datatypeName)
+            throws MetadataException {
+        // First look in the context to see if this transaction created the
+        // requested datatype itself (but the datatype is still uncommitted).
+        Datatype datatype = ctx.getDatatype(dataverseName, datatypeName);
+        if (datatype != null) {
+            // Don't add this dataverse to the cache, since it is still
+            // uncommitted.
+            return datatype;
+        }
+        if (ctx.datatypeIsDropped(dataverseName, datatypeName)) {
+            // Datatype has been dropped by this transaction but could still be
+            // in the cache.
+            return null;
+        }
+        if (ctx.getDataverse(dataverseName) != null) {
+            // This transaction has dropped and subsequently created the same
+            // dataverse.
+            return null;
+        }
+        datatype = cache.getDatatype(dataverseName, datatypeName);
+        if (datatype != null) {
+            // Datatype is already in the cache, don't add it again.
+            return datatype;
+        }
+        try {
+            datatype = metadataNode.getDatatype(ctx.getTxnId(), dataverseName, datatypeName);
+        } catch (RemoteException e) {
+            throw new MetadataException(e);
+        }
+        // We fetched the datatype from the MetadataNode. Add it to the cache
+        // when this transaction commits.
+        if (datatype != null) {
+            ctx.addDatatype(datatype);
+        }
+        return datatype;
+    }
 
-	@Override
-	public void addIndex(MetadataTransactionContext ctx, Index index)
-			throws MetadataException {
-		try {
-			metadataNode.addIndex(ctx.getTxnId(), index);
-		} catch (RemoteException e) {
-			throw new MetadataException(e);
-		}
-	}
+    @Override
+    public void addIndex(MetadataTransactionContext ctx, Index index) throws MetadataException {
+        try {
+            metadataNode.addIndex(ctx.getTxnId(), index);
+        } catch (RemoteException e) {
+            throw new MetadataException(e);
+        }
+    }
 
-	@Override
-	public void dropIndex(MetadataTransactionContext ctx, String dataverseName,
-			String datasetName, String indexName) throws MetadataException {
-		try {
-			metadataNode.dropIndex(ctx.getTxnId(), dataverseName, datasetName,
-					indexName);
-		} catch (RemoteException e) {
-			throw new MetadataException(e);
-		}
-	}
+    @Override
+    public void addAdapter(MetadataTransactionContext mdTxnCtx, Adapter adapter) throws MetadataException {
+        try {
+            metadataNode.addAdapter(mdTxnCtx.getTxnId(), adapter);
+        } catch (RemoteException e) {
+            throw new MetadataException(e);
+        }
+        mdTxnCtx.addAdapter(adapter);
 
-	@Override
-	public Index getIndex(MetadataTransactionContext ctx, String dataverseName,
-			String datasetName, String indexName) throws MetadataException {
-		try {
-			return metadataNode.getIndex(ctx.getTxnId(), dataverseName,
-					datasetName, indexName);
-		} catch (RemoteException e) {
-			throw new MetadataException(e);
-		}
-	}
+    }
 
-	@Override
-	public void addNode(MetadataTransactionContext ctx, Node node)
-			throws MetadataException {
-		try {
-			metadataNode.addNode(ctx.getTxnId(), node);
-		} catch (RemoteException e) {
-			throw new MetadataException(e);
-		}
-	}
+    @Override
+    public void dropIndex(MetadataTransactionContext ctx, String dataverseName, String datasetName, String indexName)
+            throws MetadataException {
+        try {
+            metadataNode.dropIndex(ctx.getTxnId(), dataverseName, datasetName, indexName);
+        } catch (RemoteException e) {
+            throw new MetadataException(e);
+        }
+    }
 
-	@Override
-	public void addNodegroup(MetadataTransactionContext ctx, NodeGroup nodeGroup)
-			throws MetadataException {
-		try {
-			metadataNode.addNodeGroup(ctx.getTxnId(), nodeGroup);
-		} catch (RemoteException e) {
-			throw new MetadataException(e);
-		}
-		ctx.addNogeGroup(nodeGroup);
-	}
+    @Override
+    public Index getIndex(MetadataTransactionContext ctx, String dataverseName, String datasetName, String indexName)
+            throws MetadataException {
+        try {
+            return metadataNode.getIndex(ctx.getTxnId(), dataverseName, datasetName, indexName);
+        } catch (RemoteException e) {
+            throw new MetadataException(e);
+        }
+    }
 
-	@Override
-	public void dropNodegroup(MetadataTransactionContext ctx,
-			String nodeGroupName) throws MetadataException {
-		try {
-			metadataNode.dropNodegroup(ctx.getTxnId(), nodeGroupName);
-		} catch (RemoteException e) {
-			throw new MetadataException(e);
-		}
-		ctx.dropNodeGroup(nodeGroupName);
-	}
+    @Override
+    public void addNode(MetadataTransactionContext ctx, Node node) throws MetadataException {
+        try {
+            metadataNode.addNode(ctx.getTxnId(), node);
+        } catch (RemoteException e) {
+            throw new MetadataException(e);
+        }
+    }
+
+    @Override
+    public void addNodegroup(MetadataTransactionContext ctx, NodeGroup nodeGroup) throws MetadataException {
+        try {
+            metadataNode.addNodeGroup(ctx.getTxnId(), nodeGroup);
+        } catch (RemoteException e) {
+            throw new MetadataException(e);
+        }
+        ctx.addNogeGroup(nodeGroup);
+    }
+
+    @Override
+    public void dropNodegroup(MetadataTransactionContext ctx, String nodeGroupName) throws MetadataException {
+        try {
+            metadataNode.dropNodegroup(ctx.getTxnId(), nodeGroupName);
+        } catch (RemoteException e) {
+            throw new MetadataException(e);
+        }
+        ctx.dropNodeGroup(nodeGroupName);
+    }
 
     @Override
     public NodeGroup getNodegroup(MetadataTransactionContext ctx, String nodeGroupName) throws MetadataException {
@@ -439,18 +426,16 @@ public class MetadataManager implements IMetadataManager {
         return nodeGroup;
     }
 
-	@Override
-	public void addFunction(MetadataTransactionContext mdTxnCtx,
-			Function function) throws MetadataException {
-		try {
-			metadataNode.addFunction(mdTxnCtx.getTxnId(), function);
-		} catch (RemoteException e) {
-			throw new MetadataException(e);
-		}
-		mdTxnCtx.addFunction(function);
-	}
+    @Override
+    public void addFunction(MetadataTransactionContext mdTxnCtx, Function function) throws MetadataException {
+        try {
+            metadataNode.addFunction(mdTxnCtx.getTxnId(), function);
+        } catch (RemoteException e) {
+            throw new MetadataException(e);
+        }
+        mdTxnCtx.addFunction(function);
+    }
 
-	
     @Override
     public void dropFunction(MetadataTransactionContext ctx, String dataverseName, String functionName, int arity)
             throws MetadataException {
@@ -499,42 +484,27 @@ public class MetadataManager implements IMetadataManager {
             ctx.addFunction(function);
         }
         return function;
-
     }
 
-	@Override
-	public void addAdapter(MetadataTransactionContext mdTxnCtx, Adapter adapter)
-			throws MetadataException {
-		try {
-			metadataNode.addAdapter(mdTxnCtx.getTxnId(), adapter);
-		} catch (RemoteException e) {
-			throw new MetadataException(e);
-		}
-		mdTxnCtx.addAdapter(adapter);
+    @Override
+    public void dropAdapter(MetadataTransactionContext ctx, String dataverseName, String name) throws MetadataException {
+        try {
+            metadataNode.dropAdapter(ctx.getTxnId(), dataverseName, name);
+        } catch (RemoteException e) {
+            throw new MetadataException(e);
+        }
+    }
 
-	}
-
-	@Override
-	public void dropAdapter(MetadataTransactionContext ctx,
-			String dataverseName, String name) throws MetadataException {
-		try {
-			metadataNode.dropAdapter(ctx.getTxnId(), dataverseName, name);
-		} catch (RemoteException e) {
-			throw new MetadataException(e);
-		}
-	}
-
-	@Override
-	public Adapter getAdapter(MetadataTransactionContext ctx,
-			String dataverseName, String name) throws MetadataException {
-		Adapter adapter = null;
-		try {
-			adapter = metadataNode.getAdapter(ctx.getTxnId(), dataverseName,
-					name);
-		} catch (RemoteException e) {
-			throw new MetadataException(e);
-		}
-		return adapter;
-	}
+    @Override
+    public Adapter getAdapter(MetadataTransactionContext ctx, String dataverseName, String name)
+            throws MetadataException {
+        Adapter adapter = null;
+        try {
+            adapter = metadataNode.getAdapter(ctx.getTxnId(), dataverseName, name);
+        } catch (RemoteException e) {
+            throw new MetadataException(e);
+        }
+        return adapter;
+    }
 
 }

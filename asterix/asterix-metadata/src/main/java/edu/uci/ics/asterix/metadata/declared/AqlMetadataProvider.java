@@ -37,11 +37,11 @@ import edu.uci.ics.asterix.formats.base.IDataFormat;
 import edu.uci.ics.asterix.formats.nontagged.AqlBinaryComparatorFactoryProvider;
 import edu.uci.ics.asterix.formats.nontagged.AqlSerializerDeserializerProvider;
 import edu.uci.ics.asterix.formats.nontagged.AqlTypeTraitProvider;
+import edu.uci.ics.asterix.metadata.entities.Adapter;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
 import edu.uci.ics.asterix.metadata.entities.ExternalDatasetDetails;
 import edu.uci.ics.asterix.metadata.entities.FeedDatasetDetails;
 import edu.uci.ics.asterix.metadata.entities.Index;
-import edu.uci.ics.asterix.metadata.entities.Adapter;
 import edu.uci.ics.asterix.metadata.utils.DatasetUtils;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
 import edu.uci.ics.asterix.om.types.ARecordType;
@@ -175,7 +175,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
     }
 
     @SuppressWarnings("rawtypes")
-    public  Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> buildExternalDataScannerRuntime(
+    public Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> buildExternalDataScannerRuntime(
             JobSpecification jobSpec, IAType itemType, ExternalDatasetDetails datasetDetails, IDataFormat format)
             throws AlgebricksException {
         if (itemType.getTypeTag() != ATypeTag.RECORD) {
@@ -185,16 +185,17 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         IDatasourceAdapterFactory adapterFactory;
         IDatasourceAdapter adapter;
         String adapterName;
-        Adapter adapterEntity; 
+        Adapter adapterEntity;
         try {
             adapterName = datasetDetails.getAdapter();
             adapterEntity = metadata.getAdapter(adapterName);
             adapterFactory = (IDatasourceAdapterFactory) Class.forName(adapterEntity.getClassname()).newInstance();
             if (adapterFactory.getAdapterType().equals(AdapterType.GENERIC)) {
-                adapter = ((IGenericDatasourceAdapterFactory) adapterFactory).createAdapter(datasetDetails.getProperties(),
-                        itemType);
+                adapter = ((IGenericDatasourceAdapterFactory) adapterFactory).createAdapter(
+                        datasetDetails.getProperties(), itemType);
             } else {
-                adapter = ((ITypedDatasourceAdapterFactory) adapterFactory).createAdapter(datasetDetails.getProperties());
+                adapter = ((ITypedDatasourceAdapterFactory) adapterFactory).createAdapter(datasetDetails
+                        .getProperties());
             }
 
         } catch (Exception e) {
@@ -211,7 +212,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         ISerializerDeserializer payloadSerde = format.getSerdeProvider().getSerializerDeserializer(itemType);
         RecordDescriptor scannerDesc = new RecordDescriptor(new ISerializerDeserializer[] { payloadSerde });
 
-        ExternalDataScanOperatorDescriptor dataScanner = new ExternalDataScanOperatorDescriptor(jobSpec, 
+        ExternalDataScanOperatorDescriptor dataScanner = new ExternalDataScanOperatorDescriptor(jobSpec,
                 adapterEntity.getClassname(), datasetDetails.getProperties(), rt, scannerDesc);
 
         AlgebricksPartitionConstraint constraint = adapter.getPartitionConstraint();
@@ -254,10 +255,11 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
             String adapterFactoryClassname = datasetDetails.getAdapterFactory();
             adapterFactory = (IDatasourceAdapterFactory) Class.forName(adapterFactoryClassname).newInstance();
             if (adapterFactory.getAdapterType().equals(AdapterType.GENERIC)) {
-                adapter = ((IGenericDatasourceAdapterFactory) adapterFactory).createAdapter(datasetDetails.getProperties(),
-                        itemType);
+                adapter = ((IGenericDatasourceAdapterFactory) adapterFactory).createAdapter(
+                        datasetDetails.getProperties(), itemType);
             } else {
-                adapter = ((ITypedDatasourceAdapterFactory) adapterFactory).createAdapter(datasetDetails.getProperties());
+                adapter = ((ITypedDatasourceAdapterFactory) adapterFactory).createAdapter(datasetDetails
+                        .getProperties());
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -268,7 +270,8 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         RecordDescriptor feedDesc = new RecordDescriptor(new ISerializerDeserializer[] { payloadSerde });
 
         FeedIntakeOperatorDescriptor feedIngestor = new FeedIntakeOperatorDescriptor(jobSpec, new FeedId(dataverse,
-                dataset), datasetDetails.getAdapterFactory(), datasetDetails.getProperties(), (ARecordType) itemType, feedDesc);
+                dataset), datasetDetails.getAdapterFactory(), datasetDetails.getProperties(), (ARecordType) itemType,
+                feedDesc);
 
         AlgebricksPartitionConstraint constraint = adapter.getPartitionConstraint();
         return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(feedIngestor, constraint);

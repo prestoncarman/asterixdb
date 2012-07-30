@@ -18,8 +18,8 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluator;
 import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluatorFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
-import edu.uci.ics.hyracks.dataflow.common.data.accessors.ArrayBackedValueStorage;
-import edu.uci.ics.hyracks.dataflow.common.data.accessors.IDataOutputProvider;
+import edu.uci.ics.hyracks.data.std.api.IDataOutputProvider;
+import edu.uci.ics.hyracks.data.std.util.ArrayBackedValueStorage;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.IFrameTupleReference;
 import edu.uci.ics.hyracks.dataflow.common.data.marshalling.IntegerSerializerDeserializer;
 
@@ -69,8 +69,8 @@ public class PrefixLenJaccardDescriptor extends AbstractScalarFunctionDynamicDes
                         // similarity threshold
                         inputVal.reset();
                         evalThreshold.evaluate(tuple);
-                        float similarityThreshold = (float) AFloatSerializerDeserializer.getFloat(inputVal.getByteArray(),
-                                1);
+                        float similarityThreshold = (float) AFloatSerializerDeserializer.getFloat(
+                                inputVal.getByteArray(), 1);
 
                         if (similarityThreshold != similarityThresholdCache || similarityFilters == null) {
                             similarityFilters = new SimilarityFiltersJaccard(similarityThreshold);

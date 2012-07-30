@@ -28,7 +28,7 @@ import edu.uci.ics.asterix.om.base.AMutableString;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
-import edu.uci.ics.hyracks.dataflow.common.data.accessors.ArrayBackedValueStorage;
+import edu.uci.ics.hyracks.data.std.util.ArrayBackedValueStorage;
 import edu.uci.ics.hyracks.dataflow.common.data.parsers.IValueParser;
 import edu.uci.ics.hyracks.dataflow.common.data.parsers.IValueParserFactory;
 

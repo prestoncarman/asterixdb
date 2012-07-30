@@ -13,7 +13,7 @@ import edu.uci.ics.asterix.om.functions.IExternalFunctionInfo;
 import edu.uci.ics.asterix.om.functions.IFunctionDescriptor;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.IAType;
-import edu.uci.ics.asterix.runtime.base.IScalarFunctionDynamicDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.base.AbstractScalarFunctionDynamicDescriptor;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.NotImplementedException;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.IFunctionInfo;
 
@@ -51,7 +51,7 @@ public class RuntimeExternalFunctionUtil {
         return null;
     }
 
-    private static IScalarFunctionDynamicDescriptor getScalarFunctionDescriptor(IFunctionInfo finfo) {
+    private static AbstractScalarFunctionDynamicDescriptor getScalarFunctionDescriptor(IFunctionInfo finfo) {
         return new ExternalScalarFunctionDescriptor(finfo);
     }
 

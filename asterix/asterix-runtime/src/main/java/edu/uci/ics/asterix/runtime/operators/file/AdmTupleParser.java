@@ -5,13 +5,13 @@ import edu.uci.ics.hyracks.api.context.IHyracksTaskContext;
 
 public class AdmTupleParser extends AbstractTupleParser {
 
-	public AdmTupleParser(IHyracksTaskContext ctx, ARecordType recType) {
-		super(ctx, recType);
-	}
+    public AdmTupleParser(IHyracksTaskContext ctx, ARecordType recType) {
+        super(ctx, recType);
+    }
 
-	@Override
-	public IDataParser getDataParser() {
-		return new ADMDataParser();
-	}
+    @Override
+    public IDataParser getDataParser() {
+        return new ADMDataParser();
+    }
 
 }

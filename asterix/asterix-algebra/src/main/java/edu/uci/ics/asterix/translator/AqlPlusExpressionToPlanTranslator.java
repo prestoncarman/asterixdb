@@ -80,6 +80,8 @@ import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
 import edu.uci.ics.asterix.common.functions.FunctionConstants;
 import edu.uci.ics.asterix.formats.base.IDataFormat;
+import edu.uci.ics.asterix.metadata.MetadataException;
+import edu.uci.ics.asterix.metadata.MetadataManager;
 import edu.uci.ics.asterix.metadata.MetadataTransactionContext;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
 import edu.uci.ics.asterix.metadata.declared.AqlLogicalPlanAndMetadataImpl;
@@ -87,6 +89,8 @@ import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
 import edu.uci.ics.asterix.metadata.declared.FileSplitDataSink;
 import edu.uci.ics.asterix.metadata.declared.FileSplitSinkId;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
+import edu.uci.ics.asterix.metadata.entities.Function;
+import edu.uci.ics.asterix.metadata.functions.ExternalFunctionCompilerUtil;
 import edu.uci.ics.asterix.metadata.utils.DatasetUtils;
 import edu.uci.ics.asterix.om.base.AInt32;
 import edu.uci.ics.asterix.om.base.AString;
@@ -148,10 +152,9 @@ import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluatorFactory;
  * Each visit returns a pair of an operator and a variable. The variable
  * corresponds to the new column, if any, added to the tuple flow. E.g., for
  * Unnest, the column is the variable bound to the elements in the list, for
- * Subplan it is null.
- * The first argument of a visit method is the expression which is translated.
- * The second argument of a visit method is the tuple source for the current
- * subtree.
+ * Subplan it is null. The first argument of a visit method is the expression
+ * which is translated. The second argument of a visit method is the tuple
+ * source for the current subtree.
  */
 
 public class AqlPlusExpressionToPlanTranslator extends AbstractAqlTranslator implements
@@ -194,18 +197,20 @@ public class AqlPlusExpressionToPlanTranslator extends AbstractAqlTranslator imp
         }
     }
 
-    private final long txnId;
     private final MetadataTransactionContext mdTxnCtx;
+    private final String dataverse;
+    private final long txnId;
     private TranslationContext context;
     private String outputDatasetName;
     private MetaScopeLogicalVariable metaScopeExp = new MetaScopeLogicalVariable();
     private MetaScopeILogicalOperator metaScopeOp = new MetaScopeILogicalOperator();
     private static LogicalVariable METADATA_DUMMY_VAR = new LogicalVariable(-1);
 
-    public AqlPlusExpressionToPlanTranslator(long txnId, MetadataTransactionContext mdTxnCtx,
+    public AqlPlusExpressionToPlanTranslator(long txnId, MetadataTransactionContext mdTxnCtx, String dataverse,
             Counter currentVarCounter, String outputDatasetName) {
         this.txnId = txnId;
         this.mdTxnCtx = mdTxnCtx;
+        this.dataverse = dataverse;
         this.context = new TranslationContext(currentVarCounter);
         this.outputDatasetName = outputDatasetName;
         this.context.setTopFlwor(false);
@@ -472,17 +477,32 @@ public class AqlPlusExpressionToPlanTranslator extends AbstractAqlTranslator imp
         FunctionIdentifier fi = new FunctionIdentifier(AlgebricksBuiltinFunctions.ALGEBRICKS_NS, fid.getFunctionName());
         AsterixFunctionInfo afi = AsterixBuiltinFunctions.lookupFunction(fi);
         FunctionIdentifier builtinAquafi = afi == null ? null : afi.getFunctionIdentifier();
+        AbstractFunctionCallExpression f = null;
 
         if (builtinAquafi != null) {
             fi = builtinAquafi;
+            f = handleBuiltinFunction(builtinAquafi, args);
         } else {
             fi = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, fid.getFunctionName());
-            FunctionIdentifier builtinAsterixFi = AsterixBuiltinFunctions.getBuiltinFunctionIdentifier(fi);
-            if (builtinAsterixFi != null) {
-                fi = builtinAsterixFi;
+            if (AsterixBuiltinFunctions.isBuiltinCompilerFunction(fi)) {
+                FunctionIdentifier builtinAsterixFi = AsterixBuiltinFunctions.getBuiltinFunctionIdentifier(fi);
+                f = handleBuiltinFunction(builtinAsterixFi, args);
+            } else {
+                f = handleUserDefinedFunction(fid, args);
             }
         }
-        AbstractFunctionCallExpression f;
+
+        AssignOperator op = new AssignOperator(v, new MutableObject<ILogicalExpression>(f));
+        if (topOp != null) {
+            op.getInputs().add(topOp);
+        }
+
+        return new Pair<ILogicalOperator, LogicalVariable>(op, v);
+    }
+
+    private AbstractFunctionCallExpression handleBuiltinFunction(FunctionIdentifier fi,
+            List<Mutable<ILogicalExpression>> args) {
+        AbstractFunctionCallExpression f = null;
         if (AsterixBuiltinFunctions.isBuiltinAggregateFunction(fi)) {
             f = AsterixBuiltinFunctions.makeAggregateFunctionExpression(fi, args);
         } else if (AsterixBuiltinFunctions.isBuiltinUnnestingFunction(fi)) {
@@ -493,12 +513,26 @@ public class AqlPlusExpressionToPlanTranslator extends AbstractAqlTranslator imp
         } else {
             f = new ScalarFunctionCallExpression(FunctionUtils.getFunctionInfo(fi), args);
         }
-        AssignOperator op = new AssignOperator(v, new MutableObject<ILogicalExpression>(f));
-        if (topOp != null) {
-            op.getInputs().add(topOp);
+        return f;
+    }
+
+    private AbstractFunctionCallExpression handleUserDefinedFunction(AsterixFunction asterixFunction,
+            List<Mutable<ILogicalExpression>> args) throws MetadataException {
+        Function function = MetadataManager.INSTANCE.getFunction(mdTxnCtx, dataverse,
+                asterixFunction.getFunctionName(), asterixFunction.getArity());
+        if (function == null) {
+            throw new MetadataException("Unknown function " + asterixFunction);
         }
 
-        return new Pair<ILogicalOperator, LogicalVariable>(op, v);
+        AbstractFunctionCallExpression f = null;
+        if (function.getFunctionKind().equalsIgnoreCase(FunctionKind.SCALAR.toString())) {
+            IFunctionInfo finfo = ExternalFunctionCompilerUtil.getExternalFunctionInfo(mdTxnCtx, function);
+            f = new ScalarFunctionCallExpression(finfo, args);
+        } else {
+            throw new MetadataException(" Functions of kind " + function.getFunctionKind() + " are not supported");
+        }
+
+        return f;
     }
 
     @Override

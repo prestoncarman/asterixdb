@@ -10,7 +10,6 @@ import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.commons.lang3.mutable.MutableObject;
 
 import edu.uci.ics.asterix.common.config.GlobalConfig;
-import edu.uci.ics.asterix.common.exceptions.AsterixException;
 import edu.uci.ics.asterix.common.exceptions.AsterixRuntimeException;
 import edu.uci.ics.asterix.common.parse.IParseFileSplitsDecl;
 import edu.uci.ics.asterix.dataflow.data.nontagged.AqlNullWriterFactory;
@@ -31,7 +30,6 @@ import edu.uci.ics.asterix.om.base.IAObject;
 import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
 import edu.uci.ics.asterix.om.functions.FunctionManagerHolder;
-import edu.uci.ics.asterix.om.functions.IExternalFunctionInfo;
 import edu.uci.ics.asterix.om.functions.IFunctionDescriptor;
 import edu.uci.ics.asterix.om.functions.IFunctionDescriptorFactory;
 import edu.uci.ics.asterix.om.functions.IFunctionManager;
@@ -111,6 +109,7 @@ import edu.uci.ics.asterix.runtime.evaluators.functions.LikeDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.NotDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.NumericAddDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.NumericDivideDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.NumericModuloDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.NumericMultiplyDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.NumericSubtractDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.NumericUnaryMinusDescriptor;
@@ -135,9 +134,28 @@ import edu.uci.ics.asterix.runtime.evaluators.functions.SwitchCaseDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.UnorderedListConstructorDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.WordTokensDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.functions.YearDescriptor;
-import edu.uci.ics.asterix.runtime.external.ExternalFunctionDescriptorProvider;
-import edu.uci.ics.asterix.runtime.external.ExternalFunctionProvider;
-import edu.uci.ics.asterix.runtime.external.RuntimeExternalFunctionUtil;
+import edu.uci.ics.asterix.runtime.evaluators.functions.NumericAbsDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.NumericCeilingDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.NumericFloorDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.NumericRoundDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.NumericRoundHalfToEvenDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.NumericRoundHalfToEven2Descriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.StringEqualDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.StringStartWithDescrtiptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.StringEndWithDescrtiptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.StringMatchesDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.StringLowerCaseDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.StringMatchesWithFlagDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.StringReplaceDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.StringReplaceWithFlagsDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.StringLengthDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.Substring2Descriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.SubstringBeforeDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.SubstringAfterDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.StringToCodePointDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.CodePointToStringDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.StringConcatDescriptor;
+import edu.uci.ics.asterix.runtime.evaluators.functions.StringJoinDescriptor;
 import edu.uci.ics.asterix.runtime.operators.file.AdmSchemafullRecordParserFactory;
 import edu.uci.ics.asterix.runtime.operators.file.NtDelimitedDataTupleParserFactory;
 import edu.uci.ics.asterix.runtime.runningaggregates.std.TidRunningAggregateDescriptor;
@@ -173,7 +191,7 @@ import edu.uci.ics.hyracks.algebricks.runtime.evaluators.ColumnAccessEvalFactory
 import edu.uci.ics.hyracks.algebricks.runtime.evaluators.ConstantEvalFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.INullWriterFactory;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
-import edu.uci.ics.hyracks.dataflow.common.data.accessors.ArrayBackedValueStorage;
+import edu.uci.ics.hyracks.data.std.util.ArrayBackedValueStorage;
 import edu.uci.ics.hyracks.dataflow.common.data.parsers.DoubleParserFactory;
 import edu.uci.ics.hyracks.dataflow.common.data.parsers.FloatParserFactory;
 import edu.uci.ics.hyracks.dataflow.common.data.parsers.IValueParserFactory;
@@ -189,7 +207,7 @@ public class NonTaggedDataFormat implements IDataFormat {
     public static final NonTaggedDataFormat INSTANCE = new NonTaggedDataFormat();
 
     public static final String NON_TAGGED_DATA_FORMAT = "edu.uci.ics.asterix.runtime.formats.NonTaggedDataFormat";
-
+    
     private static LogicalVariable METADATA_DUMMY_VAR = new LogicalVariable(-1);
 
     private static final HashMap<ATypeTag, IValueParserFactory> typeToValueParserFactMap = new HashMap<ATypeTag, IValueParserFactory>();
@@ -245,11 +263,37 @@ public class NonTaggedDataFormat implements IDataFormat {
         temp.add(NumericDivideDescriptor.FACTORY);
         temp.add(NumericMultiplyDescriptor.FACTORY);
         temp.add(NumericSubtractDescriptor.FACTORY);
+        temp.add(NumericModuloDescriptor.FACTORY);
         temp.add(IsNullDescriptor.FACTORY);
         temp.add(NotDescriptor.FACTORY);
         temp.add(LenDescriptor.FACTORY);
         temp.add(NonEmptyStreamAggregateDescriptor.FACTORY);
         temp.add(RangeDescriptor.FACTORY);
+
+// Xiaoyu Ma add for numeric unary functions
+        temp.add(NumericAbsDescriptor.FACTORY);
+        temp.add(NumericCeilingDescriptor.FACTORY);
+        temp.add(NumericFloorDescriptor.FACTORY);
+        temp.add(NumericRoundDescriptor.FACTORY);
+        temp.add(NumericRoundHalfToEvenDescriptor.FACTORY);
+        temp.add(NumericRoundHalfToEven2Descriptor.FACTORY);
+        // String functions
+        temp.add(StringEqualDescriptor.FACTORY);
+        temp.add(StringStartWithDescrtiptor.FACTORY);    
+        temp.add(StringEndWithDescrtiptor.FACTORY);       
+        temp.add(StringMatchesDescriptor.FACTORY);    
+        temp.add(StringLowerCaseDescriptor.FACTORY);   
+        temp.add(StringMatchesWithFlagDescriptor.FACTORY);
+        temp.add(StringReplaceDescriptor.FACTORY);      
+        temp.add(StringReplaceWithFlagsDescriptor.FACTORY);    
+        temp.add(StringLengthDescriptor.FACTORY);        
+        temp.add(Substring2Descriptor.FACTORY);    
+        temp.add(SubstringBeforeDescriptor.FACTORY); 
+        temp.add(SubstringAfterDescriptor.FACTORY); 
+        temp.add(StringToCodePointDescriptor.FACTORY);         
+        temp.add(CodePointToStringDescriptor.FACTORY); 
+        temp.add(StringConcatDescriptor.FACTORY);         
+        temp.add(StringJoinDescriptor.FACTORY);      
 
         // aggregates
         temp.add(ListifyAggregateDescriptor.FACTORY);
@@ -468,19 +512,8 @@ public class NonTaggedDataFormat implements IDataFormat {
     public IFunctionDescriptor resolveFunction(ILogicalExpression expr, IVariableTypeEnvironment context)
             throws AlgebricksException {
         FunctionIdentifier fnId = ((AbstractFunctionCallExpression) expr).getFunctionIdentifier();
-        IFunctionDescriptor fd = null;
-        if (AsterixBuiltinFunctions.isBuiltinCompilerFunction(fnId)) {
-            IFunctionManager mgr = FunctionManagerHolder.getFunctionManager();
-            fd = mgr.lookupFunction(fnId);
-        } else {
-            try {
-                fd = ExternalFunctionDescriptorProvider
-                        .getExternalFunctionDescriptor((IExternalFunctionInfo) ((AbstractFunctionCallExpression) expr)
-                                .getFunctionInfo());
-            } catch (AsterixException ae) {
-                throw new AlgebricksException(ae);
-            }
-        }
+        IFunctionManager mgr = FunctionManagerHolder.getFunctionManager();
+        IFunctionDescriptor fd = mgr.lookupFunction(fnId);
         if (fd == null) {
             throw new AsterixRuntimeException("Unresolved function " + fnId);
         }

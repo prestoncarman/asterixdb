@@ -14,53 +14,46 @@
  */
 package edu.uci.ics.asterix.om.functions;
 
-import java.io.Serializable;
-
-import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression.FunctionKind;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.IFunctionInfo;
 
-public class AsterixFunctionInfo implements IFunctionInfo, Serializable {
+public class AsterixFunctionInfo implements IFunctionInfo {
 
-    protected final FunctionIdentifier functionIdentifier;
+	private final FunctionIdentifier functionIdentifier;
 
-    public AsterixFunctionInfo(String namespace, AsterixFunction asterixFunction, boolean isBuiltin) {
-        this.functionIdentifier = new FunctionIdentifier(namespace, asterixFunction.getFunctionName(),
-                asterixFunction.getArity());
-    }
+	public AsterixFunctionInfo(String namespace, AsterixFunction asterixFunction) {
+		this.functionIdentifier = new FunctionIdentifier(namespace,
+				asterixFunction.getFunctionName(), asterixFunction.getArity());
+	}
 
-    public AsterixFunctionInfo(String namespace, AsterixFunction asterixFunction, FunctionKind kind, boolean isBuiltin) {
-        this.functionIdentifier = new FunctionIdentifier(namespace, asterixFunction.getFunctionName(),
-                asterixFunction.getArity());
-    }
+	public AsterixFunctionInfo(FunctionIdentifier functionIdentifier) {
+		this.functionIdentifier = functionIdentifier;
+	}
 
-    public AsterixFunctionInfo(FunctionIdentifier functionIdentifier) {
-        this.functionIdentifier = functionIdentifier;
-    }
+	@Override
+	public FunctionIdentifier getFunctionIdentifier() {
+		return functionIdentifier;
+	}
 
-    @Override
-    public FunctionIdentifier getFunctionIdentifier() {
-        return functionIdentifier;
-    }
+	@Override
+	public int hashCode() {
+		return toString().hashCode();
+	}
 
-    @Override
-    public int hashCode() {
-        return toString().hashCode();
-    }
+	@Override
+	public boolean equals(Object o) {
+		if (!(o instanceof AsterixFunctionInfo)) {
+			return false;
+		}
+		AsterixFunctionInfo info = (AsterixFunctionInfo) o;
+		return functionIdentifier.equals(info.getFunctionIdentifier());
+	}
 
-    @Override
-    public boolean equals(Object o) {
-        if (!(o instanceof AsterixFunctionInfo)) {
-            return false;
-        }
-        AsterixFunctionInfo info = (AsterixFunctionInfo) o;
-        return functionIdentifier.equals(info.getFunctionIdentifier());
-    }
-
-    @Override
-    public String toString() {
-        return this.functionIdentifier.getNamespace() + ":" + this.functionIdentifier.getName() + "@"
-                + this.functionIdentifier.getArity();
-    }
+	@Override
+	public String toString() {
+		return this.functionIdentifier.getNamespace() + ":"
+				+ this.functionIdentifier.getName() + "@"
+				+ this.functionIdentifier.getArity();
+	}
 
 }

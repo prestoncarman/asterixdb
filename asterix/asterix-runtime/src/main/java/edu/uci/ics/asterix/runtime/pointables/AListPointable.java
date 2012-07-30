@@ -35,7 +35,6 @@ import edu.uci.ics.asterix.runtime.util.container.IObjectFactory;
  * This class interprets the binary data representation of a list, one can
  * call getItems and getItemTags to get pointable objects for items and item
  * type tags.
- * 
  */
 public class AListPointable extends AbstractVisitablePointable {
 

@@ -22,6 +22,8 @@ import edu.uci.ics.asterix.om.typecomputer.impl.APolygonTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.ARectangleTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.AStringTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.BinaryBooleanOrNullFunctionTypeComputer;
+import edu.uci.ics.asterix.om.typecomputer.impl.BinaryStringBoolOrNullTypeComputer;
+import edu.uci.ics.asterix.om.typecomputer.impl.BinaryStringStringOrNullTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.CastRecordResultTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.ClosedRecordConstructorResultType;
 import edu.uci.ics.asterix.om.typecomputer.impl.FieldAccessByIndexResultType;
@@ -31,6 +33,8 @@ import edu.uci.ics.asterix.om.typecomputer.impl.NonTaggedFieldAccessByNameResult
 import edu.uci.ics.asterix.om.typecomputer.impl.NonTaggedGetItemResultType;
 import edu.uci.ics.asterix.om.typecomputer.impl.NonTaggedLocalAvgTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.NonTaggedNumericAddSubMulDivTypeComputer;
+import edu.uci.ics.asterix.om.typecomputer.impl.NonTaggedNumericRoundHalfToEven2TypeComputer;
+import edu.uci.ics.asterix.om.typecomputer.impl.NonTaggedNumericUnaryFunctionTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.NonTaggedSumTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.NonTaggedSwitchCaseComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.NonTaggedUnaryMinusTypeComputer;
@@ -56,8 +60,15 @@ import edu.uci.ics.asterix.om.typecomputer.impl.OrderedListConstructorResultType
 import edu.uci.ics.asterix.om.typecomputer.impl.OrderedListOfAInt32TypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.OrderedListOfAStringTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.OrderedListOfAnyTypeComputer;
+import edu.uci.ics.asterix.om.typecomputer.impl.QuadStringStringOrNullTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.ScalarVersionOfAggregateResultType;
+import edu.uci.ics.asterix.om.typecomputer.impl.Substring2TypeComputer;
+import edu.uci.ics.asterix.om.typecomputer.impl.SubstringTypeComputer;
+import edu.uci.ics.asterix.om.typecomputer.impl.TripleStringBoolOrNullTypeComputer;
+import edu.uci.ics.asterix.om.typecomputer.impl.TripleStringStringOrNullTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.UnaryBooleanOrNullFunctionTypeComputer;
+import edu.uci.ics.asterix.om.typecomputer.impl.UnaryStringInt32OrNullTypeComputer;
+import edu.uci.ics.asterix.om.typecomputer.impl.UnaryStringOrNullTypeComputer;
 import edu.uci.ics.asterix.om.typecomputer.impl.UnorderedListConstructorResultType;
 import edu.uci.ics.asterix.om.types.AOrderedListType;
 import edu.uci.ics.asterix.om.types.ATypeTag;
@@ -109,6 +120,7 @@ public class AsterixBuiltinFunctions {
             2);
     public final static FunctionIdentifier ANY_COLLECTION_MEMBER = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "any-collection-member", 1);
+
     public final static FunctionIdentifier LISTIFY = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "listify", 1);
 
     // public final static FunctionIdentifier BAGIFY = new
@@ -153,7 +165,54 @@ public class AsterixBuiltinFunctions {
             "numeric-idiv", 2);
     public final static FunctionIdentifier CARET = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "caret", 2);
 
+    public final static FunctionIdentifier NUMERIC_ABS = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "numeric-abs", 1);
+    public final static FunctionIdentifier NUMERIC_CEILING = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "numeric-ceiling", 1);
+    public final static FunctionIdentifier NUMERIC_FLOOR = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "numeric-floor", 1);
+    public final static FunctionIdentifier NUMERIC_ROUND = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "numeric-round", 1);
+    public final static FunctionIdentifier NUMERIC_ROUND_HALF_TO_EVEN = new FunctionIdentifier(
+            FunctionConstants.ASTERIX_NS, "numeric-round-half-to-even", 1);
+    public final static FunctionIdentifier NUMERIC_ROUND_HALF_TO_EVEN2 = new FunctionIdentifier(
+            FunctionConstants.ASTERIX_NS, "numeric-round-half-to-even2", 2);
+    // String funcitons
+    public final static FunctionIdentifier STRING_EQUAL = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "string-equal", 2);
+    public final static FunctionIdentifier STRING_START_WITH = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "start-with", 2);
+    public final static FunctionIdentifier STRING_END_WITH = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "end-with", 2);
+    public final static FunctionIdentifier STRING_MATCHES = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "matches", 2);
+    public final static FunctionIdentifier STRING_MATCHES_WITH_FLAG = new FunctionIdentifier(
+            FunctionConstants.ASTERIX_NS, "matches2", 3);
+    public final static FunctionIdentifier STRING_LOWERCASE = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "lowercase", 1);
+    public final static FunctionIdentifier STRING_REPLACE = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "replace", 3);
+    public final static FunctionIdentifier STRING_REPLACE_WITH_FLAG = new FunctionIdentifier(
+            FunctionConstants.ASTERIX_NS, "replace2", 4);
+    public final static FunctionIdentifier STRING_LENGTH = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "string-length", 1);
+    public final static FunctionIdentifier SUBSTRING2 = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "substring2", 2);
+    public final static FunctionIdentifier SUBSTRING_BEFORE = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "substring-before", 2);
+    public final static FunctionIdentifier SUBSTRING_AFTER = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "substring-after", 2);
+    public final static FunctionIdentifier STRING_TO_CODEPOINT = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "string-to-codepoint", 1);
+    public final static FunctionIdentifier CODEPOINT_TO_STRING = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "codepoint-to-string", 1);
+    public final static FunctionIdentifier STRING_CONCAT = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "string-concat", 1);
+    public final static FunctionIdentifier STRING_JOIN = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+            "string-join", 2);
+
     public final static FunctionIdentifier DATASET = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "dataset", 1);
+
     public final static FunctionIdentifier FEED_INGEST = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
             "feed-ingest", 1);
 
@@ -192,8 +251,8 @@ public class AsterixBuiltinFunctions {
 
     public final static FunctionIdentifier SCALAR_AVG = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "avg", 1);
 
-    public final static FunctionIdentifier SCALAR_COUNT = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "count",
-            1);
+    public final static FunctionIdentifier SCALAR_COUNT = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "count", 1);
+
     public final static FunctionIdentifier SCALAR_SUM = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "sum", 1);
 
     public final static FunctionIdentifier SCALAR_MAX = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "max", 1);
@@ -357,7 +416,6 @@ public class AsterixBuiltinFunctions {
         IFunctionInfo finfo = asterixFunctionIdToInfo.get(fid);
         if (finfo == null) {
             finfo = new AsterixFunctionInfo(fid);
-            asterixFunctionIdToInfo.put(fid, finfo);
         }
         return finfo;
     }
@@ -383,7 +441,7 @@ public class AsterixBuiltinFunctions {
 
         // and then, Asterix builtin functions
         add(ANY_COLLECTION_MEMBER, NonTaggedCollectionMemberResultType.INSTANCE);
-        add(AVG, OptionalADoubleTypeComputer.INSTANCE);
+        addPrivateFunction(AVG, OptionalADoubleTypeComputer.INSTANCE);
         add(BOOLEAN_CONSTRUCTOR, UnaryBooleanOrNullFunctionTypeComputer.INSTANCE);
         add(CARET, NonTaggedNumericAddSubMulDivTypeComputer.INSTANCE);
         add(CIRCLE_CONSTRUCTOR, OptionalACircleTypeComputer.INSTANCE);
@@ -405,7 +463,7 @@ public class AsterixBuiltinFunctions {
             }
         });
         add(CONTAINS, ABooleanTypeComputer.INSTANCE);
-        add(COUNT, AInt32TypeComputer.INSTANCE);
+        addPrivateFunction(COUNT, AInt32TypeComputer.INSTANCE);
         add(COUNTHASHED_GRAM_TOKENS, OrderedListOfAInt32TypeComputer.INSTANCE);
         add(COUNTHASHED_WORD_TOKENS, OrderedListOfAInt32TypeComputer.INSTANCE);
         add(CREATE_CIRCLE, ACircleTypeComputer.INSTANCE);
@@ -440,7 +498,7 @@ public class AsterixBuiltinFunctions {
         add(GET_HANDLE, null); // TODO
         add(GET_ITEM, NonTaggedGetItemResultType.INSTANCE);
         add(GET_DATA, null); // TODO
-        add(GLOBAL_AVG, OptionalADoubleTypeComputer.INSTANCE);
+        addPrivateFunction(GLOBAL_AVG, OptionalADoubleTypeComputer.INSTANCE);
         add(GRAM_TOKENS, OrderedListOfAStringTypeComputer.INSTANCE);
         add(GLOBAL_AVG, OptionalADoubleTypeComputer.INSTANCE);
         add(HASHED_GRAM_TOKENS, OrderedListOfAInt32TypeComputer.INSTANCE);
@@ -461,11 +519,11 @@ public class AsterixBuiltinFunctions {
         add(LIKE, BinaryBooleanOrNullFunctionTypeComputer.INSTANCE);
         add(LINE_CONSTRUCTOR, OptionalALineTypeComputer.INSTANCE);
         add(LISTIFY, OrderedListConstructorResultType.INSTANCE);
-        add(LOCAL_AVG, NonTaggedLocalAvgTypeComputer.INSTANCE);
+        addPrivateFunction(LOCAL_AVG, NonTaggedLocalAvgTypeComputer.INSTANCE);
         add(MAKE_FIELD_INDEX_HANDLE, null); // TODO
         add(MAKE_FIELD_NAME_HANDLE, null); // TODO
-        add(MAX, NonTaggedSumTypeComputer.INSTANCE);
-        add(MIN, NonTaggedSumTypeComputer.INSTANCE);
+        addPrivateFunction(MAX, NonTaggedSumTypeComputer.INSTANCE);
+        addPrivateFunction(MIN, NonTaggedSumTypeComputer.INSTANCE);
         add(NON_EMPTY_STREAM, ABooleanTypeComputer.INSTANCE);
         add(NULL_CONSTRUCTOR, ANullTypeComputer.INSTANCE);
         add(NUMERIC_UNARY_MINUS, NonTaggedUnaryMinusTypeComputer.INSTANCE);
@@ -474,6 +532,31 @@ public class AsterixBuiltinFunctions {
         add(NUMERIC_DIVIDE, NonTaggedNumericAddSubMulDivTypeComputer.INSTANCE);
         add(NUMERIC_MOD, NonTaggedNumericAddSubMulDivTypeComputer.INSTANCE);
         add(NUMERIC_IDIV, AInt32TypeComputer.INSTANCE);
+
+        add(NUMERIC_ABS, NonTaggedNumericUnaryFunctionTypeComputer.INSTANCE);
+        add(NUMERIC_CEILING, NonTaggedNumericUnaryFunctionTypeComputer.INSTANCE);
+        add(NUMERIC_FLOOR, NonTaggedNumericUnaryFunctionTypeComputer.INSTANCE);
+        add(NUMERIC_ROUND, NonTaggedNumericUnaryFunctionTypeComputer.INSTANCE);
+        add(NUMERIC_ROUND_HALF_TO_EVEN, NonTaggedNumericUnaryFunctionTypeComputer.INSTANCE);
+        add(NUMERIC_ROUND_HALF_TO_EVEN2, NonTaggedNumericRoundHalfToEven2TypeComputer.INSTANCE);
+
+        add(STRING_TO_CODEPOINT, OrderedListOfAInt32TypeComputer.INSTANCE);
+        add(CODEPOINT_TO_STRING, AStringTypeComputer.INSTANCE);
+        add(STRING_CONCAT, AStringTypeComputer.INSTANCE);
+        add(SUBSTRING2, Substring2TypeComputer.INSTANCE);
+        add(STRING_LENGTH, UnaryStringInt32OrNullTypeComputer.INSTANCE);
+        add(STRING_LOWERCASE, UnaryStringOrNullTypeComputer.INSTANCE);
+        add(STRING_START_WITH, BinaryStringBoolOrNullTypeComputer.INSTANCE);
+        add(STRING_END_WITH, BinaryStringBoolOrNullTypeComputer.INSTANCE);
+        add(STRING_MATCHES, BinaryStringBoolOrNullTypeComputer.INSTANCE);
+        add(STRING_MATCHES_WITH_FLAG, TripleStringBoolOrNullTypeComputer.INSTANCE);
+        add(STRING_REPLACE, TripleStringStringOrNullTypeComputer.INSTANCE);
+        add(STRING_REPLACE_WITH_FLAG, QuadStringStringOrNullTypeComputer.INSTANCE);
+        add(SUBSTRING_BEFORE, BinaryStringStringOrNullTypeComputer.INSTANCE);
+        add(SUBSTRING_AFTER, BinaryStringStringOrNullTypeComputer.INSTANCE);
+        add(STRING_EQUAL, BinaryStringBoolOrNullTypeComputer.INSTANCE);
+        add(STRING_JOIN, AStringTypeComputer.INSTANCE);
+
         add(OPEN_RECORD_CONSTRUCTOR, OpenRecordConstructorResultType.INSTANCE);
         add(ORDERED_LIST_CONSTRUCTOR, OrderedListConstructorResultType.INSTANCE);
         add(POINT_CONSTRUCTOR, OptionalAPointTypeComputer.INSTANCE);
@@ -545,8 +628,8 @@ public class AsterixBuiltinFunctions {
                 }
             }
         });
-        add(SUBSTRING, AStringTypeComputer.INSTANCE);
-        add(SUM, NonTaggedSumTypeComputer.INSTANCE);
+        add(SUBSTRING, SubstringTypeComputer.INSTANCE);
+        addPrivateFunction(SUM, NonTaggedSumTypeComputer.INSTANCE);
         add(SWITCH_CASE, NonTaggedSwitchCaseComputer.INSTANCE);
         add(REG_EXP, ABooleanTypeComputer.INSTANCE);
         add(INJECT_FAILURE, InjectFailureTypeComputer.INSTANCE);
@@ -743,6 +826,13 @@ public class AsterixBuiltinFunctions {
         builtinFunctionsSet.put(functionInfo, functionInfo);
         funTypeComputer.put(functionInfo, typeComputer);
         asterixFunctionIdToInfo.put(fi, functionInfo);
+    }
+
+    private static IFunctionInfo addPrivateFunction(FunctionIdentifier fi, IResultTypeComputer typeComputer) {
+        IFunctionInfo functionInfo = getAsterixFunctionInfo(fi);
+        builtinFunctionsSet.put(functionInfo, functionInfo);
+        funTypeComputer.put(functionInfo, typeComputer);
+        return functionInfo;
     }
 
     private static void addAgg(FunctionIdentifier fi) {

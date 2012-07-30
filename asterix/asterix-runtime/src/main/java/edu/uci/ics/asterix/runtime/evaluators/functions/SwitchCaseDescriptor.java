@@ -11,8 +11,8 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluator;
 import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluatorFactory;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
-import edu.uci.ics.hyracks.dataflow.common.data.accessors.ArrayBackedValueStorage;
-import edu.uci.ics.hyracks.dataflow.common.data.accessors.IDataOutputProvider;
+import edu.uci.ics.hyracks.data.std.api.IDataOutputProvider;
+import edu.uci.ics.hyracks.data.std.util.ArrayBackedValueStorage;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.IFrameTupleReference;
 
 public class SwitchCaseDescriptor extends AbstractScalarFunctionDynamicDescriptor {
@@ -79,7 +79,8 @@ public class SwitchCaseDescriptor extends AbstractScalarFunctionDynamicDescripto
                             // the default case
                             argOut.reset();
                             evals[n - 1].evaluate(tuple);
-                            output.getDataOutput().write(argOut.getByteArray(), argOut.getStartOffset(), argOut.getLength());
+                            output.getDataOutput().write(argOut.getByteArray(), argOut.getStartOffset(),
+                                    argOut.getLength());
                         } catch (HyracksDataException hde) {
                             throw new AlgebricksException(hde);
                         } catch (IOException ioe) {

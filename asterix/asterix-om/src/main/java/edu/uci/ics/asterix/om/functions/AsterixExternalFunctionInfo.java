@@ -17,7 +17,7 @@ public class AsterixExternalFunctionInfo extends AsterixFunctionInfo implements 
 
     public AsterixExternalFunctionInfo(String namespace, AsterixFunction asterixFunction, FunctionKind kind,
             List<IAType> argumentTypes, IAType returnType, IResultTypeComputer rtc, String body, String language) {
-        super(namespace, asterixFunction, kind, false);
+        super(namespace, asterixFunction);
         this.rtc = rtc;
         this.argumenTypes = argumentTypes;
         this.body = body;
