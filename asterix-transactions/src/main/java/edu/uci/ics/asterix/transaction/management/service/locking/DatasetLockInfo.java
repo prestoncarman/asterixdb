@@ -137,7 +137,7 @@ public class DatasetLockInfo {
         }
     }
 
-    public int findEntityInfo(int jobId, int hashVal) {
+    public int findEntityInfoFromHolderList(int jobId, int hashVal) {
         int current;
         if (hashVal == -1) {//dataset-granule lock
             current = lastHolder;
@@ -366,8 +366,14 @@ public class DatasetLockInfo {
     /**
      * wake up upgraders first, then waiters.
      */
-    public void wakeupWaiter() {
-
+    public void wakeUpWaiters() {
+        boolean areAllUpgradersWakenUp = true;
+        int waiterObjId = firstUpgrader;
+        
+        //wake up upgraders
+        while (waiterObjId != -1) {
+            
+        }
     }
 
     /////////////////////////////////////////////////////////
@@ -432,4 +438,6 @@ public class DatasetLockInfo {
     public PrimitiveIntHashMap getEntityResourceHT() {
         return entityResourceHT;
     }
+
+
 }

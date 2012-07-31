@@ -58,6 +58,9 @@ public class JobInfo {
         if (next != -1) {
             entityInfoManager.setPrevJobResource(next, prev);
         }
+        if (lastHoldingResource == resource) {
+            lastHoldingResource = prev;
+        }
     }
     
     public void addWaitingResource(int waiterObjId) {
@@ -130,6 +133,9 @@ public class JobInfo {
         }
         if (nextObjId != -1) {
             entityInfoManager.setPrevJobResource(nextEntityInfo, prevObjId);
+        }
+        if (lastWaitingResource == waiterObjId) {
+            lastWaitingResource = prevObjId;
         }
     }
 

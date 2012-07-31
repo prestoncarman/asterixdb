@@ -18,6 +18,7 @@ package edu.uci.ics.asterix.transaction.management.service.locking;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 
+import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionManagementConstants.LockManagerConstants;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionManagementConstants.LockManagerConstants.LockMode;
 
 /**
@@ -429,11 +430,15 @@ public class EntityLockInfoManager {
     }
 
     public void addUpgrader(int slotNum, int waiterObjId) {
-        //EEEEEEEEEEEEEEEEE
-        //Assumption: There can be only one upgrader in entity-granule lock. Otherwise, more than an upgrader mean deadlock.
-        //Check: 
-        // - multiple upgrader may exist whether multiple threads in a job can try to upgrade lock on multiple resources.
-        // - check the lock() in LockManager
+        //[Notice]
+        //Even if there are multiple threads in a job try to upgrade lock mode on same resource which is entity-granule,
+        //while the first upgrader is waiting, all the incoming upgrade requests from other threads should be rejected by aborting them.
+        //Therefore, there is no actual "ADD" upgrader method. Instead, it only has "SET" upgrader method.
+        if (LockManager.IS_DEBUG_MODE) {
+            if (getUpgrader(slotNum) != -1) {
+                throw new IllegalStateException("Invalid lock upgrade request. This call should be handled as deadlock");
+            }
+        }
         
         setUpgrader(slotNum, waiterObjId);
     }
@@ -445,8 +450,9 @@ public class EntityLockInfoManager {
     /**
      * wake up upgraders first, then waiters.
      */
-    public void wakeupWaiter(int slotNum) {
+    public void wakeUpWaiters(int slotNum) {
 
+        
     }
 
     public boolean isUpgradeCompatible(int slotNum, byte lockMode, int entityInfo) {
@@ -577,6 +583,8 @@ public class EntityLockInfoManager {
         return pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).getUpgrader(
                 slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS);
     }
+
+
 }
 
 /******************************************
