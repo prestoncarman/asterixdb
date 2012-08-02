@@ -328,6 +328,22 @@ public class EntityInfoManager {
         setEntityLockCount(slotNum, (byte)(getEntityLockCount(slotNum)-1));
     }
     
+    public void increaseDatasetLockCount(int slotNum, int count) {
+        setDatasetLockCount(slotNum, (byte)(getDatasetLockCount(slotNum)+count));
+    }
+    
+    public void decreaseDatasetLockCount(int slotNum, int count) {
+        setDatasetLockCount(slotNum, (byte)(getDatasetLockCount(slotNum)-count));
+    }
+    
+    public void increaseEntityLockCount(int slotNum, int count) {
+        setEntityLockCount(slotNum, (byte)(getEntityLockCount(slotNum)+count));
+    }
+    
+    public void decreaseEntityLockCount(int slotNum, int count) {
+        setEntityLockCount(slotNum, (byte)(getEntityLockCount(slotNum)-count));
+    }
+    
     //////////////////////////////////////////////////////////////////
     //   set/get method for each field of EntityInfo
     //////////////////////////////////////////////////////////////////

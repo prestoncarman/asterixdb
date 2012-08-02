@@ -122,13 +122,13 @@ public class MetadataNode implements IMetadataNode {
     @Override
     public boolean lock(long txnId, int lockMode) throws ACIDException, RemoteException {
         TransactionContext txnCtx = transactionProvider.getTransactionManager().getTransactionContext(txnId);
-        return transactionProvider.getLockManager().lock(txnCtx, metadataResourceId, lockMode);
+        return transactionProvider.getLockManager().lock(txnCtx, metadataResourceId, lockMode, null);
     }
 
     @Override
     public boolean unlock(long txnId) throws ACIDException, RemoteException {
         TransactionContext txnCtx = transactionProvider.getTransactionManager().getTransactionContext(txnId);
-        return transactionProvider.getLockManager().unlock(txnCtx, metadataResourceId);
+        return transactionProvider.getLockManager().unlock(metadataResourceId, null, txnCtx);
     }
 
     @Override
@@ -256,7 +256,7 @@ public class MetadataNode implements IMetadataNode {
         btree.open(fileId);
         ITreeIndexAccessor indexAccessor = btree.createAccessor();
         TransactionContext txnCtx = transactionProvider.getTransactionManager().getTransactionContext(txnId);
-        transactionProvider.getLockManager().lock(txnCtx, index.getResourceId(), LockMode.EXCLUSIVE);
+        transactionProvider.getLockManager().lock(txnCtx, index.getResourceId(), LockMode.X, null);
         // TODO: fix exceptions once new BTree exception model is in hyracks.
         indexAccessor.insert(tuple);
         index.getTreeLogger().generateLogRecord(transactionProvider, txnCtx, IndexOp.INSERT, tuple);
@@ -507,7 +507,7 @@ public class MetadataNode implements IMetadataNode {
         // The transaction with txnId will have an S lock on the
         // resource. Note that lock converters have a higher priority than
         // regular waiters in the LockManager.
-        transactionProvider.getLockManager().lock(txnCtx, index.getResourceId(), LockMode.EXCLUSIVE);
+        transactionProvider.getLockManager().lock(txnCtx, index.getResourceId(), LockMode.X, null);
         indexAccessor.delete(tuple);
         index.getTreeLogger().generateLogRecord(transactionProvider, txnCtx, IndexOp.DELETE, tuple);
     }
@@ -767,7 +767,7 @@ public class MetadataNode implements IMetadataNode {
     private <ResultType> void searchIndex(long txnId, IMetadataIndex index, ITupleReference searchKey,
             IValueExtractor<ResultType> valueExtractor, List<ResultType> results) throws Exception {
         TransactionContext txnCtx = transactionProvider.getTransactionManager().getTransactionContext(txnId);
-        transactionProvider.getLockManager().lock(txnCtx, index.getResourceId(), LockMode.SHARED);
+        transactionProvider.getLockManager().lock(txnCtx, index.getResourceId(), LockMode.S, null);
         IBinaryComparatorFactory[] comparatorFactories = index.getKeyBinaryComparatorFactory();
         int fileId = index.getFileId();
         BTree btree = (BTree) indexRegistry.get(fileId);

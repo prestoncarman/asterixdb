@@ -151,7 +151,7 @@ public class APIFramework {
         // Begin a transaction against the metadata.
         // Lock the metadata in X mode to protect against other DDL and DML.
         MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
-        MetadataManager.INSTANCE.lock(mdTxnCtx, LockMode.EXCLUSIVE);
+        MetadataManager.INSTANCE.lock(mdTxnCtx, LockMode.X);
         try {
             DdlTranslator ddlt = new DdlTranslator(mdTxnCtx, query.getPrologDeclList(), out, pc, pdf);
             ddlt.translate(hcc, false);
@@ -172,7 +172,7 @@ public class APIFramework {
         // Lock the metadata in S mode to protect against other DDL
         // modifications.
         MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
-        MetadataManager.INSTANCE.lock(mdTxnCtx, LockMode.SHARED);
+        MetadataManager.INSTANCE.lock(mdTxnCtx, LockMode.S);
         try {
             DmlTranslator dmlt = new DmlTranslator(mdTxnCtx, query.getPrologDeclList());
             dmlt.translate();
@@ -307,7 +307,7 @@ public class APIFramework {
             JSONException, RemoteException, ACIDException {
         MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
         try {
-            MetadataManager.INSTANCE.lock(mdTxnCtx, LockMode.SHARED);
+            MetadataManager.INSTANCE.lock(mdTxnCtx, LockMode.S);
             Pair<AqlCompiledMetadataDeclarations, JobSpecification> result = compileQueryInternal(mdTxnCtx,
                     dataverseName, q, varCounter, outputDatasetName, metadataDecls, pc, out, pdf, dmlKind);
             MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);

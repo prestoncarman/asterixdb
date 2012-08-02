@@ -344,7 +344,6 @@ public class EntityLockInfoManager {
 
         //Notice!!
         //remove the corresponding resource from linked list of resource.
-        //it is guaranteed that there is no waiter or upgrader in the JobInfo when this function is called.
         prev = entityInfoManager.getPrevJobResource(holder);
         next = entityInfoManager.getNextJobResource(holder);
 
@@ -356,7 +355,7 @@ public class EntityLockInfoManager {
             entityInfoManager.setPrevJobResource(next, prev);
         } else {
             //This entityInfo(i.e., holder) is the last resource held by this job.
-            jobInfo.setlastHoldingResource(holder);
+            jobInfo.setlastHoldingResource(prev);
         }
     }
 
@@ -478,6 +477,54 @@ public class EntityLockInfoManager {
         }
     }
 
+    
+
+    public int findEntityInfoFromHolderList(int eLockInfo, int jobId, int hashVal) {
+        int entityInfo = getLastHolder(eLockInfo);
+        
+        while(entityInfo != -1) {
+            if (jobId == entityInfoManager.getJobId(entityInfo) && hashVal == entityInfoManager.getPKHashVal(entityInfo)) {
+                return entityInfo;
+            }
+            entityInfo = entityInfoManager.getPrevEntityActor(entityInfo);
+        }
+        
+        return -1;
+    }
+
+    public int findWaiterFromWaiterList(int eLockInfo, int jobId, int hashVal) {
+        int waiterObjId = getFirstWaiter(eLockInfo);
+        LockWaiter waiterObj;
+        int entityInfo;
+        
+        while (waiterObjId != -1) {
+            waiterObj = lockWaiterManager.getLockWaiter(waiterObjId);
+            entityInfo = waiterObj.getEntityInfoSlot();
+            if (jobId == entityInfoManager.getJobId(entityInfo) && hashVal == entityInfoManager.getPKHashVal(entityInfo)) {
+                return waiterObjId;
+            }
+            waiterObjId = entityInfoManager.getNextEntityActor(entityInfo);
+        }
+        
+        return -1;
+    }
+    
+    public int findUpgraderFromUpgraderList(int eLockInfo, int jobId, int hashVal) {
+        int waiterObjId = getUpgrader(eLockInfo);
+        LockWaiter waiterObj;
+        int entityInfo;
+        
+        if (waiterObjId != -1) {
+            waiterObj = lockWaiterManager.getLockWaiter(waiterObjId);
+            entityInfo = waiterObj.getEntityInfoSlot();
+            if (jobId == entityInfoManager.getJobId(entityInfo) && hashVal == entityInfoManager.getPKHashVal(entityInfo)) {
+                return waiterObjId;
+            }
+        }
+        
+        return -1;
+    }
+
     public void increaseLockCount(int slotNum, byte lockMode) {
         switch (lockMode) {
             case LockMode.X:
@@ -583,7 +630,6 @@ public class EntityLockInfoManager {
         return pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).getUpgrader(
                 slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS);
     }
-
 
 }
 

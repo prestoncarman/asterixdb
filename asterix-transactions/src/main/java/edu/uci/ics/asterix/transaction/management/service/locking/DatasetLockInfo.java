@@ -3,6 +3,7 @@ package edu.uci.ics.asterix.transaction.management.service.locking;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionManagementConstants.LockManagerConstants.LockMode;
 
 public class DatasetLockInfo {
+    private EntityLockInfoManager entityLockInfoManager;
     private EntityInfoManager entityInfoManager;
     private LockWaiterManager lockWaiterManager;
     private PrimitiveIntHashMap entityResourceHT;
@@ -14,9 +15,10 @@ public class DatasetLockInfo {
     private int firstWaiter;
     private int firstUpgrader;
 
-    public DatasetLockInfo(EntityInfoManager entityInfoManager, LockWaiterManager lockWaiterManager) {
+    public DatasetLockInfo(EntityLockInfoManager entityLockInfoManager, EntityInfoManager entityInfoManager, LockWaiterManager lockWaiterManager) {
+        this.entityLockInfoManager = entityLockInfoManager;
         this.entityInfoManager = entityInfoManager;
-        this.lockWaiterManager = lockWaiterManager; 
+        this.lockWaiterManager = lockWaiterManager;
         entityResourceHT = new PrimitiveIntHashMap();
         lastHolder = -1; //-1 stands for end of list
         firstWaiter = -1;
@@ -138,27 +140,70 @@ public class DatasetLockInfo {
     }
 
     public int findEntityInfoFromHolderList(int jobId, int hashVal) {
-        int current;
+        int entityInfo;
+        int eLockInfo;
+        int waiterObjId;
         if (hashVal == -1) {//dataset-granule lock
-            current = lastHolder;
-            while (current != -1) {
-                if (jobId == entityInfoManager.getJobId(current)) {
-                    return current;
+            entityInfo = lastHolder;
+            while (entityInfo != -1) {
+                if (jobId == entityInfoManager.getJobId(entityInfo)) {
+                    return entityInfo;
                 }
-                current = entityInfoManager.getPrevEntityActor(current);
+                entityInfo = entityInfoManager.getPrevEntityActor(entityInfo);
             }
+            return -1;
         } else { //entity-granule lock
-            current = entityResourceHT.get(hashVal);
-            while (current != -1) {
-                if (jobId == entityInfoManager.getJobId(current)) {
-                    return current;
+            eLockInfo = entityResourceHT.get(hashVal);
+            entityInfo = entityLockInfoManager.findEntityInfoFromHolderList(eLockInfo, jobId, hashVal);
+            if (entityInfo == -1) {
+                //find the entityInfo from the waiter list of entityLockInfo. 
+                //There is a case where dataset-granule lock is acquired, but entity-granule lock is not acquired yet.
+                //In this case, the waiter of the entityLockInfo represents the holder of the datasetLockInfo.
+                waiterObjId = entityLockInfoManager.findWaiterFromWaiterList(eLockInfo, jobId, hashVal);
+                if (waiterObjId != -1) {
+                    entityInfo = lockWaiterManager.getLockWaiter(waiterObjId).getEntityInfoSlot();
                 }
-                current = entityInfoManager.getPrevEntityActor(current);
             }
+            return entityInfo;
         }
-        return -1;
     }
 
+    public int findWaiterFromWaiterList(int jobId, int hashVal) {
+        int waiterObjId;
+        LockWaiter waiterObj;
+        int entityInfo = 0;
+        
+        waiterObjId = firstWaiter;
+        while (waiterObjId != -1) {
+            waiterObj = lockWaiterManager.getLockWaiter(waiterObjId);
+            entityInfo = waiterObj.getEntityInfoSlot();
+            if (jobId == entityInfoManager.getJobId(entityInfo) && hashVal == entityInfoManager.getPKHashVal(entityInfo)) {
+                return waiterObjId;
+            }
+            waiterObjId = entityInfoManager.getPrevEntityActor(entityInfo);
+        }
+        
+        return -1;
+    }
+    
+    public int findUpgraderFromUpgraderList(int jobId, int hashVal) {
+        int waiterObjId;
+        LockWaiter waiterObj;
+        int entityInfo = 0;
+        
+        waiterObjId = firstUpgrader;
+        while (waiterObjId != -1) {
+            waiterObj = lockWaiterManager.getLockWaiter(waiterObjId);
+            entityInfo = waiterObj.getEntityInfoSlot();
+            if (jobId == entityInfoManager.getJobId(entityInfo) && hashVal == entityInfoManager.getPKHashVal(entityInfo)) {
+                return waiterObjId;
+            }
+            waiterObjId = entityInfoManager.getPrevEntityActor(entityInfo);
+        }
+        
+        return -1;
+    }
+    
     public boolean isNoHolder() {
         return ISCount == 0 && IXCount == 0 && SCount == 0 && XCount == 0;
     }
@@ -227,13 +272,14 @@ public class DatasetLockInfo {
 
     /**
      * append new waiter to the end of waiters
+     * 
      * @param waiterObjId
      */
     public void addWaiter(int waiterObjId) {
         int lastEntityInfo = 0;
         int lastObjId;
         LockWaiter lastObj;
-        
+
         if (firstWaiter != -1) {
             //find the lastWaiter
             lastObjId = firstWaiter;
@@ -283,10 +329,10 @@ public class DatasetLockInfo {
         //get current waiter object
         currentObj = lockWaiterManager.getLockWaiter(currentObjId);
         currentEntityInfo = currentObj.getEntityInfoSlot();
-        
+
         //get next waiterObjId
         nextObjId = entityInfoManager.getNextEntityActor(currentEntityInfo);
-        
+
         if (prevEntityInfo != -1) {
             //prev->next = next
             entityInfoManager.setNextEntityActor(prevEntityInfo, nextObjId);
@@ -300,7 +346,7 @@ public class DatasetLockInfo {
         int lastEntityInfo = 0;
         int lastObjId;
         LockWaiter lastObj;
-        
+
         if (firstWaiter != -1) {
             //find the lastWaiter
             lastObjId = firstWaiter;
@@ -350,10 +396,10 @@ public class DatasetLockInfo {
         //get current waiter object
         currentObj = lockWaiterManager.getLockWaiter(currentObjId);
         currentEntityInfo = currentObj.getEntityInfoSlot();
-        
+
         //get next waiterObjId
         nextObjId = entityInfoManager.getNextEntityActor(currentEntityInfo);
-        
+
         if (prevEntityInfo != -1) {
             //prev->next = next
             entityInfoManager.setNextEntityActor(prevEntityInfo, nextObjId);
@@ -365,14 +411,27 @@ public class DatasetLockInfo {
 
     /**
      * wake up upgraders first, then waiters.
+     * Criteria to wake up upgraders: if the upgrading lock mode is compatible, then wake up the upgrader.
+     * BTW, how do we know the upgrading lock mode? (we don't keep the upgrading lock mode and waiting lock mode
      */
     public void wakeUpWaiters() {
         boolean areAllUpgradersWakenUp = true;
         int waiterObjId = firstUpgrader;
-        
+        LockWaiter waiterObj;
+
         //wake up upgraders
         while (waiterObjId != -1) {
+            waiterObj = lockWaiterManager.getLockWaiter(waiterObjId);
             
+
+        }
+        
+        //wake up waiters
+        if (areAllUpgradersWakenUp) {
+            waiterObjId = firstWaiter;
+            while (waiterObjId != -1) {
+                
+            }
         }
     }
 
@@ -438,6 +497,5 @@ public class DatasetLockInfo {
     public PrimitiveIntHashMap getEntityResourceHT() {
         return entityResourceHT;
     }
-
 
 }

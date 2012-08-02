@@ -330,6 +330,7 @@ class ChildLockWaiterArrayManager {
         freeSlotNum = childArray[currentSlot].getNextFreeSlot();
         childArray[currentSlot].setWait(true);
         childArray[currentSlot].setVictim(false);
+        childArray[currentSlot].setWaiterCount((byte)0);
         occupiedSlots++;
         return currentSlot;
     }

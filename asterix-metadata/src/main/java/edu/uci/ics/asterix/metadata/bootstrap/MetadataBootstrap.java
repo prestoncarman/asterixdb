@@ -148,7 +148,7 @@ public class MetadataBootstrap {
         // Begin a transaction against the metadata.
         // Lock the metadata in X mode.
         MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
-        MetadataManager.INSTANCE.lock(mdTxnCtx, LockMode.EXCLUSIVE);
+        MetadataManager.INSTANCE.lock(mdTxnCtx, LockMode.X);
 
         try {
             if (isNewUniverse) {

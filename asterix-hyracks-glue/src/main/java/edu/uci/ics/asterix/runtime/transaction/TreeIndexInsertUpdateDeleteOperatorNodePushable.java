@@ -141,7 +141,7 @@ public class TreeIndexInsertUpdateDeleteOperatorNodePushable extends AbstractUna
                 switch (op) {
                     case INSERT: {
                         lockManager.lock(txnContext, resourceId,
-                                TransactionManagementConstants.LockManagerConstants.LockMode.EXCLUSIVE);
+                                TransactionManagementConstants.LockManagerConstants.LockMode.X, null);
                         indexAccessor.insert(tuple);
                         treeLogger.generateLogRecord(transactionProvider, txnContext, op, tuple);
                         break;
@@ -149,7 +149,7 @@ public class TreeIndexInsertUpdateDeleteOperatorNodePushable extends AbstractUna
 
                     case DELETE: {
                         lockManager.lock(txnContext, resourceId,
-                                TransactionManagementConstants.LockManagerConstants.LockMode.EXCLUSIVE);
+                                TransactionManagementConstants.LockManagerConstants.LockMode.X, null);
                         indexAccessor.delete(tuple);
                         treeLogger.generateLogRecord(transactionProvider, txnContext, op, tuple);
                         break;

@@ -54,7 +54,7 @@ public class TransactionManager implements ITransactionManager {
             } finally {
                 txnContext.releaseResources();
                 transactionProvider.getLockManager().releaseLocks(txnContext);
-                transactionContextRepository.remove(txnContext.getTransactionID());
+                transactionContextRepository.remove(txnContext.getTransactionId());
                 txnContext.setTxnState(TransactionState.ABORTED);
             }
         }
@@ -100,13 +100,13 @@ public class TransactionManager implements ITransactionManager {
                 }
             } catch (ACIDException ae) {
                 if (LOGGER.isLoggable(Level.SEVERE)) {
-                    LOGGER.severe(" caused exception in commit !" + txnContext.getTransactionID());
+                    LOGGER.severe(" caused exception in commit !" + txnContext.getTransactionId());
                 }
                 throw ae;
             } finally {
                 txnContext.releaseResources();
                 transactionProvider.getLockManager().releaseLocks(txnContext); // release
-                transactionContextRepository.remove(txnContext.getTransactionID());
+                transactionContextRepository.remove(txnContext.getTransactionId());
                 txnContext.setTxnState(TransactionState.COMMITTED);
             }
         }

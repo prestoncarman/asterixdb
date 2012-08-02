@@ -23,6 +23,7 @@ import edu.uci.ics.asterix.transaction.management.resource.ICloseable;
 import edu.uci.ics.asterix.transaction.management.service.logging.LogUtil;
 import edu.uci.ics.asterix.transaction.management.service.logging.LogicalLogLocator;
 import edu.uci.ics.asterix.transaction.management.service.transaction.ITransactionManager.TransactionState;
+import edu.uci.ics.hyracks.api.job.JobId;
 
 /**
  * Represents a holder object that contains all information related to a
@@ -45,13 +46,14 @@ public class TransactionContext implements Serializable {
 
     private static final long serialVersionUID = -6105616785783310111L;
     private TransactionProvider transactionProvider;
-    private long transactionID;
+    private int transactionId;
     private LogicalLogLocator lastLogLocator;
     private TransactionState txnState;
     private long startWaitTime;
     private int status;
     private Set<ICloseable> resources = new HashSet<ICloseable>();
     private TransactionType transactionType = TransactionType.READ;
+    private JobId jobId;
 
     public void setTransactionType(TransactionType transactionType) {
         this.transactionType = transactionType;
@@ -65,10 +67,15 @@ public class TransactionContext implements Serializable {
         resources.add(resource);
     }
 
-    public TransactionContext(long transactionId, TransactionProvider transactionProvider) throws ACIDException {
-        this.transactionID = transactionId;
+    public TransactionContext(int transactionId, TransactionProvider transactionProvider) throws ACIDException {
+        this.transactionId = transactionId;
         this.transactionProvider = transactionProvider;
         init();
+        jobId = new JobId(transactionId); //TODO temporary code. will be removed by getting JobId as input param instead of transactionId
+    }
+    
+    public JobId getJobId() {
+        return jobId;
     }
 
     private void init() throws ACIDException {
@@ -86,8 +93,8 @@ public class TransactionContext implements Serializable {
         this.lastLogLocator = lastLogLocator;
     }
 
-    public long getTransactionID() {
-        return transactionID;
+    public int getTransactionId() {
+        return transactionId;
     }
 
     public void setStartWaitTime(long time) {

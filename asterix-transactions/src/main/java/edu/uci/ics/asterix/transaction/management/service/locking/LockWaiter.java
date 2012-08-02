@@ -30,10 +30,13 @@ public class LockWaiter {
     private int entityInfoSlotNum;
     private boolean wait;
     private boolean victim;
+    private byte waiterCount;
+    private boolean firstGetUp;
 
     public LockWaiter() {
         this.victim = false;
         this.wait = true;
+        waiterCount = 0;
     }
 
     public void setEntityInfoSlot(int slotNum) {
@@ -66,5 +69,29 @@ public class LockWaiter {
 
     public boolean getVictim() {
         return this.victim;
+    }
+    
+    public void increaseWaiterCount() {
+        waiterCount++;
+    }
+    
+    public void decreaseWaiterCount() {
+        waiterCount--;
+    }
+    
+    public byte getWaiterCount() {
+        return waiterCount;
+    }
+    
+    public void setWaiterCount(byte count) {
+        waiterCount = count;
+    }
+    
+    public void setFirstGetUp(boolean isFirst) {
+        firstGetUp = isFirst;
+    }
+    
+    public boolean isFirstGetUp() {
+        return firstGetUp;
     }
 }

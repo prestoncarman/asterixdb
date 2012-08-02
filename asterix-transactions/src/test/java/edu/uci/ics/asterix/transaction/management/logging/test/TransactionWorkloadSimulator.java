@@ -176,7 +176,7 @@ class Transaction extends Thread {
                 if (!retry) {
                     lockMode = random.nextInt(2);
                 }
-                boolean lockGranted = TransactionWorkloadSimulator.lockManager.lock(context, resourceID, lockMode);
+                boolean lockGranted = TransactionWorkloadSimulator.lockManager.lock(context, resourceID, lockMode, null);
                 if (!lockGranted) {
                     retry = true;
                     continue;
