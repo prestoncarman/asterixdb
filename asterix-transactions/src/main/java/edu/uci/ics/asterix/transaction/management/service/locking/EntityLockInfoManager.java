@@ -360,37 +360,32 @@ public class EntityLockInfoManager {
     }
 
     public void addWaiter(int slotNum, int waiterObjId) {
-        int lastEntityInfo = 0;
         int lastObjId;
-        LockWaiter lastObj;
+        LockWaiter lastObj = null;
         int firstWaiter = getFirstWaiter(slotNum);
-        
+
         if (firstWaiter != -1) {
             //find the lastWaiter
             lastObjId = firstWaiter;
             while (lastObjId != -1) {
                 lastObj = lockWaiterManager.getLockWaiter(lastObjId);
-                lastEntityInfo = lastObj.getEntityInfoSlot();
-                lastObjId = entityInfoManager.getNextEntityActor(lastEntityInfo);
+                lastObjId = lastObj.getNextWaiterObjId();
             }
             //last->next = new_waiter
-            entityInfoManager.setNextEntityActor(lastEntityInfo, waiterObjId);
+            lastObj.setNextWaiterObjId(waiterObjId);
         } else {
-            //set first waiter
             setFirstWaiter(slotNum, waiterObjId);
         }
         //new_waiter->next = -1
         lastObj = lockWaiterManager.getLockWaiter(waiterObjId);
-        lastEntityInfo = lastObj.getEntityInfoSlot();
-        entityInfoManager.setNextEntityActor(lastEntityInfo, -1);
+        lastObj.setNextWaiterObjId(-1);
     }
 
     public void removeWaiter(int slotNum, int waiterObjId) {
         int currentObjId = getFirstWaiter(slotNum);
         LockWaiter currentObj;
-        int currentEntityInfo = -1;
-        LockWaiter prevObj;
-        int prevEntityInfo = -1;
+        LockWaiter prevObj = null;
+        int prevObjId = -1;
         int nextObjId;
 
         while (currentObjId != waiterObjId) {
@@ -408,20 +403,19 @@ public class EntityLockInfoManager {
             }
 
             prevObj = lockWaiterManager.getLockWaiter(currentObjId);
-            prevEntityInfo = prevObj.getEntityInfoSlot();
-            currentObjId = entityInfoManager.getNextEntityActor(prevEntityInfo);
+            prevObjId = currentObjId;
+            currentObjId = prevObj.getNextWaiterObjId();
         }
 
         //get current waiter object
         currentObj = lockWaiterManager.getLockWaiter(currentObjId);
-        currentEntityInfo = currentObj.getEntityInfoSlot();
-        
+
         //get next waiterObjId
-        nextObjId = entityInfoManager.getNextEntityActor(currentEntityInfo);
-        
-        if (prevEntityInfo != -1) {
+        nextObjId = currentObj.getNextWaiterObjId();
+
+        if (prevObjId != -1) {
             //prev->next = next
-            entityInfoManager.setNextEntityActor(prevEntityInfo, nextObjId);
+            prevObj.setNextWaiterObjId(nextObjId);
         } else {
             //removed first waiter. firstWaiter = current->next
             setFirstWaiter(slotNum, nextObjId);
@@ -444,14 +438,6 @@ public class EntityLockInfoManager {
 
     public void removeUpgrader(int slotNum, int waiterObjId) {
         setUpgrader(slotNum, -1);
-    }
-
-    /**
-     * wake up upgraders first, then waiters.
-     */
-    public void wakeUpWaiters(int slotNum) {
-
-        
     }
 
     public boolean isUpgradeCompatible(int slotNum, byte lockMode, int entityInfo) {
@@ -503,7 +489,7 @@ public class EntityLockInfoManager {
             if (jobId == entityInfoManager.getJobId(entityInfo) && hashVal == entityInfoManager.getPKHashVal(entityInfo)) {
                 return waiterObjId;
             }
-            waiterObjId = entityInfoManager.getNextEntityActor(entityInfo);
+            waiterObjId = waiterObj.getNextWaiterObjId();
         }
         
         return -1;

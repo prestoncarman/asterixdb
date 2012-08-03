@@ -94,7 +94,7 @@ public interface ILockManager {
      * @return
      * @throws ACIDException
      */
-    public void getInstantlock(DatasetId datasetId, int entityHashValue, byte lockMode, TransactionContext context) throws ACIDException;
+    public void instantLock(DatasetId datasetId, int entityHashValue, byte lockMode, TransactionContext context) throws ACIDException;
 
 
     /**

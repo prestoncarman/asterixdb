@@ -331,6 +331,7 @@ class ChildLockWaiterArrayManager {
         childArray[currentSlot].setWait(true);
         childArray[currentSlot].setVictim(false);
         childArray[currentSlot].setWaiterCount((byte)0);
+        childArray[currentSlot].setNextWaiterObjId(-1);
         occupiedSlots++;
         return currentSlot;
     }

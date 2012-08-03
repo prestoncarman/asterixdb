@@ -7,14 +7,14 @@ public class JobInfo {
     private LockWaiterManager lockWaiterManager;
     private TransactionContext jobCtx;
     private int lastHoldingResource; //resource(entity or dataset) which is held by this job lastly
-    private int lastWaitingResource; //resource(entity or dataset) which this job is waiting for
+    private int firstWaitingResource; //resource(entity or dataset) which this job is waiting for
     private int upgradingResource; //resource(entity or dataset) which this job is waiting for to upgrade
 
     public JobInfo(EntityInfoManager entityInfoManager, LockWaiterManager lockWaiterManager, TransactionContext txnCtx) {
         this.entityInfoManager = entityInfoManager;
         this.jobCtx = txnCtx;
         this.lastHoldingResource = -1;
-        this.lastWaitingResource = -1;
+        this.firstWaitingResource = -1;
         this.upgradingResource = -1;
     }
 
@@ -64,37 +64,37 @@ public class JobInfo {
     }
     
     public void addWaitingResource(int waiterObjId) {
-        LockWaiter waiterObj;
-        int entityInfo;
-        
-        if (lastWaitingResource != -1) {
-            waiterObj = lockWaiterManager.getLockWaiter(lastHoldingResource);
-            entityInfo = waiterObj.getEntityInfoSlot();
-            entityInfoManager.setNextJobResource(entityInfo, waiterObjId);
+        int lastObjId;
+        LockWaiter lastObj = null;
+
+        if (firstWaitingResource != -1) {
+            //find the lastWaiter
+            lastObjId = firstWaitingResource;
+            while (lastObjId != -1) {
+                lastObj = lockWaiterManager.getLockWaiter(lastObjId);
+                lastObjId = lastObj.getNextWaiterObjId();
+            }
+            //last->next = new_waiter
+            lastObj.setNextWaiterObjId(waiterObjId);
+        } else {
+            firstWaitingResource = waiterObjId;
         }
-        
-        waiterObj = lockWaiterManager.getLockWaiter(waiterObjId);
-        entityInfo = waiterObj.getEntityInfoSlot();
-        entityInfoManager.setPrevJobResource(entityInfo, lastWaitingResource);
-        entityInfoManager.setNextJobResource(entityInfo, -1);
-        lastWaitingResource = waiterObjId;
+        //new_waiter->next = -1
+        lastObj = lockWaiterManager.getLockWaiter(waiterObjId);
+        lastObj.setNextWaiterObjId(-1);
     }
 
     public void removeWaitingResource(int waiterObjId) {
-        int currentId = lastWaitingResource;
+        int currentObjId = firstWaitingResource;
         LockWaiter currentObj;
-        int prevObjId;
-        LockWaiter prevObj;
+        LockWaiter prevObj = null;
+        int prevObjId = -1;
         int nextObjId;
-        LockWaiter nextObj;
-        int currentEntityInfo = 0;
-        int prevEntityInfo = 0;
-        int nextEntityInfo = 0;
 
-        while (currentId != waiterObjId) {
+        while (currentObjId != waiterObjId) {
 
             if (LockManager.IS_DEBUG_MODE) {
-                if (currentId == -1) {
+                if (currentObjId == -1) {
                     //shouldn't occur: debugging purpose
                     try {
                         throw new Exception();
@@ -105,37 +105,23 @@ public class JobInfo {
                 }
             }
 
-            currentObj = lockWaiterManager.getLockWaiter(currentId);
-            currentEntityInfo = currentObj.getEntityInfoSlot();
-            currentId = entityInfoManager.getPrevJobResource(currentEntityInfo);
+            prevObj = lockWaiterManager.getLockWaiter(currentObjId);
+            prevObjId = currentObjId;
+            currentObjId = prevObj.getNextWaiterObjId();
         }
 
-        currentObj = lockWaiterManager.getLockWaiter(currentId);
-        currentEntityInfo = currentObj.getEntityInfoSlot();
-        
-        //getPrevJobResource through waiterObj
-        prevObjId = entityInfoManager.getPrevJobResource(currentEntityInfo);
+        //get current waiter object
+        currentObj = lockWaiterManager.getLockWaiter(currentObjId);
+
+        //get next waiterObjId
+        nextObjId = currentObj.getNextWaiterObjId();
+
         if (prevObjId != -1) {
-            prevObj = lockWaiterManager.getLockWaiter(prevObjId);
-            prevEntityInfo = prevObj.getEntityInfoSlot();
-        }
-        
-        //getNextJobResource through waiterObj
-        nextObjId = entityInfoManager.getNextJobResource(currentEntityInfo);
-        if (nextObjId != -1) {
-            nextObj = lockWaiterManager.getLockWaiter(nextObjId);
-            nextEntityInfo = nextObj.getEntityInfoSlot();
-        }
-        
-        //update prev->next = next
-        if (prevObjId != -1) {
-            entityInfoManager.setNextJobResource(prevEntityInfo, nextObjId);
-        }
-        if (nextObjId != -1) {
-            entityInfoManager.setPrevJobResource(nextEntityInfo, prevObjId);
-        }
-        if (lastWaitingResource == waiterObjId) {
-            lastWaitingResource = prevObjId;
+            //prev->next = next
+            prevObj.setNextWaiterObjId(nextObjId);
+        } else {
+            //removed first waiter. firstWaiter = current->next
+            firstWaitingResource = nextObjId;
         }
     }
 
@@ -150,12 +136,12 @@ public class JobInfo {
         return lastHoldingResource;
     }
 
-    public void setLastWaitingResource(int resource) {
-        lastWaitingResource = resource;
+    public void setFirstWaitingResource(int resource) {
+        firstWaitingResource = resource;
     }
 
-    public int getLastWaitingResource() {
-        return lastWaitingResource;
+    public int getFirstWaitingResource() {
+        return firstWaitingResource;
     }
 
     public void setUpgradingResource(int resource) {

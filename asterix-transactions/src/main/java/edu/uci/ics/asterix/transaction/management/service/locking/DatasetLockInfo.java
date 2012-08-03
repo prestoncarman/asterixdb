@@ -180,7 +180,7 @@ public class DatasetLockInfo {
             if (jobId == entityInfoManager.getJobId(entityInfo) && hashVal == entityInfoManager.getPKHashVal(entityInfo)) {
                 return waiterObjId;
             }
-            waiterObjId = entityInfoManager.getPrevEntityActor(entityInfo);
+            waiterObjId = waiterObj.getNextWaiterObjId();
         }
         
         return -1;
@@ -198,7 +198,7 @@ public class DatasetLockInfo {
             if (jobId == entityInfoManager.getJobId(entityInfo) && hashVal == entityInfoManager.getPKHashVal(entityInfo)) {
                 return waiterObjId;
             }
-            waiterObjId = entityInfoManager.getPrevEntityActor(entityInfo);
+            waiterObjId = waiterObj.getNextWaiterObjId();
         }
         
         return -1;
@@ -276,35 +276,31 @@ public class DatasetLockInfo {
      * @param waiterObjId
      */
     public void addWaiter(int waiterObjId) {
-        int lastEntityInfo = 0;
         int lastObjId;
-        LockWaiter lastObj;
+        LockWaiter lastObj = null;
 
         if (firstWaiter != -1) {
             //find the lastWaiter
             lastObjId = firstWaiter;
             while (lastObjId != -1) {
                 lastObj = lockWaiterManager.getLockWaiter(lastObjId);
-                lastEntityInfo = lastObj.getEntityInfoSlot();
-                lastObjId = entityInfoManager.getNextEntityActor(lastEntityInfo);
+                lastObjId = lastObj.getNextWaiterObjId();
             }
             //last->next = new_waiter
-            entityInfoManager.setNextEntityActor(lastEntityInfo, waiterObjId);
+            lastObj.setNextWaiterObjId(waiterObjId);
         } else {
             firstWaiter = waiterObjId;
         }
         //new_waiter->next = -1
         lastObj = lockWaiterManager.getLockWaiter(waiterObjId);
-        lastEntityInfo = lastObj.getEntityInfoSlot();
-        entityInfoManager.setNextEntityActor(lastEntityInfo, -1);
+        lastObj.setNextWaiterObjId(-1);
     }
 
     public void removeWaiter(int waiterObjId) {
         int currentObjId = firstWaiter;
         LockWaiter currentObj;
-        int currentEntityInfo = -1;
-        LockWaiter prevObj;
-        int prevEntityInfo = -1;
+        LockWaiter prevObj = null;
+        int prevObjId = -1;
         int nextObjId;
 
         while (currentObjId != waiterObjId) {
@@ -322,20 +318,19 @@ public class DatasetLockInfo {
             }
 
             prevObj = lockWaiterManager.getLockWaiter(currentObjId);
-            prevEntityInfo = prevObj.getEntityInfoSlot();
-            currentObjId = entityInfoManager.getNextEntityActor(prevEntityInfo);
+            prevObjId = currentObjId;
+            currentObjId = prevObj.getNextWaiterObjId();
         }
 
         //get current waiter object
         currentObj = lockWaiterManager.getLockWaiter(currentObjId);
-        currentEntityInfo = currentObj.getEntityInfoSlot();
 
         //get next waiterObjId
-        nextObjId = entityInfoManager.getNextEntityActor(currentEntityInfo);
+        nextObjId = currentObj.getNextWaiterObjId();
 
-        if (prevEntityInfo != -1) {
+        if (prevObjId != -1) {
             //prev->next = next
-            entityInfoManager.setNextEntityActor(prevEntityInfo, nextObjId);
+            prevObj.setNextWaiterObjId(nextObjId);
         } else {
             //removed first waiter. firstWaiter = current->next
             firstWaiter = nextObjId;
@@ -343,35 +338,31 @@ public class DatasetLockInfo {
     }
 
     public void addUpgrader(int waiterObjId) {
-        int lastEntityInfo = 0;
         int lastObjId;
-        LockWaiter lastObj;
+        LockWaiter lastObj = null;
 
-        if (firstWaiter != -1) {
+        if (firstUpgrader != -1) {
             //find the lastWaiter
-            lastObjId = firstWaiter;
+            lastObjId = firstUpgrader;
             while (lastObjId != -1) {
                 lastObj = lockWaiterManager.getLockWaiter(lastObjId);
-                lastEntityInfo = lastObj.getEntityInfoSlot();
-                lastObjId = entityInfoManager.getNextEntityActor(lastEntityInfo);
+                lastObjId = lastObj.getNextWaiterObjId();
             }
             //last->next = new_waiter
-            entityInfoManager.setNextEntityActor(lastEntityInfo, waiterObjId);
+            lastObj.setNextWaiterObjId(waiterObjId);
         } else {
-            firstWaiter = waiterObjId;
+            firstUpgrader = waiterObjId;
         }
         //new_waiter->next = -1
         lastObj = lockWaiterManager.getLockWaiter(waiterObjId);
-        lastEntityInfo = lastObj.getEntityInfoSlot();
-        entityInfoManager.setNextEntityActor(lastEntityInfo, -1);
+        lastObj.setNextWaiterObjId(-1);
     }
 
     public void removeUpgrader(int waiterObjId) {
-        int currentObjId = firstWaiter;
+        int currentObjId = firstUpgrader;
         LockWaiter currentObj;
-        int currentEntityInfo = -1;
-        LockWaiter prevObj;
-        int prevEntityInfo = -1;
+        LockWaiter prevObj = null;
+        int prevObjId = -1;
         int nextObjId;
 
         while (currentObjId != waiterObjId) {
@@ -389,49 +380,22 @@ public class DatasetLockInfo {
             }
 
             prevObj = lockWaiterManager.getLockWaiter(currentObjId);
-            prevEntityInfo = prevObj.getEntityInfoSlot();
-            currentObjId = entityInfoManager.getNextEntityActor(prevEntityInfo);
+            prevObjId = currentObjId;
+            currentObjId = prevObj.getNextWaiterObjId();
         }
 
         //get current waiter object
         currentObj = lockWaiterManager.getLockWaiter(currentObjId);
-        currentEntityInfo = currentObj.getEntityInfoSlot();
 
         //get next waiterObjId
-        nextObjId = entityInfoManager.getNextEntityActor(currentEntityInfo);
+        nextObjId = currentObj.getNextWaiterObjId();
 
-        if (prevEntityInfo != -1) {
+        if (prevObjId != -1) {
             //prev->next = next
-            entityInfoManager.setNextEntityActor(prevEntityInfo, nextObjId);
+            prevObj.setNextWaiterObjId(nextObjId);
         } else {
             //removed first waiter. firstWaiter = current->next
-            firstWaiter = nextObjId;
-        }
-    }
-
-    /**
-     * wake up upgraders first, then waiters.
-     * Criteria to wake up upgraders: if the upgrading lock mode is compatible, then wake up the upgrader.
-     * BTW, how do we know the upgrading lock mode? (we don't keep the upgrading lock mode and waiting lock mode
-     */
-    public void wakeUpWaiters() {
-        boolean areAllUpgradersWakenUp = true;
-        int waiterObjId = firstUpgrader;
-        LockWaiter waiterObj;
-
-        //wake up upgraders
-        while (waiterObjId != -1) {
-            waiterObj = lockWaiterManager.getLockWaiter(waiterObjId);
-            
-
-        }
-        
-        //wake up waiters
-        if (areAllUpgradersWakenUp) {
-            waiterObjId = firstWaiter;
-            while (waiterObjId != -1) {
-                
-            }
+            firstUpgrader = nextObjId;
         }
     }
 

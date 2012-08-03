@@ -25,6 +25,7 @@ public class DeadlockDetector {
     private JobId tempJobIdObj; //temporary object to avoid object creation
     private DatasetId tempDatasetIdObj; //temporary object to avoid object creation
 
+    
     public DeadlockDetector(HashMap<JobId, JobInfo> jobHT, HashMap<DatasetId, DatasetLockInfo> datasetResourceHT,
             EntityLockInfoManager entityLockInfoManager, EntityInfoManager entityInfoManager,
             LockWaiterManager lockWaiterManager) {
@@ -40,7 +41,7 @@ public class DeadlockDetector {
         tempJobIdObj = new JobId(0);
         tempDatasetIdObj = new DatasetId(0);
     }
-
+    
     public boolean isSafeToAdd(DatasetLockInfo dLockInfo, int eLockInfo, int entityInfo, boolean isDatasetLockInfo) {
         int holder;
         int nextHolder;
@@ -183,7 +184,7 @@ public class DeadlockDetector {
         jobInfo = jobHT.get(tempJobIdObj);
         
         //get WaiterObj
-        waiterId = jobInfo.getLastWaitingResource();
+        waiterId = jobInfo.getFirstWaitingResource();
         while (waiterId != -1)
         {
             waiterObj = lockWaiterManager.getLockWaiter(waiterId);
