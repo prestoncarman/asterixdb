@@ -20,6 +20,7 @@ import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
  */
 
 public class LockInfo {
+    
     final int NUM_OF_LOCK_MODES = 32;
     final int TX_ARRAY_SIZE = 50;
     final int EOL = -1;

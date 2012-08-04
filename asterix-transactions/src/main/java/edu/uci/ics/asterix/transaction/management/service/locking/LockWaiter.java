@@ -33,6 +33,7 @@ public class LockWaiter {
     private byte waiterCount;
     private boolean firstGetUp;
     private int nextWaiterObjId; 
+    private long beginWaitTime;
 
     public LockWaiter() {
         this.victim = false;
@@ -61,7 +62,7 @@ public class LockWaiter {
         this.wait = wait;
     }
 
-    public boolean getWait() {
+    public boolean needWait() {
         return this.wait;
     }
 
@@ -69,7 +70,7 @@ public class LockWaiter {
         this.victim = victim;
     }
 
-    public boolean getVictim() {
+    public boolean isVictim() {
         return this.victim;
     }
     
@@ -103,5 +104,13 @@ public class LockWaiter {
     
     public int getNextWaiterObjId() {
         return nextWaiterObjId;
+    }
+    
+    public void setBeginWaitTime(long time) {
+        this.beginWaitTime = time;
+    }
+    
+    public long getBeginWaitTime() {
+        return beginWaitTime;
     }
 }

@@ -37,7 +37,7 @@ public class TransactionContext implements Serializable {
     public static final long INVALID_TIME = -1l; // used for showing a
     // transaction is not waiting.
     public static final int ACTIVE_STATUS = 0;
-    public static final int TIMED_OUT_SATUS = 1;
+    public static final int TIMED_OUT_STATUS = 1;
 
     public enum TransactionType {
         READ,

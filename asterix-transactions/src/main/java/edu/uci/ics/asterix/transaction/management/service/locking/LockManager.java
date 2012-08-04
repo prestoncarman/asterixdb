@@ -17,6 +17,9 @@ package edu.uci.ics.asterix.transaction.management.service.locking;
 
 import java.io.Serializable;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Map.Entry;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.logging.Logger;
@@ -958,7 +961,7 @@ public class LockManager implements ILockManager {
                     //the waiting resource list of JobInfo
                     jobInfo.addWaitingResource(waiterId);
                 }
-                txnContext.setStartWaitTime(System.currentTimeMillis());
+                waiter.setBeginWaitTime(System.currentTimeMillis());
             } else {
                 waiterId = duplicatedWaiterObjId;
                 waiter = lockWaiterManager.getLockWaiter(waiterId);
@@ -987,7 +990,7 @@ public class LockManager implements ILockManager {
             unlatchLockTable();
             synchronized (waiter) {
                 unlatchWaitNotify();
-                while (waiter.getWait()) {
+                while (waiter.needWait()) {
                     try {
                         waiter.wait();
                     } catch (InterruptedException e) {
@@ -998,8 +1001,8 @@ public class LockManager implements ILockManager {
 
             //waiter woke up -> remove/deallocate waiter object and abort if timeout
             latchLockTable();
-
-            if (txnContext.getStatus() == TransactionContext.TIMED_OUT_SATUS) {
+            
+            if (txnContext.getStatus() == TransactionContext.TIMED_OUT_STATUS || waiter.isVictim()) {
                 try {
                     requestAbort(txnContext);
                 } finally {
@@ -1059,7 +1062,7 @@ public class LockManager implements ILockManager {
     }
 
     private void requestAbort(TransactionContext txnContext) throws ACIDException {
-        txnContext.setStatus(TransactionContext.TIMED_OUT_SATUS);
+        txnContext.setStatus(TransactionContext.TIMED_OUT_STATUS);
         txnContext.setStartWaitTime(TransactionContext.INVALID_TIME);
         throw new ACIDException("Transaction " + txnContext.getJobId()
                 + " should abort (requested by the Lock Manager)");
@@ -1186,25 +1189,26 @@ public class LockManager implements ILockManager {
     }
 
     public void sweepForTimeout() throws ACIDException {
-        /*    synchronized (lmTables) {
-                Iterator<Long> txrIt = lmTables.getIteratorOnTxrs();
-                while (txrIt.hasNext()) {
-                    long nextTxrID = txrIt.next();
-                    TxrInfo nextTxrInfo = lmTables.getTxrInfo(nextTxrID);
-                    if (toutDetector.isVictim(nextTxrInfo)) {
-                        nextTxrInfo.getContext().setStatus(TransactionContext.TIMED_OUT_SATUS);
-                        LockInfo nextLockInfo = lmTables.getLockInfo(nextTxrInfo.getWaitOnRid());
-                        synchronized (nextLockInfo) {
-                            WaitingInfo nextVictim = nextLockInfo.getWaitingOnObject(nextTxrID, LockInfo.ANY_LOCK_MODE);
-                            nextVictim.setAsVictim();
-                            toutDetector.addToVictimsList(nextVictim.getWaitingEntry());
-                        }
-                    }
-                }
+        JobInfo jobInfo;
+        int waiterObjId;
+        LockWaiter waiterObj;
+        
+        latchLockTable();
+        
+        Iterator<Entry<JobId, JobInfo>> iter = jobHT.entrySet().iterator();
+        while(iter.hasNext()) {
+            Map.Entry<JobId, JobInfo> pair = (Map.Entry<JobId, JobInfo>)iter.next();
+            jobInfo = pair.getValue();
+            waiterObjId = jobInfo.getFirstWaitingResource();
+            while(waiterObjId != -1) {
+                waiterObj = lockWaiterManager.getLockWaiter(waiterObjId);
+                toutDetector.checkAndSetVictim(waiterObj);
+                waiterObjId = waiterObj.getNextWaiterObjId();
             }
-                */
+        }
+        
+        unlatchLockTable();
     }
-
 }
 
 /******************************************

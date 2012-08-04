@@ -281,8 +281,8 @@ public class LockWaiterManager {
                 waiter = child.getLockWaiter(j);
                 s.append(j).append(": ");
                 s.append("\t" + waiter.getEntityInfoSlot());
-                s.append("\t" + waiter.getWait());
-                s.append("\t" + waiter.getVictim());
+                s.append("\t" + waiter.needWait());
+                s.append("\t" + waiter.isVictim());
                 s.append("\n");
             }
             s.append("\n");
@@ -332,6 +332,7 @@ class ChildLockWaiterArrayManager {
         childArray[currentSlot].setVictim(false);
         childArray[currentSlot].setWaiterCount((byte)0);
         childArray[currentSlot].setNextWaiterObjId(-1);
+        childArray[currentSlot].setBeginWaitTime(-1l);
         occupiedSlots++;
         return currentSlot;
     }
