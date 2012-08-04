@@ -39,6 +39,7 @@ import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyAggregateFunctionFactory
 import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluator;
 import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluatorFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
+import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 import edu.uci.ics.hyracks.data.std.api.IDataOutputProvider;
 import edu.uci.ics.hyracks.data.std.util.ArrayBackedValueStorage;
 import edu.uci.ics.hyracks.data.std.util.ByteArrayAccessibleOutputStream;
@@ -168,6 +169,11 @@ public class AvgAggregateDescriptor extends AbstractAggregateFunctionDynamicDesc
                     public void finish() throws AlgebricksException {
                         if (count == 0) {
                             GlobalConfig.ASTERIX_LOGGER.fine("AVG aggregate ran over empty input.");
+                            try {
+								nullSerde.serialize(ANull.NULL, out);
+							} catch (HyracksDataException e) {
+								throw new AlgebricksException(e);
+							}
                         } else {
                             try {
                                 if (metNull)
