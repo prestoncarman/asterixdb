@@ -68,23 +68,6 @@ public interface ILockManager {
     public void unlock(DatasetId datasetId, int entityHashValue, TransactionContext txnContext) throws ACIDException;
 
     /**
-     * Request to convert granted lockMode of a transaction on a specific
-     * resource. Requesting transaction would either grab the lock, or sent to
-     * waiting based on the type of the request, and current mask on the
-     * resource and possible set of waiting converters
-     * - If the transaction does not have any lock on the resource, then an
-     * exception is thrown - If the transaction already has a stronger lock,
-     * then no operation is taken
-     * 
-     * @param context
-     * @param resourceID
-     * @param mode
-     * @return
-     * @throws ACIDException
-     */
-    //public boolean convertLock(TransactorContext context, byte[] resourceID, int mode) throws ACIDException;
-
-    /**
      * Call to lock and unlock a specific resource in a specific lock mode
      * @param datasetId
      * @param entityHashValue
@@ -109,11 +92,24 @@ public interface ILockManager {
     public boolean tryLock(DatasetId datasetId, int entityHashValue, byte lockMode, TransactionContext context) throws ACIDException;
     
     /**
+     * 
+     * @param datasetId
+     * @param entityHashValue
+     * @param lockMode
+     * @param txnContext
+     * @return
+     * @throws ACIDException
+     */
+    boolean instantTryLock(DatasetId datasetId, int entityHashValue, byte lockMode, TransactionContext txnContext)
+            throws ACIDException;
+    /**
      * Prints out the contents of the transactions' table in a readable fashion
      * 
      * @return
      * @throws ACIDException
      */
     public String prettyPrint() throws ACIDException;
+
+
 
 }

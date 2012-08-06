@@ -46,7 +46,7 @@ public class TransactionContext implements Serializable {
 
     private static final long serialVersionUID = -6105616785783310111L;
     private TransactionProvider transactionProvider;
-    private int transactionId;
+    private long transactionId; //TODO remove this and replace with jobId
     private LogicalLogLocator lastLogLocator;
     private TransactionState txnState;
     private long startWaitTime;
@@ -67,11 +67,11 @@ public class TransactionContext implements Serializable {
         resources.add(resource);
     }
 
-    public TransactionContext(int transactionId, TransactionProvider transactionProvider) throws ACIDException {
+    public TransactionContext(long transactionId, TransactionProvider transactionProvider) throws ACIDException {
         this.transactionId = transactionId;
         this.transactionProvider = transactionProvider;
         init();
-        jobId = new JobId(transactionId); //TODO temporary code. will be removed by getting JobId as input param instead of transactionId
+        jobId = new JobId((int)transactionId); //TODO temporary code. will be removed by getting JobId as input param instead of transactionId
     }
     
     public JobId getJobId() {
@@ -93,7 +93,7 @@ public class TransactionContext implements Serializable {
         this.lastLogLocator = lastLogLocator;
     }
 
-    public int getTransactionId() {
+    public long getTransactionId() {
         return transactionId;
     }
 
