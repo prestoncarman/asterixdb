@@ -5,7 +5,7 @@ import java.util.Map;
 import edu.uci.ics.asterix.external.dataset.adapter.CNNFeedAdapter;
 import edu.uci.ics.asterix.external.dataset.adapter.IDatasourceAdapter;
 
-public class CNNFeedAdapterFactory implements ITypedDatasourceAdapterFactory {
+public class CNNFeedAdapterFactory implements ITypedFeedDatasetAdapterFactory {
 
     @Override
     public IDatasourceAdapter createAdapter(Map<String, String> configuration) throws Exception {
@@ -15,8 +15,18 @@ public class CNNFeedAdapterFactory implements ITypedDatasourceAdapterFactory {
     }
 
     @Override
+    public String getName() {
+        return "cnn_feed";
+    }
+
+    @Override
+    public FeedAdapterType getFeedAdapterType() {
+        return FeedAdapterType.TYPED;
+    }
+
+    @Override
     public AdapterType getAdapterType() {
-        return AdapterType.TYPED;
+        return AdapterType.FEED;
     }
 
 }

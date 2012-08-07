@@ -27,8 +27,8 @@ import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
 import edu.uci.ics.asterix.common.config.DatasetConfig.IndexType;
 import edu.uci.ics.asterix.common.context.AsterixAppRuntimeContext;
 import edu.uci.ics.asterix.common.functions.FunctionConstants;
+import edu.uci.ics.asterix.external.adapter.factory.IAdapterFactory;
 import edu.uci.ics.asterix.external.dataset.adapter.AdapterIdentifier;
-import edu.uci.ics.asterix.common.context.AsterixAppRuntimeContext;
 import edu.uci.ics.asterix.metadata.IDatasetDetails;
 import edu.uci.ics.asterix.metadata.MetadataManager;
 import edu.uci.ics.asterix.metadata.MetadataTransactionContext;
@@ -311,27 +311,25 @@ public class MetadataBootstrap {
     }
 
     private static void insertInitialAdapters(MetadataTransactionContext mdTxnCtx) throws Exception {
-        Adapter localFileSystemAdapter = new Adapter(new AdapterIdentifier(FunctionConstants.ASTERIX_NS, "localfs"),
-                "edu.uci.ics.asterix.external.adapter.factory.NCFileSystemAdapterFactory", Adapter.AdapterType.INTERNAL);
+        String[] builtInAdapterClassNames = new String[] {
+                "edu.uci.ics.asterix.external.adapter.factory.NCFileSystemAdapterFactory",
+                "edu.uci.ics.asterix.external.adapter.factory.HDFSAdapterFactory",
+                "edu.uci.ics.asterix.external.adapter.factory.PullBasedTwitterAdapterFactory",
+                "edu.uci.ics.asterix.external.adapter.factory.RSSFeedAdapterFactory",
+                "edu.uci.ics.asterix.external.adapter.factory.CNNFeedAdapterFactory",
+                "edu.uci.ics.asterix.tools.external.data.adapter.RateControlledFileSystemBasedAdapterFactory" };
+        Adapter adapter;
+        for (String adapterClassName : builtInAdapterClassNames) {
+            adapter = getAdapter(adapterClassName);
+            MetadataManager.INSTANCE.addAdapter(mdTxnCtx, adapter);
+        }
+    }
 
-        Adapter HDFSAdapter = new Adapter(new AdapterIdentifier(FunctionConstants.ASTERIX_NS, "hdfs"),
-                "edu.uci.ics.asterix.external.adapter.factory.HDFSAdapterFactory", Adapter.AdapterType.INTERNAL);
-
-        Adapter PullBasedTwitterFeedAdapter = new Adapter(new AdapterIdentifier(FunctionConstants.ASTERIX_NS,
-                "pullTwitter"), "edu.uci.ics.asterix.external.adapter.factory.PullBasedTwitterAdapterFactory",
+    private static Adapter getAdapter(String adapterFactoryClassName) throws Exception {
+        String adapterName = ((IAdapterFactory) (Class.forName(adapterFactoryClassName).newInstance()))
+                .getName();
+        return new Adapter(new AdapterIdentifier(FunctionConstants.ASTERIX_NS, adapterName), adapterFactoryClassName,
                 Adapter.AdapterType.INTERNAL);
-
-        Adapter RSSFeedAdapter = new Adapter(new AdapterIdentifier(FunctionConstants.ASTERIX_NS, "rssFeed"),
-                "edu.uci.ics.asterix.external.adapter.factory.RSSFeedAdapterFactory", Adapter.AdapterType.INTERNAL);
-
-        Adapter CNNFeedAdapter = new Adapter(new AdapterIdentifier(FunctionConstants.ASTERIX_NS, "cnnFeed"),
-                "edu.uci.ics.asterix.external.adapter.factory.CNNFeedAdapterFactory", Adapter.AdapterType.INTERNAL);
-
-        MetadataManager.INSTANCE.addAdapter(mdTxnCtx, localFileSystemAdapter);
-        MetadataManager.INSTANCE.addAdapter(mdTxnCtx, HDFSAdapter);
-        MetadataManager.INSTANCE.addAdapter(mdTxnCtx, PullBasedTwitterFeedAdapter);
-        MetadataManager.INSTANCE.addAdapter(mdTxnCtx, RSSFeedAdapter);
-        MetadataManager.INSTANCE.addAdapter(mdTxnCtx, CNNFeedAdapter);
     }
 
     public static void createIndex(IMetadataIndex dataset) throws Exception {

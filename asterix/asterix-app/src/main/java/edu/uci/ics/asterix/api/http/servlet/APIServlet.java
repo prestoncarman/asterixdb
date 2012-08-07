@@ -110,8 +110,9 @@ public class APIServlet extends HttpServlet {
                 out.println("==> " + line);
             }
         } catch (Exception e) {
+            e.printStackTrace();
             out.println(e.getMessage());
-       }
+        }
     }
 
     @Override

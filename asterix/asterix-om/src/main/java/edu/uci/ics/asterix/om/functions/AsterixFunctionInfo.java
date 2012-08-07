@@ -14,46 +14,72 @@
  */
 package edu.uci.ics.asterix.om.functions;
 
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.Serializable;
+
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.IFunctionInfo;
 
-public class AsterixFunctionInfo implements IFunctionInfo {
+public class AsterixFunctionInfo implements IFunctionInfo, Serializable {
 
-	private final FunctionIdentifier functionIdentifier;
+    private FunctionIdentifier functionIdentifier;
 
-	public AsterixFunctionInfo(String namespace, AsterixFunction asterixFunction) {
-		this.functionIdentifier = new FunctionIdentifier(namespace,
-				asterixFunction.getFunctionName(), asterixFunction.getArity());
-	}
+    public AsterixFunctionInfo() {
+        functionIdentifier = null;
+    }
 
-	public AsterixFunctionInfo(FunctionIdentifier functionIdentifier) {
-		this.functionIdentifier = functionIdentifier;
-	}
+    public AsterixFunctionInfo(String namespace, AsterixFunction asterixFunction) {
+        this.functionIdentifier = new FunctionIdentifier(namespace, asterixFunction.getFunctionName(),
+                asterixFunction.getArity());
+    }
 
-	@Override
-	public FunctionIdentifier getFunctionIdentifier() {
-		return functionIdentifier;
-	}
+    public AsterixFunctionInfo(FunctionIdentifier functionIdentifier) {
+        this.functionIdentifier = functionIdentifier;
+    }
 
-	@Override
-	public int hashCode() {
-		return toString().hashCode();
-	}
+    @Override
+    public FunctionIdentifier getFunctionIdentifier() {
+        return functionIdentifier;
+    }
 
-	@Override
-	public boolean equals(Object o) {
-		if (!(o instanceof AsterixFunctionInfo)) {
-			return false;
-		}
-		AsterixFunctionInfo info = (AsterixFunctionInfo) o;
-		return functionIdentifier.equals(info.getFunctionIdentifier());
-	}
+    @Override
+    public int hashCode() {
+        return toString().hashCode();
+    }
 
-	@Override
-	public String toString() {
-		return this.functionIdentifier.getNamespace() + ":"
-				+ this.functionIdentifier.getName() + "@"
-				+ this.functionIdentifier.getArity();
-	}
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof AsterixFunctionInfo)) {
+            return false;
+        }
+        AsterixFunctionInfo info = (AsterixFunctionInfo) o;
+        return functionIdentifier.equals(info.getFunctionIdentifier());
+    }
+
+    @Override
+    public String toString() {
+        return this.functionIdentifier.getNamespace() + ":" + this.functionIdentifier.getName() + "@"
+                + this.functionIdentifier.getArity();
+    }
+
+    /*
+    private void writeObject(ObjectOutputStream os) {
+        try {
+            os.defaultWriteObject();
+            os.writeObject(functionIdentifier);
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+    }
+
+    private void readObject(ObjectInputStream is) {
+        try {
+            is.defaultReadObject();
+            functionIdentifier = (FunctionIdentifier) is.readObject();
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+    }*/
 
 }

@@ -664,30 +664,30 @@ DatasetDecl DatasetDeclaration(DatasetType datasetType) throws ParseException :
 InternalDetailsDecl InternalDatasetDeclaration() throws ParseException :
 {
     InternalDetailsDecl idd = null;
+    List<String> partitionExprs = new ArrayList<String>();
+    String nodegroupName=null;
 }
 {
-  {
-    idd = new InternalDetailsDecl();
-  }
   "partitioned" "by" "key"
   < IDENTIFIER >
   {
-    	 idd.addPartitioningExpr(token.image);
+    	 partitionExprs.add(token.image);
   }
   (
     "," < IDENTIFIER >
     {
-      	idd.addPartitioningExpr(token.image);
+      	partitionExprs.add(token.image);
     }
   )*
   (
   "on" < IDENTIFIER >
     {
-    	idd.setNodegroupName(new Identifier(token.image));
+    	nodegroupName = token.image;
     }
   )?
   ";"
   {
+    idd = new InternalDetailsDecl(nodegroupName, partitionExprs);
     return idd;
   }
 }
@@ -728,14 +728,14 @@ ExternalDetailsDecl ExternalDatasetDeclaration() throws ParseException :
 
 FeedDetailsDecl FeedDatasetDeclaration() throws ParseException :
 {
-    FeedDetailsDecl fdd = null;
     String adapterClassname = null;
     Map < String, String > properties;
+    String funcName = null;
+    int arity=0;
+    List<String> partitioningKeys = new ArrayList<String>();
+    String nodegroupName = null;
 }
 {
-  {
-    fdd = new FeedDetailsDecl();
-  }
   
    "using"
    
@@ -751,31 +751,42 @@ FeedDetailsDecl FeedDatasetDeclaration() throws ParseException :
   ("apply" "function" 
   < IDENTIFIER >
   {
-      fdd.setFunctionIdentifier(token.image);
+       funcName = getToken(0).toString();
   }
+  ("." <IDENTIFIER>
+       {
+        funcName = funcName + "." + getToken(0).toString();
+       }
+  )?     
+  "@"
+   <INTEGER_LITERAL> 
+   {
+   
+    Token t= getToken(0);
+	arity= (new Integer(t.image)).intValue();
+   }    
   )?
   
   "partitioned" "by" "key"
   < IDENTIFIER >
   {
-    	 fdd.addPartitioningExpr(token.image);
+    	 partitioningKeys.add(token.image);
   }
   (
     "," < IDENTIFIER >
     {
-      	fdd.addPartitioningExpr(token.image);
+      	partitioningKeys.add(token.image);
     }
   )*
   (
   "on" < IDENTIFIER >
   {
-    	fdd.setNodegroupName(new Identifier(token.image));
+    	nodegroupName = token.image;
   }
   )?
   ";"
   {
-    fdd.setAdapterClassname(adapterClassname);
-    fdd.setProperties(properties);
+    FeedDetailsDecl fdd = new FeedDetailsDecl(adapterClassname, properties, new AsterixFunction(funcName, arity), partitioningKeys, nodegroupName);
     return fdd;
   }
 }

@@ -6,7 +6,7 @@ import edu.uci.ics.asterix.external.dataset.adapter.HiveAdapter;
 import edu.uci.ics.asterix.external.dataset.adapter.IDatasourceAdapter;
 import edu.uci.ics.asterix.om.types.IAType;
 
-public class HiveAdapterFactory implements IGenericDatasourceAdapterFactory {
+public class HiveAdapterFactory implements IExternalDatasetAdapterFactory {
 
     @Override
     public IDatasourceAdapter createAdapter(Map<String, String> configuration, IAType type) throws Exception {
@@ -16,6 +16,11 @@ public class HiveAdapterFactory implements IGenericDatasourceAdapterFactory {
 
     @Override
     public AdapterType getAdapterType() {
-        return AdapterType.GENERIC;
+        return AdapterType.EXTERNAL_DATASET;
+    }
+
+    @Override
+    public String getName() {
+        return "hive";
     }
 }

@@ -90,4 +90,15 @@ public class Function implements IMetadataEntity {
         return cache.dropFunction(this);
     }
 
+    @Override
+    public String toString() {
+        StringBuilder builder = new StringBuilder();
+        builder.append(dataverseName + "." + functionName + "@" + arity);
+        builder.append("\n");
+        builder.append("return type:" + returnType);
+        builder.append("\n");
+        builder.append("body" + functionBody);
+        return builder.toString();
+    }
+
 }

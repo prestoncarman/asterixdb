@@ -44,6 +44,7 @@ import edu.uci.ics.asterix.om.base.AOrderedList;
 import edu.uci.ics.asterix.om.base.ARecord;
 import edu.uci.ics.asterix.om.base.AString;
 import edu.uci.ics.asterix.om.base.IACursor;
+import edu.uci.ics.asterix.om.functions.AsterixFunction;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 import edu.uci.ics.hyracks.data.std.util.ArrayBackedValueStorage;
@@ -143,12 +144,16 @@ public class DatasetTupleTranslator extends AbstractTupleTranslator<Dataset> {
                             .getValueByPos(MetadataRecordTypes.FEED_DETAILS_ARECORD_FUNCTION_FIELD_INDEX))
                             .getStringValue();
 
+                    String[] fidComponents = functionIdentifier.split("@");
+                    AsterixFunction asterixFunction = new AsterixFunction(fidComponents[0],
+                            Integer.parseInt(fidComponents[1]));
+
                     String feedState = ((AString) datasetDetailsRecord
                             .getValueByPos(MetadataRecordTypes.FEED_DETAILS_ARECORD_STATE_FIELD_INDEX))
                             .getStringValue();
 
                     datasetDetails = new FeedDatasetDetails(fileStructure, partitioningStrategy, partitioningKey,
-                            partitioningKey, groupName, adapter, properties, functionIdentifier, feedState);
+                            partitioningKey, groupName, adapter, properties, asterixFunction, feedState);
                 }
                 break;
             }

@@ -16,8 +16,7 @@ package edu.uci.ics.asterix.external.data.operator;
 
 import java.util.Map;
 
-import edu.uci.ics.asterix.external.adapter.factory.IDatasourceAdapterFactory;
-import edu.uci.ics.asterix.external.adapter.factory.IGenericDatasourceAdapterFactory;
+import edu.uci.ics.asterix.external.adapter.factory.IExternalDatasetAdapterFactory;
 import edu.uci.ics.asterix.external.dataset.adapter.IDatasourceAdapter;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.hyracks.api.application.ICCApplicationContext;
@@ -37,7 +36,7 @@ public class ExternalDataScanOperatorDescriptor extends AbstractSingleActivityOp
     private final String adapterFactory;
     private final Map<String, String> adapterConfiguration;
     private final IAType atype;
-    private IDatasourceAdapterFactory datasourceAdapterFactory;
+    private IExternalDatasetAdapterFactory datasourceAdapterFactory;
 
     public ExternalDataScanOperatorDescriptor(JobSpecification spec, String adapter, Map<String, String> arguments,
             IAType atype, RecordDescriptor rDesc) {
@@ -84,7 +83,7 @@ public class ExternalDataScanOperatorDescriptor extends AbstractSingleActivityOp
             IRecordDescriptorProvider recordDescProvider, final int partition, int nPartitions)
             throws HyracksDataException {
         try {
-            datasourceAdapterFactory = (IDatasourceAdapterFactory) Class.forName(adapterFactory).newInstance();
+            datasourceAdapterFactory = (IExternalDatasetAdapterFactory) Class.forName(adapterFactory).newInstance();
         } catch (Exception e) {
             throw new HyracksDataException("initialization of adapter failed", e);
         }
@@ -94,10 +93,8 @@ public class ExternalDataScanOperatorDescriptor extends AbstractSingleActivityOp
                 writer.open();
                 IDatasourceAdapter adapter = null;
                 try {
-                    if (datasourceAdapterFactory.getAdapterType().equals(IDatasourceAdapterFactory.AdapterType.GENERIC)) {
-                        adapter = ((IGenericDatasourceAdapterFactory) datasourceAdapterFactory).createAdapter(
-                                adapterConfiguration, atype);
-                    }
+                    adapter = ((IExternalDatasetAdapterFactory) datasourceAdapterFactory).createAdapter(
+                            adapterConfiguration, atype);
                     adapter.initialize(ctx);
                     adapter.start(partition, writer);
                 } catch (Exception e) {

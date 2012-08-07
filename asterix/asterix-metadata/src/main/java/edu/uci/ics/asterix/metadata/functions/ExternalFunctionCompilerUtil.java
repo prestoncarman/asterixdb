@@ -47,7 +47,7 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.IFunctionInfo;
 import edu.uci.ics.hyracks.algebricks.core.algebra.metadata.IMetadataProvider;
 
-public class ExternalFunctionCompilerUtil implements Serializable{
+public class ExternalFunctionCompilerUtil implements Serializable {
 
     private static Map<String, IResultTypeComputer> resultTypeComputers = new HashMap<String, IResultTypeComputer>();
 
@@ -70,7 +70,7 @@ public class ExternalFunctionCompilerUtil implements Serializable{
         IFunctionInfo finfo = null;
         if (FunctionKind.SCALAR.toString().equalsIgnoreCase(functionKind)) {
             finfo = getScalarFunctionInfo(txnCtx, function);
-        } else if (FunctionKind.SCALAR.toString().equalsIgnoreCase(functionKind)) {
+        } else if (FunctionKind.AGGREGATE.toString().equalsIgnoreCase(functionKind)) {
             finfo = getAggregateFunctionInfo(txnCtx, function);
         } else if (FunctionKind.STATEFUL.toString().equalsIgnoreCase(functionKind)) {
             finfo = getStatefulFunctionInfo(txnCtx, function);
@@ -117,6 +117,9 @@ public class ExternalFunctionCompilerUtil implements Serializable{
             } else {
                 Datatype datatype;
                 datatype = MetadataManager.INSTANCE.getDatatype(txnCtx, function.getDataverseName(), paramType);
+                if (datatype == null) {
+                    throw new MetadataException(" Type " + paramType + " not defined");
+                }
                 return (datatype.getDatatype());
             }
         }
@@ -174,31 +177,34 @@ public class ExternalFunctionCompilerUtil implements Serializable{
 
                 };
             default:
-                IResultTypeComputer typeComputer = new IResultTypeComputer() {
+               IResultTypeComputer typeComputer = new IResultTypeComputer() {
                     @Override
                     public IAType computeType(ILogicalExpression expression, IVariableTypeEnvironment env,
                             IMetadataProvider<?, ?> mp) throws AlgebricksException {
-                        IAType collectionType = null;
-                        try {
-                            collectionType = getCollectionType(function.getReturnType(), txnCtx, function);
-                            if (collectionType != null) {
-                                return collectionType;
-                            }
-                        } catch (Exception e) {
-
-                        }
-                        Datatype datatype;
-                        try {
-                            datatype = MetadataManager.INSTANCE.getDatatype(txnCtx, function.getDataverseName(),
-                                    function.getReturnType());
-                        } catch (MetadataException me) {
-                            throw new AlgebricksException(me);
-                        }
-                        return datatype.getDatatype();
+                        return type;
                     }
                 };
+                return typeComputer;
         }
-        return null;
+
+    }
+
+    private static IAType getType(Function function, MetadataTransactionContext txnCtx) throws AlgebricksException {
+        IAType collectionType = null;
+        try {
+            collectionType = getCollectionType(function.getReturnType(), txnCtx, function);
+            if (collectionType != null) {
+                return collectionType;
+            } else {
+
+                Datatype datatype;
+                datatype = MetadataManager.INSTANCE.getDatatype(txnCtx, function.getDataverseName(),
+                        function.getReturnType());
+                return datatype.getDatatype();
+            }
+        } catch (MetadataException me) {
+            throw new AlgebricksException(me);
+        }
     }
 
     private static IFunctionInfo getUnnestFunctionInfo(MetadataTransactionContext txnCtx, Function function) {

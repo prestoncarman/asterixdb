@@ -1,12 +1,13 @@
 package edu.uci.ics.asterix.external.adapter.factory;
 
-public interface IDatasourceAdapterFactory {
-    
+public interface IAdapterFactory {
+
     public enum AdapterType {
-        TYPED,
-        GENERIC
+        EXTERNAL_DATASET,
+        FEED
     }
-    
+
     public AdapterType getAdapterType();
-    
+
+    public String getName();
 }

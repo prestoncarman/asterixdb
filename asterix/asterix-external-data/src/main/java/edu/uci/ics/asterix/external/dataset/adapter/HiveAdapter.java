@@ -41,11 +41,6 @@ public class HiveAdapter extends AbstractDatasourceAdapter {
     }
 
     @Override
-    public AdapterDataFlowType getAdapterDataFlowType() {
-        return AdapterDataFlowType.PULL;
-    }
-
-    @Override
     public void configure(Map<String, String> arguments) throws Exception {
         configuration = arguments;
         configureHadoopAdapter();

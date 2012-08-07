@@ -38,7 +38,6 @@ public class CreateFunctionStatement implements Statement {
 
     public CreateFunctionStatement(AsterixFunction AsterixFunction, List<VarIdentifier> parameterList, String functionBody,
             boolean ifNotExists) {
-        
         this.asterixFunction = AsterixFunction;
         this.functionBody = functionBody;
         this.ifNotExists = ifNotExists;

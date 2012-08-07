@@ -4,8 +4,9 @@ import java.util.Map;
 
 import edu.uci.ics.asterix.external.dataset.adapter.IDatasourceAdapter;
 import edu.uci.ics.asterix.external.dataset.adapter.PullBasedTwitterAdapter;
+import edu.uci.ics.asterix.om.types.IAType;
 
-public class PullBasedTwitterAdapterFactory implements ITypedDatasourceAdapterFactory {
+public class PullBasedTwitterAdapterFactory implements ITypedFeedDatasetAdapterFactory {
 
     @Override
     public IDatasourceAdapter createAdapter(Map<String, String> configuration) throws Exception {
@@ -16,6 +17,17 @@ public class PullBasedTwitterAdapterFactory implements ITypedDatasourceAdapterFa
 
     @Override
     public AdapterType getAdapterType() {
-        return AdapterType.TYPED;
+        return AdapterType.EXTERNAL_DATASET;
     }
+
+    @Override
+    public String getName() {
+        return "pull_twitter";
+    }
+
+    @Override
+    public FeedAdapterType getFeedAdapterType() {
+        return FeedAdapterType.TYPED;
+    }
+
 }

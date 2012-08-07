@@ -44,6 +44,9 @@ public abstract class FileSystemBasedAdapter extends AbstractDatasourceAdapter {
         this.atype = atype;
     }
 
+    public FileSystemBasedAdapter() {
+    }
+
     @Override
     public void start(int partition, IFrameWriter writer) throws Exception {
         InputStream in = getInputStream(partition);
@@ -56,9 +59,6 @@ public abstract class FileSystemBasedAdapter extends AbstractDatasourceAdapter {
 
     @Override
     public abstract void configure(Map<String, String> arguments) throws Exception;
-
-    @Override
-    public abstract AdapterDataFlowType getAdapterDataFlowType();
 
     @Override
     public abstract AdapterType getAdapterType();

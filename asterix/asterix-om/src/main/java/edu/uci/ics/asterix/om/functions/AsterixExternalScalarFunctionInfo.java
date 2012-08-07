@@ -22,9 +22,16 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionC
 
 public class AsterixExternalScalarFunctionInfo extends AsterixExternalFunctionInfo {
 
+    private static final long serialVersionUID = 1L;
+
     public AsterixExternalScalarFunctionInfo(String namespace, AsterixFunction asterixFunction, IAType returnType,
             String body, String language, List<IAType> argumentTypes, IResultTypeComputer rtc) {
         super(namespace, asterixFunction, FunctionKind.SCALAR, argumentTypes, returnType, rtc, body, language);
     }
 
+    public AsterixExternalScalarFunctionInfo() {
+        super();
+    }
+
+    
 }

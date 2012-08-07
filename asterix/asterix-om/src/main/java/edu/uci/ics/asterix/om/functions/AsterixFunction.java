@@ -14,19 +14,25 @@
  */
 package edu.uci.ics.asterix.om.functions;
 
+import java.io.Serializable;
+
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 
-public class AsterixFunction {
+public class AsterixFunction implements Serializable {
 
     private final String functionName;
     private final int arity;
     public final static int VARARGS = -1;
 
     public AsterixFunction(String functionName, int arity) {
+        if (functionName.contains("@")) {
+            throw new IllegalArgumentException("Invalid function name " + functionName
+                    + " Function names may not contain '@'");
+        }
         this.functionName = functionName;
         this.arity = arity;
     }
-    
+
     public AsterixFunction(FunctionIdentifier fid) {
         this.functionName = fid.getName();
         this.arity = fid.getArity();

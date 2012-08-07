@@ -40,7 +40,6 @@ public abstract class AbstractDatasourceAdapter implements IDatasourceAdapter {
 	protected transient AlgebricksPartitionConstraint partitionConstraint;
 	protected IAType atype;
 	protected IHyracksTaskContext ctx;
-	protected AdapterDataFlowType dataFlowType;
 	protected AdapterType adapterType;
 	protected boolean typeInfoRequired = false;
 	
@@ -77,15 +76,6 @@ public abstract class AbstractDatasourceAdapter implements IDatasourceAdapter {
 
 	}
 
-	abstract public void initialize(IHyracksTaskContext ctx) throws Exception;
-
-	abstract public void configure(Map<String, String> arguments)
-			throws Exception;
-
-	abstract public AdapterDataFlowType getAdapterDataFlowType();
-
-	abstract public AdapterType getAdapterType();
-
 	public AlgebricksPartitionConstraint getPartitionConstraint() {
 		return partitionConstraint;
 	}
@@ -96,10 +86,6 @@ public abstract class AbstractDatasourceAdapter implements IDatasourceAdapter {
 
 	public Map<String, String> getConfiguration() {
 		return configuration;
-	}
-
-	public IAType getAdapterOutputType() {
-		return atype;
 	}
 
 	public void setAdapterProperty(String property, String value) {

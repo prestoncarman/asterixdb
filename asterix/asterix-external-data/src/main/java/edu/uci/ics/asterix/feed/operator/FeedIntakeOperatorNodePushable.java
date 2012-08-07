@@ -33,9 +33,11 @@ public class FeedIntakeOperatorNodePushable extends AbstractUnaryInputUnaryOutpu
 
     @Override
     public void open() throws HyracksDataException {
-        feedInboxMonitor = new FeedInboxMonitor((IManagedFeedAdapter) adapter, inbox, partition);
-        feedInboxMonitor.start();
-        feedManager.registerFeedOperatorMsgQueue(feedId, inbox);
+        if (adapter instanceof IManagedFeedAdapter) {
+            feedInboxMonitor = new FeedInboxMonitor((IManagedFeedAdapter) adapter, inbox, partition);
+            feedInboxMonitor.start();
+            feedManager.registerFeedOperatorMsgQueue(feedId, inbox);
+        }
         writer.open();
         try {
             adapter.start(partition, writer);

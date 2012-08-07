@@ -17,29 +17,20 @@ package edu.uci.ics.asterix.aql.expression;
 import java.util.ArrayList;
 import java.util.List;
 
-import edu.uci.ics.asterix.metadata.bootstrap.MetadataConstants;
-
 public class InternalDetailsDecl implements IDatasetDetailsDecl {
-    private Identifier nodegroupName = new Identifier(MetadataConstants.METADATA_DEFAULT_NODEGROUP_NAME);
+    private final String nodegroupName;
     private List<String> partitioningExprs = new ArrayList<String>();
 
-    public void addPartitioningExpr(String pe) {
-        this.partitioningExprs.add(pe);
-    }
-
-    public void addPartitioningExprList(List<String> peList) {
-        this.partitioningExprs = peList;
+    public InternalDetailsDecl(String nodegroupName, List<String> partitionExprs) {
+        this.nodegroupName = nodegroupName;
+        this.partitioningExprs = partitionExprs;
     }
 
     public List<String> getPartitioningExprs() {
         return partitioningExprs;
     }
 
-    public void setNodegroupName(Identifier nodegroupName) {
-        this.nodegroupName = nodegroupName;
-    }
-
-    public Identifier getNodegroupName() {
+    public String getNodegroupName() {
         return nodegroupName;
     }
 }

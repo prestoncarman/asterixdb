@@ -53,11 +53,6 @@ public class NCFileSystemAdapter extends FileSystemBasedAdapter {
 	}
 
 	@Override
-	public AdapterDataFlowType getAdapterDataFlowType() {
-		return AdapterDataFlowType.PULL;
-	}
-
-	@Override
 	public AdapterType getAdapterType() {
 		return AdapterType.READ;
 	}

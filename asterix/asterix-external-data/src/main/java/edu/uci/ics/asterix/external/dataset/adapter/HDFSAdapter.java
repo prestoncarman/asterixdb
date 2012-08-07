@@ -173,10 +173,6 @@ public class HDFSAdapter extends FileSystemBasedAdapter {
 		return conf;
 	}
 
-	public AdapterDataFlowType getAdapterDataFlowType() {
-		return AdapterDataFlowType.PULL;
-	}
-
 	public AdapterType getAdapterType() {
 		return AdapterType.READ_WRITE;
 	}

@@ -4,8 +4,8 @@ import java.util.Map;
 
 import edu.uci.ics.asterix.external.dataset.adapter.IDatasourceAdapter;
 
-public interface ITypedDatasourceAdapterFactory extends IDatasourceAdapterFactory {
+public interface ITypedFeedDatasetAdapterFactory extends IFeedDatasetAdapterFactory {
 
     public IDatasourceAdapter createAdapter(Map<String, String> configuration) throws Exception;
-
+    
 }

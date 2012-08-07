@@ -66,7 +66,8 @@ public class NCBootstrapImpl implements INCBootstrap {
             MetadataManager.INSTANCE.init();
             MetadataBootstrap.startUniverse(proxy.getAsterixProperties(), ncApplicationContext);
             ExternalLibraryBootstrap.setUpExternaLibraries(ncApplicationContext.getNodeId(), true);
-
+        } else {
+            ExternalLibraryBootstrap.setUpExternaLibraries(ncApplicationContext.getNodeId(), false);
         }
 
         // Start a sub-component for the API server. This server is only connected to by the 

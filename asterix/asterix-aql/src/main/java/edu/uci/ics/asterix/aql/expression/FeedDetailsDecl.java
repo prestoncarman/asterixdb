@@ -14,34 +14,33 @@
  */
 package edu.uci.ics.asterix.aql.expression;
 
+import java.util.List;
 import java.util.Map;
 
+import edu.uci.ics.asterix.om.functions.AsterixFunction;
+
 public class FeedDetailsDecl extends InternalDetailsDecl {
-    private Map<String, String> properties;
-    private String adapterClassname;
-    private String functionIdentifier;
+    private final Map<String, String> properties;
+    private final String adapterFactoryClassname;
+    private final AsterixFunction function;
 
-    public void setFunctionIdentifier(String functionIdentifier) {
-        this.functionIdentifier = functionIdentifier;
-    }
-
-    public void setAdapterClassname(String adapter) {
-        this.adapterClassname = adapter;
-    }
-
-    public void setProperties(Map<String, String> properties) {
+    public FeedDetailsDecl(String adapterFactoryClassName, Map<String, String> properties, AsterixFunction function,
+            List<String> partitioningExpr, String nodegroupName) {
+        super(nodegroupName, partitioningExpr);
+        this.adapterFactoryClassname = adapterFactoryClassName;
         this.properties = properties;
+        this.function = function;
     }
 
     public String getAdapterClassname() {
-        return adapterClassname;
+        return adapterFactoryClassname;
     }
 
     public Map<String, String> getProperties() {
         return properties;
     }
 
-    public String getFunctionIdentifier() {
-        return functionIdentifier;
+    public AsterixFunction getFunction() {
+        return function;
     }
 }

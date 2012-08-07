@@ -28,6 +28,7 @@ import edu.uci.ics.asterix.formats.nontagged.AqlSerializerDeserializerProvider;
 import edu.uci.ics.asterix.metadata.bootstrap.MetadataRecordTypes;
 import edu.uci.ics.asterix.om.base.AMutableString;
 import edu.uci.ics.asterix.om.base.AString;
+import edu.uci.ics.asterix.om.functions.AsterixFunction;
 import edu.uci.ics.asterix.om.types.AOrderedListType;
 import edu.uci.ics.asterix.om.types.BuiltinType;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
@@ -39,7 +40,7 @@ public class FeedDatasetDetails extends InternalDatasetDetails {
     private static final long serialVersionUID = 1L;
     private final String adapterFactory;
     private final Map<String, String> properties;
-    private String functionIdentifier;
+    private final AsterixFunction asterixFunction;
     private FeedState feedState;
 
     public enum FeedState {
@@ -54,11 +55,11 @@ public class FeedDatasetDetails extends InternalDatasetDetails {
 
     public FeedDatasetDetails(FileStructure fileStructure, PartitioningStrategy partitioningStrategy,
             List<String> partitioningKey, List<String> primaryKey, String groupName, String adapterFactory,
-            Map<String, String> properties, String functionIdentifier, String feedState) {
+            Map<String, String> properties, AsterixFunction asterixFunction, String feedState) {
         super(fileStructure, partitioningStrategy, partitioningKey, primaryKey, groupName);
         this.properties = properties;
         this.adapterFactory = adapterFactory;
-        this.functionIdentifier = functionIdentifier;
+        this.asterixFunction = asterixFunction;
         this.feedState = feedState.equals(FeedState.ACTIVE.toString()) ? FeedState.ACTIVE : FeedState.INACTIVE;
     }
 
@@ -141,8 +142,8 @@ public class FeedDatasetDetails extends InternalDatasetDetails {
 
         // write field 7
         fieldValue.reset();
-        if (getFunctionIdentifier() != null) {
-            aString.setValue(getFunctionIdentifier());
+        if (getFunction() != null) {
+            aString.setValue(getFunction().toString());
             stringSerde.serialize(aString, fieldValue.getDataOutput());
             feedRecordBuilder.addField(MetadataRecordTypes.FEED_DETAILS_ARECORD_FUNCTION_FIELD_INDEX, fieldValue);
         }
@@ -204,12 +205,8 @@ public class FeedDatasetDetails extends InternalDatasetDetails {
         return properties;
     }
 
-    public String getFunctionIdentifier() {
-        return functionIdentifier;
-    }
-
-    public void setFunctionIdentifier(String functionIdentifier) {
-        this.functionIdentifier = functionIdentifier;
+    public AsterixFunction getFunction() {
+        return asterixFunction;
     }
 
 }

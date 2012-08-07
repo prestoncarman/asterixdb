@@ -4,13 +4,16 @@ import java.util.List;
 
 import org.apache.commons.lang3.mutable.Mutable;
 
+import edu.uci.ics.asterix.common.exceptions.AsterixException;
 import edu.uci.ics.asterix.common.functions.FunctionDescriptorTag;
 import edu.uci.ics.asterix.formats.base.IDataFormat;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
 import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
+import edu.uci.ics.asterix.om.functions.IExternalFunctionInfo;
 import edu.uci.ics.asterix.om.functions.IFunctionDescriptor;
 import edu.uci.ics.asterix.runtime.evaluators.comparisons.ComparisonEvalFactory;
+import edu.uci.ics.asterix.runtime.external.ExternalFunctionDescriptorProvider;
 import edu.uci.ics.asterix.runtime.formats.FormatUtils;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
@@ -125,9 +128,18 @@ public class AqlLogicalExpressionJobGen implements ILogicalExpressionJobGen {
         }
 
         IFunctionDescriptor fd = null;
-        AqlMetadataProvider mp = (AqlMetadataProvider) context.getMetadataProvider();
-        IDataFormat format = mp == null ? FormatUtils.getDefaultFormat() : mp.getMetadataDeclarations().getFormat();
-        fd = format.resolveFunction(expr, env);
+        if (!(expr.getFunctionInfo() instanceof IExternalFunctionInfo)) {
+            AqlMetadataProvider mp = (AqlMetadataProvider) context.getMetadataProvider();
+            IDataFormat format = mp == null ? FormatUtils.getDefaultFormat() : mp.getMetadataDeclarations().getFormat();
+            fd = format.resolveFunction(expr, env);
+        } else {
+            try {
+                fd = ExternalFunctionDescriptorProvider.getExternalFunctionDescriptor((IExternalFunctionInfo) expr
+                        .getFunctionInfo());
+            } catch (AsterixException ae) {
+                throw new AlgebricksException(ae);
+            }
+        }
         return fd.createEvaluatorFactory(args);
     }
 

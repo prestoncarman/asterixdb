@@ -9,17 +9,28 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionC
 public class AsterixExternalFunctionInfo extends AsterixFunctionInfo implements IExternalFunctionInfo {
 
     private final IResultTypeComputer rtc;
-    private final List<IAType> argumenTypes;
+    private final List<IAType> argumentTypes;
     private final String body;
     private final String language;
     private final FunctionKind kind;
     private final IAType returnType;
 
+    public AsterixExternalFunctionInfo(){
+        super();
+        rtc = null;
+        argumentTypes= null;
+        body = null;
+        language=null;
+        kind = null;
+        returnType = null;
+                
+    }
+    
     public AsterixExternalFunctionInfo(String namespace, AsterixFunction asterixFunction, FunctionKind kind,
             List<IAType> argumentTypes, IAType returnType, IResultTypeComputer rtc, String body, String language) {
         super(namespace, asterixFunction);
         this.rtc = rtc;
-        this.argumenTypes = argumentTypes;
+        this.argumentTypes = argumentTypes;
         this.body = body;
         this.language = language;
         this.kind = kind;
@@ -31,7 +42,7 @@ public class AsterixExternalFunctionInfo extends AsterixFunctionInfo implements 
     }
 
     public List<IAType> getArgumenTypes() {
-        return argumenTypes;
+        return argumentTypes;
     }
 
     @Override
@@ -41,7 +52,7 @@ public class AsterixExternalFunctionInfo extends AsterixFunctionInfo implements 
 
     @Override
     public List<IAType> getParamList() {
-        return argumenTypes;
+        return argumentTypes;
     }
 
     @Override

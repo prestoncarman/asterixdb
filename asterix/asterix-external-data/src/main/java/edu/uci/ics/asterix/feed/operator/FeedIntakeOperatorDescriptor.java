@@ -16,11 +16,11 @@ package edu.uci.ics.asterix.feed.operator;
 
 import java.util.Map;
 
-import edu.uci.ics.asterix.external.adapter.factory.IDatasourceAdapterFactory;
-import edu.uci.ics.asterix.external.adapter.factory.IDatasourceAdapterFactory.AdapterType;
-import edu.uci.ics.asterix.external.adapter.factory.IGenericDatasourceAdapterFactory;
-import edu.uci.ics.asterix.external.adapter.factory.ITypedDatasourceAdapterFactory;
-import edu.uci.ics.asterix.external.dataset.adapter.IDatasourceAdapter;
+import edu.uci.ics.asterix.external.adapter.factory.IFeedDatasetAdapterFactory;
+import edu.uci.ics.asterix.external.adapter.factory.IFeedDatasetAdapterFactory.FeedAdapterType;
+import edu.uci.ics.asterix.external.adapter.factory.IGenericFeedDatasetAdapterFactory;
+import edu.uci.ics.asterix.external.adapter.factory.ITypedFeedDatasetAdapterFactory;
+import edu.uci.ics.asterix.external.dataset.adapter.IFeedDatasourceAdapter;
 import edu.uci.ics.asterix.feed.mgmt.FeedId;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.IAType;
@@ -40,7 +40,7 @@ public class FeedIntakeOperatorDescriptor extends AbstractSingleActivityOperator
     private final IAType atype;
     private final FeedId feedId;
 
-    private transient IDatasourceAdapterFactory datasourceAdapterFactory;
+    private transient IFeedDatasetAdapterFactory datasourceAdapterFactory;
 
     public FeedIntakeOperatorDescriptor(JobSpecification spec, FeedId feedId, String adapter,
             Map<String, String> arguments, ARecordType atype, RecordDescriptor rDesc) {
@@ -55,14 +55,15 @@ public class FeedIntakeOperatorDescriptor extends AbstractSingleActivityOperator
     public IOperatorNodePushable createPushRuntime(IHyracksTaskContext ctx,
             IRecordDescriptorProvider recordDescProvider, final int partition, int nPartitions)
             throws HyracksDataException {
-        IDatasourceAdapter adapter;
+        IFeedDatasourceAdapter adapter;
         try {
-            datasourceAdapterFactory = (IDatasourceAdapterFactory) Class.forName(adapterFactoryClassName).newInstance();
-            if (datasourceAdapterFactory.getAdapterType().equals(AdapterType.GENERIC)) {
-                adapter = ((IGenericDatasourceAdapterFactory) datasourceAdapterFactory).createAdapter(
-                        adapterConfiguration, atype);
+            datasourceAdapterFactory = (IFeedDatasetAdapterFactory) Class.forName(adapterFactoryClassName)
+                    .newInstance();
+            if (datasourceAdapterFactory.getFeedAdapterType().equals(FeedAdapterType.GENERIC)) {
+                adapter = (IFeedDatasourceAdapter) ((IGenericFeedDatasetAdapterFactory) datasourceAdapterFactory)
+                        .createAdapter(adapterConfiguration, atype);
             } else {
-                adapter = ((ITypedDatasourceAdapterFactory) datasourceAdapterFactory)
+                adapter = (IFeedDatasourceAdapter) ((ITypedFeedDatasetAdapterFactory) datasourceAdapterFactory)
                         .createAdapter(adapterConfiguration);
             }
             adapter.initialize(ctx);

@@ -5,7 +5,8 @@ import java.util.Map;
 import edu.uci.ics.asterix.external.dataset.adapter.IDatasourceAdapter;
 import edu.uci.ics.asterix.om.types.IAType;
 
-public interface IGenericDatasourceAdapterFactory extends IDatasourceAdapterFactory{
+public interface IExternalDatasetAdapterFactory extends IAdapterFactory {
 
-    public IDatasourceAdapter createAdapter(Map<String, String> configuration, IAType type) throws Exception;
+    public IDatasourceAdapter createAdapter(Map<String, String> configuration, IAType sourceType) throws Exception;
+    
 }

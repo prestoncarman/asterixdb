@@ -73,6 +73,8 @@ public class RuntimeExternalFunctionUtil {
             case STRING:
                 return new AMutableString("");
             default:
+                return null;
+                /*
                 ARecordType recordType = (ARecordType) type;
                 IAType[] fieldTypes = recordType.getFieldTypes();
                 IAObject[] fields = new IAObject[fieldTypes.length];
@@ -80,6 +82,7 @@ public class RuntimeExternalFunctionUtil {
                     fields[i] = allocateArgumentObjects(fieldTypes[i]);
                 }
                 return new AMutableRecord((ARecordType) type, fields);
+                */
         }
     }
 

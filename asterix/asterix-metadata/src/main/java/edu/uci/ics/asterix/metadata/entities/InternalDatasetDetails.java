@@ -25,6 +25,7 @@ import edu.uci.ics.asterix.builders.RecordBuilder;
 import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
 import edu.uci.ics.asterix.formats.nontagged.AqlSerializerDeserializerProvider;
 import edu.uci.ics.asterix.metadata.IDatasetDetails;
+import edu.uci.ics.asterix.metadata.bootstrap.MetadataConstants;
 import edu.uci.ics.asterix.metadata.bootstrap.MetadataRecordTypes;
 import edu.uci.ics.asterix.om.base.AMutableString;
 import edu.uci.ics.asterix.om.base.AString;
@@ -58,7 +59,7 @@ public class InternalDatasetDetails implements IDatasetDetails {
         this.partitioningStrategy = partitioningStrategy;
         this.partitioningKeys = partitioningKey;
         this.primaryKeys = primaryKey;
-        this.nodeGroupName = groupName;
+        this.nodeGroupName = groupName == null ? MetadataConstants.METADATA_DEFAULT_NODEGROUP_NAME : groupName;
     }
 
     public String getNodeGroupName() {

@@ -5,7 +5,7 @@ import java.util.Map;
 import edu.uci.ics.asterix.external.dataset.adapter.IDatasourceAdapter;
 import edu.uci.ics.asterix.external.dataset.adapter.RSSFeedAdapter;
 
-public class RSSFeedAdapterFactory implements ITypedDatasourceAdapterFactory {
+public class RSSFeedAdapterFactory implements ITypedFeedDatasetAdapterFactory {
 
     @Override
     public IDatasourceAdapter createAdapter(Map<String, String> configuration) throws Exception {
@@ -16,6 +16,17 @@ public class RSSFeedAdapterFactory implements ITypedDatasourceAdapterFactory {
 
     @Override
     public AdapterType getAdapterType() {
-        return AdapterType.TYPED;
+        return AdapterType.FEED;
     }
+
+    @Override
+    public String getName() {
+        return "rss_feed";
+    }
+
+    @Override
+    public FeedAdapterType getFeedAdapterType() {
+        return FeedAdapterType.TYPED;
+    }
+
 }
