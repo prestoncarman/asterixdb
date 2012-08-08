@@ -361,3 +361,79 @@ class LockRequestProducer implements Runnable {
         }
     }
 }
+
+class LockRequest {
+    public int requestType;
+    public DatasetId datasetIdObj;
+    public int entityHashValue;
+    public byte lockMode;
+    public TransactionContext txnContext;
+    public boolean isUpgrade;
+
+    public LockRequest(int requestType, DatasetId datasetIdObj, int entityHashValue, byte lockMode,
+            TransactionContext txnContext) {
+        this.requestType = requestType;
+        this.datasetIdObj = datasetIdObj;
+        this.entityHashValue = entityHashValue;
+        this.lockMode = lockMode;
+        this.txnContext = txnContext;
+        isUpgrade = false;
+    }
+
+    public String prettyPrint() {
+        StringBuilder s = new StringBuilder();
+        switch (requestType) {
+            case RequestType.LOCK:
+                s.append("|L|");
+                break;
+            case RequestType.TRY_LOCK:
+                s.append("|TL|");
+                break;
+            case RequestType.INSTANT_LOCK:
+                s.append("|IL|");
+                break;
+            case RequestType.INSTANT_TRY_LOCK:
+                s.append("|ITL|");
+                break;
+            case RequestType.UNLOCK:
+                s.append("|UL|");
+                break;
+            case RequestType.RELEASE_LOCKS:
+                s.append("|RL|");
+                break;
+            default:
+                throw new UnsupportedOperationException("Unsupported method");
+        }
+        s.append("\t").append(txnContext.getJobId().getId()).append(",").append(datasetIdObj.getId()).append(",")
+                .append(entityHashValue).append(":");
+        switch (lockMode) {
+            case LockMode.S:
+                s.append("S");
+                break;
+            case LockMode.X:
+                s.append("X");
+                break;
+            case LockMode.IS:
+                s.append("IS");
+                break;
+            case LockMode.IX:
+                s.append("IX");
+                break;
+            default:
+                throw new UnsupportedOperationException("Unsupported lock mode");
+        }
+        s.append(",").append(isUpgrade).append("\n");
+        return s.toString();
+    }
+}
+
+class RequestType {
+    public static final int LOCK = 0;
+    public static final int TRY_LOCK = 1;
+    public static final int INSTANT_LOCK = 2;
+    public static final int INSTANT_TRY_LOCK = 3;
+    public static final int UNLOCK = 4;
+    public static final int RELEASE_LOCKS = 5;
+}
+
+
