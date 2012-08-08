@@ -98,6 +98,7 @@ public class LockManager implements ILockManager {
         byte datasetLockMode = entityHashValue == -1 ? lockMode : lockMode == LockMode.S ? LockMode.IS : LockMode.IX;
 
         latchLockTable();
+        validateJob(txnContext);
 
         dLockInfo = datasetResourceHT.get(datasetId);
         jobInfo = jobHT.get(jobId);
@@ -147,6 +148,16 @@ public class LockManager implements ILockManager {
 
         unlatchLockTable();
         return;
+    }
+    
+    private void validateJob(TransactionContext txnContext) throws ACIDException {
+        if (txnContext.getStatus() == TransactionContext.TIMED_OUT_STATUS) {
+            try {
+                requestAbort(txnContext);
+            } finally {
+                unlatchLockTable();
+            }
+        }
     }
 
     private int lockDatasetGranule(DatasetId datasetId, int entityHashValue, byte lockMode,
@@ -409,6 +420,7 @@ public class LockManager implements ILockManager {
         }
 
         latchLockTable();
+        validateJob(txnContext);
 
         //find the resource to be unlocked
         dLockInfo = datasetResourceHT.get(datasetId);
@@ -648,6 +660,7 @@ public class LockManager implements ILockManager {
         boolean isSuccess = false;
 
         latchLockTable();
+        validateJob(txnContext);
 
         dLockInfo = datasetResourceHT.get(datasetId);
         jobInfo = jobHT.get(jobId);

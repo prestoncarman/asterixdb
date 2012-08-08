@@ -1,13 +1,12 @@
 package edu.uci.ics.asterix.transaction.management.service.locking;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Random;
 
 import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionContext;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionManagementConstants.LockManagerConstants.LockMode;
+import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionProvider;
 
 /**
  * LockManagerUnitTest: unit test of LockManager
@@ -17,198 +16,348 @@ import edu.uci.ics.asterix.transaction.management.service.transaction.Transactio
 
 public class LockManagerUnitTest {
 
-    public static void main(String args[]) throws ACIDException {
+    private static final int MAX_NUM_OF_UPGRADE_THREAD = 2;
+    private static final int MAX_NUM_OF_ENTITY_LOCK_THREAD = 8;
+    private static final int MAX_NUM_OF_DATASET_LOCK_THREAD = 2;
+    private static final int MAX_NUM_OF_THREAD_IN_A_JOB = 4;
+    private static int jobId = 0;
+    private static Random rand; 
     
 
+    public static void main(String args[]) throws ACIDException {
+        int i;
+        TransactionProvider txnProvider = new TransactionProvider("LockManagerUnitTest");
+        rand = new Random();
+        for (i = 0; i < MAX_NUM_OF_ENTITY_LOCK_THREAD; i++) {
+            generateEntityLockThread(txnProvider);
+        }
+        
+        for (i = 0; i < MAX_NUM_OF_DATASET_LOCK_THREAD; i++) {
+            generateDatasetLockThread(txnProvider);
+        }
+        
+        for (i = 0; i < MAX_NUM_OF_UPGRADE_THREAD; i++) {
+            generateEntityLockUpgradeThread(txnProvider);
+        }
     }
+    
+    private static void generateEntityLockThread(TransactionProvider txnProvider) {
+        Thread t;
+        int childCount = rand.nextInt(MAX_NUM_OF_THREAD_IN_A_JOB);
+        TransactionContext txnContext = generateTxnContext(txnProvider);
+
+        for (int i=0; i < childCount; i++) {
+            t = new Thread(new LockRequestProducer(txnProvider.getLockManager(), txnContext, false, false, false));
+            t.start();
+        }
+    }
+    
+    private static void generateDatasetLockThread(TransactionProvider txnProvider) {
+        Thread t;
+        int childCount = rand.nextInt(MAX_NUM_OF_THREAD_IN_A_JOB);
+        TransactionContext txnContext = generateTxnContext(txnProvider);
+        
+        for (int i=0; i < childCount; i++) {
+            t = new Thread(new LockRequestProducer(txnProvider.getLockManager(), txnContext, true, false, false));
+            t.start();
+        }
+    }
+    
+    private static void generateEntityLockUpgradeThread(TransactionProvider txnProvider) {
+        Thread t;
+        int childCount = MAX_NUM_OF_THREAD_IN_A_JOB;
+        TransactionContext txnContext = generateTxnContext(txnProvider);
+        
+        for (int i=0; i < childCount-1; i++) {
+            t = new Thread(new LockRequestProducer(txnProvider.getLockManager(), txnContext, false, true, false));
+            t.start();
+        }
+        t = new Thread(new LockRequestProducer(txnProvider.getLockManager(), txnContext, false, true, true));
+    }
+    
+    private static TransactionContext generateTxnContext(TransactionProvider txnProvider) {
+        try {
+            return new TransactionContext((long)(jobId++), txnProvider);
+        } catch (ACIDException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+    
 }
 
-class Txr extends TransactionContext implements Runnable {
+class LockRequestProducer implements Runnable {
 
-    
     private static final long serialVersionUID = -3191274684985609965L;
-    final double S_LOCK_PROB = 0.6;
-    final double CONVERT_PROB = 0.5;
+    private static final int MAX_DATASET_NUM = 10;
+    private static final int MAX_ENTITY_NUM = 100;
+    private static final int MAX_LOCK_MODE_NUM = 2;
+    private static final long DATASET_LOCK_THREAD_SLEEP_TIME = 1000;
+    private static final int MAX_LOCK_REQUEST_TYPE_NUM = 4;
 
-    int it; //how many times it cycles
-    Random rand;
-    ILockManager lm;
-    TaskTracker tracker;
-    String history;
+    private ILockManager lockMgr;
+    private TransactionContext txnContext;
+    //private LockRequestTracker lockRequestTracker;
+    private Random rand;
+    private boolean isDatasetLock; //dataset or entity
+    private ArrayList<LockRequest> requestQueue;
+    private StringBuilder requestHistory;
+    private int unlockIndex;
+    private int upgradeIndex;
+    private boolean isUpgradeThread;
+    private boolean isUpgradeThreadJob;
 
-    public Txr(long tid, int it, ILockManager lm, TaskTracker tracker) {
-        super(tid);
-        this.it = it;
-        this.rand = new Random();
-        this.lm = lm;
-        this.tracker = tracker;
-        this.history = "";
+    public LockRequestProducer(ILockManager lockMgr, TransactionContext txnContext,
+            boolean isDatasetLock, boolean isUpgradeThreadJob, boolean isUpgradeThread) {
+        this.lockMgr = lockMgr;
+        this.txnContext = txnContext;
+        //this.lockRequestTracker = lockRequestTracker;
+        this.isDatasetLock = isDatasetLock;
+        this.isUpgradeThreadJob = isUpgradeThreadJob;
+        this.isUpgradeThread = isUpgradeThread;
+        
+
+        this.rand = new Random(txnContext.getJobId().getId());
+        requestQueue = new ArrayList<LockRequest>();
+        requestHistory = new StringBuilder();
+        unlockIndex = 0;
+        upgradeIndex = 0;
     }
 
     @Override
     public void run() {
-        extendHistory("(it=" + it + ")\t");
-        tracker.updateTxrHistory(getMyId(), history);
-        for (int i = 0; i < it; i++) {
-            //System.out.println("Iteration "+i+" for Transaction "+getTransactionID());
-            byte[] resToLock = tracker.getOneRes();
-            int mode = getLockReqMode();
-            try {
-                extendHistory(((mode == LockManagerTester.S_LOCKMODE) ? "R(S" : "R(X") + i + ")");
-                tracker.updateTxrHistory(getMyId(), history);
-                boolean req = lm.lock(this, resToLock, mode);
-                if (!req) {
-                    //System.out.println("Transaction "+getMyId()+" failed");
-                    extendHistory("[Lock FAILED]");
-                    tracker.updateTxrHistory(getMyId(), history);
-                    //LockManagerTester.incKilledxr();
-                    tracker.incKilledTXrs();
-                    return;
-                }
-                extendHistory(((mode == LockManagerTester.S_LOCKMODE) ? "G(S" : "G(X") + i + ")");
-                tracker.updateTxrHistory(getMyId(), history);
-
-                Thread.sleep(500 + rand.nextInt(1500));
-
-                if (mode == LockManagerTester.S_LOCKMODE) {
-                    if (rand.nextDouble() < CONVERT_PROB) {
-                        extendHistory("R(C" + "" + i + ")");
-                        tracker.updateTxrHistory(getMyId(), history);
-                        mode = LockManagerTester.X_LOCKMODE;
-                        boolean c = lm.convertLock(this, resToLock, mode);
-                        if (!c) {
-                            //System.out.println("Transaction "+getMyId()+" failed in conversion");
-                            extendHistory("[CONVERT FAILED]");
-                            tracker.updateTxrHistory(getMyId(), history);
-                            //LockManagerTester.incKilledxr();
-                            tracker.incKilledTXrs();
-                            return;
-                        }
-                        extendHistory("G(C" + "" + i + ")");
-                        tracker.updateTxrHistory(getMyId(), history);
-                    }
-                }
-
-                lm.unlock(this, resToLock);
-                extendHistory(((mode == LockManagerTester.S_LOCKMODE) ? "U(S" : "U(X") + i + ")");
-                tracker.updateTxrHistory(getMyId(), history);
-                //tracker.decIt(getMyId(), history);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+        if (isDatasetLock) {
+            runDatasetLockTask();
+        } else {
+            runEntityLockTask();
         }
-        extendHistory("(DONE)");
-        tracker.updateTxrHistory(getMyId(), history);
-        tracker.incFinishedTxrs(getMyId(), history);
-        //LockManagerTester.incFinishedTxr();
-        //tracker.incFinishedTxrs(getMyId(), history);
-        System.out.println("\n" + tracker.getCountStat());
-        System.out.println("Txr Table Size:\t" + ((LockManager) lm).dsAccessor.getTxrTableSize() + "\n");
-    }
-
-    private int getLockReqMode() {
-        return ((rand.nextDouble() < S_LOCK_PROB) ? LockManagerTester.S_LOCKMODE : LockManagerTester.X_LOCKMODE);
-    }
-
-    private long getMyId() {
-        ByteBuffer buffer = ByteBuffer.allocate(8);
-        buffer.putLong(getTransactionID());
-        return buffer.getLong(0);
-    }
-
-    private void extendHistory(String next) {
-        history += next + " -> ";
-        //System.out.println("Transaction "+getMyId()+":\t"+history);
-    }
-}
-
-class LockRequestTracker {
-    ArrayList<LockRequest> allRequestList;
-    HashMap<Integer, StringBuilder> requestMapPerJob;
-
-    public LockRequestTracker() {
-        allRequestList = new ArrayList<LockRequest>();
-        requestMapPerJob = new HashMap<Integer, StringBuilder>();
     }
     
-    public synchronized void addRequest(LockRequest request) {
-        int jobId = request.txnContext.getJobId().getId();
-        allRequestList.add(request);
-        StringBuilder s = requestMapPerJob.get(jobId);
-        if (s == null) {
-            requestMapPerJob.put(request.txnContext.getJobId().getId(), new StringBuilder(request.prettyPrint()));
+    private void runDatasetLockTask() {
+        try {
+            produceDatasetLockRequest();
+        } catch (ACIDException e) {
+            e.printStackTrace();
+           return;
+        }
+        
+        try {
+            Thread.sleep(DATASET_LOCK_THREAD_SLEEP_TIME);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        
+        try {
+            produceDatasetUnlockRequest();
+        } catch (ACIDException e) {
+            e.printStackTrace();
+            return;
+        }
+    }
+    
+    private void runEntityLockTask() {
+        int i;
+        byte lockMode;
+        int lockCount; 
+        int upgradeCount; 
+        int releaseCount; 
+        
+        lockCount = 1 + rand.nextInt(20);
+        if (isUpgradeThreadJob) {
+            if (isUpgradeThread) { 
+                upgradeCount = rand.nextInt(4) + 1;
+                if (upgradeCount > lockCount) {
+                    upgradeCount = lockCount;
+                }
+            } else {
+                upgradeCount = 0;
+            }
+            lockMode = LockMode.S;
         } else {
-            requestMapPerJob.put(request.txnContext.getJobId().getId(), s.append(request.prettyPrint()));
+            upgradeCount = 0;
+            lockMode = (byte)(this.txnContext.getJobId().getId()%2);
+        }
+        releaseCount = rand.nextInt(1000)%13 == 0 ? 1 : 0;
+        
+        //lock
+        for (i=0; i < lockCount; i++) {
+            try {
+                produceEntityLockRequest(lockMode);
+            } catch (ACIDException e) {
+                e.printStackTrace();
+                return;
+            }
+        }
+        
+        //upgrade
+        for (i=0; i<upgradeCount; i++) {
+            try {
+                produceEntityLockUpgradeRequest();
+            } catch (ACIDException e) {
+                e.printStackTrace();
+                return;
+            }
+        }
+        
+        //unlock or releaseLocks
+        if (releaseCount == 0) {
+            //unlock
+            for (i=0; i < lockCount; i++) {
+                try {
+                    produceEntityUnlockRequest();
+                } catch (ACIDException e) {
+                    e.printStackTrace();
+                    return;
+                }
+            }
+        } else {
+            try {
+                produceEntityReleaseLocksRequest();
+            } catch (ACIDException e) {
+                e.printStackTrace();
+                return;
+            }
         }
     }
-}
 
-class LockRequest {
-    public RequestType requestType;
-    public DatasetId datasetIdObj;
-    public int entityHashValue;
-    public byte lockMode;
-    public TransactionContext txnContext;
-
-    public LockRequest(RequestType requestType, DatasetId datasetIdObj, int entityHashValue, byte lockMode,
-            TransactionContext txnContext) {
-        this.requestType = requestType;
-        this.datasetIdObj = datasetIdObj;
-        this.entityHashValue = entityHashValue;
-        this.lockMode = lockMode;
-        this.txnContext = txnContext;
+    private void produceDatasetLockRequest() throws ACIDException {
+        int requestType = RequestType.LOCK;
+        int datasetId = rand.nextInt(MAX_DATASET_NUM);
+        int entityHashValue = -1;
+        byte lockMode = (byte) (rand.nextInt(MAX_LOCK_MODE_NUM));
+        LockRequest request = new LockRequest(requestType, new DatasetId(datasetId), entityHashValue, lockMode,
+                txnContext);
+        requestQueue.add(request);
+        requestHistory.append(request.prettyPrint());
+        sendRequest(request);
     }
 
-    public String prettyPrint() {
-        StringBuilder s = new StringBuilder();
-        switch (requestType) {
-            case LOCK:
-                s.append("|L|");
+    private void produceDatasetUnlockRequest() throws ACIDException {
+        LockRequest lockRequest = requestQueue.get(0);
+
+        int requestType = RequestType.RELEASE_LOCKS;
+        int datasetId = lockRequest.datasetIdObj.getId();
+        int entityHashValue = -1;
+        byte lockMode = LockMode.S;//lockMode is not used for unlock() call.
+        LockRequest request = new LockRequest(requestType, new DatasetId(datasetId), entityHashValue, lockMode,
+                txnContext);
+        requestQueue.add(request);
+        requestHistory.append(request.prettyPrint());
+        sendRequest(request);
+    }
+
+    private void produceEntityLockRequest(byte lockMode) throws ACIDException {
+        int requestType = rand.nextInt(MAX_LOCK_REQUEST_TYPE_NUM);
+        int datasetId = rand.nextInt(MAX_DATASET_NUM);
+        int entityHashValue = rand.nextInt(MAX_ENTITY_NUM);
+        LockRequest request = new LockRequest(requestType, new DatasetId(datasetId), entityHashValue, lockMode,
+                txnContext);
+        requestQueue.add(request);
+        requestHistory.append(request.prettyPrint());
+        sendRequest(request);
+    }
+    
+    private void produceEntityLockUpgradeRequest() throws ACIDException {
+        LockRequest lockRequest = null;
+        int size = requestQueue.size();
+        boolean existLockRequest = false;
+        
+        while (upgradeIndex < size) {
+            lockRequest = requestQueue.get(upgradeIndex++);
+            if (lockRequest.isUpgrade) {
+                continue;
+            }
+            if (lockRequest.requestType == RequestType.UNLOCK || lockRequest.requestType == RequestType.RELEASE_LOCKS) {
+                continue;
+            }
+            if (lockRequest.lockMode == LockMode.X) {
+                continue;
+            }
+            existLockRequest = true;
+            break;
+        }
+
+        if (existLockRequest) {
+            int requestType = lockRequest.requestType;
+            int datasetId = lockRequest.datasetIdObj.getId();
+            int entityHashValue = lockRequest.entityHashValue;
+            byte lockMode = LockMode.X;
+            LockRequest request = new LockRequest(requestType, new DatasetId(datasetId), entityHashValue, lockMode,
+                    txnContext);
+            request.isUpgrade = true;
+            requestQueue.add(request);
+            requestHistory.append(request.prettyPrint());
+            sendRequest(request);
+        }
+    }
+
+    private void produceEntityUnlockRequest() throws ACIDException {
+        LockRequest lockRequest = null;
+        int size = requestQueue.size();
+        boolean existLockRequest = false;
+        
+        while (unlockIndex < size) {
+            lockRequest = requestQueue.get(unlockIndex++);
+            if (lockRequest.isUpgrade) {
+                continue;
+            }
+            if (lockRequest.requestType == RequestType.UNLOCK || lockRequest.requestType == RequestType.RELEASE_LOCKS) {
+                continue;
+            }
+            existLockRequest = true;
+            break;
+        }
+
+        if (existLockRequest) {
+            int requestType = RequestType.UNLOCK;
+            int datasetId = lockRequest.datasetIdObj.getId();
+            int entityHashValue = lockRequest.entityHashValue;
+            byte lockMode = lockRequest.lockMode;
+            LockRequest request = new LockRequest(requestType, new DatasetId(datasetId), entityHashValue, lockMode,
+                    txnContext);
+            requestQueue.add(request);
+            requestHistory.append(request.prettyPrint());
+            sendRequest(request);
+        }
+    }
+    
+    private void produceEntityReleaseLocksRequest() throws ACIDException {
+        LockRequest lockRequest = requestQueue.get(0);
+
+        int requestType = RequestType.RELEASE_LOCKS;
+        int datasetId = -1;
+        int entityHashValue = -1;
+        byte lockMode = LockMode.S;
+        LockRequest request = new LockRequest(requestType, new DatasetId(datasetId), entityHashValue, lockMode,
+                txnContext);
+        requestQueue.add(request);
+        requestHistory.append(request.prettyPrint());
+        sendRequest(request);
+    }
+    
+    private void sendRequest(LockRequest request) throws ACIDException {
+        
+        switch (request.requestType) {
+            case RequestType.LOCK:
+                lockMgr.lock(request.datasetIdObj, request.entityHashValue, request.lockMode, request.txnContext);
                 break;
-            case INSTANT_LOCK:
-                s.append("|IL|");
+            case RequestType.INSTANT_LOCK:
+                lockMgr.instantLock(request.datasetIdObj, request.entityHashValue, request.lockMode, request.txnContext);
                 break;
-            case TRY_LOCK:
-                s.append("|TL|");
+            case RequestType.TRY_LOCK:
+                lockMgr.tryLock(request.datasetIdObj, request.entityHashValue, request.lockMode, request.txnContext);
                 break;
-            case INSTANT_TRY_LOCK:
-                s.append("|ITL|");
+            case RequestType.INSTANT_TRY_LOCK:
+                lockMgr.instantTryLock(request.datasetIdObj, request.entityHashValue, request.lockMode, request.txnContext);
                 break;
-            case UNLOCK:
-                s.append("|UL|");
+            case RequestType.UNLOCK:
+                lockMgr.unlock(request.datasetIdObj, request.entityHashValue, request.txnContext);
                 break;
-            case RELEASE_LOCKS:
-                s.append("|RL|");
+            case RequestType.RELEASE_LOCKS:
+                lockMgr.releaseLocks(request.txnContext);
                 break;
             default:
-                throw new UnsupportedOperationException("Unsupported method");
+                throw new UnsupportedOperationException("Unsupported lock method");
         }
-        s.append("\t").append(txnContext.getJobId().getId()).append(",").append(datasetIdObj.getId()).append(",").append(entityHashValue).append(":");
-        switch (lockMode) {
-            case LockMode.IS:
-                s.append("IS\n");
-                break;
-            case LockMode.IX:
-                s.append("IX\n");
-                break;
-            case LockMode.S:
-                s.append("S\n");
-                break;
-            case LockMode.X:
-                s.append("X\n");
-                break;
-            default:
-                throw new UnsupportedOperationException("Unsupported lock mode");
-        }
-        return s.toString();
     }
-}
-
-enum RequestType {
-    LOCK,
-    INSTANT_LOCK,
-    TRY_LOCK,
-    INSTANT_TRY_LOCK,
-    UNLOCK,
-    RELEASE_LOCKS
 }

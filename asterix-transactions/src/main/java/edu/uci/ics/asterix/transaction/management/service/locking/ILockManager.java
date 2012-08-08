@@ -63,7 +63,7 @@ public interface ILockManager {
      * @param datasetId
      * @param entityHashValue
      * @param txnContext
-     * @throws ACIDException
+     * @throws ACIDException TODO
      */
     public void unlock(DatasetId datasetId, int entityHashValue, TransactionContext txnContext) throws ACIDException;
 
