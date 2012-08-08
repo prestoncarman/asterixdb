@@ -42,7 +42,7 @@ public class LockManager implements ILockManager {
 
     private static final Logger LOGGER = Logger.getLogger(LockManager.class.getName());
     private static final int LOCK_MANAGER_INITIAL_HASH_TABLE_SIZE = 50;// do we need this?
-    public static final boolean IS_DEBUG_MODE = false;
+    public static final boolean IS_DEBUG_MODE = true;//false
 
     private TransactionProvider txnProvider;
 
@@ -64,6 +64,8 @@ public class LockManager implements ILockManager {
 
     private int tryLockDatasetGranuleRevertOperation;
     private int tryLockEntityGranuleRevertOperation;
+    
+    private LockRequestTracker lockRequestTracker; //for debugging
 
     public LockManager(TransactionProvider txnProvider) throws ACIDException {
         this.txnProvider = txnProvider;
@@ -77,6 +79,10 @@ public class LockManager implements ILockManager {
         this.deadlockDetector = new DeadlockDetector(jobHT, datasetResourceHT, entityLockInfoManager,
                 entityInfoManager, lockWaiterManager);
         this.toutDetector = new TimeOutDetector(this);
+        
+        if(IS_DEBUG_MODE) {
+            this.lockRequestTracker = new LockRequestTracker();
+        }
     }
 
     @Override
@@ -99,6 +105,10 @@ public class LockManager implements ILockManager {
 
         latchLockTable();
         validateJob(txnContext);
+
+        if (IS_DEBUG_MODE) {
+            trackLockRequest(RequestType.LOCK, datasetId, entityHashValue, lockMode, txnContext);
+        }
 
         dLockInfo = datasetResourceHT.get(datasetId);
         jobInfo = jobHT.get(jobId);
@@ -421,6 +431,10 @@ public class LockManager implements ILockManager {
 
         latchLockTable();
         validateJob(txnContext);
+        
+        if (IS_DEBUG_MODE) {
+            trackLockRequest(RequestType.UNLOCK, datasetId, entityHashValue, (byte)0, txnContext);
+        }
 
         //find the resource to be unlocked
         dLockInfo = datasetResourceHT.get(datasetId);
@@ -647,7 +661,7 @@ public class LockManager implements ILockManager {
         }
     }
 
-    public boolean internalTryLock(DatasetId datasetId, int entityHashValue, byte lockMode, TransactionContext txnContext)
+    private boolean internalTryLock(DatasetId datasetId, int entityHashValue, byte lockMode, TransactionContext txnContext)
             throws ACIDException {
         JobId jobId = txnContext.getJobId();
         int jId = jobId.getId(); //int-type jobId
@@ -661,6 +675,10 @@ public class LockManager implements ILockManager {
 
         latchLockTable();
         validateJob(txnContext);
+        
+        if (IS_DEBUG_MODE) {
+            trackLockRequest(RequestType.TRY_LOCK, datasetId, entityHashValue, lockMode, txnContext);
+        }
 
         dLockInfo = datasetResourceHT.get(datasetId);
         jobInfo = jobHT.get(jobId);
@@ -717,6 +735,26 @@ public class LockManager implements ILockManager {
         unlatchLockTable();
 
         return isSuccess;
+    }
+
+    private void trackLockRequest(int requestType, DatasetId datasetIdObj, int entityHashValue, byte lockMode,
+            TransactionContext txnContext) {
+        LockRequest request = new LockRequest(requestType, datasetIdObj, entityHashValue, lockMode, txnContext);
+        lockRequestTracker.addRequest(request);
+    }
+    
+    public String getGlobalRequestHistory() {
+        if (IS_DEBUG_MODE) {
+            return lockRequestTracker.getGlobalRequestHistory();
+        }
+        return null;
+    }
+    
+    public String getLocalRequestHistory() {
+        if (IS_DEBUG_MODE) {
+            return lockRequestTracker.getLocalRequestHistory();
+        }
+        return null;
     }
 
     private void revertTryLockDatasetGranuleOperation(DatasetId datasetId, int entityHashValue, byte lockMode,

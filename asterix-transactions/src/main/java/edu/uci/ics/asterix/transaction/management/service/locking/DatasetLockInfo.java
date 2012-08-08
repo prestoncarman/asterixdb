@@ -154,6 +154,9 @@ public class DatasetLockInfo {
             return -1;
         } else { //entity-granule lock
             eLockInfo = entityResourceHT.get(hashVal);
+            if (eLockInfo == -1) {
+                return -1;
+            }
             entityInfo = entityLockInfoManager.findEntityInfoFromHolderList(eLockInfo, jobId, hashVal);
             if (entityInfo == -1) {
                 //find the entityInfo from the waiter list of entityLockInfo. 
