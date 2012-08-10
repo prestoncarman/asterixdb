@@ -12,6 +12,7 @@ public class JobInfo {
 
     public JobInfo(EntityInfoManager entityInfoManager, LockWaiterManager lockWaiterManager, TransactionContext txnCtx) {
         this.entityInfoManager = entityInfoManager;
+        this.lockWaiterManager = lockWaiterManager;
         this.jobCtx = txnCtx;
         this.lastHoldingResource = -1;
         this.firstWaitingResource = -1;

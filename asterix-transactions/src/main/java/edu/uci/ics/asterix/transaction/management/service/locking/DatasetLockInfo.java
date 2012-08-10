@@ -15,7 +15,8 @@ public class DatasetLockInfo {
     private int firstWaiter;
     private int firstUpgrader;
 
-    public DatasetLockInfo(EntityLockInfoManager entityLockInfoManager, EntityInfoManager entityInfoManager, LockWaiterManager lockWaiterManager) {
+    public DatasetLockInfo(EntityLockInfoManager entityLockInfoManager, EntityInfoManager entityInfoManager,
+            LockWaiterManager lockWaiterManager) {
         this.entityLockInfoManager = entityLockInfoManager;
         this.entityInfoManager = entityInfoManager;
         this.lockWaiterManager = lockWaiterManager;
@@ -175,38 +176,40 @@ public class DatasetLockInfo {
         int waiterObjId;
         LockWaiter waiterObj;
         int entityInfo = 0;
-        
+
         waiterObjId = firstWaiter;
         while (waiterObjId != -1) {
             waiterObj = lockWaiterManager.getLockWaiter(waiterObjId);
             entityInfo = waiterObj.getEntityInfoSlot();
-            if (jobId == entityInfoManager.getJobId(entityInfo) && hashVal == entityInfoManager.getPKHashVal(entityInfo)) {
+            if (jobId == entityInfoManager.getJobId(entityInfo)
+                    && hashVal == entityInfoManager.getPKHashVal(entityInfo)) {
                 return waiterObjId;
             }
             waiterObjId = waiterObj.getNextWaiterObjId();
         }
-        
+
         return -1;
     }
-    
+
     public int findUpgraderFromUpgraderList(int jobId, int hashVal) {
         int waiterObjId;
         LockWaiter waiterObj;
         int entityInfo = 0;
-        
+
         waiterObjId = firstUpgrader;
         while (waiterObjId != -1) {
             waiterObj = lockWaiterManager.getLockWaiter(waiterObjId);
             entityInfo = waiterObj.getEntityInfoSlot();
-            if (jobId == entityInfoManager.getJobId(entityInfo) && hashVal == entityInfoManager.getPKHashVal(entityInfo)) {
+            if (jobId == entityInfoManager.getJobId(entityInfo)
+                    && hashVal == entityInfoManager.getPKHashVal(entityInfo)) {
                 return waiterObjId;
             }
             waiterObjId = waiterObj.getNextWaiterObjId();
         }
-        
+
         return -1;
     }
-    
+
     public boolean isNoHolder() {
         return ISCount == 0 && IXCount == 0 && SCount == 0 && XCount == 0;
     }
@@ -400,6 +403,29 @@ public class DatasetLockInfo {
             //removed first waiter. firstWaiter = current->next
             firstUpgrader = nextObjId;
         }
+    }
+
+    //debugging method
+    public String printWaiters() {
+        StringBuilder s = new StringBuilder();
+        int waiterObjId;
+        LockWaiter waiterObj;
+        int entityInfo;
+
+        s.append("WID\tWCT\tEID\tJID\tDID\tPK\n");
+
+        waiterObjId = firstWaiter;
+        while (waiterObjId != -1) {
+            waiterObj = lockWaiterManager.getLockWaiter(waiterObjId);
+            entityInfo = waiterObj.getEntityInfoSlot();
+            s.append(waiterObjId).append("\t").append(waiterObj.getWaiterCount()).append("\t").append(entityInfo)
+                    .append("\t").append(entityInfoManager.getJobId(entityInfo)).append("\t")
+                    .append(entityInfoManager.getDatasetId(entityInfo)).append("\t")
+                    .append(entityInfoManager.getPKHashVal(entityInfo)).append("\n");
+            waiterObjId = waiterObj.getNextWaiterObjId();
+        }
+
+        return s.toString();
     }
 
     /////////////////////////////////////////////////////////

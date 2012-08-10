@@ -139,6 +139,7 @@ public class EntityLockInfoManager {
         occupiedSlots = 0;
         isShrinkTimerOn = false;
         this.entityInfoManager = entityInfoManager;
+        this.lockWaiterManager = lockWaiterManager;
     }
 
     public int allocate() {
@@ -283,6 +284,7 @@ public class EntityLockInfoManager {
             }
             s.append("child[" + i + "]: occupiedSlots:" + child.getNumOfOccupiedSlots());
             s.append(" freeSlotNum:" + child.getFreeSlotNum() + "\n");
+            s.append("\tX\t").append("S\t").append("LH\t").append("FW\t").append("UP\n");
             for (int j = 0; j < ChildEntityLockInfoArrayManager.NUM_OF_SLOTS; j++) {
                 s.append(j).append(": ");
                 s.append("\t" + child.getXCount(j));
@@ -294,6 +296,29 @@ public class EntityLockInfoManager {
             }
             s.append("\n");
         }
+        return s.toString();
+    }
+
+    //debugging method
+    public String printWaiters(int slotNum) {
+        StringBuilder s = new StringBuilder();
+        int waiterObjId;
+        LockWaiter waiterObj;
+        int entityInfo;
+
+        s.append("WID\tWCT\tEID\tJID\tDID\tPK\n");
+
+        waiterObjId = getFirstWaiter(slotNum);
+        while (waiterObjId != -1) {
+            waiterObj = lockWaiterManager.getLockWaiter(waiterObjId);
+            entityInfo = waiterObj.getEntityInfoSlot();
+            s.append(waiterObjId).append("\t").append(waiterObj.getWaiterCount()).append("\t").append(entityInfo)
+                    .append("\t").append(entityInfoManager.getJobId(entityInfo)).append("\t")
+                    .append(entityInfoManager.getDatasetId(entityInfo)).append("\t")
+                    .append(entityInfoManager.getPKHashVal(entityInfo)).append("\n");
+            waiterObjId = waiterObj.getNextWaiterObjId();
+        }
+
         return s.toString();
     }
 
@@ -432,7 +457,7 @@ public class EntityLockInfoManager {
                 throw new IllegalStateException("Invalid lock upgrade request. This call should be handled as deadlock");
             }
         }
-        
+
         setUpgrader(slotNum, waiterObjId);
     }
 
@@ -463,18 +488,22 @@ public class EntityLockInfoManager {
         }
     }
 
-    
-
     public int findEntityInfoFromHolderList(int eLockInfo, int jobId, int hashVal) {
         int entityInfo = getLastHolder(eLockInfo);
-        
-        while(entityInfo != -1) {
-            if (jobId == entityInfoManager.getJobId(entityInfo) && hashVal == entityInfoManager.getPKHashVal(entityInfo)) {
+
+        while (entityInfo != -1) {
+            if (jobId == entityInfoManager.getJobId(entityInfo)
+                    && hashVal == entityInfoManager.getPKHashVal(entityInfo)) {
                 return entityInfo;
+            }
+            if (LockManager.IS_DEBUG_MODE) {
+                System.out.println("eLockInfo(" + eLockInfo + "),entityInfo(" + entityInfo + "), Request[" + jobId
+                        + "," + hashVal + "]:Result[" + entityInfoManager.getJobId(entityInfo) + ","
+                        + entityInfoManager.getPKHashVal(entityInfo) + "]");
             }
             entityInfo = entityInfoManager.getPrevEntityActor(entityInfo);
         }
-        
+
         return -1;
     }
 
@@ -482,32 +511,34 @@ public class EntityLockInfoManager {
         int waiterObjId = getFirstWaiter(eLockInfo);
         LockWaiter waiterObj;
         int entityInfo;
-        
+
         while (waiterObjId != -1) {
             waiterObj = lockWaiterManager.getLockWaiter(waiterObjId);
             entityInfo = waiterObj.getEntityInfoSlot();
-            if (jobId == entityInfoManager.getJobId(entityInfo) && hashVal == entityInfoManager.getPKHashVal(entityInfo)) {
+            if (jobId == entityInfoManager.getJobId(entityInfo)
+                    && hashVal == entityInfoManager.getPKHashVal(entityInfo)) {
                 return waiterObjId;
             }
             waiterObjId = waiterObj.getNextWaiterObjId();
         }
-        
+
         return -1;
     }
-    
+
     public int findUpgraderFromUpgraderList(int eLockInfo, int jobId, int hashVal) {
         int waiterObjId = getUpgrader(eLockInfo);
         LockWaiter waiterObj;
         int entityInfo;
-        
+
         if (waiterObjId != -1) {
             waiterObj = lockWaiterManager.getLockWaiter(waiterObjId);
             entityInfo = waiterObj.getEntityInfoSlot();
-            if (jobId == entityInfoManager.getJobId(entityInfo) && hashVal == entityInfoManager.getPKHashVal(entityInfo)) {
+            if (jobId == entityInfoManager.getJobId(entityInfo)
+                    && hashVal == entityInfoManager.getPKHashVal(entityInfo)) {
                 return waiterObjId;
             }
         }
-        
+
         return -1;
     }
 
@@ -612,7 +643,7 @@ public class EntityLockInfoManager {
                 slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS, upgrader);
     }
 
-    public byte getUpgrader(int slotNum) {
+    public int getUpgrader(int slotNum) {
         return pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).getUpgrader(
                 slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS);
     }
@@ -669,12 +700,15 @@ class ChildEntityLockInfoArrayManager {
         int currentSlot = freeSlotNum;
         freeSlotNum = getNextFreeSlot(currentSlot);
         //initialize values
-        setXCount(currentSlot, (short)0);
-        setSCount(currentSlot, (short)0);
+        setXCount(currentSlot, (short) 0);
+        setSCount(currentSlot, (short) 0);
         setLastHolder(currentSlot, -1);
         setFirstWaiter(currentSlot, -1);
         setUpgrader(currentSlot, -1);
         occupiedSlots++;
+        //        if (LockManager.IS_DEBUG_MODE) {
+        //            System.out.println("Allocated ELockInfo[" + currentSlot + "], freeSlotNum[" + freeSlotNum+"]");
+        //        }
         return currentSlot;
     }
 
@@ -682,6 +716,9 @@ class ChildEntityLockInfoArrayManager {
         setNextFreeSlot(slotNum, freeSlotNum);
         freeSlotNum = slotNum;
         occupiedSlots--;
+        //        if (LockManager.IS_DEBUG_MODE) {
+        //            System.out.println("Deallocated ELockInfo[" + slotNum + "], freeSlotNum[" + freeSlotNum+"]");
+        //        }
     }
 
     public void deinitialize() {
@@ -750,14 +787,14 @@ class ChildEntityLockInfoArrayManager {
     }
 
     public int getFirstWaiter(int slotNum) {
-        return buffer.get(slotNum * ENTITY_LOCK_INFO_SIZE + FIRST_WAITER_OFFSET);
+        return buffer.getInt(slotNum * ENTITY_LOCK_INFO_SIZE + FIRST_WAITER_OFFSET);
     }
 
     public void setUpgrader(int slotNum, int upgrader) {
         buffer.putInt(slotNum * ENTITY_LOCK_INFO_SIZE + UPGRADER_OFFSET, upgrader);
     }
 
-    public byte getUpgrader(int slotNum) {
-        return buffer.get(slotNum * ENTITY_LOCK_INFO_SIZE + UPGRADER_OFFSET);
+    public int getUpgrader(int slotNum) {
+        return buffer.getInt(slotNum * ENTITY_LOCK_INFO_SIZE + UPGRADER_OFFSET);
     }
 }

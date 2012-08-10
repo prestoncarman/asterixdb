@@ -283,6 +283,8 @@ public class EntityInfoManager {
             }
             s.append("child[" + i + "]: occupiedSlots:" + child.getNumOfOccupiedSlots());
             s.append(" freeSlotNum:" + child.getFreeSlotNum() + "\n");
+            s.append("\tjid\t").append("did\t").append("PK\t").append("DLM\t").append("DLC\t").append("ELM\t")
+                    .append("ELC\t").append("NEA\t").append("PJR\t").append("NJR\n");
             for (int j = 0; j < ChildEntityInfoArrayManager.NUM_OF_SLOTS; j++) {
                 s.append(j).append(": ");
                 s.append("\t" + child.getJobId(j));
@@ -302,48 +304,48 @@ public class EntityInfoManager {
         }
         return s.toString();
     }
-    
+
     public void initEntityInfo(int slotNum, int jobId, int datasetId, int PKHashVal, byte lockMode) {
         pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).initEntityInfo(
                 slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS, jobId, datasetId, PKHashVal, lockMode);
     }
-    
+
     public boolean compareEntityInfo(int slotNum, int jobId, int datasetId, int PKHashVal) {
         return getPKHashVal(slotNum) == PKHashVal && getDatasetId(slotNum) == datasetId && getJobId(slotNum) == jobId;
     }
-    
+
     public void increaseDatasetLockCount(int slotNum) {
-        setDatasetLockCount(slotNum, (byte)(getDatasetLockCount(slotNum)+1));
+        setDatasetLockCount(slotNum, (byte) (getDatasetLockCount(slotNum) + 1));
     }
-    
+
     public void decreaseDatasetLockCount(int slotNum) {
-        setDatasetLockCount(slotNum, (byte)(getDatasetLockCount(slotNum)-1));
+        setDatasetLockCount(slotNum, (byte) (getDatasetLockCount(slotNum) - 1));
     }
-    
+
     public void increaseEntityLockCount(int slotNum) {
-        setEntityLockCount(slotNum, (byte)(getEntityLockCount(slotNum)+1));
+        setEntityLockCount(slotNum, (byte) (getEntityLockCount(slotNum) + 1));
     }
-    
+
     public void decreaseEntityLockCount(int slotNum) {
-        setEntityLockCount(slotNum, (byte)(getEntityLockCount(slotNum)-1));
+        setEntityLockCount(slotNum, (byte) (getEntityLockCount(slotNum) - 1));
     }
-    
+
     public void increaseDatasetLockCount(int slotNum, int count) {
-        setDatasetLockCount(slotNum, (byte)(getDatasetLockCount(slotNum)+count));
+        setDatasetLockCount(slotNum, (byte) (getDatasetLockCount(slotNum) + count));
     }
-    
+
     public void decreaseDatasetLockCount(int slotNum, int count) {
-        setDatasetLockCount(slotNum, (byte)(getDatasetLockCount(slotNum)-count));
+        setDatasetLockCount(slotNum, (byte) (getDatasetLockCount(slotNum) - count));
     }
-    
+
     public void increaseEntityLockCount(int slotNum, int count) {
-        setEntityLockCount(slotNum, (byte)(getEntityLockCount(slotNum)+count));
+        setEntityLockCount(slotNum, (byte) (getEntityLockCount(slotNum) + count));
     }
-    
+
     public void decreaseEntityLockCount(int slotNum, int count) {
-        setEntityLockCount(slotNum, (byte)(getEntityLockCount(slotNum)-count));
+        setEntityLockCount(slotNum, (byte) (getEntityLockCount(slotNum) - count));
     }
-    
+
     //////////////////////////////////////////////////////////////////
     //   set/get method for each field of EntityInfo
     //////////////////////////////////////////////////////////////////
@@ -397,7 +399,7 @@ public class EntityInfoManager {
         return pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).getDatasetLockCount(
                 slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS);
     }
-    
+
     public void setEntityLockMode(int slotNum, byte mode) {
         pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).setEntityLockMode(
                 slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS, mode);
@@ -429,13 +431,13 @@ public class EntityInfoManager {
         return pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).getNextEntityActor(
                 slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS);
     }
-    
+
     //Used for Holder
     public void setPrevEntityActor(int slotNum, int nextActorSlotNum) {
         pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).setPrevEntityActor(
                 slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS, nextActorSlotNum);
     }
-    
+
     //Used for Holder
     public int getPrevEntityActor(int slotNum) {
         return pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).getPrevEntityActor(
@@ -451,7 +453,7 @@ public class EntityInfoManager {
         return pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).getPrevJobResource(
                 slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS);
     }
-    
+
     public void setNextJobResource(int slotNum, int nextResourceSlotNum) {
         pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).setNextJobResource(
                 slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS, nextResourceSlotNum);
@@ -461,16 +463,16 @@ public class EntityInfoManager {
         return pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).getNextJobResource(
                 slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS);
     }
-    
-//    public void setNextDatasetActor(int slotNum, int nextActorSlotNum) {
-//        pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).setNextDatasetActor(
-//                slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS, nextActorSlotNum);
-//    }
-//
-//    public int getNextDatasetActor(int slotNum) {
-//        return pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).getNextDatasetActor(
-//                slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS);
-//    }
+
+    //    public void setNextDatasetActor(int slotNum, int nextActorSlotNum) {
+    //        pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).setNextDatasetActor(
+    //                slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS, nextActorSlotNum);
+    //    }
+    //
+    //    public int getNextDatasetActor(int slotNum) {
+    //        return pArray.get(slotNum / ChildEntityInfoArrayManager.NUM_OF_SLOTS).getNextDatasetActor(
+    //                slotNum % ChildEntityInfoArrayManager.NUM_OF_SLOTS);
+    //    }
 }
 
 /******************************************
@@ -577,9 +579,9 @@ class ChildEntityInfoArrayManager {
         buffer.putInt(slotNum * ENTITY_INFO_SIZE + DATASET_ID_OFFSET, datasetId);
         buffer.putInt(slotNum * ENTITY_INFO_SIZE + PKHASH_VAL_OFFSET, PKHashVal);
         buffer.put(slotNum * ENTITY_INFO_SIZE + DATASET_LOCK_MODE_OFFSET, lockMode);
-        buffer.put(slotNum * ENTITY_INFO_SIZE + DATASET_LOCK_COUNT_OFFSET, (byte)0);
+        buffer.put(slotNum * ENTITY_INFO_SIZE + DATASET_LOCK_COUNT_OFFSET, (byte) 0);
         buffer.put(slotNum * ENTITY_INFO_SIZE + ENTITY_LOCK_MODE_OFFSET, lockMode);
-        buffer.put(slotNum * ENTITY_INFO_SIZE + ENTITY_LOCK_COUNT_OFFSET, (byte)0);
+        buffer.put(slotNum * ENTITY_INFO_SIZE + ENTITY_LOCK_COUNT_OFFSET, (byte) 0);
         buffer.putInt(slotNum * ENTITY_INFO_SIZE + ENTITY_ACTOR_OFFSET, -1);
         buffer.putInt(slotNum * ENTITY_INFO_SIZE + PREV_JOB_RESOURCE_OFFSET, -1);
         buffer.putInt(slotNum * ENTITY_INFO_SIZE + NEXT_JOB_RESOURCE_OFFSET, -1);
@@ -633,7 +635,7 @@ class ChildEntityInfoArrayManager {
     public byte getDatasetLockCount(int slotNum) {
         return buffer.get(slotNum * ENTITY_INFO_SIZE + DATASET_LOCK_COUNT_OFFSET);
     }
-    
+
     public void setEntityLockMode(int slotNum, byte mode) {
         buffer.put(slotNum * ENTITY_INFO_SIZE + ENTITY_LOCK_MODE_OFFSET, mode);
     }
@@ -659,7 +661,7 @@ class ChildEntityInfoArrayManager {
     public int getNextEntityActor(int slotNum) {
         return buffer.getInt(slotNum * ENTITY_INFO_SIZE + ENTITY_ACTOR_OFFSET);
     }
-    
+
     //Used for Holder
     public void setPrevEntityActor(int slotNum, int nextActorSlotNum) {
         buffer.putInt(slotNum * ENTITY_INFO_SIZE + ENTITY_ACTOR_OFFSET, nextActorSlotNum);
@@ -677,7 +679,7 @@ class ChildEntityInfoArrayManager {
     public int getPrevJobResource(int slotNum) {
         return buffer.getInt(slotNum * ENTITY_INFO_SIZE + PREV_JOB_RESOURCE_OFFSET);
     }
-    
+
     public void setNextJobResource(int slotNum, int prevResourceSlotNum) {
         buffer.putInt(slotNum * ENTITY_INFO_SIZE + NEXT_JOB_RESOURCE_OFFSET, prevResourceSlotNum);
     }
@@ -685,12 +687,12 @@ class ChildEntityInfoArrayManager {
     public int getNextJobResource(int slotNum) {
         return buffer.getInt(slotNum * ENTITY_INFO_SIZE + NEXT_JOB_RESOURCE_OFFSET);
     }
-    
-//    public void setNextDatasetActor(int slotNum, int nextActorSlotNum) {
-//        buffer.putInt(slotNum * ENTITY_INFO_SIZE + DATASET_ACTOR_OFFSET, nextActorSlotNum);
-//    }
-//
-//    public int getNextDatasetActor(int slotNum) {
-//        return buffer.getInt(slotNum * ENTITY_INFO_SIZE + DATASET_ACTOR_OFFSET);
-//    }
+
+    //    public void setNextDatasetActor(int slotNum, int nextActorSlotNum) {
+    //        buffer.putInt(slotNum * ENTITY_INFO_SIZE + DATASET_ACTOR_OFFSET, nextActorSlotNum);
+    //    }
+    //
+    //    public int getNextDatasetActor(int slotNum) {
+    //        return buffer.getInt(slotNum * ENTITY_INFO_SIZE + DATASET_ACTOR_OFFSET);
+    //    }
 }

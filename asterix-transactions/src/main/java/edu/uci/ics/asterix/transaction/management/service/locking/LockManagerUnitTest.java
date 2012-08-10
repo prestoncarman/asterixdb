@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Random;
 
 import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
+import edu.uci.ics.asterix.transaction.management.service.transaction.ITransactionManager.TransactionState;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionContext;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionManagementConstants.LockManagerConstants.LockMode;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionProvider;
@@ -16,36 +17,43 @@ import edu.uci.ics.asterix.transaction.management.service.transaction.Transactio
 
 public class LockManagerUnitTest {
 
-    private static final int MAX_NUM_OF_UPGRADE_THREAD = 0;//2
-    private static final int MAX_NUM_OF_ENTITY_LOCK_THREAD = 2;
-    private static final int MAX_NUM_OF_DATASET_LOCK_THREAD = 0;
-    private static final int MAX_NUM_OF_THREAD_IN_A_JOB = 4; //4
+    private static final int MAX_NUM_OF_UPGRADE_JOB = 0;//2
+    private static final int MAX_NUM_OF_ENTITY_LOCK_JOB = 2;//8
+    private static final int MAX_NUM_OF_DATASET_LOCK_JOB = 0;//2
+    private static final int MAX_NUM_OF_THREAD_IN_A_JOB = 1; //4
     private static int jobId = 0;
     private static Random rand;
 
     public static void main(String args[]) throws ACIDException {
         int i;
         TransactionProvider txnProvider = new TransactionProvider("LockManagerUnitTest");
-        rand = new Random(100);
-        for (i = 0; i < MAX_NUM_OF_ENTITY_LOCK_THREAD; i++) {
+        rand = new Random(System.currentTimeMillis());
+        for (i = 0; i < MAX_NUM_OF_ENTITY_LOCK_JOB; i++) {
+            System.out.println("Creating " + i + "th EntityLockJob..");
             generateEntityLockThread(txnProvider);
         }
 
-        for (i = 0; i < MAX_NUM_OF_DATASET_LOCK_THREAD; i++) {
+        for (i = 0; i < MAX_NUM_OF_DATASET_LOCK_JOB; i++) {
+            System.out.println("Creating " + i + "th DatasetLockJob..");
             generateDatasetLockThread(txnProvider);
         }
 
-        for (i = 0; i < MAX_NUM_OF_UPGRADE_THREAD; i++) {
+        for (i = 0; i < MAX_NUM_OF_UPGRADE_JOB; i++) {
+            System.out.println("Creating " + i + "th EntityLockUpgradeJob..");
             generateEntityLockUpgradeThread(txnProvider);
         }
     }
 
     private static void generateEntityLockThread(TransactionProvider txnProvider) {
         Thread t;
-        int childCount = 1;//rand.nextInt(MAX_NUM_OF_THREAD_IN_A_JOB);
+        int childCount = rand.nextInt(MAX_NUM_OF_THREAD_IN_A_JOB);
+        if (MAX_NUM_OF_THREAD_IN_A_JOB != 0 && childCount == 0) {
+            childCount = 1;
+        }
         TransactionContext txnContext = generateTxnContext(txnProvider);
 
         for (int i = 0; i < childCount; i++) {
+            System.out.println("Creating " + txnContext.getJobId() + "," + i+ "th EntityLockThread..");
             t = new Thread(new LockRequestProducer(txnProvider.getLockManager(), txnContext, false, false, false));
             t.start();
         }
@@ -53,25 +61,38 @@ public class LockManagerUnitTest {
 
     private static void generateDatasetLockThread(TransactionProvider txnProvider) {
         Thread t;
-        int childCount = rand.nextInt(MAX_NUM_OF_THREAD_IN_A_JOB);
+//        int childCount = rand.nextInt(MAX_NUM_OF_THREAD_IN_A_JOB);
+//        if (MAX_NUM_OF_THREAD_IN_A_JOB != 0 && childCount == 0) {
+//            childCount = 1;
+//        }
+        int childCount = 1;
+        
         TransactionContext txnContext = generateTxnContext(txnProvider);
 
         for (int i = 0; i < childCount; i++) {
+            System.out.println("Creating "  + txnContext.getJobId() + "," + i + "th DatasetLockThread..");
             t = new Thread(new LockRequestProducer(txnProvider.getLockManager(), txnContext, true, false, false));
             t.start();
         }
     }
 
     private static void generateEntityLockUpgradeThread(TransactionProvider txnProvider) {
+        int i;
         Thread t;
         int childCount = MAX_NUM_OF_THREAD_IN_A_JOB;
+        if (MAX_NUM_OF_THREAD_IN_A_JOB != 0 && childCount == 0) {
+            childCount = 1;
+        }
         TransactionContext txnContext = generateTxnContext(txnProvider);
 
-        for (int i = 0; i < childCount - 1; i++) {
+        for (i = 0; i < childCount - 1; i++) {
+            System.out.println("Creating "  + txnContext.getJobId() + "," + i + "th EntityLockUpgradeThread(false)..");
             t = new Thread(new LockRequestProducer(txnProvider.getLockManager(), txnContext, false, true, false));
             t.start();
         }
+        System.out.println("Creating " + txnContext.getJobId() + "," + i + "th EntityLockUpgradeThread(true)..");
         t = new Thread(new LockRequestProducer(txnProvider.getLockManager(), txnContext, false, true, true));
+        t.start();
     }
 
     private static TransactionContext generateTxnContext(TransactionProvider txnProvider) {
@@ -88,8 +109,8 @@ public class LockManagerUnitTest {
 class LockRequestProducer implements Runnable {
 
     private static final long serialVersionUID = -3191274684985609965L;
-    private static final int MAX_DATASET_NUM = 10;
-    private static final int MAX_ENTITY_NUM = 100;
+    private static final int MAX_DATASET_NUM = 1;
+    private static final int MAX_ENTITY_NUM = 1;
     private static final int MAX_LOCK_MODE_NUM = 2;
     private static final long DATASET_LOCK_THREAD_SLEEP_TIME = 1000;
     private static final int MAX_LOCK_REQUEST_TYPE_NUM = 4;
@@ -113,7 +134,7 @@ class LockRequestProducer implements Runnable {
         this.isUpgradeThreadJob = isUpgradeThreadJob;
         this.isUpgradeThread = isUpgradeThread;
 
-        this.rand = new Random(txnContext.getJobId().getId());
+        this.rand = new Random(System.currentTimeMillis());
         requestQueue = new ArrayList<LockRequest>();
         requestHistory = new StringBuilder();
         unlockIndex = 0;
@@ -122,17 +143,28 @@ class LockRequestProducer implements Runnable {
 
     @Override
     public void run() {
-        if (isDatasetLock) {
-            runDatasetLockTask();
-        } else {
-            runEntityLockTask();
+        try {
+            if (isDatasetLock) {
+                System.out.println("DatasetLockThread(" + Thread.currentThread().getName() + ") is running...");
+                runDatasetLockTask();
+            } else {
+                System.out.println("EntityLockThread(" + Thread.currentThread().getName() + "," + isUpgradeThreadJob
+                        + "," + isUpgradeThread + ") is running...");
+                runEntityLockTask();
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            return;
+        } finally {
+            /*
+            System.out.println("" + Thread.currentThread().getName() + "\n" + requestHistory.toString() + ""
+                    + Thread.currentThread().getName() + "\n");
+            System.out.println("RequestHistoryPerJobId\n" + ((LockManager) lockMgr).getLocalRequestHistory());
+            System.out.println("");
+            System.out.println("GlobalRequestHistory\n" + ((LockManager) lockMgr).getGlobalRequestHistory());
+            System.out.println("");
+            */
         }
-        System.out.println("" + Thread.currentThread().getName() + "\n" + requestHistory.toString() + ""
-                + Thread.currentThread().getName() + "\n");
-        System.out.println("GlobalRequestHistory\n"+((LockManager)lockMgr).getGlobalRequestHistory());
-        System.out.println("");
-        System.out.println("RequestHistoryPerJobId\n"+((LockManager)lockMgr).getLocalRequestHistory());
-        System.out.println("");
     }
 
     private void runDatasetLockTask() {
@@ -163,6 +195,7 @@ class LockRequestProducer implements Runnable {
         int lockCount;
         int upgradeCount;
         int releaseCount;
+        boolean mayRelease = false;
 
         lockCount = 1 + rand.nextInt(20);
         if (isUpgradeThreadJob) {
@@ -179,7 +212,7 @@ class LockRequestProducer implements Runnable {
             upgradeCount = 0;
             lockMode = (byte) (this.txnContext.getJobId().getId() % 2);
         }
-        releaseCount = rand.nextInt(1000) % 13 == 0 ? 1 : 0;
+        releaseCount = rand.nextInt(5) % 3 == 0 ? 1 : 0;
 
         //lock
         for (i = 0; i < lockCount; i++) {
@@ -214,7 +247,15 @@ class LockRequestProducer implements Runnable {
             }
         } else {
             try {
-                produceEntityReleaseLocksRequest();
+                synchronized (txnContext) {
+                    if (txnContext.getTxnState() != TransactionState.ABORTED) {
+                        txnContext.setTxnState(TransactionState.ABORTED);
+                        mayRelease = true;
+                    }
+                }
+                if (mayRelease) {
+                    produceEntityReleaseLocksRequest();
+                }
             } catch (ACIDException e) {
                 e.printStackTrace();
                 return;
@@ -300,7 +341,7 @@ class LockRequestProducer implements Runnable {
 
         while (unlockIndex < size) {
             lockRequest = requestQueue.get(unlockIndex++);
-            if (lockRequest.isUpgrade) {
+            if (lockRequest.isUpgrade || lockRequest.isTryLockFailed) {
                 continue;
             }
             if (lockRequest.requestType == RequestType.UNLOCK || lockRequest.requestType == RequestType.RELEASE_LOCKS
@@ -326,17 +367,35 @@ class LockRequestProducer implements Runnable {
     }
 
     private void produceEntityReleaseLocksRequest() throws ACIDException {
-        LockRequest lockRequest = requestQueue.get(0);
+        LockRequest lockRequest = null;
+        int size = requestQueue.size();
+        boolean existLockRequest = false;
 
-        int requestType = RequestType.RELEASE_LOCKS;
-        int datasetId = -1;
-        int entityHashValue = -1;
-        byte lockMode = LockMode.S;
-        LockRequest request = new LockRequest(requestType, new DatasetId(datasetId), entityHashValue, lockMode,
-                txnContext);
-        requestQueue.add(request);
-        requestHistory.append(request.prettyPrint());
-        sendRequest(request);
+        while (unlockIndex < size) {
+            lockRequest = requestQueue.get(unlockIndex++);
+            if (lockRequest.isUpgrade || lockRequest.isTryLockFailed) {
+                continue;
+            }
+            if (lockRequest.requestType == RequestType.UNLOCK || lockRequest.requestType == RequestType.RELEASE_LOCKS
+                    || lockRequest.requestType == RequestType.INSTANT_LOCK
+                    || lockRequest.requestType == RequestType.INSTANT_TRY_LOCK) {
+                continue;
+            }
+            existLockRequest = true;
+            break;
+        }
+        
+        if (existLockRequest) {
+            int requestType = RequestType.RELEASE_LOCKS;
+            int datasetId = -1;
+            int entityHashValue = -1;
+            byte lockMode = LockMode.S;
+            LockRequest request = new LockRequest(requestType, new DatasetId(datasetId), entityHashValue, lockMode,
+                    txnContext);
+            requestQueue.add(request);
+            requestHistory.append(request.prettyPrint());
+            sendRequest(request);
+        }
     }
 
     private void sendRequest(LockRequest request) throws ACIDException {
@@ -349,7 +408,8 @@ class LockRequestProducer implements Runnable {
                 lockMgr.instantLock(request.datasetIdObj, request.entityHashValue, request.lockMode, request.txnContext);
                 break;
             case RequestType.TRY_LOCK:
-                lockMgr.tryLock(request.datasetIdObj, request.entityHashValue, request.lockMode, request.txnContext);
+                request.isTryLockFailed = !lockMgr.tryLock(request.datasetIdObj, request.entityHashValue,
+                        request.lockMode, request.txnContext);
                 break;
             case RequestType.INSTANT_TRY_LOCK:
                 lockMgr.instantTryLock(request.datasetIdObj, request.entityHashValue, request.lockMode,
@@ -364,6 +424,12 @@ class LockRequestProducer implements Runnable {
             default:
                 throw new UnsupportedOperationException("Unsupported lock method");
         }
+        try {
+            Thread.sleep((long)0);
+        } catch (InterruptedException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
     }
 }
 
@@ -374,7 +440,9 @@ class LockRequest {
     public byte lockMode;
     public TransactionContext txnContext;
     public boolean isUpgrade;
-
+    public boolean isTryLockFailed;
+    public long requestTime;
+    public String threadName;
     public LockRequest(int requestType, DatasetId datasetIdObj, int entityHashValue, byte lockMode,
             TransactionContext txnContext) {
         this.requestType = requestType;
@@ -382,11 +450,15 @@ class LockRequest {
         this.entityHashValue = entityHashValue;
         this.lockMode = lockMode;
         this.txnContext = txnContext;
+        this.requestTime = System.currentTimeMillis();
+        this.threadName = new String(Thread.currentThread().getName());
         isUpgrade = false;
+        isTryLockFailed = false;//used for TryLock request not to call Unlock when the tryLock failed.
     }
 
     public String prettyPrint() {
         StringBuilder s = new StringBuilder();
+        s.append(threadName).append("\t").append(requestTime).append("\t");
         switch (requestType) {
             case RequestType.LOCK:
                 s.append("|L|");
