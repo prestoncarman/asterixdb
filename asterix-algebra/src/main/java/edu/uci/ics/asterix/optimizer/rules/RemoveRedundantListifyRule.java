@@ -13,6 +13,7 @@ import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalPlan;
+import edu.uci.ics.hyracks.algebricks.core.algebra.base.INestedPlan;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IOptimizationContext;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalExpressionTag;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalOperatorTag;
@@ -70,7 +71,7 @@ public class RemoveRedundantListifyRule implements IAlgebraicRewriteRule {
         AbstractLogicalOperator op = (AbstractLogicalOperator) opRef.getValue();
         VariableUtilities.getUsedVariables(op, varSet);
         if (op.hasNestedPlans()) {
-            AbstractOperatorWithNestedPlans aonp = (AbstractOperatorWithNestedPlans) op;
+            INestedPlan aonp = (INestedPlan) op;
             for (ILogicalPlan p : aonp.getNestedPlans()) {
                 for ( Mutable<ILogicalOperator> r : p.getRoots()) {
                     if (applyRuleDown(r, varSet, context)) {
