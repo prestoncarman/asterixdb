@@ -20,6 +20,7 @@ import edu.uci.ics.hyracks.algebricks.common.utils.Pair;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalPlan;
+import edu.uci.ics.hyracks.algebricks.core.algebra.base.INestedPlan;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IOptimizationContext;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalExpressionTag;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalOperatorTag;
@@ -36,6 +37,7 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractLog
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractOperatorWithNestedPlans;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AggregateOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.GroupByOperator;
+import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.GroupJoinOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.InnerJoinOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.LeftOuterJoinOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOperator;
@@ -43,6 +45,7 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.operators.physical.ExternalGr
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.physical.PreclusteredGroupByPOperator;
 import edu.uci.ics.hyracks.algebricks.core.rewriter.base.IAlgebraicRewriteRule;
 import edu.uci.ics.hyracks.algebricks.core.rewriter.base.PhysicalOptimizationConfig;
+import edu.uci.ics.hyracks.algebricks.rewriter.util.GroupJoinUtils;
 import edu.uci.ics.hyracks.algebricks.rewriter.util.JoinUtils;
 
 public class SetAsterixPhysicalOperatorsRule implements IAlgebraicRewriteRule {
@@ -137,6 +140,10 @@ public class SetAsterixPhysicalOperatorsRule implements IAlgebraicRewriteRule {
                     JoinUtils.setJoinAlgorithmAndExchangeAlgo((LeftOuterJoinOperator) op, context);
                     break;
                 }
+                case GROUPJOIN: {
+                    GroupJoinUtils.setJoinAlgorithmAndExchangeAlgo((GroupJoinOperator) op, context);
+                    break;
+                }
                 case UNNEST_MAP: {
                     UnnestMapOperator unnestMap = (UnnestMapOperator) op;
                     ILogicalExpression unnestExpr = unnestMap.getExpressionRef().getValue();
@@ -180,7 +187,7 @@ public class SetAsterixPhysicalOperatorsRule implements IAlgebraicRewriteRule {
             }
         }
         if (op.hasNestedPlans()) {
-            AbstractOperatorWithNestedPlans nested = (AbstractOperatorWithNestedPlans) op;
+            INestedPlan nested = (INestedPlan) op;
             for (ILogicalPlan p : nested.getNestedPlans()) {
                 setPhysicalOperators(p, context);
             }

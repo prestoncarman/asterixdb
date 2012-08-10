@@ -81,6 +81,7 @@ import edu.uci.ics.hyracks.algebricks.rewriter.rules.SetAlgebricksPhysicalOperat
 import edu.uci.ics.hyracks.algebricks.rewriter.rules.SetExecutionModeRule;
 import edu.uci.ics.hyracks.algebricks.rewriter.rules.SimpleUnnestToProductRule;
 import edu.uci.ics.hyracks.algebricks.rewriter.rules.SubplanOutOfGroupRule;
+//import edu.uci.ics.hyracks.algebricks.rewriter.rules.ReplaceJoinGroupWithGroupJoinRule;
 
 public final class RuleCollections {
 
@@ -118,6 +119,7 @@ public final class RuleCollections {
         condPushDownAndJoinInference.add(new RemoveRedundantListifyRule());
         condPushDownAndJoinInference.add(new SimpleUnnestToProductRule());
         condPushDownAndJoinInference.add(new ComplexJoinInferenceRule());
+//        condPushDownAndJoinInference.add(new ReplaceJoinGroupWithGroupJoinRule());
         condPushDownAndJoinInference.add(new PushSelectIntoJoinRule());
         condPushDownAndJoinInference.add(new IntroJoinInsideSubplanRule());
         condPushDownAndJoinInference.add(new PushAssignDownThroughProductRule());
@@ -133,7 +135,7 @@ public final class RuleCollections {
         condPushDownAndJoinInference.add(new PushProperJoinThroughProduct());
         condPushDownAndJoinInference.add(new PushGroupByThroughProduct());
         condPushDownAndJoinInference.add(new NestGroupByRule());
-        condPushDownAndJoinInference.add(new ReplaceJoinGroupWithGroupJoinRule());
+//        condPushDownAndJoinInference.add(new ReplaceJoinGroupWithGroupJoinRule());
 
         return condPushDownAndJoinInference;
     }
@@ -144,6 +146,7 @@ public final class RuleCollections {
         fieldLoads.add(new PushFieldAccessRule());
         // fieldLoads.add(new ByNameToByHandleFieldAccessRule()); -- disabled
         fieldLoads.add(new ByNameToByIndexFieldAccessRule());
+        fieldLoads.add(new ReplaceJoinGroupWithGroupJoinRule());
         fieldLoads.add(new AsterixInlineVariablesRule());
         // fieldLoads.add(new InlineRecordAccessRule());
         fieldLoads.add(new RemoveUnusedAssignAndAggregateRule());
