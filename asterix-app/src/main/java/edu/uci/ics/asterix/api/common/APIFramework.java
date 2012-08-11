@@ -562,7 +562,10 @@ public class APIFramework {
             hcc.waitForCompletion(jobId);
             long endTime = System.currentTimeMillis();
             double duration = (endTime - startTime) / 1000.00;
-            out.println("<PRE>Duration: " + duration + "</PRE>");
+            // The spatial aggregation demo will pass null.
+            if (out != null) {
+            	out.println("<PRE>Duration: " + duration + "</PRE>");
+            }
         }
 
     }
@@ -584,7 +587,10 @@ public class APIFramework {
             }
             long endTime = System.currentTimeMillis();
             double duration = (endTime - startTime) / 1000.00;
-            out.println("<PRE>Duration: " + duration + "</PRE>");
+            // The spatial aggregation demo will pass null.
+            if (out != null) {
+            	out.println("<PRE>Duration: " + duration + "</PRE>");
+            }
         }
 
     }

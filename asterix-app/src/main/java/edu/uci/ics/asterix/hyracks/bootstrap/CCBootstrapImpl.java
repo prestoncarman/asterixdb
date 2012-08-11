@@ -29,6 +29,7 @@ import org.eclipse.jetty.servlet.ServletHolder;
 import edu.uci.ics.asterix.api.aqlj.server.APIClientThreadFactory;
 import edu.uci.ics.asterix.api.aqlj.server.ThreadedServer;
 import edu.uci.ics.asterix.api.http.servlet.APIServlet;
+import edu.uci.ics.asterix.api.http.servlet.SpatialAggregationDemoAPIServlet;
 import edu.uci.ics.asterix.common.config.GlobalConfig;
 import edu.uci.ics.asterix.metadata.MetadataManager;
 import edu.uci.ics.asterix.metadata.api.IAsterixStateProxy;
@@ -44,11 +45,13 @@ public class CCBootstrapImpl implements ICCBootstrap {
 
     public static final int DEFAULT_API_SERVER_PORT = 14600;
     private static final int DEFAULT_API_NODEDATA_SERVER_PORT = 14601;
+    private static final int DEFAULT_SPATIAK_AGGREGATION_DEMO_SERVER_PORT = 14602;
 
     private Server webServer;
     private static IAsterixStateProxy proxy;
     private ICCApplicationContext appCtx;
     private ThreadedServer apiServer;
+    private Server spatialAggregationDemoServer;
 
     @Override
     public void start() throws Exception {
@@ -71,6 +74,10 @@ public class CCBootstrapImpl implements ICCBootstrap {
         // Setup and start the API server
         setupAPIServer();
         apiServer.start();
+        
+        // Setup and start the spatial aggregation demo
+        setupSpatialAggregationDemoServer();
+        spatialAggregationDemoServer.start();
     }
 
     @Override
@@ -82,6 +89,7 @@ public class CCBootstrapImpl implements ICCBootstrap {
         
         webServer.stop();
         apiServer.shutdown();
+        spatialAggregationDemoServer.stop();
     }
 
     @Override
@@ -124,5 +132,15 @@ public class CCBootstrapImpl implements ICCBootstrap {
         }
 
         apiServer = new ThreadedServer(DEFAULT_API_SERVER_PORT, new APIClientThreadFactory(appCtx));
+    }
+    
+    private void setupSpatialAggregationDemoServer() throws Exception {
+        int port = DEFAULT_SPATIAK_AGGREGATION_DEMO_SERVER_PORT;
+        spatialAggregationDemoServer = new Server(port);
+        
+        ServletContextHandler context = new ServletContextHandler(ServletContextHandler.SESSIONS);
+        context.setContextPath("/");
+        spatialAggregationDemoServer.setHandler(context);
+        context.addServlet(new ServletHolder(new SpatialAggregationDemoAPIServlet()), "/*");
     }
 }

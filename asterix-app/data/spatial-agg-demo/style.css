@@ -1,0 +1,155 @@
+html, body {
+    margin: 0;
+    padding: 0;
+    font-family: sans-serif;
+    height: 90%;
+}
+
+#wrapper {
+    margin: 0 auto;
+    width: 100%;
+    height: 100%;
+}
+
+#header {
+    padding: 5px 0;
+}
+
+#header img{
+    width: 100px;
+    height: 100px;
+    vertical-align: middle;
+}
+
+#header img+img{
+    width: 150px;
+    height: 50px;
+    vertical-align: middle;
+}
+
+#header h1, h2{
+    padding: 0;
+    margin: 0;
+    display: inline;
+}
+
+#header a:link {
+    color: blue;
+}
+
+#header a:visited {
+    color: blue;
+}
+
+#img-wrapper {
+    float: left;
+    padding-top: 50px;
+    padding-bottom: 20px;
+}
+
+#img-wrapper a:link {
+    text-decoration: none;
+}
+#img-wrapper a:visited {
+    text-decoration: none;
+}
+#img-wrapper a:hover {
+    text-decoration: none;
+}
+#img-wrapper a:active {
+    text-decoration: none;
+}
+
+#title {
+    padding-left: 300px;
+    padding-right: 30px;
+    margin-top: 0;
+}
+
+#title h1 {
+    font-family: Helvetica Neue, Helvetica, Sans-Serif;
+    font-weight: 500;
+    text-align: center;
+}
+
+#title p {
+    font-size: 12px;
+    padding-bottom: 0;
+    margin-bottom: 0;
+}
+
+#content-wrapper {
+    float: left;
+    width: 100%;
+    height: 100%;
+}
+
+#left-column {
+    float: left;
+    width: 300px;
+    background: #eee;
+}
+
+#right-column {
+    border: 1px solid #aaa;
+    margin-left: 300px;
+    height: 100%;
+}
+
+#map-canvas {
+    width: 100%;
+    height: 100%;
+}
+
+.column-section {
+    border-top: 1px solid #aaa;
+    border-bottom: 1px solid #aaa;
+}
+
+.section-title {
+    background: #ddd;
+    padding: 5px 0;
+}
+
+.section-title span {
+    margin-left: 10px;
+    font-size: .8em;
+    font-weight: bold;
+}
+
+.section-controls {
+    text-align: center;
+    padding: 10px 0;
+    font-size: .8em;
+}
+
+.section-controls .textbox {
+    margin: 3px 3px;
+    width: 90%;
+}
+
+.control {
+    margin: 0;
+    padding: 5px 0;
+}
+
+.control li {
+    display: inline;
+    padding: 0 20px;
+    margin: 0;
+}
+
+div.ui-datepicker {
+    font-size: 12px;
+}
+
+.grid-slider {
+    width: 80%;
+    padding: 1px;
+    margin-left: 10%;
+}
+
+.control-label {
+    padding: 4px 0;
+}
+
