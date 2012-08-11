@@ -20,19 +20,35 @@ public class JobInfo {
     }
 
     public void addHoldingResource(int resource) {
+        
+        if (LockManager.IS_DEBUG_MODE) {
+            if (entityInfoManager.getJobId(resource) != jobCtx.getJobId().getId()) {
+                throw new IllegalStateException("JobInfo("+jobCtx.getJobId().getId()+") has diffrent Job(JID:"+entityInfoManager.getJobId(resource)+"'s resource!!!");
+            }
+            //System.out.println(Thread.currentThread().getName()+"\tJobInfo_AddHolder:"+ resource);
+        }
+        
         if (lastHoldingResource != -1) {
             entityInfoManager.setNextJobResource(lastHoldingResource, resource);
         }
         entityInfoManager.setPrevJobResource(resource, lastHoldingResource);
         entityInfoManager.setNextJobResource(resource, -1);
         lastHoldingResource = resource;
+
     }
 
     public void removeHoldingResource(int resource) {
         int current = lastHoldingResource;
         int prev;
         int next;
-
+        
+        if (LockManager.IS_DEBUG_MODE) {
+            if (entityInfoManager.getJobId(resource) != jobCtx.getJobId().getId()) {
+                throw new IllegalStateException("JobInfo("+jobCtx.getJobId().getId()+") has diffrent Job(JID:"+entityInfoManager.getJobId(resource)+"'s resource!!!");
+            }
+            //System.out.println(Thread.currentThread().getName()+"\tJobInfo_RemoveHolder:"+ resource);
+        }
+        
         while (current != resource) {
 
             if (LockManager.IS_DEBUG_MODE) {
@@ -67,22 +83,38 @@ public class JobInfo {
     public void addWaitingResource(int waiterObjId) {
         int lastObjId;
         LockWaiter lastObj = null;
-
+        
         if (firstWaitingResource != -1) {
             //find the lastWaiter
             lastObjId = firstWaitingResource;
             while (lastObjId != -1) {
                 lastObj = lockWaiterManager.getLockWaiter(lastObjId);
-                lastObjId = lastObj.getNextWaiterObjId();
+                if (LockManager.IS_DEBUG_MODE) {
+                    int entityInfo = lastObj.getEntityInfoSlot();
+                    if (entityInfoManager.getJobId(entityInfo) != jobCtx.getJobId().getId()) {
+                        throw new IllegalStateException("JobInfo("+jobCtx.getJobId().getId()+") has diffrent Job(JID:"+entityInfoManager.getJobId(entityInfo)+"'s resource!!!");
+                    }
+                }
+                lastObjId = lastObj.getNextWaitingResourceObjId();
             }
             //last->next = new_waiter
-            lastObj.setNextWaiterObjId(waiterObjId);
+            lastObj.setNextWaitingResourceObjId(waiterObjId);
         } else {
             firstWaitingResource = waiterObjId;
         }
         //new_waiter->next = -1
         lastObj = lockWaiterManager.getLockWaiter(waiterObjId);
-        lastObj.setNextWaiterObjId(-1);
+        if (LockManager.IS_DEBUG_MODE) {
+            int entityInfo = lastObj.getEntityInfoSlot();
+            if (entityInfoManager.getJobId(entityInfo) != jobCtx.getJobId().getId()) {
+                throw new IllegalStateException("JobInfo("+jobCtx.getJobId().getId()+") has diffrent Job(JID:"+entityInfoManager.getJobId(entityInfo)+"'s resource!!!");
+            }
+        }
+        lastObj.setNextWaitingResourceObjId(-1);
+        
+//        if (LockManager.IS_DEBUG_MODE) {
+//            System.out.println(Thread.currentThread().getName()+"\tJobInfo_AddWaiter:"+ waiterObjId + ", FirstWaiter:"+firstWaitingResource);            
+//        }
     }
 
     public void removeWaitingResource(int waiterObjId) {
@@ -108,22 +140,33 @@ public class JobInfo {
 
             prevObj = lockWaiterManager.getLockWaiter(currentObjId);
             prevObjId = currentObjId;
-            currentObjId = prevObj.getNextWaiterObjId();
+            currentObjId = prevObj.getNextWaitingResourceObjId();
         }
 
         //get current waiter object
         currentObj = lockWaiterManager.getLockWaiter(currentObjId);
+        
+        if (LockManager.IS_DEBUG_MODE) {
+            int entityInfo = currentObj.getEntityInfoSlot();
+            if (entityInfoManager.getJobId(entityInfo) != jobCtx.getJobId().getId()) {
+                throw new IllegalStateException("JobInfo("+jobCtx.getJobId().getId()+") has diffrent Job(JID:"+entityInfoManager.getJobId(entityInfo)+"'s resource!!!");
+            }
+        }
 
         //get next waiterObjId
-        nextObjId = currentObj.getNextWaiterObjId();
+        nextObjId = currentObj.getNextWaitingResourceObjId();
 
         if (prevObjId != -1) {
             //prev->next = next
-            prevObj.setNextWaiterObjId(nextObjId);
+            prevObj.setNextWaitingResourceObjId(nextObjId);
         } else {
             //removed first waiter. firstWaiter = current->next
             firstWaitingResource = nextObjId;
         }
+        
+//        if (LockManager.IS_DEBUG_MODE) {
+//            System.out.println(Thread.currentThread().getName()+"\tJobInfo_RemoveWaiter:"+ waiterObjId + ", FirstWaiter:"+firstWaitingResource);            
+//        }
     }
 
     /////////////////////////////////////////////////////////

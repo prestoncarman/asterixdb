@@ -332,8 +332,12 @@ class ChildLockWaiterArrayManager {
         childArray[currentSlot].setVictim(false);
         childArray[currentSlot].setWaiterCount((byte)0);
         childArray[currentSlot].setNextWaiterObjId(-1);
+        childArray[currentSlot].setNextWaitingResourceObjId(-1);
         childArray[currentSlot].setBeginWaitTime(-1l);
         occupiedSlots++;
+//        if (LockManager.IS_DEBUG_MODE) {
+//            System.out.println(Thread.currentThread().getName()+"  Alloc LockWaiterId("+currentSlot+")");
+//        }
         return currentSlot;
     }
 
@@ -341,6 +345,9 @@ class ChildLockWaiterArrayManager {
         childArray[slotNum].setNextFreeSlot(freeSlotNum);
         freeSlotNum = slotNum;
         occupiedSlots--;
+//        if (LockManager.IS_DEBUG_MODE) {
+//            System.out.println(Thread.currentThread().getName()+"  Dealloc LockWaiterId("+slotNum+")");
+//        }
     }
 
     public void deinitialize() {

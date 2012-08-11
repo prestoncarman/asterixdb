@@ -12,6 +12,7 @@ import edu.uci.ics.hyracks.api.job.JobId;
 
 public class DeadlockDetector {
 
+    public static final boolean IS_DEBUG_MODE = true;//false
     private HashMap<JobId, JobInfo> jobHT;
     private HashMap<DatasetId, DatasetLockInfo> datasetResourceHT;
     private EntityLockInfoManager entityLockInfoManager;
@@ -182,6 +183,11 @@ public class DeadlockDetector {
         //get JobInfo
         tempJobIdObj.setId(jobId);
         jobInfo = jobHT.get(tempJobIdObj);
+        if (IS_DEBUG_MODE) {
+            if (jobInfo == null) {
+                System.out.println(Thread.currentThread().getName()+"jobId:"+jobId);
+            }
+        }
         
         //get WaiterObj
         waiterId = jobInfo.getFirstWaitingResource();

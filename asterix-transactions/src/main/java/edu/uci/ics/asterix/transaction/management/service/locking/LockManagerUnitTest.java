@@ -19,8 +19,8 @@ public class LockManagerUnitTest {
 
     private static final int MAX_NUM_OF_UPGRADE_JOB = 0;//2
     private static final int MAX_NUM_OF_ENTITY_LOCK_JOB = 2;//8
-    private static final int MAX_NUM_OF_DATASET_LOCK_JOB = 0;//2
-    private static final int MAX_NUM_OF_THREAD_IN_A_JOB = 1; //4
+    private static final int MAX_NUM_OF_DATASET_LOCK_JOB = 2;//2
+    private static final int MAX_NUM_OF_THREAD_IN_A_JOB = 2; //4
     private static int jobId = 0;
     private static Random rand;
 

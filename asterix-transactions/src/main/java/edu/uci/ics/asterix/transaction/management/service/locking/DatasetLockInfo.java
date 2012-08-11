@@ -300,6 +300,10 @@ public class DatasetLockInfo {
         //new_waiter->next = -1
         lastObj = lockWaiterManager.getLockWaiter(waiterObjId);
         lastObj.setNextWaiterObjId(-1);
+
+//        if (LockManager.IS_DEBUG_MODE) {
+//            System.out.println(printWaiters());
+//        }
     }
 
     public void removeWaiter(int waiterObjId) {
@@ -341,6 +345,10 @@ public class DatasetLockInfo {
             //removed first waiter. firstWaiter = current->next
             firstWaiter = nextObjId;
         }
+
+//        if (LockManager.IS_DEBUG_MODE) {
+//            System.out.println(printWaiters());
+//        }
     }
 
     public void addUpgrader(int waiterObjId) {

@@ -32,7 +32,8 @@ public class LockWaiter {
     private boolean victim;
     private byte waiterCount;
     private boolean firstGetUp;
-    private int nextWaiterObjId; 
+    private int nextWaiterObjId; //used for DatasetLockInfo and EntityLockInfo
+    private int nextWaitingResourceObjId; //used for JobInfo
     private long beginWaitTime;
 
     public LockWaiter() {
@@ -40,6 +41,7 @@ public class LockWaiter {
         this.wait = true;
         waiterCount = 0;
         nextWaiterObjId = -1;
+        nextWaitingResourceObjId = -1;
     }
 
     public void setEntityInfoSlot(int slotNum) {
@@ -104,6 +106,14 @@ public class LockWaiter {
     
     public int getNextWaiterObjId() {
         return nextWaiterObjId;
+    }
+    
+    public void setNextWaitingResourceObjId(int next) {
+        nextWaitingResourceObjId = next;
+    }
+    
+    public int getNextWaitingResourceObjId() {
+        return nextWaitingResourceObjId;
     }
     
     public void setBeginWaitTime(long time) {

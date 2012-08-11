@@ -496,11 +496,11 @@ public class EntityLockInfoManager {
                     && hashVal == entityInfoManager.getPKHashVal(entityInfo)) {
                 return entityInfo;
             }
-            if (LockManager.IS_DEBUG_MODE) {
-                System.out.println("eLockInfo(" + eLockInfo + "),entityInfo(" + entityInfo + "), Request[" + jobId
-                        + "," + hashVal + "]:Result[" + entityInfoManager.getJobId(entityInfo) + ","
-                        + entityInfoManager.getPKHashVal(entityInfo) + "]");
-            }
+//            if (LockManager.IS_DEBUG_MODE) {
+//                System.out.println("eLockInfo(" + eLockInfo + "),entityInfo(" + entityInfo + "), Request[" + jobId
+//                        + "," + hashVal + "]:Result[" + entityInfoManager.getJobId(entityInfo) + ","
+//                        + entityInfoManager.getPKHashVal(entityInfo) + "]");
+//            }
             entityInfo = entityInfoManager.getPrevEntityActor(entityInfo);
         }
 
