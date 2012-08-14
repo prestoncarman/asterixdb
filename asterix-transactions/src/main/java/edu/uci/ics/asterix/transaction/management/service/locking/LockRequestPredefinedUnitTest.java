@@ -526,6 +526,7 @@ class WorkerReadyQueue {
         }
 
         if (listSize != queueSize) {
+            log("listSize:"+listSize +", queueSize:"+queueSize);
             return false;
         }
 
