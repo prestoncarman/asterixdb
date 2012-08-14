@@ -2,6 +2,8 @@ options {
 
 	  
        STATIC = false;
+       DEBUG_PARSER = true;
+       DEBUG_LOOKAHEAD = true;
 	
 }
 
@@ -1814,8 +1816,8 @@ Expression  FLWOGR() throws ParseException:
 	createNewScope();
 }
 {
-     (tmp = ForClause()  {clauseList.add(tmp);} | tmp = LetClause() {clauseList.add(tmp);})
-      (tmp = Clause() {clauseList.add(tmp);})* "return" returnExpr = Expression()
+     (tmp = ForOrFromClause()  {clauseList.add(tmp);} | tmp = LetOrWithClause() {clauseList.add(tmp);})
+      (tmp = Clause() {clauseList.add(tmp);})* returnExpr = ReturnExpression()
 
      {
        flworg.setClauseList(clauseList);
@@ -1831,8 +1833,8 @@ Clause Clause()throws ParseException :
 }
 {
     (
-         clause = ForClause() 
-       | clause = LetClause() 
+         clause = ForOrFromClause() 
+       | clause = LetOrWithClause() 
        | clause = WhereClause() 
        | clause = OrderbyClause() 
        | clause = GroupClause() 
@@ -1842,6 +1844,87 @@ Clause Clause()throws ParseException :
     )
     {
       return clause;
+    }
+}
+
+/*
+Expression ReturnOrSelectExpression() throws ParseException:
+{
+	Expression expr;
+}
+{
+    (
+    	expr = ReturnExpression() | expr = SelectExpression()
+    )
+    
+    {
+      return expr;
+    }
+}
+*/
+
+Expression ReturnExpression() throws ParseException:
+{
+  Expression expr;
+}
+{
+    "return" expr = Expression()
+    {
+      return expr;
+    }
+}
+
+Expression SelectExpression() throws ParseException:
+{
+  Expression expr;
+}
+{
+    "select" expr = Expression()
+    {
+      return expr;
+    }
+}
+
+Clause ForOrFromClause()throws ParseException :
+{
+	Clause clause = null;
+}
+{
+    (
+    	clause = ForClause() | clause = FromClause()
+    )
+    
+    {
+      return clause;
+    }
+}
+
+Clause FromClause()throws ParseException :
+{
+	
+	ForClause fc = new ForClause();   // a bit of a hack - first try :-)
+	VariableExpr varExp;
+	VariableExpr varPos = null;
+	Expression inExp;                 // again, a bit of a hack - very lightly-skinned approach :-)
+	extendCurrentScope();
+}
+{
+    "from" inExp = Expression()
+ 
+    "as" ( varExp = Variable() )
+     { getCurrentScope().addNewVarSymbolToScope(varExp.getVar()); }
+      
+     ("at" varPos = Variable()
+	  { getCurrentScope().addNewVarSymbolToScope(varPos.getVar()); } 
+	 )?
+	 
+    {
+      fc.setVarExpr(varExp);
+      fc.setInExpr(inExp);
+      if (varPos != null) {
+        fc.setPosExpr(varPos);
+      }
+      return fc;
     }
 }
 
@@ -1873,6 +1956,38 @@ Clause ForClause()throws ParseException :
       return fc;
     }
 }
+
+Clause LetOrWithClause()throws ParseException :
+{
+	Clause clause = null;
+}
+{
+    (
+    	clause = LetClause() | clause = WithClause()
+    )
+    
+    {
+      return clause;
+    }
+}
+
+Clause WithClause() throws ParseException:
+{
+	LetClause lc = new LetClause();
+	VariableExpr varExp;
+	Expression beExp;
+	extendCurrentScope();
+}
+{
+    "with" varExp = Variable() "as" beExp = Expression()
+    {
+      getCurrentScope().addNewVarSymbolToScope(varExp.getVar());
+      lc.setVarExpr(varExp);
+      lc.setBeExpr(beExp);
+      return lc;
+    }
+}
+
 
 Clause LetClause() throws ParseException:
 {
