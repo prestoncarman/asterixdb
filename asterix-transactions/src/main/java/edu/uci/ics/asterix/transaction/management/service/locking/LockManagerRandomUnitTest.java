@@ -15,7 +15,7 @@ import edu.uci.ics.asterix.transaction.management.service.transaction.Transactio
  * @author kisskys
  */
 
-public class LockManagerUnitTest {
+public class LockManagerRandomUnitTest {
 
     private static final int MAX_NUM_OF_UPGRADE_JOB = 0;//2
     private static final int MAX_NUM_OF_ENTITY_LOCK_JOB = 2;//8
@@ -26,7 +26,7 @@ public class LockManagerUnitTest {
 
     public static void main(String args[]) throws ACIDException {
         int i;
-        TransactionProvider txnProvider = new TransactionProvider("LockManagerUnitTest");
+        TransactionProvider txnProvider = new TransactionProvider("LockManagerRandomUnitTest");
         rand = new Random(System.currentTimeMillis());
         for (i = 0; i < MAX_NUM_OF_ENTITY_LOCK_JOB; i++) {
             System.out.println("Creating " + i + "th EntityLockJob..");
@@ -268,7 +268,7 @@ class LockRequestProducer implements Runnable {
         int datasetId = rand.nextInt(MAX_DATASET_NUM);
         int entityHashValue = -1;
         byte lockMode = (byte) (rand.nextInt(MAX_LOCK_MODE_NUM));
-        LockRequest request = new LockRequest(requestType, new DatasetId(datasetId), entityHashValue, lockMode,
+        LockRequest request = new LockRequest(Thread.currentThread().getName(), requestType, new DatasetId(datasetId), entityHashValue, lockMode,
                 txnContext);
         requestQueue.add(request);
         requestHistory.append(request.prettyPrint());
@@ -282,7 +282,7 @@ class LockRequestProducer implements Runnable {
         int datasetId = lockRequest.datasetIdObj.getId();
         int entityHashValue = -1;
         byte lockMode = LockMode.S;//lockMode is not used for unlock() call.
-        LockRequest request = new LockRequest(requestType, new DatasetId(datasetId), entityHashValue, lockMode,
+        LockRequest request = new LockRequest(Thread.currentThread().getName(), requestType, new DatasetId(datasetId), entityHashValue, lockMode,
                 txnContext);
         requestQueue.add(request);
         requestHistory.append(request.prettyPrint());
@@ -293,7 +293,7 @@ class LockRequestProducer implements Runnable {
         int requestType = rand.nextInt(MAX_LOCK_REQUEST_TYPE_NUM);
         int datasetId = rand.nextInt(MAX_DATASET_NUM);
         int entityHashValue = rand.nextInt(MAX_ENTITY_NUM);
-        LockRequest request = new LockRequest(requestType, new DatasetId(datasetId), entityHashValue, lockMode,
+        LockRequest request = new LockRequest(Thread.currentThread().getName(), requestType, new DatasetId(datasetId), entityHashValue, lockMode,
                 txnContext);
         requestQueue.add(request);
         requestHistory.append(request.prettyPrint());
@@ -325,7 +325,7 @@ class LockRequestProducer implements Runnable {
             int datasetId = lockRequest.datasetIdObj.getId();
             int entityHashValue = lockRequest.entityHashValue;
             byte lockMode = LockMode.X;
-            LockRequest request = new LockRequest(requestType, new DatasetId(datasetId), entityHashValue, lockMode,
+            LockRequest request = new LockRequest(Thread.currentThread().getName(), requestType, new DatasetId(datasetId), entityHashValue, lockMode,
                     txnContext);
             request.isUpgrade = true;
             requestQueue.add(request);
@@ -358,7 +358,7 @@ class LockRequestProducer implements Runnable {
             int datasetId = lockRequest.datasetIdObj.getId();
             int entityHashValue = lockRequest.entityHashValue;
             byte lockMode = lockRequest.lockMode;
-            LockRequest request = new LockRequest(requestType, new DatasetId(datasetId), entityHashValue, lockMode,
+            LockRequest request = new LockRequest(Thread.currentThread().getName(), requestType, new DatasetId(datasetId), entityHashValue, lockMode,
                     txnContext);
             requestQueue.add(request);
             requestHistory.append(request.prettyPrint());
@@ -390,7 +390,7 @@ class LockRequestProducer implements Runnable {
             int datasetId = -1;
             int entityHashValue = -1;
             byte lockMode = LockMode.S;
-            LockRequest request = new LockRequest(requestType, new DatasetId(datasetId), entityHashValue, lockMode,
+            LockRequest request = new LockRequest(Thread.currentThread().getName(), requestType, new DatasetId(datasetId), entityHashValue, lockMode,
                     txnContext);
             requestQueue.add(request);
             requestHistory.append(request.prettyPrint());
@@ -443,7 +443,7 @@ class LockRequest {
     public boolean isTryLockFailed;
     public long requestTime;
     public String threadName;
-    public LockRequest(int requestType, DatasetId datasetIdObj, int entityHashValue, byte lockMode,
+    public LockRequest(String threadName, int requestType, DatasetId datasetIdObj, int entityHashValue, byte lockMode,
             TransactionContext txnContext) {
         this.requestType = requestType;
         this.datasetIdObj = datasetIdObj;
@@ -451,9 +451,15 @@ class LockRequest {
         this.lockMode = lockMode;
         this.txnContext = txnContext;
         this.requestTime = System.currentTimeMillis();
-        this.threadName = new String(Thread.currentThread().getName());
+        this.threadName = new String(threadName);
         isUpgrade = false;
         isTryLockFailed = false;//used for TryLock request not to call Unlock when the tryLock failed.
+    }
+    
+    public LockRequest(String threadName, int requestType) {
+        this.requestType = requestType;
+        this.requestTime = System.currentTimeMillis();
+        this.threadName = new String(threadName);
     }
 
     public String prettyPrint() {
@@ -478,6 +484,15 @@ class LockRequest {
             case RequestType.RELEASE_LOCKS:
                 s.append("|RL|");
                 break;
+            case RequestType.CHECK_SEQUENCE:
+                s.append("|CSQ|");
+                return s.toString();
+            case RequestType.CHECK_SET:
+                s.append("|CST|");
+                return s.toString();
+            case RequestType.KILL:
+                s.append("|KI|");
+                return s.toString();
             default:
                 throw new UnsupportedOperationException("Unsupported method");
         }
@@ -511,4 +526,7 @@ class RequestType {
     public static final int INSTANT_TRY_LOCK = 3;
     public static final int UNLOCK = 4;
     public static final int RELEASE_LOCKS = 5;
+    public static final int CHECK_SEQUENCE = 6;
+    public static final int CHECK_SET = 7;
+    public static final int KILL = 8;
 }

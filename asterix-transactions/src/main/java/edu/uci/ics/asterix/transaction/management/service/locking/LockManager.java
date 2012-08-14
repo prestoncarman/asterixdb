@@ -805,7 +805,7 @@ public class LockManager implements ILockManager {
     private void trackLockRequest(String msg, int requestType, DatasetId datasetIdObj, int entityHashValue, byte lockMode,
             TransactionContext txnContext, DatasetLockInfo dLockInfo, int eLockInfo) {
         StringBuilder s = new StringBuilder();
-        LockRequest request = new LockRequest(requestType, datasetIdObj, entityHashValue, lockMode, txnContext);
+        LockRequest request = new LockRequest(Thread.currentThread().getName(), requestType, datasetIdObj, entityHashValue, lockMode, txnContext);
         s.append(msg);
         if (msg.equals("Granted")) {
             if (dLockInfo != null) {

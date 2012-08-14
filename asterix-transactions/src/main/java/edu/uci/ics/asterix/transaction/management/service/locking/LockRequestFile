@@ -1,0 +1,14 @@
+1 L 1 1 1 S
+2 L 2 1 1 S
+3 L 3 1 1 X
+4 L 4 1 1 S
+0 CST
+1 UL 1 1 1 S
+2 UL 2 1 1 S
+1 KI 
+2 KI 
+3 UL 3 1 1 S
+4 UL 4 1 1 S
+0 CSQ
+3 KI
+4 KI
