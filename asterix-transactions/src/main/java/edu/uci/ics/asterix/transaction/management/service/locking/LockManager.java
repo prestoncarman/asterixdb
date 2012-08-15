@@ -555,7 +555,8 @@ public class LockManager implements ILockManager {
         DatasetLockInfo dLockInfo = null;
         int eLockInfo = -1;
         int did;//int-type dataset id
-        int lockCount;
+        int datasetLockCount;
+        int entityLockCount;
         byte lockMode;
 
         JobId jobId = txnContext.getJobId();
@@ -614,44 +615,56 @@ public class LockManager implements ILockManager {
             if (entityHashValue == -1) {
                 //decrease datasetLockCount
                 lockMode = entityInfoManager.getDatasetLockMode(entityInfo);
-                lockCount = entityInfoManager.getDatasetLockCount(entityInfo);
-                dLockInfo.decreaseLockCount(lockMode, lockCount);
-
-                //wakeup waiters of datasetLock and remove holder from datasetLockInfo
-                wakeUpDatasetLockWaiters(dLockInfo);
-
-                //remove the holder from datasetLockInfo only if the lock is dataset-granule lock.
-                //--> this also removes the holding resource from jobInfo               
-                //(Because the IX and IS lock's holders are handled implicitly, 
-                //those are not in the holder list of datasetLockInfo.)
-                dLockInfo.removeHolder(entityInfo, jobInfo);
+                datasetLockCount = entityInfoManager.getDatasetLockCount(entityInfo);
+                if (datasetLockCount != 0) {
+                    dLockInfo.decreaseLockCount(lockMode, datasetLockCount);
+    
+                    //wakeup waiters of datasetLock and remove holder from datasetLockInfo
+                    wakeUpDatasetLockWaiters(dLockInfo);
+    
+                    //remove the holder from datasetLockInfo only if the lock is dataset-granule lock.
+                    //--> this also removes the holding resource from jobInfo               
+                    //(Because the IX and IS lock's holders are handled implicitly, 
+                    //those are not in the holder list of datasetLockInfo.)
+                    dLockInfo.removeHolder(entityInfo, jobInfo);
+                }
             } else {
                 //decrease datasetLockCount
                 lockMode = entityInfoManager.getDatasetLockMode(entityInfo);
                 lockMode = lockMode == LockMode.S ? LockMode.IS : LockMode.IX;
-                lockCount = entityInfoManager.getDatasetLockCount(entityInfo);
-                dLockInfo.decreaseLockCount(lockMode, lockCount);
+                datasetLockCount = entityInfoManager.getDatasetLockCount(entityInfo);
+                
+                if (datasetLockCount != 0) {
+                    dLockInfo.decreaseLockCount(lockMode, datasetLockCount);
+                }
 
                 //decrease entityLockCount
                 lockMode = entityInfoManager.getEntityLockMode(entityInfo);
-                lockCount = entityInfoManager.getEntityLockCount(entityInfo);
+                entityLockCount = entityInfoManager.getEntityLockCount(entityInfo);
                 eLockInfo = dLockInfo.getEntityResourceHT().get(entityHashValue);
                 if (IS_DEBUG_MODE) {
                     if (eLockInfo < 0) {
                         System.out.println("eLockInfo:" + eLockInfo);
                     }
                 }
-                entityLockInfoManager.decreaseLockCount(eLockInfo, lockMode, (short) lockCount);
+                
+                if (entityLockCount != 0) {
+                    entityLockInfoManager.decreaseLockCount(eLockInfo, lockMode, (short) entityLockCount);
+                }
 
-                //wakeup waiters of datasetLock and don't remove holder from datasetLockInfo
-                wakeUpDatasetLockWaiters(dLockInfo);
+                if (datasetLockCount != 0) {
+                    //wakeup waiters of datasetLock and don't remove holder from datasetLockInfo
+                    wakeUpDatasetLockWaiters(dLockInfo);
+                }
 
-                //wakeup waiters of entityLock
-                wakeUpEntityLockWaiters(eLockInfo);
-
-                //remove the holder from entityLockInfo 
-                //--> this also removes the holding resource from jobInfo
-                entityLockInfoManager.removeHolder(eLockInfo, entityInfo, jobInfo);
+                if (entityLockCount != 0) { 
+                    //wakeup waiters of entityLock
+                    wakeUpEntityLockWaiters(eLockInfo);
+    
+                    //remove the holder from entityLockInfo 
+                    //--> this also removes the holding resource from jobInfo
+                    entityLockInfoManager.removeHolder(eLockInfo, entityInfo, jobInfo);
+                }
 
                 //deallocate entityLockInfo if there is no holder and waiter.
                 if (entityLockInfoManager.getLastHolder(eLockInfo) == -1
@@ -1147,7 +1160,7 @@ public class LockManager implements ILockManager {
                 waiterId = lockWaiterManager.allocate(); //initial value of waiterObj: wait = true, victim = false
                 waiter = lockWaiterManager.getLockWaiter(waiterId);
                 waiter.setEntityInfoSlot(entityInfo);
-                if (!isUpgrade && isDatasetLockInfo) {
+                //if (!isUpgrade && isDatasetLockInfo) {
                     //[Notice]
                     //upgrader was already added to the holding resource list
                     //entityLockInfo's waiter means that when the corresponding datasetLock is acquired,
@@ -1156,7 +1169,7 @@ public class LockManager implements ILockManager {
                     //the waiting resource list of JobInfo
                     //TODO revisit this condition. waiterId should be added to JobInfo after acquired the DatasetLockInfo and waiting entityLockInfo.
                     jobInfo.addWaitingResource(waiterId);
-                }
+                //}
                 waiter.setBeginWaitTime(System.currentTimeMillis());
             } else {
                 waiterId = duplicatedWaiterObjId;
@@ -1239,9 +1252,9 @@ public class LockManager implements ILockManager {
                     }
                 }
 
-                if (!isUpgrade && isDatasetLockInfo) {
+                //if (!isUpgrade && isDatasetLockInfo) {
                     jobInfo.removeWaitingResource(waiterId);
-                }
+                //}
                 lockWaiterManager.deallocate(waiterId);
             }
 

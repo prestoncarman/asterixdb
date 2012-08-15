@@ -200,31 +200,27 @@ class LockRequestController implements Runnable {
             }
         }
 
-        //if (resultScanner.hasNextLine()) {
-            try {
-                while (resultScanner.hasNextInt()) {
-                    threadId = resultScanner.nextInt();
-                    if (threadId < 0) {
-                        break;
-                    }
-                    s.append(threadId).append(",");
-                    expectedResultThreadList.add(threadId);
+        try {
+            while (resultScanner.hasNextInt()) {
+                threadId = resultScanner.nextInt();
+                if (threadId < 0) {
+                    break;
                 }
-            } catch (InputMismatchException e) {
-                //log(s.toString());
-                e.printStackTrace();
+                s.append(threadId).append(",");
+                expectedResultThreadList.add(threadId);
             }
-            
-            log(s.toString());
-            
-            if (isSequence) {
-                return workerReadyQueue.checkSequence(expectedResultThreadList);
-            } else {
-                return workerReadyQueue.checkSet(expectedResultThreadList);
-            }
-        //}
-
-        //return false;
+        } catch (InputMismatchException e) {
+            //log(s.toString());
+            e.printStackTrace();
+        }
+        
+        log(s.toString());
+        
+        if (isSequence) {
+            return workerReadyQueue.checkSequence(expectedResultThreadList);
+        } else {
+            return workerReadyQueue.checkSet(expectedResultThreadList);
+        }
 
     }
 
@@ -242,7 +238,6 @@ class LockRequestController implements Runnable {
         String lockMode;
 
         Scanner scanner = new Scanner(new FileInputStream(requestFileName));
-                //"src/main/java/edu/uci/ics/asterix/transaction/management/service/locking/LockRequestFile"));
         while (scanner.hasNextLine()) {
             try {
                 threadId = scanner.nextInt();
@@ -402,8 +397,18 @@ class LockRequestWorker implements Runnable {
             try {
                 sendRequest(lockRequest);
             } catch (ACIDException e) {
-                if (lockRequest.txnContext.getTxnState() == TransactionState.ABORTED) {
-                    log("*** Causing deadlock: aborting " + lockRequest.txnContext.getJobId() + " ***");
+                if (lockRequest.txnContext.getStatus() == TransactionContext.TIMED_OUT_STATUS) {
+                    if (lockRequest.txnContext.getTxnState() != TransactionState.ABORTED) {
+                        lockRequest.txnContext.setTxnState(TransactionState.ABORTED);
+                        log("*** "+ lockRequest.txnContext.getJobId()+ " lock request causing deadlock ***");
+                        log("Abort --> Releasing all locks acquired by "+ lockRequest.txnContext.getJobId());
+                        try {
+                            lockMgr.releaseLocks(lockRequest.txnContext);
+                        } catch (ACIDException e1) {
+                            e1.printStackTrace();
+                        }
+                        log("Abort --> Released all locks acquired by "+ lockRequest.txnContext.getJobId());
+                    }
                     isDone = true;
                 } else {
                     e.printStackTrace();

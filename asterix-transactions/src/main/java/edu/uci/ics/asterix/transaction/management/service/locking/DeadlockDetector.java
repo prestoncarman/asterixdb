@@ -138,21 +138,21 @@ public class DeadlockDetector {
             //get S/X-lock holders of dataset
             entityInfo = dLockInfo.getLastHolder();
             while(entityInfo != -1) {
-                holderList.put(entityInfoManager.getJobId(entityInfo), -1);
+                holderList.put(entityInfoManager.getJobId(entityInfo), 0);
                 entityInfo = entityInfoManager.getPrevEntityActor(entityInfo);
             }
             
             //get IS/IX-lock holders of dataset
             entityHT = dLockInfo.getEntityResourceHT();
             entityHT.beginIterate();
-            entityLockInfo = entityHT.getNextKey();
+            entityLockInfo = entityHT.getNextValue();
             while (entityLockInfo != -1) {
                 entityInfo = entityLockInfoManager.getLastHolder(entityLockInfo);
                 while (entityInfo != -1) {
-                    holderList.put(entityInfoManager.getJobId(entityInfo), -1);
+                    holderList.put(entityInfoManager.getJobId(entityInfo), 0);
                     entityInfo = entityInfoManager.getPrevEntityActor(entityInfo);
                 }
-                entityLockInfo = entityHT.getNextKey();
+                entityLockInfo = entityHT.getNextValue();
             }
         } else {
             //get S/X-lock holders of entity
@@ -161,7 +161,7 @@ public class DeadlockDetector {
             if (entityLockInfo != -1) {
                 entityInfo = entityLockInfoManager.getLastHolder(entityLockInfo);
                 while (entityInfo != -1) {
-                    holderList.put(entityInfoManager.getJobId(entityInfo), -1);
+                    holderList.put(entityInfoManager.getJobId(entityInfo), 0);
                     entityInfo = entityInfoManager.getPrevEntityActor(entityInfo);
                 }
             }
@@ -196,7 +196,7 @@ public class DeadlockDetector {
             waiterObj = lockWaiterManager.getLockWaiter(waiterId);
             entityInfo = waiterObj.getEntityInfoSlot();
             resourceList.put(entityInfo, -1);
-            waiterId = entityInfoManager.getPrevJobResource(entityInfo);
+            waiterId = waiterObj.getNextWaitingResourceObjId(); 
         }
         return;
     }
