@@ -1,6 +1,20 @@
-1 L	1 1 1 X
-2 L	2 1 2 S
+1 L	1 1 1 S
 2 L	2 1 1 S
-1 L	1 1 2 X
-0 CST
+3 L	3 1 1 S
+4 L	1 1 1 X
+1 L	1 1 1 S
+5 L	5 1 1 S
+0 CST	
+2 UL	2 1 1 S
+3 UL	3 1 1 S
 2 KI
+3 KI
+0 CST
+4 UL	1 1 1 S
+0 CST	
+1 UL	1 1 1 S
+0 CST
+5 UL	5 1 1 S
+1 KI
+4 KI
+5 KI

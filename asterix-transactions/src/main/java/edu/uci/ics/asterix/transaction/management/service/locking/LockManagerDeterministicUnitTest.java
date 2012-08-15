@@ -15,7 +15,7 @@ import edu.uci.ics.asterix.transaction.management.service.transaction.Transactio
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionManagementConstants.LockManagerConstants.LockMode;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionProvider;
 
-public class LockRequestPredefinedUnitTest {
+public class LockManagerDeterministicUnitTest {
 
     public static void main(String args[]) throws ACIDException, IOException {
         //initialize controller thread
@@ -134,7 +134,7 @@ class LockRequestController implements Runnable {
         } else if (request.requestType == RequestType.KILL) {
             worker = workerReadyQueue.pop(request.threadName);
             while (worker == null) {
-                log(Thread.currentThread().getName() + " waiting for "+request.threadName+"to be in the workerReadyQueue["+ i++ +"].");
+                log(Thread.currentThread().getName() + " waiting for "+request.threadName+" to be in the workerReadyQueue["+ i++ +"].");
                 try {
                     Thread.sleep((long)10);
                 } catch (InterruptedException e) {

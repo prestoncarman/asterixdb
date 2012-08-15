@@ -316,9 +316,12 @@ public class LockManager implements ILockManager {
                 }
             } else { //duplicated call
                 entityInfoManager.increaseDatasetLockCount(entityInfo);
+                datasetLockMode = entityInfoManager.getDatasetLockMode(entityInfo);
+                
                 if (entityHashValue == -1) { //dataset-granule
                     dLockInfo.increaseLockCount(datasetLockMode);
                 } else { //entity-granule
+                    datasetLockMode = datasetLockMode == LockMode.S? LockMode.IS: LockMode.IX;
                     dLockInfo.increaseLockCount(datasetLockMode);
                 }
             }
@@ -355,7 +358,7 @@ public class LockManager implements ILockManager {
 
                 if (waiterCount > 0) {
                     weakerModeLockCount = entityInfoManager.getEntityLockCount(entityInfo);
-                    entityInfoManager.setEntityLockMode(entityInfo, lockMode);
+                    entityInfoManager.setEntityLockMode(entityInfo, LockMode.X);
                     entityInfoManager.increaseEntityLockCount(entityInfo, waiterCount - 1);
 
                     entityLockInfoManager.increaseLockCount(entityInfo, LockMode.X, (short) (weakerModeLockCount

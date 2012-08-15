@@ -106,15 +106,15 @@ public class DatasetLockInfo {
         switch (lockMode) {
         //upgrade from IS -> IX
         //XCount is guaranteed to be 0.
-        //upgrade is allowed if SCount is 0 except caller txn's count.
+        //upgrade is allowed if SCount is 0.
             case LockMode.IX:
-                return SCount - entityInfoManager.getDatasetLockCount(entityInfo) == 0;
+                return SCount == 0;
 
                 //upgrade from S -> X
                 //XCount and IXCount are guaranteed to be 0.
-                //upgrade is allowed if ISCount is 0 except caller txn's count.
+                //upgrade is allowed if ISCount is 0.
             case LockMode.X:
-                return ISCount - entityInfoManager.getDatasetLockCount(entityInfo) == 0;
+                return ISCount == 0;
 
             default:
                 throw new IllegalStateException("Invalid upgrade lock mode");
