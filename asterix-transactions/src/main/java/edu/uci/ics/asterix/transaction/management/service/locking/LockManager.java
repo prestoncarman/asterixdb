@@ -409,7 +409,7 @@ public class LockManager implements ILockManager {
 
                 } else {//duplicated call
                     entityInfoManager.increaseEntityLockCount(entityInfo);
-                    entityLockInfoManager.increaseLockCount(eLockInfo, lockMode);
+                    entityLockInfoManager.increaseLockCount(eLockInfo, entityInfoManager.getEntityLockMode(entityInfo));
                 }
             } else {//new call from this job, but still eLockInfo exists since other threads hold it or wait on it
                 entityInfo = entityInfoFromDLockInfo;
@@ -938,9 +938,11 @@ public class LockManager implements ILockManager {
 
             case 3://[revertOperation3]: reverting 'adding a duplicated call'
                 entityInfoManager.decreaseDatasetLockCount(entityInfo);
+                datasetLockMode = entityInfoManager.getDatasetLockMode(entityInfo);
                 if (entityHashValue == -1) { //dataset-granule
                     dLockInfo.decreaseLockCount(datasetLockMode);
                 } else { //entity-granule
+                    datasetLockMode = datasetLockMode == LockMode.S? LockMode.IS: LockMode.IX;
                     dLockInfo.decreaseLockCount(datasetLockMode);
                 }
 
@@ -1046,11 +1048,15 @@ public class LockManager implements ILockManager {
                 //revert the following operations if the caller thread has to wait during this call.
                 //[revertOperation3]
                 entityInfoManager.increaseDatasetLockCount(entityInfo);
+                datasetLockMode = entityInfoManager.getDatasetLockMode(entityInfo);
+                
                 if (entityHashValue == -1) { //dataset-granule
                     dLockInfo.increaseLockCount(datasetLockMode);
                 } else { //entity-granule
+                    datasetLockMode = datasetLockMode == LockMode.S? LockMode.IS: LockMode.IX;
                     dLockInfo.increaseLockCount(datasetLockMode);
                 }
+                
                 tryLockDatasetGranuleRevertOperation = 3;
                 //////////////////////////////////////////////////////////////////////////////////////
 
@@ -1110,7 +1116,7 @@ public class LockManager implements ILockManager {
 
                 } else {//duplicated call
                     entityInfoManager.increaseEntityLockCount(entityInfo);
-                    entityLockInfoManager.increaseLockCount(eLockInfo, lockMode);
+                    entityLockInfoManager.increaseLockCount(eLockInfo, entityInfoManager.getEntityLockMode(entityInfo));
                 }
             } else {//new call from this job, but still eLockInfo exists since other threads hold it or wait on it
                 entityInfo = entityInfoFromDLockInfo;

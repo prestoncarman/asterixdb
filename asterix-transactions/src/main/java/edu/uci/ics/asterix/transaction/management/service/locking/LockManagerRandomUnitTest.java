@@ -17,10 +17,10 @@ import edu.uci.ics.asterix.transaction.management.service.transaction.Transactio
 
 public class LockManagerRandomUnitTest {
 
-    private static final int MAX_NUM_OF_UPGRADE_JOB = 0;//2
-    private static final int MAX_NUM_OF_ENTITY_LOCK_JOB = 2;//8
+    private static final int MAX_NUM_OF_UPGRADE_JOB = 2;//2
+    private static final int MAX_NUM_OF_ENTITY_LOCK_JOB = 8;//8
     private static final int MAX_NUM_OF_DATASET_LOCK_JOB = 2;//2
-    private static final int MAX_NUM_OF_THREAD_IN_A_JOB = 2; //4
+    private static final int MAX_NUM_OF_THREAD_IN_A_JOB = 1; //4
     private static int jobId = 0;
     private static Random rand;
 
@@ -109,8 +109,8 @@ public class LockManagerRandomUnitTest {
 class LockRequestProducer implements Runnable {
 
     private static final long serialVersionUID = -3191274684985609965L;
-    private static final int MAX_DATASET_NUM = 1;
-    private static final int MAX_ENTITY_NUM = 1;
+    private static final int MAX_DATASET_NUM = 10;//10
+    private static final int MAX_ENTITY_NUM = 30;//30
     private static final int MAX_LOCK_MODE_NUM = 2;
     private static final long DATASET_LOCK_THREAD_SLEEP_TIME = 1000;
     private static final int MAX_LOCK_REQUEST_TYPE_NUM = 4;
@@ -200,7 +200,7 @@ class LockRequestProducer implements Runnable {
         lockCount = 1 + rand.nextInt(20);
         if (isUpgradeThreadJob) {
             if (isUpgradeThread) {
-                upgradeCount = rand.nextInt(4) + 1;
+                upgradeCount = 1; //rand.nextInt(4) + 1;
                 if (upgradeCount > lockCount) {
                     upgradeCount = lockCount;
                 }
