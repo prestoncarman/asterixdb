@@ -1874,6 +1874,7 @@ Expression ReturnExpression() throws ParseException:
     }
 }
 
+/*
 Expression SelectExpression() throws ParseException:
 {
   Expression expr;
@@ -1884,6 +1885,7 @@ Expression SelectExpression() throws ParseException:
       return expr;
     }
 }
+*/
 
 Clause ForOrFromClause()throws ParseException :
 {
