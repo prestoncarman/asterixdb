@@ -3,11 +3,11 @@ package edu.uci.ics.asterix.tools.translator;
 import java.util.List;
 
 import edu.uci.ics.asterix.aql.base.Statement;
+import edu.uci.ics.asterix.common.exceptions.AsterixException;
 import edu.uci.ics.asterix.metadata.MetadataException;
 import edu.uci.ics.asterix.metadata.MetadataTransactionContext;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
 import edu.uci.ics.asterix.translator.AbstractAqlTranslator;
-import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 
 public class ADGenDmlTranslator extends AbstractAqlTranslator {
 
@@ -20,7 +20,7 @@ public class ADGenDmlTranslator extends AbstractAqlTranslator {
         this.aqlStatements = aqlStatements;
     }
 
-    public void translate() throws AlgebricksException, MetadataException {
+    public void translate() throws AsterixException, MetadataException {
         compiledDeclarations = compileMetadata(mdTxnCtx, aqlStatements, false);
     }
 

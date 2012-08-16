@@ -11,34 +11,21 @@ import edu.uci.ics.asterix.om.functions.AsterixFunction;
 
 public class CreateFunctionStatement implements Statement {
 
-    private AsterixFunction asterixFunction;
-    private String functionBody;
-    private boolean ifNotExists;
-    private List<String> paramList;
+    private final AsterixFunction asterixFunction;
+    private final String functionBody;
+    private final boolean ifNotExists;
+    private final List<String> paramList;
 
-    public AsterixFunction getFunctionIdentifier() {
+    public AsterixFunction getaAterixFunction() {
         return asterixFunction;
-    }
-
-    public void setFunctionIdentifier(AsterixFunction AsterixFunction) {
-        this.asterixFunction = AsterixFunction;
     }
 
     public String getFunctionBody() {
         return functionBody;
     }
 
-    public void setFunctionBody(String functionBody) {
-        this.functionBody = functionBody;
-    }
-
-    public void setIfNotExists(boolean ifNotExists) {
-        this.ifNotExists = ifNotExists;
-    }
-
-    public CreateFunctionStatement(AsterixFunction AsterixFunction, List<VarIdentifier> parameterList, String functionBody,
-            boolean ifNotExists) {
-        
+    public CreateFunctionStatement(AsterixFunction AsterixFunction, List<VarIdentifier> parameterList,
+            String functionBody, boolean ifNotExists) {
         this.asterixFunction = AsterixFunction;
         this.functionBody = functionBody;
         this.ifNotExists = ifNotExists;
@@ -59,10 +46,6 @@ public class CreateFunctionStatement implements Statement {
 
     public List<String> getParamList() {
         return paramList;
-    }
-
-    public void setParamList(List<String> paramList) {
-        this.paramList = paramList;
     }
 
     @Override

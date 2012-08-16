@@ -44,7 +44,7 @@ public class FunctionUtils {
         List<VarIdentifier> varIdentifiers = new ArrayList<VarIdentifier>();
 
         StringBuilder builder = new StringBuilder();
-        builder.append(" declare function " + function.getFunctionName());
+        builder.append(" declare function " + function.getName().split("@")[0]);
         builder.append("(");
         for (String param : params) {
             VarIdentifier varId = new VarIdentifier(param);
@@ -52,7 +52,9 @@ public class FunctionUtils {
             builder.append(param);
             builder.append(",");
         }
-        builder.delete(builder.length() - 1, builder.length());
+        if (params.size() > 0) {
+            builder.delete(builder.length() - 1, builder.length());
+        }
         builder.append(")");
         builder.append("{");
         builder.append(functionBody);
@@ -74,22 +76,22 @@ public class FunctionUtils {
         return AsterixBuiltinFunctions.getAsterixFunctionInfo(fi);
     }
 
-    public static IFunctionInfo getFunctionInfo(MetadataTransactionContext mdTxnCtx, String dataverseName,
-            AsterixFunction asterixFunction) throws MetadataException {
-        FunctionIdentifier fid = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
-                asterixFunction.getFunctionName(), asterixFunction.getArity());
-        IFunctionInfo finfo = AsterixBuiltinFunctions.getAsterixFunctionInfo(fid);
-        if (fid == null) {
-            fid = new FunctionIdentifier(AlgebricksBuiltinFunctions.ALGEBRICKS_NS, asterixFunction.getFunctionName(),
-                    asterixFunction.getArity());
-        }
-        if (fid == null) {
-            Function function = MetadataManager.INSTANCE.getFunction(mdTxnCtx, dataverseName,
-                    asterixFunction.getFunctionName(), asterixFunction.getArity());
-            if (function != null) {
-                finfo = new AsterixFunctionInfo(dataverseName, asterixFunction);
-            }
-        }
-        return finfo; // could be null
-    }
+    /*
+      public static IFunctionInfo getFunctionInfo(MetadataTransactionContext mdTxnCtx, String dataverseName,
+              AsterixFunction asterixFunction) throws MetadataException {
+          FunctionIdentifier fid = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, asterixFunction.getName(),
+                  asterixFunction.getArity());
+          IFunctionInfo finfo = AsterixBuiltinFunctions.getAsterixFunctionInfo(fid);
+          if (fid == null) {
+              fid = new FunctionIdentifier(AlgebricksBuiltinFunctions.ALGEBRICKS_NS, asterixFunction.getName(),
+                      asterixFunction.getArity());
+          }
+          if (fid == null) {
+              Function function = MetadataManager.INSTANCE.getFunction(mdTxnCtx, dataverseName, asterixFunction);
+              if (function != null) {
+                  finfo = new AsterixFunctionInfo(dataverseName, asterixFunction);
+              }
+          }
+          return finfo; // could be null
+      }*/
 }

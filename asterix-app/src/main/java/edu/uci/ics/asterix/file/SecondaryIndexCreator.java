@@ -134,11 +134,13 @@ public abstract class SecondaryIndexCreator {
         numPrimaryKeys = DatasetUtils.getPartitioningKeys(dataset).size();
         numSecondaryKeys = createIndexStmt.getKeyFields().size();
         Pair<IFileSplitProvider, AlgebricksPartitionConstraint> primarySplitsAndConstraint = metadata
-                .splitProviderAndPartitionConstraintsForInternalOrFeedDataset(datasetName, datasetName);
+                .splitProviderAndPartitionConstraintsForInternalOrFeedDataset(metadata.getDefaultDataverseName(), datasetName,
+                        datasetName);
         primaryFileSplitProvider = primarySplitsAndConstraint.first;
         primaryPartitionConstraint = primarySplitsAndConstraint.second;
         Pair<IFileSplitProvider, AlgebricksPartitionConstraint> secondarySplitsAndConstraint = metadata
-                .splitProviderAndPartitionConstraintsForInternalOrFeedDataset(datasetName, secondaryIndexName);
+                .splitProviderAndPartitionConstraintsForInternalOrFeedDataset(metadata.getDefaultDataverseName(), datasetName,
+                        secondaryIndexName);
         secondaryFileSplitProvider = secondarySplitsAndConstraint.first;
         secondaryPartitionConstraint = secondarySplitsAndConstraint.second;
         // Must be called in this order.
@@ -281,7 +283,8 @@ public abstract class SecondaryIndexCreator {
             fieldPermutation[i] = i;
         }
         Pair<IFileSplitProvider, AlgebricksPartitionConstraint> secondarySplitsAndConstraint = metadata
-                .splitProviderAndPartitionConstraintsForInternalOrFeedDataset(datasetName, secondaryIndexName);
+                .splitProviderAndPartitionConstraintsForInternalOrFeedDataset(metadata.getDefaultDataverseName(), datasetName,
+                        secondaryIndexName);
         TreeIndexBulkLoadOperatorDescriptor treeIndexBulkLoadOp = new TreeIndexBulkLoadOperatorDescriptor(spec,
                 AsterixStorageManagerInterface.INSTANCE, AsterixIndexRegistryProvider.INSTANCE,
                 secondarySplitsAndConstraint.first, secondaryRecDesc.getTypeTraits(), secondaryComparatorFactories,

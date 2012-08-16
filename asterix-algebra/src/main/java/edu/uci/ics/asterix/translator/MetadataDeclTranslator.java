@@ -16,6 +16,7 @@ import edu.uci.ics.asterix.aql.expression.UnorderedListTypeDefinition;
 import edu.uci.ics.asterix.common.annotations.IRecordFieldDataGen;
 import edu.uci.ics.asterix.common.annotations.RecordDataGenAnnotation;
 import edu.uci.ics.asterix.common.annotations.TypeDataGen;
+import edu.uci.ics.asterix.common.exceptions.AsterixException;
 import edu.uci.ics.asterix.metadata.MetadataException;
 import edu.uci.ics.asterix.metadata.MetadataManager;
 import edu.uci.ics.asterix.metadata.MetadataTransactionContext;
@@ -30,22 +31,21 @@ import edu.uci.ics.asterix.om.types.AUnorderedListType;
 import edu.uci.ics.asterix.om.types.AbstractCollectionType;
 import edu.uci.ics.asterix.om.types.BuiltinType;
 import edu.uci.ics.asterix.om.types.IAType;
-import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.data.IAWriterFactory;
 import edu.uci.ics.hyracks.dataflow.std.file.FileSplit;
 
 public final class MetadataDeclTranslator {
     private final MetadataTransactionContext mdTxnCtx;
-    private final String dataverseName;
+    private final String defaultDataverse;
     private final List<TypeDecl> typeDeclarations;
     private final FileSplit outputFile;
     private final Map<String, String> config;
     private final IAWriterFactory writerFactory;
 
-    public MetadataDeclTranslator(MetadataTransactionContext mdTxnCtx, String dataverseName, FileSplit outputFile,
+    public MetadataDeclTranslator(MetadataTransactionContext mdTxnCtx, String defaultDataverse, FileSplit outputFile,
             IAWriterFactory writerFactory, Map<String, String> config, List<TypeDecl> typeDeclarations) {
         this.mdTxnCtx = mdTxnCtx;
-        this.dataverseName = dataverseName;
+        this.defaultDataverse = defaultDataverse;
         this.outputFile = outputFile;
         this.writerFactory = writerFactory;
         this.config = config;
@@ -53,7 +53,7 @@ public final class MetadataDeclTranslator {
     }
 
     // TODO: Should this not throw an AsterixException?
-    public AqlCompiledMetadataDeclarations computeMetadataDeclarations(boolean online) throws AlgebricksException,
+    public AqlCompiledMetadataDeclarations computeMetadataDeclarations(boolean online) throws AsterixException,
             MetadataException {
         Map<String, TypeDataGen> typeDataGenMap = new HashMap<String, TypeDataGen>();
         for (TypeDecl td : typeDeclarations) {
@@ -64,11 +64,12 @@ public final class MetadataDeclTranslator {
         }
         Map<String, IAType> typeMap = computeTypes();
         Map<String, String[]> stores = AsterixProperties.INSTANCE.getStores();
-        return new AqlCompiledMetadataDeclarations(mdTxnCtx, dataverseName, outputFile, config, stores, typeMap,
-                typeDataGenMap, writerFactory, online);
+        AqlCompiledMetadataDeclarations compiledDeclarations = new AqlCompiledMetadataDeclarations(mdTxnCtx,
+                defaultDataverse, outputFile, config, stores, typeMap, typeDataGenMap, writerFactory, online);
+        return compiledDeclarations;
     }
 
-    private Map<String, IAType> computeTypes() throws AlgebricksException, MetadataException {
+    private Map<String, IAType> computeTypes() throws AsterixException, MetadataException {
         Map<String, IAType> typeMap = new HashMap<String, IAType>();
         Map<String, Map<ARecordType, List<Integer>>> incompleteFieldTypes = new HashMap<String, Map<ARecordType, List<Integer>>>();
         Map<String, List<AbstractCollectionType>> incompleteItemTypes = new HashMap<String, List<AbstractCollectionType>>();
@@ -82,12 +83,12 @@ public final class MetadataDeclTranslator {
     private void secondPass(Map<String, IAType> typeMap,
             Map<String, Map<ARecordType, List<Integer>>> incompleteFieldTypes,
             Map<String, List<AbstractCollectionType>> incompleteItemTypes,
-            Map<String, List<String>> incompleteTopLevelTypeReferences) throws AlgebricksException, MetadataException {
+            Map<String, List<String>> incompleteTopLevelTypeReferences) throws AsterixException, MetadataException {
         // solve remaining top level references
         for (String trefName : incompleteTopLevelTypeReferences.keySet()) {
             IAType t = typeMap.get(trefName);
             if (t == null) {
-                throw new AlgebricksException("Could not resolve type " + trefName);
+                throw new AsterixException("Could not resolve type " + trefName);
             }
             for (String tname : incompleteTopLevelTypeReferences.get(trefName)) {
                 typeMap.put(tname, t);
@@ -98,9 +99,9 @@ public final class MetadataDeclTranslator {
             IAType t = typeMap.get(trefName);
             if (t == null) {
                 // Try to get type from the metadata manager.
-                Datatype metadataDataType = MetadataManager.INSTANCE.getDatatype(mdTxnCtx, dataverseName, trefName);
+                Datatype metadataDataType = MetadataManager.INSTANCE.getDatatype(mdTxnCtx, defaultDataverse, trefName);
                 if (metadataDataType == null) {
-                    throw new AlgebricksException("Could not resolve type " + trefName);
+                    throw new AsterixException("Could not resolve type " + trefName);
                 }
                 t = metadataDataType.getDatatype();
                 typeMap.put(trefName, t);
@@ -123,7 +124,7 @@ public final class MetadataDeclTranslator {
         for (String trefName : incompleteItemTypes.keySet()) {
             IAType t = typeMap.get(trefName);
             if (t == null) {
-                throw new AlgebricksException("Could not resolve type " + trefName);
+                throw new AsterixException("Could not resolve type " + trefName);
             }
             for (AbstractCollectionType act : incompleteItemTypes.get(trefName)) {
                 act.setItemType(t);
@@ -134,12 +135,12 @@ public final class MetadataDeclTranslator {
     private void firstPass(Map<String, IAType> typeMap,
             Map<String, Map<ARecordType, List<Integer>>> incompleteFieldTypes,
             Map<String, List<AbstractCollectionType>> incompleteItemTypes,
-            Map<String, List<String>> incompleteTopLevelTypeReferences) throws AlgebricksException {
+            Map<String, List<String>> incompleteTopLevelTypeReferences) throws AsterixException {
         for (TypeDecl td : typeDeclarations) {
             TypeExpression texpr = td.getTypeDef();
             String tdname = td.getIdent().getValue();
             if (AsterixBuiltinTypeMap.getBuiltinTypes().get(tdname) != null) {
-                throw new AlgebricksException("Cannot redefine builtin type " + tdname + " .");
+                throw new AsterixException("Cannot redefine builtin type " + tdname + " .");
             }
             switch (texpr.getTypeKind()) {
                 case TYPEREFERENCE: {

@@ -111,10 +111,7 @@ public class APIClientThread extends Thread {
         }
 
         // the "write output..." clause is inserted into incoming AQL statements
-        binaryOutputClause = "write output to "
-                + outputNodeName
-                + ":\""
-                + outputFilePath
+        binaryOutputClause = "write output to " + outputNodeName + ":\"" + outputFilePath
                 + "\" using \"edu.uci.ics.hyracks.algebricks.runtime.writers.SerializedDataWriterFactory\";";
 
     }
@@ -238,7 +235,7 @@ public class APIClientThread extends Thread {
             }
 
             Pair<AqlCompiledMetadataDeclarations, JobSpecification> metadataAndSpec = APIFramework.compileQuery(
-                    dataverse, q, parser.getVarCounter(), null, metadata, pc, out, DisplayFormat.TEXT, null);
+                    dataverse, q, parser.getVarCounter(), null, metadata, pc, out, DisplayFormat.TEXT, null, null);
             JobSpecification spec = metadataAndSpec.second;
             metadata = metadataAndSpec.first;
             APIFramework.executeJobArray(hcc, new JobSpecification[] { spec }, out, DisplayFormat.TEXT);

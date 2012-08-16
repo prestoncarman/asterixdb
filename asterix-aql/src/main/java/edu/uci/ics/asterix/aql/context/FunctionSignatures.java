@@ -22,7 +22,7 @@ public class FunctionSignatures {
     }
 
     public void put(AsterixFunction fd, boolean varargs) {
-        String name = fd.getFunctionName();
+        String name = fd.getName();
         FunctionExpressionMap func = functionMap.get(name);
         if (func == null) {
             func = new FunctionExpressionMap(varargs);

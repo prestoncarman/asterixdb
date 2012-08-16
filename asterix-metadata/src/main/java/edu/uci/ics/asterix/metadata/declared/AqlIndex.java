@@ -38,7 +38,7 @@ public class AqlIndex implements IDataSourceIndex<String, AqlSourceId> {
     @Override
     public IDataSource<AqlSourceId> getDataSource() {
         try {
-            AqlSourceId asid = new AqlSourceId(acmd.getDataverseName(), datasetName);
+            AqlSourceId asid = new AqlSourceId(acmd.getDefaultDataverseName(), datasetName);
             return AqlMetadataProvider.lookupSourceInMetadata(acmd, asid);
         } catch (AlgebricksException e) {
             return null;

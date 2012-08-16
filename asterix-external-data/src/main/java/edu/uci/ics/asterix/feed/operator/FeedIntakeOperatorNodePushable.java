@@ -5,16 +5,15 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 import edu.uci.ics.asterix.external.data.adapter.api.IDatasourceReadAdapter;
 import edu.uci.ics.asterix.external.data.parser.IManagedDataParser;
+import edu.uci.ics.asterix.feed.comm.AlterFeedMessage;
+import edu.uci.ics.asterix.feed.comm.IFeedMessage;
 import edu.uci.ics.asterix.feed.managed.adapter.IManagedFeedAdapter;
 import edu.uci.ics.asterix.feed.managed.adapter.IMutableFeedAdapter;
 import edu.uci.ics.asterix.feed.mgmt.FeedId;
 import edu.uci.ics.asterix.feed.mgmt.FeedSystemProvider;
 import edu.uci.ics.asterix.feed.mgmt.IFeedManager;
-import edu.uci.ics.asterix.feed.comm.AlterFeedMessage;
-import edu.uci.ics.asterix.feed.comm.IFeedMessage;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 import edu.uci.ics.hyracks.dataflow.std.base.AbstractUnaryInputUnaryOutputOperatorNodePushable;
-import edu.uci.ics.hyracks.dataflow.std.base.AbstractUnaryOutputSourceOperatorNodePushable;
 
 public class FeedIntakeOperatorNodePushable extends AbstractUnaryInputUnaryOutputOperatorNodePushable {
 

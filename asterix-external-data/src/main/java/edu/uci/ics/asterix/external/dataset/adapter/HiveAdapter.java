@@ -19,7 +19,6 @@ import java.util.Map;
 import edu.uci.ics.asterix.external.data.adapter.api.IDatasourceReadAdapter;
 import edu.uci.ics.asterix.external.data.parser.IDataParser;
 import edu.uci.ics.asterix.om.types.IAType;
-import edu.uci.ics.hyracks.api.comm.IFrameWriter;
 import edu.uci.ics.hyracks.api.context.IHyracksTaskContext;
 
 public class HiveAdapter extends AbstractDatasourceAdapter implements

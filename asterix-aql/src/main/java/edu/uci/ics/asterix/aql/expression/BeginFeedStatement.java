@@ -12,11 +12,13 @@ import edu.uci.ics.asterix.metadata.entities.FeedDatasetDetails;
 
 public class BeginFeedStatement implements Statement {
 
-    private Identifier datasetName;
+    private final Identifier dataverseName;
+    private final Identifier datasetName;
     private Query query;
     private int varCounter;
 
-    public BeginFeedStatement(Identifier datasetName, int varCounter) {
+    public BeginFeedStatement(Identifier dataverseName, Identifier datasetName, int varCounter) {
+        this.dataverseName = dataverseName;
         this.datasetName = datasetName;
         this.varCounter = varCounter;
     }
@@ -42,6 +44,10 @@ public class BeginFeedStatement implements Statement {
         query = ((InsertStatement) query.getPrologDeclList().get(0)).getQuery();
     }
 
+    public Identifier getDataverseName() {
+        return dataverseName;
+    }
+    
     public Identifier getDatasetName() {
         return datasetName;
     }

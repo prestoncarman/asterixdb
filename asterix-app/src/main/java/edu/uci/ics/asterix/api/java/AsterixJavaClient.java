@@ -2,9 +2,6 @@ package edu.uci.ics.asterix.api.java;
 
 import java.io.PrintWriter;
 import java.io.Reader;
-import java.rmi.RemoteException;
-
-import org.json.JSONException;
 
 import edu.uci.ics.asterix.api.common.APIFramework;
 import edu.uci.ics.asterix.api.common.APIFramework.DisplayFormat;
@@ -17,8 +14,6 @@ import edu.uci.ics.asterix.aql.parser.ParseException;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
 import edu.uci.ics.asterix.metadata.MetadataManager;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
-import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
-import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.common.utils.Pair;
 import edu.uci.ics.hyracks.api.client.IHyracksClientConnection;
 import edu.uci.ics.hyracks.api.job.JobSpecification;
@@ -47,7 +42,7 @@ public class AsterixJavaClient {
 
     public void compile(boolean optimize, boolean printRewrittenExpressions, boolean printLogicalPlan,
             boolean printOptimizedPlan, boolean printPhysicalOpsOnly, boolean generateBinaryRuntime, boolean printJob)
-            throws AsterixException, AlgebricksException, JSONException, RemoteException, ACIDException {
+            throws Exception {
         queryJobSpec = null;
         dmlJobs = null;
 
@@ -78,7 +73,7 @@ public class AsterixJavaClient {
         }
 
         Pair<AqlCompiledMetadataDeclarations, JobSpecification> metadataAndSpec = APIFramework.compileQuery(
-                dataverseName, q, parser.getVarCounter(), null, null, pc, writer, DisplayFormat.TEXT, null);
+                dataverseName, q, parser.getVarCounter(), null, null, pc, writer, DisplayFormat.TEXT, null, null);
         if (metadataAndSpec != null) {
             queryJobSpec = metadataAndSpec.second;
         }

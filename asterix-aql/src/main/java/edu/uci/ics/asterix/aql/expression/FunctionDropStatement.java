@@ -4,16 +4,15 @@ import edu.uci.ics.asterix.aql.base.Statement;
 import edu.uci.ics.asterix.aql.expression.visitor.IAqlExpressionVisitor;
 import edu.uci.ics.asterix.aql.expression.visitor.IAqlVisitorWithVoidReturn;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
+import edu.uci.ics.asterix.om.functions.AsterixFunction;
 
 public class FunctionDropStatement implements Statement {
 
-    private Identifier functionName;
-    private int arity;
+    private AsterixFunction asterixFunction;
     private boolean ifExists;
 
-    public FunctionDropStatement(Identifier functionName, int arity, boolean ifExists) {
-        this.functionName = functionName;
-        this.arity = arity;
+    public FunctionDropStatement(AsterixFunction asterixFunction, boolean ifExists) {
+        this.asterixFunction = asterixFunction;
         this.ifExists = ifExists;
     }
 
@@ -22,20 +21,12 @@ public class FunctionDropStatement implements Statement {
         return Kind.FUNCTION_DROP;
     }
 
-    public Identifier getFunctionName() {
-        return functionName;
+    public AsterixFunction getAsterixFunction() {
+        return asterixFunction;
     }
 
     public boolean getIfExists() {
         return ifExists;
-    }
-
-    public int getArity() {
-        return arity;
-    }
-
-    public void setArity(int arity) {
-        this.arity = arity;
     }
 
     @Override

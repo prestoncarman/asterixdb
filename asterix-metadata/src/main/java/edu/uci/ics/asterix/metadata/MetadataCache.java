@@ -26,7 +26,7 @@ import edu.uci.ics.asterix.metadata.entities.Datatype;
 import edu.uci.ics.asterix.metadata.entities.Dataverse;
 import edu.uci.ics.asterix.metadata.entities.Function;
 import edu.uci.ics.asterix.metadata.entities.NodeGroup;
-import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
+import edu.uci.ics.asterix.om.functions.FunctionSignature;
 
 /**
  * Caches metadata entities such that the MetadataManager does not have to
@@ -44,7 +44,7 @@ public class MetadataCache {
     // Key is dataverse name.
     protected final Map<String, NodeGroup> nodeGroups = new HashMap<String, NodeGroup>();
     // Key is function Identifier . Key of value map is function name.
-    protected final Map<FunctionIdentifier, Function> functions = new HashMap<FunctionIdentifier, Function>();
+    protected final Map<FunctionSignature, Function> functions = new HashMap<FunctionSignature, Function>();
 
     // Atomically executes all metadata operations in ctx's log.
     public void commit(MetadataTransactionContext ctx) {
@@ -82,6 +82,7 @@ public class MetadataCache {
                             nodeGroups.clear();
                             datasets.clear();
                             datatypes.clear();
+                            functions.clear();
                         }
                     }
                 }
@@ -215,9 +216,9 @@ public class MetadataCache {
         }
     }
 
-    public Function getFunction(String dataverse, String functionName, int arity) {
+    public Function getFunction(FunctionSignature functionSignature) {
         synchronized (functions) {
-            return functions.get(new FunctionIdentifier(dataverse, functionName, arity));
+            return functions.get(functionSignature);
         }
     }
 
@@ -268,12 +269,11 @@ public class MetadataCache {
 
     public Object addFunctionIfNotExists(Function function) {
         synchronized (functions) {
-            FunctionIdentifier fId = new FunctionIdentifier(function.getDataverseName(), function.getFunctionName(),
-                    function.getFunctionArity());
-
-            Function fun = functions.get(fId);
+            FunctionSignature signature = new FunctionSignature(function.getDataverseName(),
+                    function.getName(), function.getParams().size());
+            Function fun = functions.get(signature);
             if (fun == null) {
-                return functions.put(fId, function);
+                return functions.put(signature, function);
             }
             return null;
         }
@@ -281,13 +281,13 @@ public class MetadataCache {
 
     public Object dropFunction(Function function) {
         synchronized (functions) {
-            FunctionIdentifier fId = new FunctionIdentifier(function.getDataverseName(), function.getFunctionName(),
-                    function.getFunctionArity());
-            Function fun = functions.get(fId);
+            FunctionSignature signature = new FunctionSignature(function.getDataverseName(),
+                    function.getName(), function.getParams().size());
+            Function fun = functions.get(signature);
             if (fun == null) {
                 return null;
             }
-            return functions.remove(fId);
+            return functions.remove(signature);
         }
     }
 }

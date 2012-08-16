@@ -33,6 +33,7 @@ import edu.uci.ics.asterix.aql.expression.IfExpr;
 import edu.uci.ics.asterix.aql.expression.IndexAccessor;
 import edu.uci.ics.asterix.aql.expression.IndexDropStatement;
 import edu.uci.ics.asterix.aql.expression.InsertStatement;
+import edu.uci.ics.asterix.aql.expression.InternalDetailsDecl;
 import edu.uci.ics.asterix.aql.expression.LetClause;
 import edu.uci.ics.asterix.aql.expression.LimitClause;
 import edu.uci.ics.asterix.aql.expression.ListConstructor;
@@ -67,7 +68,6 @@ import edu.uci.ics.asterix.aql.expression.WriteFromQueryResultStatement;
 import edu.uci.ics.asterix.aql.expression.WriteStatement;
 import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
-import edu.uci.ics.asterix.aql.expression.InternalDetailsDecl;
 
 public class AQLPrintVisitor implements IAqlVisitorWithVoidReturn<Integer> {
     // private int level =0;
@@ -294,7 +294,7 @@ public class AQLPrintVisitor implements IAqlVisitorWithVoidReturn<Integer> {
 
     @Override
     public void visit(FunctionDecl fd, Integer step) throws AsterixException {
-        out.println(skip(step) + "FunctionDecl " + fd.getIdent().getFunctionName() + "(" + fd.getParamList().toString()
+        out.println(skip(step) + "FunctionDecl " + fd.getIdent().getName() + "(" + fd.getParamList().toString()
                 + ") {");
         fd.getFuncBody().accept(this, step + 1);
         out.println(skip(step) + "}");

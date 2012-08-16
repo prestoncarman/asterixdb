@@ -7,8 +7,8 @@ import java.util.Map;
 
 import edu.uci.ics.asterix.aql.base.Clause;
 import edu.uci.ics.asterix.aql.base.Expression;
-import edu.uci.ics.asterix.aql.base.Statement;
 import edu.uci.ics.asterix.aql.base.Expression.Kind;
+import edu.uci.ics.asterix.aql.base.Statement;
 import edu.uci.ics.asterix.aql.expression.BeginFeedStatement;
 import edu.uci.ics.asterix.aql.expression.CallExpr;
 import edu.uci.ics.asterix.aql.expression.ControlFeedStatement;
@@ -72,6 +72,7 @@ import edu.uci.ics.asterix.metadata.MetadataTransactionContext;
 import edu.uci.ics.asterix.metadata.entities.Function;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
 import edu.uci.ics.asterix.om.functions.AsterixFunction;
+import edu.uci.ics.asterix.om.functions.FunctionSignature;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.AlgebricksBuiltinFunctions;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 
@@ -157,36 +158,54 @@ public final class AqlRewriter {
 
         List<AsterixFunction> functionCalls = getFunctionCalls(expression);
         for (AsterixFunction funId : functionCalls) {
-            if (AsterixBuiltinFunctions.isBuiltinCompilerFunction(new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
-                    funId.getFunctionName()))) {
-                continue;
-            }
-
-            if (AsterixBuiltinFunctions.isBuiltinCompilerFunction(new FunctionIdentifier(
-                    AlgebricksBuiltinFunctions.ALGEBRICKS_NS, funId.getFunctionName()))) {
-                continue;
-            }
 
             if (declaredFunctions != null && declaredFunctions.contains(funId)) {
                 continue;
             }
 
-            FunctionDecl functionDecl = getFunctionDecl(funId);
-            if (functionDecls.contains(functionDecl)) {
-                throw new AsterixException(" Detected recursvity!");
+            FunctionDecl functionDecl = lookupUserDefinedFunctionDecl(funId);
+            if (functionDecl != null) {
+                if (functionDecls.contains(functionDecl)) {
+                    throw new AsterixException(" Detected recursvity!");
+                } else {
+                    functionDecls.add(functionDecl);
+                    buildOtherUdfs(functionDecl.getFuncBody(), functionDecls, declaredFunctions);
+                }
+            } else {
+                if (isBuiltinFunction(funId)) {
+                    continue;
+                } else {
+                    throw new AsterixException(" unknown function " + funId);
+                }
             }
-            functionDecls.add(functionDecl);
-            buildOtherUdfs(functionDecl.getFuncBody(), functionDecls, declaredFunctions);
         }
     }
 
-    private FunctionDecl getFunctionDecl(AsterixFunction funId) throws AsterixException {
-        Function function = MetadataManager.INSTANCE.getFunction(mdTxnCtx, dataverseName, funId.getFunctionName(),
-                funId.getArity());
+    private FunctionDecl lookupUserDefinedFunctionDecl(AsterixFunction asterixFunction) throws AsterixException {
+        if (dataverseName == null) {
+            return null;
+        }
+        Function function = MetadataManager.INSTANCE.getFunction(mdTxnCtx, new FunctionSignature(dataverseName,
+                asterixFunction.getName(), asterixFunction.getArity()));
         if (function == null) {
-            throw new AsterixException(" unknown function " + funId);
+            return null;
         }
         return FunctionUtils.getFunctionDecl(function);
+
+    }
+
+    private boolean isBuiltinFunction(AsterixFunction asterixFunction) {
+        if (AsterixBuiltinFunctions.isBuiltinCompilerFunction(new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
+                asterixFunction.getName(), asterixFunction.getArity()))) {
+            return true;
+        }
+
+        if (AsterixBuiltinFunctions.isBuiltinCompilerFunction(new FunctionIdentifier(
+                AlgebricksBuiltinFunctions.ALGEBRICKS_NS, asterixFunction.getName(), asterixFunction.getArity()))) {
+            return true;
+        }
+
+        return false;
 
     }
 

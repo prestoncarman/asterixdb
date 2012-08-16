@@ -149,7 +149,7 @@ public class SetAsterixPhysicalOperatorsRule implements IAlgebraicRewriteRule {
                         AccessMethodJobGenParams jobGenParams = new AccessMethodJobGenParams();
                         jobGenParams.readFromFuncArgs(f.getArguments());
                         AqlMetadataProvider mp = (AqlMetadataProvider) context.getMetadataProvider();
-                        String dataverseName = mp.getMetadataDeclarations().getDataverseName();
+                        String dataverseName = mp.getMetadataDeclarations().getDefaultDataverseName();
                         AqlSourceId dataSourceId = new AqlSourceId(dataverseName, jobGenParams.getDatasetName());
                         IDataSourceIndex<String, AqlSourceId> dsi = mp.findDataSourceIndex(jobGenParams.getIndexName(),
                                 dataSourceId);

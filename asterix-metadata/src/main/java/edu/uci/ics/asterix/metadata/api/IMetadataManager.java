@@ -27,6 +27,7 @@ import edu.uci.ics.asterix.metadata.entities.Function;
 import edu.uci.ics.asterix.metadata.entities.Index;
 import edu.uci.ics.asterix.metadata.entities.Node;
 import edu.uci.ics.asterix.metadata.entities.NodeGroup;
+import edu.uci.ics.asterix.om.functions.FunctionSignature;
 import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
 
 /**
@@ -352,49 +353,46 @@ public interface IMetadataManager {
      *             For example, if the node already exists.
      */
     public void addNode(MetadataTransactionContext ctx, Node node) throws MetadataException;
-    
+
     /**
-	 * 
-	 * @param mdTxnCtx
-	 *            MetadataTransactionContext of an active metadata transaction.
-	 * @param function
-	 *            An instance of type Function that represents the function
-	 *            being added
-	 * @throws MetadataException
-	 */
-	public void addFunction(MetadataTransactionContext mdTxnCtx,
-			Function function) throws MetadataException;
+     * @param mdTxnCtx
+     *            MetadataTransactionContext of an active metadata transaction.
+     * @param function
+     *            An instance of type Function that represents the function
+     *            being added
+     * @throws MetadataException
+     */
+    public void addFunction(MetadataTransactionContext mdTxnCtx, Function function) throws MetadataException;
 
-	/**
-	 * 
-	 * @param ctx
-	 *            MetadataTransactionContext of an active metadata transaction.
-	 * @param dataverseName
-	 *            the dataverse associated with the function being searched
-	 * @param functionName
-	 *            name of the function
-	 * @param arity
-	 *            arity of the function
-	 * @return
-	 * @throws MetadataException
-	 */
-	public Function getFunction(MetadataTransactionContext ctx,
-			String dataverseName, String functionName, int arity)
-			throws MetadataException;
+    /**
+     * @param ctx
+     *            MetadataTransactionContext of an active metadata transaction.
+     * @param functionSignature
+     *            the functions signature (unique to the function)
+     * @return
+     * @throws MetadataException
+     */
 
-	/**
-	 * 
-	 * @param ctx
-	 *            MetadataTransactionContext of an active metadata transaction.
-	 * @param dataverseName
-	 *            the dataverse associated with the function being dropped
-	 * @param functionName
-	 *            name of the function
-	 * @param arity
-	 *            arity of the function
-	 * @throws MetadataException
-	 */
-	public void dropFunction(MetadataTransactionContext ctx,
-			String dataverseName, String functionName, int arity)
-			throws MetadataException;
+    public Function getFunction(MetadataTransactionContext ctx, FunctionSignature functionSignature)
+            throws MetadataException;
+
+    /**
+     * @param ctx
+     *            MetadataTransactionContext of an active metadata transaction.
+     * @param functionSignature
+     *            the functions signature (unique to the function)
+     * @throws MetadataException
+     */
+    public void dropFunction(MetadataTransactionContext ctx, FunctionSignature functionSignature)
+            throws MetadataException;
+
+    /**
+     * @param ctx
+     * @param dataverseName
+     * @return
+     * @throws MetadataException
+     */
+    public List<Function> getDataverseFunctions(MetadataTransactionContext ctx, String dataverseName)
+            throws MetadataException;
+
 }

@@ -35,6 +35,7 @@ import edu.uci.ics.asterix.common.annotations.ListValFileDataGen;
 import edu.uci.ics.asterix.common.annotations.RecordDataGenAnnotation;
 import edu.uci.ics.asterix.common.annotations.TypeDataGen;
 import edu.uci.ics.asterix.common.annotations.UndeclaredFieldsDataGen;
+import edu.uci.ics.asterix.common.exceptions.AsterixException;
 import edu.uci.ics.asterix.metadata.MetadataException;
 import edu.uci.ics.asterix.metadata.MetadataTransactionContext;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
@@ -46,7 +47,6 @@ import edu.uci.ics.asterix.om.types.BuiltinType;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.asterix.tools.translator.ADGenDmlTranslator;
 import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
-import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.NotImplementedException;
 import edu.uci.ics.hyracks.algebricks.data.utils.WriteValueTools;
 
@@ -922,7 +922,7 @@ public class AdmDataGen {
         this.outputDir = outputDir;
     }
 
-    public void init() throws IOException, ParseException, AlgebricksException, ACIDException, MetadataException {
+    public void init() throws IOException, ParseException, AsterixException, ACIDException, MetadataException {
         FileReader aql = new FileReader(schemaFile);
         AQLParser parser = new AQLParser(aql);
         Query q = (Query) parser.Statement();

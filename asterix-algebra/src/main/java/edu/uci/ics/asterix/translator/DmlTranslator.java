@@ -31,6 +31,7 @@ import edu.uci.ics.asterix.aql.expression.WriteFromQueryResultStatement;
 import edu.uci.ics.asterix.aql.literal.StringLiteral;
 import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
 import edu.uci.ics.asterix.common.config.DatasetConfig.IndexType;
+import edu.uci.ics.asterix.common.exceptions.AsterixException;
 import edu.uci.ics.asterix.metadata.IDatasetDetails;
 import edu.uci.ics.asterix.metadata.MetadataException;
 import edu.uci.ics.asterix.metadata.MetadataManager;
@@ -57,7 +58,7 @@ public class DmlTranslator extends AbstractAqlTranslator {
         this.aqlStatements = aqlStatements;
     }
 
-    public void translate() throws AlgebricksException, RemoteException, ACIDException, MetadataException {
+    public void translate() throws AsterixException, RemoteException, ACIDException, MetadataException {
         compiledDeclarations = compileMetadata(mdTxnCtx, aqlStatements, true);
         compiledDmlStatements = compileDmlStatements();
     }
@@ -70,27 +71,29 @@ public class DmlTranslator extends AbstractAqlTranslator {
         return compiledDmlStatements;
     }
 
-    private List<ICompiledDmlStatement> compileDmlStatements() throws AlgebricksException, MetadataException {
+    private List<ICompiledDmlStatement> compileDmlStatements() throws AsterixException, MetadataException {
         List<ICompiledDmlStatement> dmlStatements = new ArrayList<ICompiledDmlStatement>();
         for (Statement stmt : aqlStatements) {
             validateOperation(compiledDeclarations, stmt);
             switch (stmt.getKind()) {
                 case LOAD_FROM_FILE: {
                     LoadFromFileStatement loadStmt = (LoadFromFileStatement) stmt;
-                    CompiledLoadFromFileStatement cls = new CompiledLoadFromFileStatement(loadStmt.getDatasetName()
-                            .getValue(), loadStmt.getAdapter(), loadStmt.getProperties(),
+                    String dataverseName = loadStmt.getDataverseName() == null ? compiledDeclarations
+                            .getDefaultDataverseName() : loadStmt.getDataverseName().getValue();
+                    CompiledLoadFromFileStatement cls = new CompiledLoadFromFileStatement(dataverseName, loadStmt
+                            .getDatasetName().getValue(), loadStmt.getAdapter(), loadStmt.getProperties(),
                             loadStmt.dataIsAlreadySorted());
                     dmlStatements.add(cls);
                     // Also load the dataset's secondary indexes.
-                    List<Index> datasetIndexes = MetadataManager.INSTANCE.getDatasetIndexes(mdTxnCtx,
-                            compiledDeclarations.getDataverseName(), loadStmt.getDatasetName().getValue());
+                    List<Index> datasetIndexes = MetadataManager.INSTANCE.getDatasetIndexes(mdTxnCtx, dataverseName,
+                            loadStmt.getDatasetName().getValue());
                     for (Index index : datasetIndexes) {
                         if (!index.isSecondaryIndex()) {
                             continue;
                         }
                         // Create CompiledCreateIndexStatement from metadata entity 'index'.
                         CompiledCreateIndexStatement cis = new CompiledCreateIndexStatement(index.getIndexName(),
-                                index.getDatasetName(), index.getKeyFieldNames(), index.getGramLength(),
+                                dataverseName, index.getDatasetName(), index.getKeyFieldNames(), index.getGramLength(),
                                 index.getIndexType());
                         dmlStatements.add(cis);
                     }
@@ -98,8 +101,10 @@ public class DmlTranslator extends AbstractAqlTranslator {
                 }
                 case WRITE_FROM_QUERY_RESULT: {
                     WriteFromQueryResultStatement st1 = (WriteFromQueryResultStatement) stmt;
-                    CompiledWriteFromQueryResultStatement clfrqs = new CompiledWriteFromQueryResultStatement(st1
-                            .getDatasetName().getValue(), st1.getQuery(), st1.getVarCounter());
+                    String dataverseName = st1.getDataverseName() == null ? compiledDeclarations.getDefaultDataverseName()
+                            : st1.getDataverseName().getValue();
+                    CompiledWriteFromQueryResultStatement clfrqs = new CompiledWriteFromQueryResultStatement(
+                            dataverseName, st1.getDatasetName().getValue(), st1.getQuery(), st1.getVarCounter());
                     dmlStatements.add(clfrqs);
                     break;
                 }
@@ -112,34 +117,47 @@ public class DmlTranslator extends AbstractAqlTranslator {
                     // 1. There may be more secondary indexes to load, which were possibly created in an earlier session.
                     // 2. If the create index stmt came before the load stmt, then we would first create an empty index only to load it again later. 
                     // This may cause problems because the index would be considered loaded (even though it was loaded empty). 
+                    String loadDatasetStmtDataverse = null;
+                    String ciStmtDataverse = null;
                     for (Statement s : aqlStatements) {
                         if (s.getKind() != Kind.LOAD_FROM_FILE) {
                             continue;
                         }
                         LoadFromFileStatement loadStmt = (LoadFromFileStatement) s;
-                        if (loadStmt.getDatasetName().equals(cis.getDatasetName())) {
+                        loadDatasetStmtDataverse = loadStmt.getDataverseName() == null ? compiledDeclarations
+                                .getDefaultDataverseName() : loadStmt.getDataverseName().getValue();
+                        ciStmtDataverse = loadStmt.getDataverseName() == null ? compiledDeclarations.getDefaultDataverseName()
+                                : loadStmt.getDataverseName().getValue();
+
+                        if (loadStmt.getDatasetName().equals(cis.getDatasetName())
+                                && loadDatasetStmtDataverse.equals(ciStmtDataverse)) {
                             cis.setNeedToCreate(false);
                         }
                     }
                     if (cis.getNeedToCreate()) {
                         CompiledCreateIndexStatement ccis = new CompiledCreateIndexStatement(cis.getIndexName()
-                                .getValue(), cis.getDatasetName().getValue(), cis.getFieldExprs(), cis.getGramLength(),
-                                cis.getIndexType());
+                                .getValue(), ciStmtDataverse, cis.getDatasetName().getValue(), cis.getFieldExprs(),
+                                cis.getGramLength(), cis.getIndexType());
                         dmlStatements.add(ccis);
                     }
                     break;
                 }
                 case INSERT: {
                     InsertStatement is = (InsertStatement) stmt;
-                    CompiledInsertStatement clfrqs = new CompiledInsertStatement(is.getDatasetName().getValue(),
-                            is.getQuery(), is.getVarCounter());
+                    String dataverseName = is.getDataverseName() == null ? compiledDeclarations.getDefaultDataverseName() : is
+                            .getDataverseName().getValue();
+                    CompiledInsertStatement clfrqs = new CompiledInsertStatement(dataverseName, is.getDatasetName()
+                            .getValue(), is.getQuery(), is.getVarCounter());
                     dmlStatements.add(clfrqs);
                     break;
                 }
                 case DELETE: {
                     DeleteStatement ds = (DeleteStatement) stmt;
-                    CompiledDeleteStatement clfrqs = new CompiledDeleteStatement(ds.getVariableExpr(),
-                            ds.getDatasetName(), ds.getCondition(), ds.getDieClause(), ds.getVarCounter(),
+                    String dataverseName = ds.getDataverseName() == null ? compiledDeclarations.getDefaultDataverseName() : ds
+                            .getDataverseName().getValue();
+
+                    CompiledDeleteStatement clfrqs = new CompiledDeleteStatement(ds.getVariableExpr(), dataverseName,
+                            ds.getDatasetName().getValue(), ds.getCondition(), ds.getDieClause(), ds.getVarCounter(),
                             compiledDeclarations);
                     dmlStatements.add(clfrqs);
                     break;
@@ -147,16 +165,15 @@ public class DmlTranslator extends AbstractAqlTranslator {
 
                 case BEGIN_FEED: {
                     BeginFeedStatement bfs = (BeginFeedStatement) stmt;
-                    CompiledBeginFeedStatement cbfs = new CompiledBeginFeedStatement(bfs.getDatasetName(),
-                            bfs.getQuery(), bfs.getVarCounter());
+                    String dataverseName = bfs.getDataverseName() == null ? compiledDeclarations.getDefaultDataverseName()
+                            : bfs.getDataverseName().getValue();
+
+                    CompiledBeginFeedStatement cbfs = new CompiledBeginFeedStatement(dataverseName, bfs
+                            .getDatasetName().getValue(), bfs.getQuery(), bfs.getVarCounter());
                     dmlStatements.add(cbfs);
                     Dataset dataset;
-                    try {
-                        dataset = MetadataManager.INSTANCE.getDataset(mdTxnCtx,
-                                compiledDeclarations.getDataverseName(), bfs.getDatasetName().getValue());
-                    } catch (MetadataException me) {
-                        throw new AlgebricksException(me);
-                    }
+                    dataset = MetadataManager.INSTANCE.getDataset(mdTxnCtx, compiledDeclarations.getDefaultDataverseName(),
+                            bfs.getDatasetName().getValue());
                     IDatasetDetails datasetDetails = dataset.getDatasetDetails();
                     if (datasetDetails.getDatasetType() != DatasetType.FEED) {
                         throw new IllegalArgumentException("Dataset " + bfs.getDatasetName().getValue()
@@ -169,8 +186,9 @@ public class DmlTranslator extends AbstractAqlTranslator {
 
                 case CONTROL_FEED: {
                     ControlFeedStatement cfs = (ControlFeedStatement) stmt;
-                    CompiledControlFeedStatement clcfs = new CompiledControlFeedStatement(cfs.getOperationType(),
-                            cfs.getDatasetName(), cfs.getAlterAdapterConfParams());
+                    CompiledControlFeedStatement clcfs = new CompiledControlFeedStatement(cfs.getOperationType(), cfs
+                            .getDataverseName().getValue(), cfs.getDatasetName().getValue(),
+                            cfs.getAlterAdapterConfParams());
                     dmlStatements.add(clcfs);
                     break;
 
@@ -183,10 +201,15 @@ public class DmlTranslator extends AbstractAqlTranslator {
     public static interface ICompiledDmlStatement {
 
         public abstract Kind getKind();
+
+        public String getDataverseName();
+
+        public String getDatasetName();
     }
 
     public static class CompiledCreateIndexStatement implements ICompiledDmlStatement {
         private final String indexName;
+        private final String dataverseName;
         private final String datasetName;
         private final List<String> keyFields;
         private final IndexType indexType;
@@ -194,9 +217,10 @@ public class DmlTranslator extends AbstractAqlTranslator {
         // Specific to NGram index.
         private final int gramLength;
 
-        public CompiledCreateIndexStatement(String indexName, String datasetName, List<String> keyFields,
-                int gramLength, IndexType indexType) {
+        public CompiledCreateIndexStatement(String indexName, String dataverseName, String datasetName,
+                List<String> keyFields, int gramLength, IndexType indexType) {
             this.indexName = indexName;
+            this.dataverseName = dataverseName;
             this.datasetName = datasetName;
             this.keyFields = keyFields;
             this.gramLength = gramLength;
@@ -205,6 +229,10 @@ public class DmlTranslator extends AbstractAqlTranslator {
 
         public String getDatasetName() {
             return datasetName;
+        }
+
+        public String getDataverseName() {
+            return dataverseName;
         }
 
         public String getIndexName() {
@@ -230,17 +258,23 @@ public class DmlTranslator extends AbstractAqlTranslator {
     }
 
     public static class CompiledLoadFromFileStatement implements ICompiledDmlStatement {
+        private String dataverseName;
         private String datasetName;
         private boolean alreadySorted;
         private String adapter;
         private Map<String, String> properties;
 
-        public CompiledLoadFromFileStatement(String datasetName, String adapter, Map<String, String> properties,
-                boolean alreadySorted) {
+        public CompiledLoadFromFileStatement(String dataverseName, String datasetName, String adapter,
+                Map<String, String> properties, boolean alreadySorted) {
+            this.dataverseName = dataverseName;
             this.datasetName = datasetName;
             this.alreadySorted = alreadySorted;
             this.adapter = adapter;
             this.properties = properties;
+        }
+
+        public String getDataverseName() {
+            return dataverseName;
         }
 
         public String getDatasetName() {
@@ -267,18 +301,27 @@ public class DmlTranslator extends AbstractAqlTranslator {
 
     public static class CompiledWriteFromQueryResultStatement implements ICompiledDmlStatement {
 
+        private String dataverseName;
         private String datasetName;
         private Query query;
         private int varCounter;
 
-        public CompiledWriteFromQueryResultStatement(String datasetName, Query query, int varCounter) {
+        public CompiledWriteFromQueryResultStatement(String dataverseName, String datasetName, Query query,
+                int varCounter) {
+            this.dataverseName = dataverseName;
             this.datasetName = datasetName;
             this.query = query;
             this.varCounter = varCounter;
         }
 
+        @Override
         public String getDatasetName() {
             return datasetName;
+        }
+
+        @Override
+        public String getDataverseName() {
+            return dataverseName;
         }
 
         public int getVarCounter() {
@@ -297,14 +340,20 @@ public class DmlTranslator extends AbstractAqlTranslator {
     }
 
     public static class CompiledInsertStatement implements ICompiledDmlStatement {
-        private String datasetName;
-        private Query query;
-        private int varCounter;
+        private final String dataverseName;
+        private final String datasetName;
+        private final Query query;
+        private final int varCounter;
 
-        public CompiledInsertStatement(String datasetName, Query query, int varCounter) {
+        public CompiledInsertStatement(String dataverseName, String datasetName, Query query, int varCounter) {
+            this.dataverseName = dataverseName;
             this.datasetName = datasetName;
             this.query = query;
             this.varCounter = varCounter;
+        }
+
+        public String getDataverseName() {
+            return dataverseName;
         }
 
         public String getDatasetName() {
@@ -326,17 +375,25 @@ public class DmlTranslator extends AbstractAqlTranslator {
     }
 
     public static class CompiledBeginFeedStatement implements ICompiledDmlStatement {
-        private Identifier datasetName;
+        private String dataverseName;
+        private String datasetName;
         private Query query;
         private int varCounter;
 
-        public CompiledBeginFeedStatement(Identifier datasetName, Query query, int varCounter) {
+        public CompiledBeginFeedStatement(String dataverseName, String datasetName, Query query, int varCounter) {
+            this.dataverseName = dataverseName;
             this.datasetName = datasetName;
             this.query = query;
             this.varCounter = varCounter;
         }
 
-        public Identifier getDatasetName() {
+        @Override
+        public String getDataverseName() {
+            return dataverseName;
+        }
+
+        @Override
+        public String getDatasetName() {
             return datasetName;
         }
 
@@ -359,20 +416,28 @@ public class DmlTranslator extends AbstractAqlTranslator {
     }
 
     public static class CompiledControlFeedStatement implements ICompiledDmlStatement {
-        private Identifier datasetName;
+        private String dataverseName;
+        private String datasetName;
         private OperationType operationType;
         private Query query;
         private int varCounter;
         private Map<String, String> alteredParams;
 
-        public CompiledControlFeedStatement(OperationType operationType, Identifier datasetName,
+        public CompiledControlFeedStatement(OperationType operationType, String dataverseName, String datasetName,
                 Map<String, String> alteredParams) {
+            this.dataverseName = dataverseName;
             this.datasetName = datasetName;
             this.operationType = operationType;
             this.alteredParams = alteredParams;
         }
 
-        public Identifier getDatasetName() {
+        @Override
+        public String getDataverseName() {
+            return dataverseName;
+        }
+
+        @Override
+        public String getDatasetName() {
             return datasetName;
         }
 
@@ -404,28 +469,33 @@ public class DmlTranslator extends AbstractAqlTranslator {
 
     public static class CompiledDeleteStatement implements ICompiledDmlStatement {
         private VariableExpr var;
-        private Identifier dataset;
+        private String dataverseName;
+        private String datasetName;
         private Expression condition;
         private Clause dieClause;
         private int varCounter;
         private AqlCompiledMetadataDeclarations compiledDeclarations;
 
-        public CompiledDeleteStatement(VariableExpr var, Identifier dataset, Expression condition, Clause dieClause,
-                int varCounter, AqlCompiledMetadataDeclarations compiledDeclarations) {
+        public CompiledDeleteStatement(VariableExpr var, String dataverseName, String datasetName,
+                Expression condition, Clause dieClause, int varCounter,
+                AqlCompiledMetadataDeclarations compiledDeclarations) {
             this.var = var;
-            this.dataset = dataset;
+            this.dataverseName = dataverseName;
+            this.datasetName = datasetName;
             this.condition = condition;
             this.dieClause = dieClause;
             this.varCounter = varCounter;
             this.compiledDeclarations = compiledDeclarations;
         }
 
-        public Identifier getDataset() {
-            return dataset;
+        @Override
+        public String getDatasetName() {
+            return datasetName;
         }
 
-        public String getDatasetName() {
-            return dataset.getValue();
+        @Override
+        public String getDataverseName() {
+            return dataverseName;
         }
 
         public int getVarCounter() {
@@ -441,7 +511,6 @@ public class DmlTranslator extends AbstractAqlTranslator {
         }
 
         public Query getQuery() throws AlgebricksException {
-            String datasetName = dataset.getValue();
 
             List<Expression> arguments = new ArrayList<Expression>();
             LiteralExpr argumentLiteral = new LiteralExpr(new StringLiteral(datasetName));

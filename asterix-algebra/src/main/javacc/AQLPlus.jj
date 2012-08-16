@@ -187,7 +187,7 @@ Statement WriteStatement() throws ParseException:
      <DATASET> <IDENTIFIER> { datasetName = new Identifier(token.image); }
      <LEFTPAREN> query = Query() <RIGHTPAREN>
      {
-        stmt = new WriteFromQueryResultStatement(datasetName, query, getVarCounter());
+        stmt = new WriteFromQueryResultStatement(null, datasetName, query, getVarCounter());
      } ))  
         
     ";"
@@ -272,7 +272,7 @@ LoadFromFileStatement LoadStatement() throws ParseException:
         
   ";"
   {
-     return new LoadFromFileStatement(datasetName, adapter, properties, alreadySorted);
+     return new LoadFromFileStatement(null, datasetName, adapter, properties, alreadySorted);
   }   
 }
 

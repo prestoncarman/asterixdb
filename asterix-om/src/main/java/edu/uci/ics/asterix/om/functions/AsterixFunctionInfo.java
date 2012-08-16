@@ -22,8 +22,12 @@ public class AsterixFunctionInfo implements IFunctionInfo {
     private final FunctionIdentifier functionIdentifier;
 
     public AsterixFunctionInfo(String namespace, AsterixFunction asterixFunction) {
-        this.functionIdentifier = new FunctionIdentifier(namespace, asterixFunction.getFunctionName(),
+        this.functionIdentifier = new FunctionIdentifier(namespace, asterixFunction.getName(),
                 asterixFunction.getArity());
+    }
+
+    public AsterixFunctionInfo() {
+        functionIdentifier = null;
     }
 
     public AsterixFunctionInfo(FunctionIdentifier functionIdentifier) {
@@ -51,8 +55,7 @@ public class AsterixFunctionInfo implements IFunctionInfo {
 
     @Override
     public String toString() {
-        return this.functionIdentifier.getNamespace() + ":" + this.functionIdentifier.getName() + "@"
-                + this.functionIdentifier.getArity();
+        return this.functionIdentifier.getNamespace() + ":" + this.functionIdentifier.getName();
     }
 
 }

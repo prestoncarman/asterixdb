@@ -237,7 +237,7 @@ public class AqlPlusExpressionToPlanTranslator extends AbstractAqlTranslator
 		}
 		if (!compiledDeclarations.isConnectedToDataverse())
 			compiledDeclarations.connectToDataverse(compiledDeclarations
-					.getDataverseName());
+					.getDefaultDataverseName());
 		IDataFormat format = compiledDeclarations.getFormat();
 		if (format == null) {
 			throw new AlgebricksException("Data format has not been set.");
@@ -533,7 +533,7 @@ public class AqlPlusExpressionToPlanTranslator extends AbstractAqlTranslator
 		}
 
 		FunctionIdentifier fi = new FunctionIdentifier(
-				AlgebricksBuiltinFunctions.ALGEBRICKS_NS, fid.getFunctionName());
+				AlgebricksBuiltinFunctions.ALGEBRICKS_NS, fid.getName());
 		AsterixFunctionInfo afi = AsterixBuiltinFunctions.lookupFunction(fi);
 		FunctionIdentifier builtinAquafi = afi == null ? null : afi
 				.getFunctionIdentifier();
@@ -542,7 +542,7 @@ public class AqlPlusExpressionToPlanTranslator extends AbstractAqlTranslator
 			fi = builtinAquafi;
 		} else {
 			fi = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
-					fid.getFunctionName());
+					fid.getName());
 			FunctionIdentifier builtinAsterixFi = AsterixBuiltinFunctions
 					.getBuiltinFunctionIdentifier(fi);
 			if (builtinAsterixFi != null) {

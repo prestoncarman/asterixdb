@@ -49,7 +49,8 @@ public class IndexOperations {
         IStorageManagerInterface storageManager = AsterixStorageManagerInterface.INSTANCE;
 
         Pair<IFileSplitProvider, AlgebricksPartitionConstraint> splitsAndConstraint = datasetDecls
-                .splitProviderAndPartitionConstraintsForInternalOrFeedDataset(datasetName, indexName);
+                .splitProviderAndPartitionConstraintsForInternalOrFeedDataset(datasetDecls.getDefaultDataverseName(),
+                        datasetName, indexName);
         TreeIndexDropOperatorDescriptor btreeDrop = new TreeIndexDropOperatorDescriptor(spec, storageManager,
                 indexRegistryProvider, splitsAndConstraint.first);
         AlgebricksPartitionConstraintHelper

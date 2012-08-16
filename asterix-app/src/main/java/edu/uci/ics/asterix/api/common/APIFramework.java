@@ -30,6 +30,7 @@ import edu.uci.ics.asterix.metadata.MetadataManager;
 import edu.uci.ics.asterix.metadata.MetadataTransactionContext;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
 import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
+import edu.uci.ics.asterix.metadata.entities.Dataverse;
 import edu.uci.ics.asterix.optimizer.base.RuleCollections;
 import edu.uci.ics.asterix.runtime.job.listener.JobEventListenerFactory;
 import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
@@ -144,8 +145,7 @@ public class APIFramework {
     }
 
     public static String compileDdlStatements(IHyracksClientConnection hcc, Query query, PrintWriter out,
-            SessionConfig pc, DisplayFormat pdf) throws AsterixException, AlgebricksException, JSONException,
-            RemoteException, ACIDException {
+            SessionConfig pc, DisplayFormat pdf) throws Exception {
         // Begin a transaction against the metadata.
         // Lock the metadata in X mode to protect against other DDL and DML.
         MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
@@ -154,11 +154,10 @@ public class APIFramework {
             DdlTranslator ddlt = new DdlTranslator(mdTxnCtx, query.getPrologDeclList(), out, pc, pdf);
             ddlt.translate(hcc, false);
             MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
-            return ddlt.getCompiledDeclarations().getDataverseName();
+            return ddlt.getCompiledDeclarations().getDefaultDataverseName();
         } catch (Exception e) {
             MetadataManager.INSTANCE.abortTransaction(mdTxnCtx);
-            e.printStackTrace();
-            throw new AlgebricksException(e);
+            throw e;
         }
     }
 
@@ -186,49 +185,50 @@ public class APIFramework {
             AqlCompiledMetadataDeclarations metadata = dmlt.getCompiledDeclarations();
 
             if (!metadata.isConnectedToDataverse())
-                metadata.connectToDataverse(metadata.getDataverseName());
+                metadata.connectToDataverse(metadata.getDefaultDataverseName());
 
             for (ICompiledDmlStatement stmt : dmlt.getCompiledDmlStatements()) {
                 switch (stmt.getKind()) {
                     case LOAD_FROM_FILE: {
                         CompiledLoadFromFileStatement stmtLoad = (CompiledLoadFromFileStatement) stmt;
-                        dmlJobs.add(DatasetOperations.createLoadDatasetJobSpec(stmtLoad, metadata));
+                        IDataFormat format = getDataFormat(mdTxnCtx, dataverseName);
+                        dmlJobs.add(DatasetOperations.createLoadDatasetJobSpec(stmtLoad, metadata, format));
                         break;
                     }
                     case WRITE_FROM_QUERY_RESULT: {
-                        CompiledWriteFromQueryResultStatement stmtLoad = (CompiledWriteFromQueryResultStatement) stmt;
+                        CompiledWriteFromQueryResultStatement writeFromQueryStmt = (CompiledWriteFromQueryResultStatement) stmt;
                         SessionConfig sc2 = new SessionConfig(pc.getPort(), true, pc.isPrintExprParam(),
                                 pc.isPrintRewrittenExprParam(), pc.isPrintLogicalPlanParam(),
                                 pc.isPrintOptimizedLogicalPlanParam(), pc.isPrintPhysicalOpsOnly(), pc.isPrintJob());
                         sc2.setGenerateJobSpec(true);
                         Pair<AqlCompiledMetadataDeclarations, JobSpecification> mj = compileQueryInternal(mdTxnCtx,
-                                dataverseName, stmtLoad.getQuery(), stmtLoad.getVarCounter(),
-                                stmtLoad.getDatasetName(), metadata, sc2, out, pdf,
-                                Statement.Kind.WRITE_FROM_QUERY_RESULT);
+                                dataverseName, writeFromQueryStmt.getQuery(), writeFromQueryStmt.getVarCounter(),
+                                writeFromQueryStmt.getDatasetName(), metadata, sc2, out, pdf,
+                                Statement.Kind.WRITE_FROM_QUERY_RESULT, writeFromQueryStmt);
                         dmlJobs.add(new Job(mj.second));
                         break;
                     }
                     case INSERT: {
-                        CompiledInsertStatement stmtLoad = (CompiledInsertStatement) stmt;
+                        CompiledInsertStatement stmtInsert = (CompiledInsertStatement) stmt;
                         SessionConfig sc2 = new SessionConfig(pc.getPort(), true, pc.isPrintExprParam(),
                                 pc.isPrintRewrittenExprParam(), pc.isPrintLogicalPlanParam(),
                                 pc.isPrintOptimizedLogicalPlanParam(), pc.isPrintPhysicalOpsOnly(), pc.isPrintJob());
                         sc2.setGenerateJobSpec(true);
                         Pair<AqlCompiledMetadataDeclarations, JobSpecification> mj = compileQueryInternal(mdTxnCtx,
-                                dataverseName, stmtLoad.getQuery(), stmtLoad.getVarCounter(),
-                                stmtLoad.getDatasetName(), metadata, sc2, out, pdf, Statement.Kind.INSERT);
+                                dataverseName, stmtInsert.getQuery(), stmtInsert.getVarCounter(),
+                                stmtInsert.getDatasetName(), metadata, sc2, out, pdf, Statement.Kind.INSERT, stmtInsert);
                         dmlJobs.add(new Job(mj.second));
                         break;
                     }
                     case DELETE: {
-                        CompiledDeleteStatement stmtLoad = (CompiledDeleteStatement) stmt;
+                        CompiledDeleteStatement stmtDelete = (CompiledDeleteStatement) stmt;
                         SessionConfig sc2 = new SessionConfig(pc.getPort(), true, pc.isPrintExprParam(),
                                 pc.isPrintRewrittenExprParam(), pc.isPrintLogicalPlanParam(),
                                 pc.isPrintOptimizedLogicalPlanParam(), pc.isPrintPhysicalOpsOnly(), pc.isPrintJob());
                         sc2.setGenerateJobSpec(true);
                         Pair<AqlCompiledMetadataDeclarations, JobSpecification> mj = compileQueryInternal(mdTxnCtx,
-                                dataverseName, stmtLoad.getQuery(), stmtLoad.getVarCounter(),
-                                stmtLoad.getDatasetName(), metadata, sc2, out, pdf, Statement.Kind.DELETE);
+                                dataverseName, stmtDelete.getQuery(), stmtDelete.getVarCounter(),
+                                stmtDelete.getDatasetName(), metadata, sc2, out, pdf, Statement.Kind.DELETE, stmtDelete);
                         dmlJobs.add(new Job(mj.second));
                         break;
                     }
@@ -246,8 +246,8 @@ public class APIFramework {
                                 pc.isPrintOptimizedLogicalPlanParam(), pc.isPrintPhysicalOpsOnly(), pc.isPrintJob());
                         sc2.setGenerateJobSpec(true);
                         Pair<AqlCompiledMetadataDeclarations, JobSpecification> mj = compileQueryInternal(mdTxnCtx,
-                                dataverseName, cbfs.getQuery(), cbfs.getVarCounter(), cbfs.getDatasetName().getValue(),
-                                metadata, sc2, out, pdf, Statement.Kind.BEGIN_FEED);
+                                dataverseName, cbfs.getQuery(), cbfs.getVarCounter(), cbfs.getDatasetName(), metadata,
+                                sc2, out, pdf, Statement.Kind.BEGIN_FEED, cbfs);
                         dmlJobs.add(new Job(mj.second));
                         break;
 
@@ -301,13 +301,13 @@ public class APIFramework {
 
     public static Pair<AqlCompiledMetadataDeclarations, JobSpecification> compileQuery(String dataverseName, Query q,
             int varCounter, String outputDatasetName, AqlCompiledMetadataDeclarations metadataDecls, SessionConfig pc,
-            PrintWriter out, DisplayFormat pdf, Statement.Kind dmlKind) throws AsterixException, AlgebricksException,
-            JSONException, RemoteException, ACIDException {
+            PrintWriter out, DisplayFormat pdf, Statement.Kind dmlKind, ICompiledDmlStatement statement)
+            throws AsterixException, AlgebricksException, JSONException, RemoteException, ACIDException {
         MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
         try {
             MetadataManager.INSTANCE.lock(mdTxnCtx, LockMode.SHARED);
             Pair<AqlCompiledMetadataDeclarations, JobSpecification> result = compileQueryInternal(mdTxnCtx,
-                    dataverseName, q, varCounter, outputDatasetName, metadataDecls, pc, out, pdf, dmlKind);
+                    dataverseName, q, varCounter, outputDatasetName, metadataDecls, pc, out, pdf, dmlKind, statement);
             MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
             return result;
         } catch (AsterixException e) {
@@ -334,8 +334,8 @@ public class APIFramework {
     public static Pair<AqlCompiledMetadataDeclarations, JobSpecification> compileQueryInternal(
             MetadataTransactionContext mdTxnCtx, String dataverseName, Query q, int varCounter,
             String outputDatasetName, AqlCompiledMetadataDeclarations metadataDecls, SessionConfig pc, PrintWriter out,
-            DisplayFormat pdf, Statement.Kind dmlKind) throws AsterixException, AlgebricksException, JSONException,
-            RemoteException, ACIDException {
+            DisplayFormat pdf, Statement.Kind dmlKind, ICompiledDmlStatement stmt) throws AsterixException,
+            AlgebricksException, JSONException, RemoteException, ACIDException {
 
         if (!pc.isPrintPhysicalOpsOnly() && pc.isPrintExprParam()) {
             out.println();
@@ -392,7 +392,7 @@ public class APIFramework {
         }
         long txnId = TransactionIDFactory.generateTransactionId();
         AqlExpressionToPlanTranslator t = new AqlExpressionToPlanTranslator(txnId, mdTxnCtx, rw.getVarCounter(),
-                outputDatasetName, dmlKind);
+                outputDatasetName, dmlKind, dataverseName, stmt);
 
         ILogicalPlanAndMetadata planAndMetadata = t.translate(rwQ, metadataDecls);
         boolean isWriteTransaction = false;
@@ -469,38 +469,38 @@ public class APIFramework {
         ICompiler compiler = compilerFactory.createCompiler(planAndMetadata.getPlan(),
                 planAndMetadata.getMetadataProvider(), t.getVarCounter());
         if (pc.isOptimize()) {
-        	compiler.optimize();        	
-        	if (pc.isPrintOptimizedLogicalPlanParam()) {
-        		if (pc.isPrintPhysicalOpsOnly()) {
-        			// For Optimizer tests.
-        			StringBuilder buffer = new StringBuilder();
-        			PlanPrettyPrinter.printPhysicalOps(planAndMetadata.getPlan(), buffer, 0);
-        			out.print(buffer);
-        		} else {
-        			switch (pdf) {
-        			case HTML: {
-        				out.println("<H1>Optimized logical plan:</H1>");
-        				out.println("<PRE>");
-        				break;
-        			}
-        			case TEXT: {
-        				out.println("----------Optimized plan ");
-        				break;
-        			}
-        			}
-        			if (q != null) {
-        				StringBuilder buffer = new StringBuilder();
-        				PlanPrettyPrinter.printPlan(planAndMetadata.getPlan(), buffer, pvisitor, 0);
-        				out.print(buffer);
-        			}
-        			switch (pdf) {
-        			case HTML: {
-        				out.println("</PRE>");
-        				break;
-        			}
-        			}
-        		}
-        	}
+            compiler.optimize();
+            if (pc.isPrintOptimizedLogicalPlanParam()) {
+                if (pc.isPrintPhysicalOpsOnly()) {
+                    // For Optimizer tests.
+                    StringBuilder buffer = new StringBuilder();
+                    PlanPrettyPrinter.printPhysicalOps(planAndMetadata.getPlan(), buffer, 0);
+                    out.print(buffer);
+                } else {
+                    switch (pdf) {
+                        case HTML: {
+                            out.println("<H1>Optimized logical plan:</H1>");
+                            out.println("<PRE>");
+                            break;
+                        }
+                        case TEXT: {
+                            out.println("----------Optimized plan ");
+                            break;
+                        }
+                    }
+                    if (q != null) {
+                        StringBuilder buffer = new StringBuilder();
+                        PlanPrettyPrinter.printPlan(planAndMetadata.getPlan(), buffer, pvisitor, 0);
+                        out.print(buffer);
+                    }
+                    switch (pdf) {
+                        case HTML: {
+                            out.println("</PRE>");
+                            break;
+                        }
+                    }
+                }
+            }
         }
 
         if (!pc.isGenerateJobSpec()) {
@@ -587,6 +587,18 @@ public class APIFramework {
             out.println("<PRE>Duration: " + duration + "</PRE>");
         }
 
+    }
+
+    private static IDataFormat getDataFormat(MetadataTransactionContext mdTxnCtx, String dataverseName)
+            throws AsterixException {
+        Dataverse dataverse = MetadataManager.INSTANCE.getDataverse(mdTxnCtx, dataverseName);
+        IDataFormat format;
+        try {
+            format = (IDataFormat) Class.forName(dataverse.getDataFormat()).newInstance();
+        } catch (Exception e) {
+            throw new AsterixException(e);
+        }
+        return format;
     }
 
 }

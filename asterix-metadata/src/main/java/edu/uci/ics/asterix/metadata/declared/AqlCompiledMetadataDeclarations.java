@@ -37,6 +37,7 @@ import edu.uci.ics.asterix.metadata.entities.Index;
 import edu.uci.ics.asterix.metadata.entities.InternalDatasetDetails;
 import edu.uci.ics.asterix.metadata.entities.NodeGroup;
 import edu.uci.ics.asterix.om.types.IAType;
+import edu.uci.ics.asterix.runtime.formats.NonTaggedDataFormat;
 import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksAbsolutePartitionConstraint;
 import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksPartitionConstraint;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
@@ -53,7 +54,7 @@ public class AqlCompiledMetadataDeclarations {
     // We are assuming that there is a one AqlCompiledMetadataDeclarations per
     // transaction.
     private final MetadataTransactionContext mdTxnCtx;
-    private String dataverseName = null;
+    private String defaultDataverseName = null;
     private FileSplit outputFile;
     private Map<String, String[]> stores;
     private IDataFormat format;
@@ -68,9 +69,9 @@ public class AqlCompiledMetadataDeclarations {
 
     public AqlCompiledMetadataDeclarations(MetadataTransactionContext mdTxnCtx, String dataverseName,
             FileSplit outputFile, Map<String, String> config, Map<String, String[]> stores, Map<String, IAType> types,
-            Map<String, TypeDataGen> typeDataGenMap, IAWriterFactory writerFactory, boolean online) {
+            Map<String, TypeDataGen> typeDataGenMap, IAWriterFactory writerFactory, boolean online)
+            throws AsterixException {
         this.mdTxnCtx = mdTxnCtx;
-        this.dataverseName = dataverseName;
         this.outputFile = outputFile;
         this.config = config;
         if (stores == null && online) {
@@ -81,11 +82,18 @@ public class AqlCompiledMetadataDeclarations {
         this.types = types;
         this.typeDataGenMap = typeDataGenMap;
         this.writerFactory = writerFactory;
+        this.format = NonTaggedDataFormat.INSTANCE;
+        try {
+            format.registerRuntimeFunctions();
+        } catch (AlgebricksException ae) {
+            throw new AsterixException(ae);
+        }
+        this.defaultDataverseName = dataverseName;
     }
 
-    public void connectToDataverse(String dvName) throws AlgebricksException, AsterixException {
+    public void connectToDataverse(String dvName) throws AsterixException {
         if (isConnected) {
-            throw new AlgebricksException("You are already connected to " + dataverseName + " dataverse");
+            throw new AsterixException("You are already connected to " + defaultDataverseName + " dataverse");
         }
         Dataverse dv;
         try {
@@ -94,9 +102,9 @@ public class AqlCompiledMetadataDeclarations {
             throw new AsterixException(e);
         }
         if (dv == null) {
-            throw new AlgebricksException("There is no dataverse with this name " + dvName + " to connect to.");
+            throw new AsterixException("There is no dataverse with this name " + dvName + " to connect to.");
         }
-        dataverseName = dvName;
+        defaultDataverseName = dvName;
         isConnected = true;
         try {
             format = (IDataFormat) Class.forName(dv.getDataFormat()).newInstance();
@@ -105,11 +113,11 @@ public class AqlCompiledMetadataDeclarations {
         }
     }
 
-    public void disconnectFromDataverse() throws AlgebricksException {
+    public void disconnectFromDataverse() throws AsterixException {
         if (!isConnected) {
-            throw new AlgebricksException("You are not connected to any dataverse");
+            throw new AsterixException("You are not connected to any dataverse");
         }
-        dataverseName = null;
+        defaultDataverseName = null;
         format = null;
         isConnected = false;
     }
@@ -118,8 +126,8 @@ public class AqlCompiledMetadataDeclarations {
         return isConnected;
     }
 
-    public String getDataverseName() {
-        return dataverseName;
+    public String getDefaultDataverseName() {
+        return defaultDataverseName;
     }
 
     public FileSplit getOutputFile() {
@@ -127,9 +135,6 @@ public class AqlCompiledMetadataDeclarations {
     }
 
     public IDataFormat getFormat() throws AlgebricksException {
-        if (!isConnected) {
-            throw new AlgebricksException("You need first to connect to a dataverse.");
-        }
         return format;
     }
 
@@ -138,6 +143,10 @@ public class AqlCompiledMetadataDeclarations {
     }
 
     public IAType findType(String typeName) {
+        return findType(defaultDataverseName, typeName);
+    }
+
+    public IAType findType(String dataverseName, String typeName) {
         Datatype type;
         try {
             type = metadataManager.getDatatype(mdTxnCtx, dataverseName, typeName);
@@ -173,6 +182,14 @@ public class AqlCompiledMetadataDeclarations {
 
     public Dataset findDataset(String datasetName) throws AlgebricksException {
         try {
+            return metadataManager.getDataset(mdTxnCtx, defaultDataverseName, datasetName);
+        } catch (MetadataException e) {
+            throw new AlgebricksException(e);
+        }
+    }
+
+    public Dataset findDataset(String dataverseName, String datasetName) throws AlgebricksException {
+        try {
             return metadataManager.getDataset(mdTxnCtx, dataverseName, datasetName);
         } catch (MetadataException e) {
             throw new AlgebricksException(e);
@@ -180,13 +197,13 @@ public class AqlCompiledMetadataDeclarations {
     }
 
     public List<Index> getDatasetIndexes(String dataverseName, String datasetName) throws AlgebricksException {
-    	try {
+        try {
             return metadataManager.getDatasetIndexes(mdTxnCtx, dataverseName, datasetName);
         } catch (MetadataException e) {
             throw new AlgebricksException(e);
         }
     }
-    
+
     public Index getDatasetPrimaryIndex(String dataverseName, String datasetName) throws AlgebricksException {
         try {
             return metadataManager.getIndex(mdTxnCtx, dataverseName, datasetName, datasetName);
@@ -202,14 +219,14 @@ public class AqlCompiledMetadataDeclarations {
             throw new AlgebricksException(e);
         }
     }
-    
+
     public void setOutputFile(FileSplit outputFile) {
         this.outputFile = outputFile;
     }
 
     public Pair<IFileSplitProvider, AlgebricksPartitionConstraint> splitProviderAndPartitionConstraintsForInternalOrFeedDataset(
-            String datasetName, String targetIdxName) throws AlgebricksException {
-        FileSplit[] splits = splitsForInternalOrFeedDataset(datasetName, targetIdxName);
+            String dataverseName, String datasetName, String targetIdxName) throws AlgebricksException {
+        FileSplit[] splits = splitsForInternalOrFeedDataset(dataverseName, datasetName, targetIdxName);
         IFileSplitProvider splitProvider = new ConstantFileSplitProvider(splits);
         String[] loc = new String[splits.length];
         for (int p = 0; p < splits.length; p++) {
@@ -234,11 +251,11 @@ public class AqlCompiledMetadataDeclarations {
                 new ConstantFileSplitProvider(invListsSplits));
     }
 
-    private FileSplit[] splitsForInternalOrFeedDataset(String datasetName, String targetIdxName)
+    private FileSplit[] splitsForInternalOrFeedDataset(String dataverseName, String datasetName, String targetIdxName)
             throws AlgebricksException {
 
-        File relPathFile = new File(getRelativePath(datasetName + "_idx_" + targetIdxName));
-        Dataset dataset = findDataset(datasetName);
+        File relPathFile = new File(getRelativePath(dataverseName, datasetName + "_idx_" + targetIdxName));
+        Dataset dataset = findDataset(dataverseName, datasetName);
         if (dataset.getDatasetType() != DatasetType.INTERNAL & dataset.getDatasetType() != DatasetType.FEED) {
             throw new AlgebricksException("Not an internal or feed dataset");
         }
@@ -270,6 +287,10 @@ public class AqlCompiledMetadataDeclarations {
     }
 
     public String getRelativePath(String fileName) {
+        return defaultDataverseName + File.separator + fileName;
+    }
+
+    public String getRelativePath(String dataverseName, String fileName) {
         return dataverseName + File.separator + fileName;
     }
 
@@ -288,4 +309,5 @@ public class AqlCompiledMetadataDeclarations {
     public MetadataTransactionContext getMetadataTransactionContext() {
         return mdTxnCtx;
     }
+
 }

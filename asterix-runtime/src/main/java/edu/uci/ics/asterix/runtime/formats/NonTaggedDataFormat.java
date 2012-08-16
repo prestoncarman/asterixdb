@@ -206,6 +206,8 @@ public class NonTaggedDataFormat implements IDataFormat {
 
     public static final NonTaggedDataFormat INSTANCE = new NonTaggedDataFormat();
 
+    public static final String NON_TAGGED_DATA_FORMAT = "edu.uci.ics.asterix.runtime.formats.NonTaggedDataFormat";
+
     private static LogicalVariable METADATA_DUMMY_VAR = new LogicalVariable(-1);
 
     private static final HashMap<ATypeTag, IValueParserFactory> typeToValueParserFactMap = new HashMap<ATypeTag, IValueParserFactory>();
@@ -268,7 +270,7 @@ public class NonTaggedDataFormat implements IDataFormat {
         temp.add(NonEmptyStreamAggregateDescriptor.FACTORY);
         temp.add(RangeDescriptor.FACTORY);
 
-// Xiaoyu Ma add for numeric unary functions
+        // Xiaoyu Ma add for numeric unary functions
         temp.add(NumericAbsDescriptor.FACTORY);
         temp.add(NumericCeilingDescriptor.FACTORY);
         temp.add(NumericFloorDescriptor.FACTORY);
@@ -277,21 +279,21 @@ public class NonTaggedDataFormat implements IDataFormat {
         temp.add(NumericRoundHalfToEven2Descriptor.FACTORY);
         // String functions
         temp.add(StringEqualDescriptor.FACTORY);
-        temp.add(StringStartWithDescrtiptor.FACTORY);    
-        temp.add(StringEndWithDescrtiptor.FACTORY);       
-        temp.add(StringMatchesDescriptor.FACTORY);    
-        temp.add(StringLowerCaseDescriptor.FACTORY);   
+        temp.add(StringStartWithDescrtiptor.FACTORY);
+        temp.add(StringEndWithDescrtiptor.FACTORY);
+        temp.add(StringMatchesDescriptor.FACTORY);
+        temp.add(StringLowerCaseDescriptor.FACTORY);
         temp.add(StringMatchesWithFlagDescriptor.FACTORY);
-        temp.add(StringReplaceDescriptor.FACTORY);      
-        temp.add(StringReplaceWithFlagsDescriptor.FACTORY);    
-        temp.add(StringLengthDescriptor.FACTORY);        
-        temp.add(Substring2Descriptor.FACTORY);    
-        temp.add(SubstringBeforeDescriptor.FACTORY); 
-        temp.add(SubstringAfterDescriptor.FACTORY); 
-        temp.add(StringToCodePointDescriptor.FACTORY);         
-        temp.add(CodePointToStringDescriptor.FACTORY); 
-        temp.add(StringConcatDescriptor.FACTORY);         
-        temp.add(StringJoinDescriptor.FACTORY);      
+        temp.add(StringReplaceDescriptor.FACTORY);
+        temp.add(StringReplaceWithFlagsDescriptor.FACTORY);
+        temp.add(StringLengthDescriptor.FACTORY);
+        temp.add(Substring2Descriptor.FACTORY);
+        temp.add(SubstringBeforeDescriptor.FACTORY);
+        temp.add(SubstringAfterDescriptor.FACTORY);
+        temp.add(StringToCodePointDescriptor.FACTORY);
+        temp.add(CodePointToStringDescriptor.FACTORY);
+        temp.add(StringConcatDescriptor.FACTORY);
+        temp.add(StringJoinDescriptor.FACTORY);
 
         // aggregates
         temp.add(ListifyAggregateDescriptor.FACTORY);

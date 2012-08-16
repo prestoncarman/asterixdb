@@ -5,7 +5,6 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.io.StringReader;
 
 import javax.servlet.ServletContext;
 import javax.servlet.http.HttpServlet;
@@ -58,7 +57,7 @@ public class APIServlet extends HttpServlet {
                     context.setAttribute(HYRACKS_CONNECTION_ATTR, hcc);
                 }
             }
-            AQLParser parser = new AQLParser(new StringReader(query));
+            AQLParser parser = new AQLParser(query);
             Query q = (Query) parser.Statement();
             SessionConfig pc = new SessionConfig(port, true, isSet(printExprParam), isSet(printRewrittenExprParam),
                     isSet(printLogicalPlanParam), isSet(printOptimizedLogicalPlanParam), false, isSet(printJob));
@@ -76,7 +75,7 @@ public class APIServlet extends HttpServlet {
             }
 
             Pair<AqlCompiledMetadataDeclarations, JobSpecification> metadataAndSpec = APIFramework.compileQuery(
-                    dataverseName, q, parser.getVarCounter(), null, null, pc, out, DisplayFormat.HTML, null);
+                    dataverseName, q, parser.getVarCounter(), null, null, pc, out, DisplayFormat.HTML, null, null);
             JobSpecification spec = metadataAndSpec.second;
             GlobalConfig.ASTERIX_LOGGER.info(spec.toJSON().toString(1));
             AqlCompiledMetadataDeclarations metadata = metadataAndSpec.first;
@@ -98,20 +97,21 @@ public class APIServlet extends HttpServlet {
                 out.println("</PRE>");
             }
         } catch (ParseException pe) {
-        	String message = pe.getMessage();
-        	message = message.replace("<", "&lt");
-        	message = message.replace(">", "&gt");
-        	out.println("SyntaxError:" + message);
-        	int pos = message.indexOf("line");
-        	if (pos > 0) {
-        		int columnPos = message.indexOf(",", pos + 1 + "line".length());
-        		int lineNo = Integer.parseInt(message.substring(pos + "line".length() + 1, columnPos));
-        		String line = query.split("\n")[lineNo - 1];            
-        		out.println("==> " + line);
-        	}
+            String message = pe.getMessage();
+            message = message.replace("<", "&lt");
+            message = message.replace(">", "&gt");
+            out.println("SyntaxError:" + message);
+            int pos = message.indexOf("line");
+            if (pos > 0) {
+                int columnPos = message.indexOf(",", pos + 1 + "line".length());
+                int lineNo = Integer.parseInt(message.substring(pos + "line".length() + 1, columnPos));
+                String line = query.split("\n")[lineNo - 1];
+                out.println("==> " + line);
+            }
         } catch (Exception e) {
+            e.printStackTrace();
             out.println(e.getMessage());
-       }
+        }
     }
 
     @Override

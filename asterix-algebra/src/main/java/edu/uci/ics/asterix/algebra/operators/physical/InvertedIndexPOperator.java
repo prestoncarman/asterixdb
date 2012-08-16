@@ -153,7 +153,8 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
 
         IAsterixApplicationContextInfo appContext = (IAsterixApplicationContextInfo) context.getAppContext();
         Pair<IFileSplitProvider, AlgebricksPartitionConstraint> secondarySplitsAndConstraint = metadata
-                .splitProviderAndPartitionConstraintsForInternalOrFeedDataset(datasetName, indexName);
+                .splitProviderAndPartitionConstraintsForInternalOrFeedDataset(metadata.getDefaultDataverseName(), datasetName,
+                        indexName);
         Pair<IFileSplitProvider, IFileSplitProvider> fileSplitProviders = metadata
                 .getInvertedIndexFileSplitProviders(secondarySplitsAndConstraint.first);
 
