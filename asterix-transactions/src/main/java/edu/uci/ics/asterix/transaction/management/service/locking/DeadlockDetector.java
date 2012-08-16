@@ -54,6 +54,7 @@ public class DeadlockDetector {
         PrimitiveIntHashMap tempHolderList;
 
         holderList.clear(true);
+        visitedHolderList.clear(true);
 
         //holderlist contains jobId
         //resourceList contains entityInfo's slot numbers instead of resourceId in order to avoid object creation 
@@ -74,6 +75,7 @@ public class DeadlockDetector {
             nextHolderList.clear(true);
 
             while (holder != -1) {
+                resourceList.clear(true);
                 getWaitingResourceList(holder, resourceList);
                 resourceList.beginIterate();
                 resource = resourceList.getNextKey();
@@ -106,7 +108,7 @@ public class DeadlockDetector {
             //set holderList to nextHolderList and nextHolderList to holderList
             tempHolderList = holderList;
             holderList = nextHolderList;
-            nextHolderList = holderList;
+            nextHolderList = tempHolderList;
             holderList.beginIterate();
             holder = holderList.getNextKey();
         }

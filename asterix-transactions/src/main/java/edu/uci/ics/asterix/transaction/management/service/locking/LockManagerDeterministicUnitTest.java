@@ -116,7 +116,9 @@ class LockRequestController implements Runnable {
             }
         }
 
-        resultScanner.close();
+        if (resultScanner != null) {
+            resultScanner.close();
+        }
         
         if (isSuccess) {
             log("\n*** Test Passed ***");

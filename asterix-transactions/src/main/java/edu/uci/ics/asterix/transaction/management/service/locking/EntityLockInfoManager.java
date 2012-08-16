@@ -706,9 +706,9 @@ class ChildEntityLockInfoArrayManager {
         setFirstWaiter(currentSlot, -1);
         setUpgrader(currentSlot, -1);
         occupiedSlots++;
-        //        if (LockManager.IS_DEBUG_MODE) {
-        //            System.out.println("Allocated ELockInfo[" + currentSlot + "], freeSlotNum[" + freeSlotNum+"]");
-        //        }
+                if (LockManager.IS_DEBUG_MODE) {
+                    System.out.println(Thread.currentThread().getName() + " Allocated ELockInfo[" + currentSlot + "]");
+                }
         return currentSlot;
     }
 
@@ -716,9 +716,9 @@ class ChildEntityLockInfoArrayManager {
         setNextFreeSlot(slotNum, freeSlotNum);
         freeSlotNum = slotNum;
         occupiedSlots--;
-        //        if (LockManager.IS_DEBUG_MODE) {
-        //            System.out.println("Deallocated ELockInfo[" + slotNum + "], freeSlotNum[" + freeSlotNum+"]");
-        //        }
+                if (LockManager.IS_DEBUG_MODE) {
+                    System.out.println(Thread.currentThread().getName() + " Deallocated ELockInfo[" + slotNum + "]");
+                }
     }
 
     public void deinitialize() {

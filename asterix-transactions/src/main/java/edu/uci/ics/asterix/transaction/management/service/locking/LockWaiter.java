@@ -35,6 +35,8 @@ public class LockWaiter {
     private int nextWaiterObjId; //used for DatasetLockInfo and EntityLockInfo
     private int nextWaitingResourceObjId; //used for JobInfo
     private long beginWaitTime;
+    private boolean isWaiter; //is upgrader or waiter
+    private boolean isWaitingOnEntityLock; //is waiting on datasetLock or entityLock
 
     public LockWaiter() {
         this.victim = false;
@@ -123,4 +125,21 @@ public class LockWaiter {
     public long getBeginWaitTime() {
         return beginWaitTime;
     }
+    
+    public boolean isWaiter() {
+        return isWaiter;
+    }
+    
+    public void setWaiter(boolean isWaiter) {
+        this.isWaiter = isWaiter;
+    }
+    
+    public boolean isWaitingOnEntityLock() {
+        return isWaitingOnEntityLock;
+    }
+    
+    public void setWaitingOnEntityLock(boolean isWaitingOnEntityLock) {
+        this.isWaitingOnEntityLock = isWaitingOnEntityLock;
+    }
+    
 }

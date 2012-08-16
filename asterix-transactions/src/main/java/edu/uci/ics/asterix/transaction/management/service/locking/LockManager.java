@@ -561,6 +561,7 @@ public class LockManager implements ILockManager {
         int datasetLockCount;
         int entityLockCount;
         byte lockMode;
+        boolean existWaiter = false;
 
         JobId jobId = txnContext.getJobId();
 
@@ -584,8 +585,9 @@ public class LockManager implements ILockManager {
         int waiterObjId = jobInfo.getFirstWaitingResource();
         int nextWaiterObjId;
         while (waiterObjId != -1) {
+            existWaiter = true;
             waiterObj = lockWaiterManager.getLockWaiter(waiterObjId);
-            nextWaiterObjId = waiterObj.getNextWaiterObjId();
+            nextWaiterObjId = waiterObj.getNextWaitingResourceObjId();
             entityInfo = waiterObj.getEntityInfoSlot();
             if (IS_DEBUG_MODE) {
                 if (jobId.getId() != entityInfoManager.getJobId(entityInfo)) {
@@ -593,6 +595,28 @@ public class LockManager implements ILockManager {
                             + entityInfoManager.getJobId(entityInfo) + "'s lock request!!!");
                 }
             }
+            
+            //0. remove from waiter(or upgrader)'s list of dLockInfo or eLockInfo.
+            did = entityInfoManager.getDatasetId(entityInfo);
+            tempDatasetIdObj.setId(did);
+            dLockInfo = datasetResourceHT.get(tempDatasetIdObj);
+            
+            if (waiterObj.isWaitingOnEntityLock()) {
+                entityHashValue = entityInfoManager.getPKHashVal(entityInfo);
+                eLockInfo = dLockInfo.getEntityResourceHT().get(entityHashValue);
+                if (waiterObj.isWaiter()) {
+                    entityLockInfoManager.removeWaiter(eLockInfo, waiterObjId);
+                } else {
+                    entityLockInfoManager.removeUpgrader(eLockInfo, waiterObjId);
+                }
+            } else {
+                if (waiterObj.isWaiter()) {
+                    dLockInfo.removeWaiter(waiterObjId);
+                } else {
+                    dLockInfo.removeUpgrader(waiterObjId);
+                }
+            }
+            
             //1. deallocate waiterObj
             lockWaiterManager.deallocate(waiterObjId);
 
@@ -692,6 +716,11 @@ public class LockManager implements ILockManager {
 
         //remove JobInfo
         jobHT.remove(jobId);
+        
+        if (existWaiter) {
+            txnContext.setStatus(TransactionContext.TIMED_OUT_STATUS);
+            txnContext.setTxnState(TransactionState.ABORTED);
+        }
 
         if (IS_DEBUG_MODE) {
             trackLockRequest("Granted", RequestType.RELEASE_LOCKS, new DatasetId(0), 0, (byte) 0, txnContext,
@@ -877,19 +906,29 @@ public class LockManager implements ILockManager {
         }
 
         lockRequestTracker.addEvent(s.toString(), request);
+        if (msg.equals("Requested")) {
+            lockRequestTracker.addRequest(request);
+        }
         System.out.println(request.prettyPrint() + "--> " + s.toString());
     }
 
-    public String getGlobalRequestHistory() {
+    public String getHistoryForAllJobs() {
         if (IS_DEBUG_MODE) {
-            return lockRequestTracker.getGlobalRequestHistory();
+            return lockRequestTracker.getHistoryForAllJobs();
         }
         return null;
     }
 
-    public String getLocalRequestHistory() {
+    public String getHistoryPerJob() {
         if (IS_DEBUG_MODE) {
-            return lockRequestTracker.getLocalRequestHistory();
+            return lockRequestTracker.getHistoryPerJob();
+        }
+        return null;
+    }
+    
+    public String getRequestHistoryForAllJobs() {
+        if (IS_DEBUG_MODE) {
+            return lockRequestTracker.getRequestHistoryForAllJobs();
         }
         return null;
     }
@@ -1075,7 +1114,6 @@ public class LockManager implements ILockManager {
         int entityInfo;
         DatasetLockInfo dLockInfo;
         boolean isUpgrade = false;
-        int waiterCount = 0;
         int weakerModeLockCount;
 
         dLockInfo = datasetResourceHT.get(datasetId);
@@ -1126,8 +1164,8 @@ public class LockManager implements ILockManager {
                     return false;
                 }
 
-                entityInfoManager.increaseEntityLockCount(entityInfo, waiterCount);
-                entityLockInfoManager.increaseLockCount(eLockInfo, lockMode, (short) waiterCount);
+                entityInfoManager.increaseEntityLockCount(entityInfo);
+                entityLockInfoManager.increaseLockCount(eLockInfo, lockMode);
                 entityLockInfoManager.addHolder(eLockInfo, entityInfo);
             }
         } else {//eLockInfo doesn't exist, so this lock request is the first request and can be granted without waiting.
@@ -1188,15 +1226,21 @@ public class LockManager implements ILockManager {
             if (duplicatedWaiterObjId == -1) {
                 //add actor properly
                 if (isDatasetLockInfo) {
+                    waiter.setWaitingOnEntityLock(false);
                     if (isUpgrade) {
                         dLockInfo.addUpgrader(waiterId);
+                        waiter.setWaiter(false);
                     } else {
                         dLockInfo.addWaiter(waiterId);
+                        waiter.setWaiter(true);
                     }
                 } else {
+                    waiter.setWaitingOnEntityLock(true);
                     if (isUpgrade) {
+                        waiter.setWaiter(false);
                         entityLockInfoManager.addUpgrader(eLockInfo, waiterId);
                     } else {
+                        waiter.setWaiter(true);
                         entityLockInfoManager.addWaiter(eLockInfo, waiterId);
                     }
                 }

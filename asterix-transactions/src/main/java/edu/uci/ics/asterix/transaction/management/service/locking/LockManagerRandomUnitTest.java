@@ -20,7 +20,7 @@ public class LockManagerRandomUnitTest {
     private static final int MAX_NUM_OF_UPGRADE_JOB = 2;//2
     private static final int MAX_NUM_OF_ENTITY_LOCK_JOB = 8;//8
     private static final int MAX_NUM_OF_DATASET_LOCK_JOB = 2;//2
-    private static final int MAX_NUM_OF_THREAD_IN_A_JOB = 1; //4
+    private static final int MAX_NUM_OF_THREAD_IN_A_JOB = 2; //4
     private static int jobId = 0;
     private static Random rand;
 
@@ -125,6 +125,7 @@ class LockRequestProducer implements Runnable {
     private int upgradeIndex;
     private boolean isUpgradeThread;
     private boolean isUpgradeThreadJob;
+    private boolean isDone;
 
     public LockRequestProducer(ILockManager lockMgr, TransactionContext txnContext, boolean isDatasetLock,
             boolean isUpgradeThreadJob, boolean isUpgradeThread) {
@@ -139,6 +140,7 @@ class LockRequestProducer implements Runnable {
         requestHistory = new StringBuilder();
         unlockIndex = 0;
         upgradeIndex = 0;
+        isDone = false;
     }
 
     @Override
@@ -156,6 +158,8 @@ class LockRequestProducer implements Runnable {
             e.printStackTrace();
             return;
         } finally {
+
+ 
             /*
             System.out.println("" + Thread.currentThread().getName() + "\n" + requestHistory.toString() + ""
                     + Thread.currentThread().getName() + "\n");
@@ -170,6 +174,9 @@ class LockRequestProducer implements Runnable {
     private void runDatasetLockTask() {
         try {
             produceDatasetLockRequest();
+            if (isDone) {
+                return;
+            }
         } catch (ACIDException e) {
             e.printStackTrace();
             return;
@@ -183,6 +190,9 @@ class LockRequestProducer implements Runnable {
 
         try {
             produceDatasetUnlockRequest();
+            if (isDone) {
+                return;
+            }
         } catch (ACIDException e) {
             e.printStackTrace();
             return;
@@ -218,6 +228,9 @@ class LockRequestProducer implements Runnable {
         for (i = 0; i < lockCount; i++) {
             try {
                 produceEntityLockRequest(lockMode);
+                if (isDone) {
+                    return;
+                }
             } catch (ACIDException e) {
                 e.printStackTrace();
                 return;
@@ -228,6 +241,9 @@ class LockRequestProducer implements Runnable {
         for (i = 0; i < upgradeCount; i++) {
             try {
                 produceEntityLockUpgradeRequest();
+                if (isDone) {
+                    return;
+                }
             } catch (ACIDException e) {
                 e.printStackTrace();
                 return;
@@ -240,6 +256,9 @@ class LockRequestProducer implements Runnable {
             for (i = 0; i < lockCount; i++) {
                 try {
                     produceEntityUnlockRequest();
+                    if (isDone) {
+                        return;
+                    }
                 } catch (ACIDException e) {
                     e.printStackTrace();
                     return;
@@ -307,10 +326,12 @@ class LockRequestProducer implements Runnable {
 
         while (upgradeIndex < size) {
             lockRequest = requestQueue.get(upgradeIndex++);
-            if (lockRequest.isUpgrade) {
+            if (lockRequest.isUpgrade || lockRequest.isTryLockFailed) {
                 continue;
             }
-            if (lockRequest.requestType == RequestType.UNLOCK || lockRequest.requestType == RequestType.RELEASE_LOCKS) {
+            if (lockRequest.requestType == RequestType.UNLOCK || lockRequest.requestType == RequestType.RELEASE_LOCKS
+                    || lockRequest.requestType == RequestType.INSTANT_LOCK
+                    || lockRequest.requestType == RequestType.INSTANT_TRY_LOCK) {
                 continue;
             }
             if (lockRequest.lockMode == LockMode.X) {
@@ -387,9 +408,9 @@ class LockRequestProducer implements Runnable {
         
         if (existLockRequest) {
             int requestType = RequestType.RELEASE_LOCKS;
-            int datasetId = -1;
-            int entityHashValue = -1;
-            byte lockMode = LockMode.S;
+            int datasetId = lockRequest.datasetIdObj.getId();
+            int entityHashValue = lockRequest.entityHashValue;
+            byte lockMode = lockRequest.lockMode;
             LockRequest request = new LockRequest(Thread.currentThread().getName(), requestType, new DatasetId(datasetId), entityHashValue, lockMode,
                     txnContext);
             requestQueue.add(request);
@@ -402,10 +423,48 @@ class LockRequestProducer implements Runnable {
 
         switch (request.requestType) {
             case RequestType.LOCK:
-                lockMgr.lock(request.datasetIdObj, request.entityHashValue, request.lockMode, request.txnContext);
+                try {
+                    lockMgr.lock(request.datasetIdObj, request.entityHashValue, request.lockMode, request.txnContext); 
+                } catch (ACIDException e) {
+                    if (request.txnContext.getStatus() == TransactionContext.TIMED_OUT_STATUS) {
+                        if (request.txnContext.getTxnState() != TransactionState.ABORTED) {
+                            request.txnContext.setTxnState(TransactionState.ABORTED);
+                            log("*** "+ request.txnContext.getJobId()+ " lock request causing deadlock ***");
+                            log("Abort --> Releasing all locks acquired by "+ request.txnContext.getJobId());
+                            try {
+                                lockMgr.releaseLocks(request.txnContext);
+                            } catch (ACIDException e1) {
+                                e1.printStackTrace();
+                            }
+                            log("Abort --> Released all locks acquired by "+ request.txnContext.getJobId());
+                        }
+                        isDone = true;
+                    } else {
+                        throw e;
+                    }
+                }
                 break;
             case RequestType.INSTANT_LOCK:
-                lockMgr.instantLock(request.datasetIdObj, request.entityHashValue, request.lockMode, request.txnContext);
+                try {
+                    lockMgr.instantLock(request.datasetIdObj, request.entityHashValue, request.lockMode, request.txnContext); 
+                } catch (ACIDException e) {
+                    if (request.txnContext.getStatus() == TransactionContext.TIMED_OUT_STATUS) {
+                        if (request.txnContext.getTxnState() != TransactionState.ABORTED) {
+                            request.txnContext.setTxnState(TransactionState.ABORTED);
+                            log("*** "+ request.txnContext.getJobId()+ " lock request causing deadlock ***");
+                            log("Abort --> Releasing all locks acquired by "+ request.txnContext.getJobId());
+                            try {
+                                lockMgr.releaseLocks(request.txnContext);
+                            } catch (ACIDException e1) {
+                                e1.printStackTrace();
+                            }
+                            log("Abort --> Released all locks acquired by "+ request.txnContext.getJobId());
+                        }
+                        isDone = true;
+                    } else {
+                        throw e;
+                    }
+                }
                 break;
             case RequestType.TRY_LOCK:
                 request.isTryLockFailed = !lockMgr.tryLock(request.datasetIdObj, request.entityHashValue,
@@ -430,6 +489,10 @@ class LockRequestProducer implements Runnable {
             // TODO Auto-generated catch block
             e.printStackTrace();
         }
+    }
+    
+    private void log(String s) {
+        System.out.println(s);
     }
 }
 
@@ -464,31 +527,32 @@ class LockRequest {
 
     public String prettyPrint() {
         StringBuilder s = new StringBuilder();
-        s.append(threadName).append("\t").append(requestTime).append("\t");
+        //s.append(threadName.charAt(7)).append("\t").append("\t");
+        s.append(threadName.substring(7)).append("\t").append("\t");
         switch (requestType) {
             case RequestType.LOCK:
-                s.append("|L|");
+                s.append("L");
                 break;
             case RequestType.TRY_LOCK:
-                s.append("|TL|");
+                s.append("TL");
                 break;
             case RequestType.INSTANT_LOCK:
-                s.append("|IL|");
+                s.append("IL");
                 break;
             case RequestType.INSTANT_TRY_LOCK:
-                s.append("|ITL|");
+                s.append("ITL");
                 break;
             case RequestType.UNLOCK:
-                s.append("|UL|");
+                s.append("UL");
                 break;
             case RequestType.RELEASE_LOCKS:
-                s.append("|RL|");
+                s.append("RL");
                 break;
             case RequestType.CHECK_SEQUENCE:
-                s.append("|CSQ|");
+                s.append("CSQ");
                 return s.toString();
             case RequestType.CHECK_SET:
-                s.append("|CST|");
+                s.append("CST");
                 return s.toString();
             case RequestType.KILL:
                 s.append("|KI|");
@@ -496,8 +560,8 @@ class LockRequest {
             default:
                 throw new UnsupportedOperationException("Unsupported method");
         }
-        s.append("\t").append(txnContext.getJobId().getId()).append(",").append(datasetIdObj.getId()).append(",")
-                .append(entityHashValue).append(":");
+        s.append("\t").append(txnContext.getJobId().getId()).append("\t").append(datasetIdObj.getId()).append("\t")
+                .append(entityHashValue).append("\t");
         switch (lockMode) {
             case LockMode.S:
                 s.append("S");
@@ -514,7 +578,7 @@ class LockRequest {
             default:
                 throw new UnsupportedOperationException("Unsupported lock mode");
         }
-        s.append(",").append(isUpgrade).append("\n");
+        s.append("\n");
         return s.toString();
     }
 }

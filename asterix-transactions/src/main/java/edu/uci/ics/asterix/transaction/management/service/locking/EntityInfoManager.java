@@ -537,6 +537,9 @@ class ChildEntityInfoArrayManager {
         int currentSlot = freeSlotNum;
         freeSlotNum = getNextFreeSlot(currentSlot);
         occupiedSlots++;
+        if (LockManager.IS_DEBUG_MODE) {
+            System.out.println(Thread.currentThread().getName()+" entity allocate: "+currentSlot);
+        }
         return currentSlot;
     }
 
@@ -544,6 +547,9 @@ class ChildEntityInfoArrayManager {
         setNextFreeSlot(slotNum, freeSlotNum);
         freeSlotNum = slotNum;
         occupiedSlots--;
+        if (LockManager.IS_DEBUG_MODE) {
+            System.out.println(Thread.currentThread().getName()+" entity deallocate: "+slotNum);
+        }
     }
 
     public void deinitialize() {

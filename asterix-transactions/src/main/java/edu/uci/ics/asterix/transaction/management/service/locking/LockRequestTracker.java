@@ -7,41 +7,51 @@ import java.util.Map.Entry;
 import java.util.Set;
 
 public class LockRequestTracker {
-    HashMap<Integer, StringBuilder> jobRequestHistory; //per job
-    StringBuilder globalRequestHistory;
+    HashMap<Integer, StringBuilder> historyPerJob; //per job
+    StringBuilder historyForAllJobs;
+    StringBuilder requestHistoryForAllJobs; //request only
 
     public LockRequestTracker() {
-        globalRequestHistory = new StringBuilder();
-        jobRequestHistory = new HashMap<Integer, StringBuilder>();
+        historyForAllJobs = new StringBuilder();
+        historyPerJob = new HashMap<Integer, StringBuilder>();
+        requestHistoryForAllJobs = new StringBuilder();
     }
 
     public void addEvent(String msg, LockRequest request) {
         int jobId = request.txnContext.getJobId().getId();
-        StringBuilder jobHistory = jobRequestHistory.get(jobId);
+        StringBuilder jobHistory = historyPerJob.get(jobId);
 
         //update jobHistory
         if (jobHistory == null) {
             jobHistory = new StringBuilder();
         }
         jobHistory.append(request.prettyPrint()).append("--> ").append(msg).append("\n");
-        jobRequestHistory.put(jobId, jobHistory);
+        historyPerJob.put(jobId, jobHistory);
 
         //handle global request queue
-        globalRequestHistory.append(request.prettyPrint()).append("--> ").append(msg).append("\n");
+        historyForAllJobs.append(request.prettyPrint()).append("--> ").append(msg).append("\n");
+    }
+    
+    public void addRequest(LockRequest request) {
+        requestHistoryForAllJobs.append(request.prettyPrint());
     }
 
-    public String getGlobalRequestHistory() {
-        return globalRequestHistory.toString();
+    public String getHistoryForAllJobs() {
+        return historyForAllJobs.toString();
     }
 
-    public String getLocalRequestHistory() {
+    public String getHistoryPerJob() {
         StringBuilder history = new StringBuilder();
-        Set<Entry<Integer, StringBuilder>> s = jobRequestHistory.entrySet();
+        Set<Entry<Integer, StringBuilder>> s = historyPerJob.entrySet();
         Iterator<Entry<Integer, StringBuilder>> iter = s.iterator();
         while (iter.hasNext()) {
             Map.Entry<Integer, StringBuilder> entry = (Map.Entry<Integer, StringBuilder>) iter.next();
             history.append(entry.getValue().toString());
         }
         return history.toString();
+    }
+    
+    public String getRequestHistoryForAllJobs() {
+        return requestHistoryForAllJobs.toString();
     }
 }
