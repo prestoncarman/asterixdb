@@ -72,8 +72,23 @@ public class DeadlockDetector {
         //if it is upgrader, then handle it as special case in the following manner
         //if there is another upgrader or waiter of which lock mode is not compatible with the caller's lock mode,
         //then this caller's wait causes deadlock.
+        if (holderList.get(callerId) != -1) {
+            int count = 0;
+            holderList.beginIterate();
+            holder = holderList.getNextKey();
+            while (holder != -1) {
+                count++;
+                if (count > 1) {
+                    break;
+                }
+                holder = holderList.getNextKey();
+            }
+            
+            if (count == 1) {
+                return false;                
+            }
+        }
         
-
         //while holderList is not empty
         holderList.beginIterate();
         holder = holderList.getNextKey();
