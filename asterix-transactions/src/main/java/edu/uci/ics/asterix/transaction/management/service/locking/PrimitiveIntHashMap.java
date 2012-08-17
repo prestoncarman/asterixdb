@@ -180,7 +180,23 @@ public class PrimitiveIntHashMap {
             }
             growCount++;
         }
-        occupiedSlots += child.put(bucketNum%CHILD_BUCKETS, key, value);
+        occupiedSlots += child.put(bucketNum%CHILD_BUCKETS, key, value, false);
+    }
+    
+    public void upsert (int key, int value) {
+        int growCount = 0;
+        int bucketNum = hash(key);
+        ChildIntArrayManager child = pArray.get(bucketNum/CHILD_BUCKETS);
+        while (child.isFull(bucketNum%CHILD_BUCKETS)) {
+            growHashMap();
+            bucketNum = hash(key);
+            child = pArray.get(bucketNum/CHILD_BUCKETS);
+            if (growCount > 2) {
+                //changeHashFunc();
+            }
+            growCount++;
+        }
+        occupiedSlots += child.put(bucketNum%CHILD_BUCKETS, key, value, true);
     }
     
     private int hash(int key) {
@@ -241,7 +257,7 @@ public class PrimitiveIntHashMap {
                         child.cArray[j][k*2] = -1;
                         child.cArray[j][0]--;
                         //re-hash it 
-                        pArray.get(hash(key)/CHILD_BUCKETS).put(hash(key)%CHILD_BUCKETS, key, value);
+                        pArray.get(hash(key)/CHILD_BUCKETS).put(hash(key)%CHILD_BUCKETS, key, value, false);
                     }
                 }
             }
@@ -490,16 +506,17 @@ class ChildIntArrayManager {
 
     /**
      * Put key,value into a slot in the bucket if the key doesn't exist.
-     * Otherwise, ignore it.
+     * Update value if the key exists and if isUpsert is true
      * No need to call get() to check the existence of the key before calling put().
      * Notice! Caller should make sure that there is an available slot.
      * 
      * @param bucketNum
      * @param key
      * @param value
-     * @return 1 for success, 0 for key duplication
+     * @param isUpsert
+     * @return 1 for new insertion, 0 for key duplication 
      */
-    public int put(int bucketNum, int key, int value) {
+    public int put(int bucketNum, int key, int value, boolean isUpsert) {
         int i;
         int emptySlot=-1;
 
@@ -512,6 +529,9 @@ class ChildIntArrayManager {
 
         for (i = 1; i < NUM_OF_SLOTS; i++) {
             if (cArray[bucketNum][i*2] == key) {
+                if (isUpsert) {
+                    cArray[bucketNum][emptySlot*2+1] = value;
+                }
                 return 0;
             }
             else if (cArray[bucketNum][i*2] == -1) {

@@ -382,6 +382,8 @@ public class EntityLockInfoManager {
             //This entityInfo(i.e., holder) is the last resource held by this job.
             jobInfo.setlastHoldingResource(prev);
         }
+        
+        //jobInfo.decreaseDatasetLockCount(holder);
     }
 
     public void addWaiter(int slotNum, int waiterObjId) {

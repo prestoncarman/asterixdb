@@ -269,15 +269,28 @@ public class LockManager implements ILockManager {
                 jobHT.put(jobId, jobInfo);
             }
             
-            //TODO
             //[Notice]
             //There has been no same caller as (jId, dId, entityHashValue) triplet.
             //But there could be the same caller as (jId, dId) pair.
             //For example, two requests (J1, D1, E1) and (J1, D1, E2) are considered as duplicated call in dataset-granule perspective.
-            //Therefore, I cover the above case in the following code.
-            //1. find the same dataset-granule lock request, that is, (J1, D1) pair in the above example.
+            //Therefore, the above duplicated call case is covered in the following code.
             
-            
+            //find the same dataset-granule lock request, that is, (J1, D1) pair in the above example.
+            if (jobInfo.isDatasetLockGranted(dId, datasetLockMode)) {
+                //this is duplicated call
+                entityInfoManager.increaseDatasetLockCount(entityInfo);
+                if (entityHashValue == -1) {
+                    dLockInfo.increaseLockCount(datasetLockMode);
+                    dLockInfo.addHolder(entityInfo);
+                } else {
+                    dLockInfo.increaseLockCount(datasetLockMode);
+                    //IS and IX holders are implicitly handled.
+                }
+                //add entityInfo to JobInfo's holding-resource list
+                jobInfo.addHoldingResource(entityInfo);
+                
+                return entityInfo;
+            }
 
             //wait if any upgrader exists or upgrading lock mode is not compatible
             if (dLockInfo.getFirstUpgrader() != -1 || dLockInfo.getFirstWaiter() != -1
@@ -969,7 +982,7 @@ public class LockManager implements ILockManager {
 
         //see tryLockDatasetGranule() function to know the revert operation
         switch (tryLockDatasetGranuleRevertOperation) {
-
+            
             case 1://[revertOperation1]: reverting 'adding a holder'
 
                 if (entityHashValue == -1) {
@@ -1048,20 +1061,59 @@ public class LockManager implements ILockManager {
         entityInfo = dLockInfo.findEntityInfoFromHolderList(jId, entityHashValue);
         if (entityInfo == -1) { //new call from this job -> doesn't mean that eLockInfo doesn't exist since another thread might have create the eLockInfo already.
 
+            //////////////////////////////////////////////////////////////////////////////////////
+            //[part of revertOperation1]
+            entityInfo = entityInfoManager.allocate(jId, dId, entityHashValue, lockMode);
+            if (jobInfo == null) {
+                jobInfo = new JobInfo(entityInfoManager, lockWaiterManager, txnContext);
+                jobHT.put(jobId, jobInfo);
+            }
+            //////////////////////////////////////////////////////////////////////////////////////
+            
+            //////////////////////////////////////////////////////////////////////////////////////
+            //revert the following operations if the caller thread has to wait during this call.
+            //[revertOperation1]
+            
+            //[Notice]
+            //There has been no same caller as (jId, dId, entityHashValue) triplet.
+            //But there could be the same caller as (jId, dId) pair.
+            //For example, two requests (J1, D1, E1) and (J1, D1, E2) are considered as duplicated call in dataset-granule perspective.
+            //Therefore, the above duplicated call case is covered in the following code.
+            //find the same dataset-granule lock request, that is, (J1, D1) pair in the above example.
+            if (jobInfo.isDatasetLockGranted(dId, datasetLockMode)) {
+                //this is duplicated call
+                entityInfoManager.increaseDatasetLockCount(entityInfo);
+                if (entityHashValue == -1) {
+                    dLockInfo.increaseLockCount(datasetLockMode);
+                    dLockInfo.addHolder(entityInfo);
+                } else {
+                    dLockInfo.increaseLockCount(datasetLockMode);
+                    //IS and IX holders are implicitly handled.
+                }
+                //add entityInfo to JobInfo's holding-resource list
+                jobInfo.addHoldingResource(entityInfo);
+                
+                tryLockDatasetGranuleRevertOperation = 1;
+                
+                return entityInfo;
+            }
+            //////////////////////////////////////////////////////////////////////////////////////
+            
             //return fail if any upgrader exists or upgrading lock mode is not compatible
             if (dLockInfo.getFirstUpgrader() != -1 || dLockInfo.getFirstWaiter() != -1
                     || !dLockInfo.isCompatible(datasetLockMode)) {
+                //revert [part of revertOperation1 and 2] before return
+                if (jobInfo.getLastHoldingResource() == -1 && jobInfo.getFirstWaitingResource() == -1) {
+                    jobHT.remove(jobId);
+                }
+                entityInfoManager.deallocate(entityInfo);
+                
                 return -2;
             }
 
             //////////////////////////////////////////////////////////////////////////////////////
             //revert the following operations if the caller thread has to wait during this call.
             //[revertOperation1]
-            entityInfo = entityInfoManager.allocate(jId, dId, entityHashValue, lockMode);
-            if (jobInfo == null) {
-                jobInfo = new JobInfo(entityInfoManager, lockWaiterManager, txnContext);
-                jobHT.put(jobId, jobInfo);
-            }
 
             entityInfoManager.increaseDatasetLockCount(entityInfo);
             if (entityHashValue == -1) {
