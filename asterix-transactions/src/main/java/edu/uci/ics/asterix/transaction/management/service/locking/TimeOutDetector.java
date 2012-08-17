@@ -15,8 +15,8 @@ import edu.uci.ics.asterix.transaction.management.service.transaction.Transactio
  */
 
 public class TimeOutDetector {
-    static final long TIME_OUT_THRESHOLD = 600000;
-    static final long SWEEP_PERIOD = 120000;
+    static final long TIME_OUT_THRESHOLD = 60000;
+    static final long SWEEP_PERIOD = 10000;//120000;
 
     LockManager lockMgr;
     Thread trigger;

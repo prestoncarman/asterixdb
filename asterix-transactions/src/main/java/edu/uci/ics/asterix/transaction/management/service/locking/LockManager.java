@@ -261,12 +261,23 @@ public class LockManager implements ILockManager {
 
         //3. lock request causing duplicated holding requests from different threads or a single thread in a same job
         entityInfo = dLockInfo.findEntityInfoFromHolderList(jId, entityHashValue);
-        if (entityInfo == -1) { //new call from this job -> doesn't mean that eLockInfo doesn't exist since another thread might have create the eLockInfo already.
+        if (entityInfo == -1) {
+
             entityInfo = entityInfoManager.allocate(jId, dId, entityHashValue, lockMode);
             if (jobInfo == null) {
                 jobInfo = new JobInfo(entityInfoManager, lockWaiterManager, txnContext);
                 jobHT.put(jobId, jobInfo);
             }
+            
+            //TODO
+            //[Notice]
+            //There has been no same caller as (jId, dId, entityHashValue) triplet.
+            //But there could be the same caller as (jId, dId) pair.
+            //For example, two requests (J1, D1, E1) and (J1, D1, E2) are considered as duplicated call in dataset-granule perspective.
+            //Therefore, I cover the above case in the following code.
+            //1. find the same dataset-granule lock request, that is, (J1, D1) pair in the above example.
+            
+            
 
             //wait if any upgrader exists or upgrading lock mode is not compatible
             if (dLockInfo.getFirstUpgrader() != -1 || dLockInfo.getFirstWaiter() != -1
@@ -361,9 +372,9 @@ public class LockManager implements ILockManager {
                     entityInfoManager.setEntityLockMode(entityInfo, LockMode.X);
                     entityInfoManager.increaseEntityLockCount(entityInfo, waiterCount - 1);
 
-                    entityLockInfoManager.increaseLockCount(entityInfo, LockMode.X, (short) (weakerModeLockCount
+                    entityLockInfoManager.increaseLockCount(eLockInfo, LockMode.X, (short) (weakerModeLockCount
                             + waiterCount - 1));//new lock mode
-                    entityLockInfoManager.decreaseLockCount(entityInfo, LockMode.S, (short) weakerModeLockCount);//old lock mode 
+                    entityLockInfoManager.decreaseLockCount(eLockInfo, LockMode.S, (short) weakerModeLockCount);//old lock mode 
                 }
                 return;
             }
@@ -402,9 +413,9 @@ public class LockManager implements ILockManager {
                         entityInfoManager.setEntityLockMode(entityInfo, lockMode);
                         entityInfoManager.increaseEntityLockCount(entityInfo, waiterCount - 1);
 
-                        entityLockInfoManager.increaseLockCount(entityInfo, LockMode.X, (short) (weakerModeLockCount
+                        entityLockInfoManager.increaseLockCount(eLockInfo, LockMode.X, (short) (weakerModeLockCount
                                 + waiterCount - 1));//new lock mode
-                        entityLockInfoManager.decreaseLockCount(entityInfo, LockMode.S, (short) weakerModeLockCount);//old lock mode 
+                        entityLockInfoManager.decreaseLockCount(eLockInfo, LockMode.S, (short) weakerModeLockCount);//old lock mode 
                     }
 
                 } else {//duplicated call
@@ -596,7 +607,7 @@ public class LockManager implements ILockManager {
                 }
             }
             
-            //0. remove from waiter(or upgrader)'s list of dLockInfo or eLockInfo.
+            //1. remove from waiter(or upgrader)'s list of dLockInfo or eLockInfo.
             did = entityInfoManager.getDatasetId(entityInfo);
             tempDatasetIdObj.setId(did);
             dLockInfo = datasetResourceHT.get(tempDatasetIdObj);
@@ -617,10 +628,22 @@ public class LockManager implements ILockManager {
                 }
             }
             
-            //1. deallocate waiterObj
+            //2. wake-up waiters
+            latchWaitNotify();
+            synchronized (waiterObj) {
+                unlatchWaitNotify();
+                waiterObj.setWait(false);
+                if (IS_DEBUG_MODE) {
+                    System.out.println("" + Thread.currentThread().getName() + "\twake-up(D): WID(" + waiterObjId
+                            + "),EID(" + waiterObj.getEntityInfoSlot() + ")");
+                }
+                waiterObj.notifyAll();
+            }
+            
+            //3. deallocate waiterObj
             lockWaiterManager.deallocate(waiterObjId);
 
-            //2. deallocate entityInfo only if this waiter is not an upgrader
+            //4. deallocate entityInfo only if this waiter is not an upgrader
             if (entityInfoManager.getDatasetLockCount(entityInfo) == 0
                     && entityInfoManager.getEntityLockCount(entityInfo) == 0) {
                 entityInfoManager.deallocate(entityInfo);
@@ -1149,8 +1172,8 @@ public class LockManager implements ILockManager {
                     weakerModeLockCount = entityInfoManager.getEntityLockCount(entityInfo);
                     entityInfoManager.setEntityLockMode(entityInfo, lockMode);
 
-                    entityLockInfoManager.increaseLockCount(entityInfo, LockMode.X, (short) weakerModeLockCount);//new lock mode
-                    entityLockInfoManager.decreaseLockCount(entityInfo, LockMode.S, (short) weakerModeLockCount);//old lock mode
+                    entityLockInfoManager.increaseLockCount(eLockInfo, LockMode.X, (short) weakerModeLockCount);//new lock mode
+                    entityLockInfoManager.decreaseLockCount(eLockInfo, LockMode.S, (short) weakerModeLockCount);//old lock mode
 
                 } else {//duplicated call
                     entityInfoManager.increaseEntityLockCount(entityInfo);

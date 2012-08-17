@@ -66,6 +66,13 @@ public class DeadlockDetector {
         } else {
             getHolderList(datasetId, hashValue, holderList);
         }
+        
+        //TODO
+        //check whether this caller is upgrader or not
+        //if it is upgrader, then handle it as special case in the following manner
+        //if there is another upgrader or waiter of which lock mode is not compatible with the caller's lock mode,
+        //then this caller's wait causes deadlock.
+        
 
         //while holderList is not empty
         holderList.beginIterate();
@@ -128,6 +135,8 @@ public class DeadlockDetector {
         DatasetLockInfo dLockInfo;
         int entityLockInfo;
         int entityInfo;
+        int waiterObjId;
+        LockWaiter waiterObj;
         
         //get datasetLockInfo
         tempDatasetIdObj.setId(datasetId);
@@ -149,11 +158,24 @@ public class DeadlockDetector {
             entityHT.beginIterate();
             entityLockInfo = entityHT.getNextValue();
             while (entityLockInfo != -1) {
+                
+                //1. add holder of eLockInfo to holerList
                 entityInfo = entityLockInfoManager.getLastHolder(entityLockInfo);
                 while (entityInfo != -1) {
                     holderList.put(entityInfoManager.getJobId(entityInfo), 0);
                     entityInfo = entityInfoManager.getPrevEntityActor(entityInfo);
                 }
+                
+                //2. add waiter of eLockInfo to holderList since waiter of entityLock is a holder of datasetLock
+                //(Upgraders need not to be added since upgraders are also holders)
+                waiterObjId = entityLockInfoManager.getFirstWaiter(entityLockInfo);
+                while (waiterObjId != -1) {
+                    waiterObj = lockWaiterManager.getLockWaiter(waiterObjId);
+                    entityInfo = waiterObj.getEntityInfoSlot();
+                    holderList.put(entityInfoManager.getJobId(entityInfo), 0);
+                    waiterObjId = waiterObj.getNextWaiterObjId();
+                }
+                
                 entityLockInfo = entityHT.getNextValue();
             }
         } else {
