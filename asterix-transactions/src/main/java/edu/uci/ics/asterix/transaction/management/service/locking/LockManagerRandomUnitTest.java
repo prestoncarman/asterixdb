@@ -524,11 +524,19 @@ class LockRequest {
         this.requestTime = System.currentTimeMillis();
         this.threadName = new String(threadName);
     }
+    
+    //used for "W" request type
+    public LockRequest(String threadName, int requestType, int waitTime) {
+        this.requestType = requestType;
+        this.requestTime = System.currentTimeMillis();
+        this.threadName = new String(threadName);
+        this.entityHashValue = waitTime;
+    }
 
     public String prettyPrint() {
         StringBuilder s = new StringBuilder();
         //s.append(threadName.charAt(7)).append("\t").append("\t");
-        s.append(threadName.substring(7)).append("\t").append("\t");
+        s.append("T").append(threadName.substring(7)).append("\t");
         switch (requestType) {
             case RequestType.LOCK:
                 s.append("L");
@@ -554,13 +562,16 @@ class LockRequest {
             case RequestType.CHECK_SET:
                 s.append("CST");
                 return s.toString();
-            case RequestType.KILL:
-                s.append("|KI|");
+            case RequestType.END:
+                s.append("END");
+                return s.toString();
+            case RequestType.WAIT:
+                s.append("W").append("\t").append(entityHashValue);
                 return s.toString();
             default:
                 throw new UnsupportedOperationException("Unsupported method");
         }
-        s.append("\t").append(txnContext.getJobId().getId()).append("\t").append(datasetIdObj.getId()).append("\t")
+        s.append("\tJ").append(txnContext.getJobId().getId()).append("\tD").append(datasetIdObj.getId()).append("\tE")
                 .append(entityHashValue).append("\t");
         switch (lockMode) {
             case LockMode.S:
@@ -592,5 +603,6 @@ class RequestType {
     public static final int RELEASE_LOCKS = 5;
     public static final int CHECK_SEQUENCE = 6;
     public static final int CHECK_SET = 7;
-    public static final int KILL = 8;
+    public static final int END = 8;
+    public static final int WAIT = 9;
 }

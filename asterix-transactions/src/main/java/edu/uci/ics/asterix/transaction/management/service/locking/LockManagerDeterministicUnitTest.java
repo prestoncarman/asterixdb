@@ -21,44 +21,49 @@ public class LockManagerDeterministicUnitTest {
         //initialize controller thread
         String requestFileName = new String(
                 "src/main/java/edu/uci/ics/asterix/transaction/management/service/locking/LockRequestFile");
-        String resultFileName = new String(
-                "src/main/java/edu/uci/ics/asterix/transaction/management/service/locking/ExpectedResultFile");
-        Thread t = new Thread(new LockRequestController(requestFileName, resultFileName), "Thread-0");
+        Thread t = new Thread(new LockRequestController(requestFileName));
         t.start();
     }
 }
 
 class LockRequestController implements Runnable {
 
+    public static final boolean IS_DEBUG_MODE = false;
     TransactionProvider txnProvider;
     WorkerReadyQueue workerReadyQueue;
     ArrayList<LockRequest> requestList;
+    ArrayList<ArrayList<Integer>> expectedResultList;
+    int resultListIndex;
     LockManager lockMgr;
-    Scanner resultScanner;
     String requestFileName;
-    String resultFileName;
-    ArrayList<Integer> expectedResultThreadList;
+    long defaultWaitTime;
 
-    public LockRequestController(String requestFileName, String resultFileName) throws ACIDException {
+    //ArrayList<Integer> expectedResultThreadList;
+
+    public LockRequestController(String requestFileName) throws ACIDException {
         this.txnProvider = new TransactionProvider("LockManagerPredefinedUnitTest");;
         this.workerReadyQueue = new WorkerReadyQueue();
         this.requestList = new ArrayList<LockRequest>();
+        this.expectedResultList = new ArrayList<ArrayList<Integer>>();
         this.lockMgr = (LockManager) txnProvider.getLockManager();
         this.requestFileName = new String(requestFileName);
-        this.resultFileName = new String(resultFileName);
+        this.resultListIndex = 0;
+        this.defaultWaitTime = 10;
     }
 
     @Override
     public void run() {
+        Thread.currentThread().setName("Thread-0");
         HashMap<String, Thread> threadMap = new HashMap<String, Thread>();
         Thread t = null;
         LockRequest lockRequest = null;
         boolean isSuccess = true;
 
         try {
-            readRequest(requestList);
+            readRequest();
         } catch (IOException e) {
-            ;//do nothing;
+            e.printStackTrace();
+            System.exit(-1);
         } catch (ACIDException e) {
             e.printStackTrace();
             System.exit(-1);
@@ -84,15 +89,15 @@ class LockRequestController implements Runnable {
 
         //wait for all workerThreads to be ready
         try {
-            log("waiting for all workerThreads initialization ...");
-            Thread.sleep(1);
+            log("waiting for all workerThreads to complete initialization ...");
+            Thread.sleep(5);
         } catch (InterruptedException e1) {
             e1.printStackTrace();
         }
         while (workerReadyQueue.size() != threadMap.size()) {
             try {
                 log(" .");
-                Thread.sleep(1);
+                Thread.sleep(5);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
@@ -115,10 +120,6 @@ class LockRequestController implements Runnable {
                 break;
             }
         }
-
-        if (resultScanner != null) {
-            resultScanner.close();
-        }
         
         if (isSuccess) {
             log("\n*** Test Passed ***");
@@ -133,14 +134,26 @@ class LockRequestController implements Runnable {
             return validateExpectedResult(true);
         } else if (request.requestType == RequestType.CHECK_SET) {
             return validateExpectedResult(false);
-        } else if (request.requestType == RequestType.KILL) {
+        } else if (request.requestType == RequestType.WAIT) {
+            try {
+                Thread.sleep((long)request.entityHashValue);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+                return false;
+            }
+        } else if (request.requestType == RequestType.END) {
             worker = workerReadyQueue.pop(request.threadName);
             while (worker == null) {
+                if (!IS_DEBUG_MODE) {
+                    log(request.threadName + " is not in the workerReadyQueue");
+                    return false;
+                }
                 log(Thread.currentThread().getName() + " waiting for "+request.threadName+" to be in the workerReadyQueue["+ i++ +"].");
                 try {
                     Thread.sleep((long)10);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
+                    return false;
                 }
                 worker = workerReadyQueue.pop(request.threadName);
             }
@@ -150,14 +163,18 @@ class LockRequestController implements Runnable {
                 worker.notify();
             }
             try {
-                Thread.sleep((long) 10);
+                Thread.sleep((long) defaultWaitTime);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
         } else {
             worker = workerReadyQueue.pop(request.threadName);
             while (worker == null) {
-                log(Thread.currentThread().getName() + " waiting for "+request.threadName+"to be in the workerReadyQueue["+ i++ +"].");
+                if (!IS_DEBUG_MODE) {
+                    log(request.threadName + " is not in the workerReadyQueue");
+                    return false;
+                }
+                log(Thread.currentThread().getName() + " waiting for "+request.threadName+" to be in the workerReadyQueue["+ i++ +"].");
                 try {
                     Thread.sleep((long)10);
                 } catch (InterruptedException e) {
@@ -173,7 +190,7 @@ class LockRequestController implements Runnable {
             }
             
             try {
-                Thread.sleep((long) 10);
+                Thread.sleep((long) defaultWaitTime);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
@@ -184,13 +201,14 @@ class LockRequestController implements Runnable {
 
     public boolean validateExpectedResult(boolean isSequence) {
 
+        /*
         int threadId = -1;
-        StringBuilder s = new StringBuilder("ExpectedResultThreadList: ");
+        StringBuilder s = new StringBuilder("ExpectedResultList: ");
         
-        if (expectedResultThreadList == null) {
-            expectedResultThreadList = new ArrayList<Integer>();
+        if (expectedResultList == null) {
+            expectedResultList = new ArrayList<Integer>();
         } else {
-            expectedResultThreadList.clear();
+            expectedResultList.clear();
         }
 
         if (resultScanner == null) {
@@ -209,7 +227,7 @@ class LockRequestController implements Runnable {
                     break;
                 }
                 s.append(threadId).append(",");
-                expectedResultThreadList.add(threadId);
+                expectedResultList.add(threadId);
             }
         } catch (InputMismatchException e) {
             //log(s.toString());
@@ -217,16 +235,17 @@ class LockRequestController implements Runnable {
         }
         
         log(s.toString());
+        */
         
         if (isSequence) {
-            return workerReadyQueue.checkSequence(expectedResultThreadList);
+            return workerReadyQueue.checkSequence(expectedResultList.get(resultListIndex++));
         } else {
-            return workerReadyQueue.checkSet(expectedResultThreadList);
+            return workerReadyQueue.checkSet(expectedResultList.get(resultListIndex++));
         }
 
     }
 
-    public void readRequest(ArrayList<LockRequest> requestList) throws IOException, ACIDException {
+    public void readRequest() throws IOException, ACIDException {
         int i = 0;
         LockRequest lockRequest = null;
         TransactionContext txnContext = null;
@@ -237,28 +256,47 @@ class LockRequestController implements Runnable {
         int jobId;
         int datasetId;
         int PKHashVal;
+        int waitTime;
+        ArrayList<Integer> list = null;
         String lockMode;
 
         Scanner scanner = new Scanner(new FileInputStream(requestFileName));
         while (scanner.hasNextLine()) {
             try {
-                threadId = scanner.nextInt();
+                threadId = Integer.parseInt(scanner.next().substring(1));
                 requestType = scanner.next();
-                if (requestType.equals("CSQ") || requestType.equals("CST") || requestType.equals("KI")) {
-                    log("LockRequest[" + i++ + "]:" + threadId + "," + requestType);
+                if (requestType.equals("CSQ") || requestType.equals("CST") || requestType.equals("END")) {
+                    log("LockRequest[" + i++ + "]:T" + threadId + "," + requestType);
                     lockRequest = new LockRequest("Thread-" + threadId, getRequestType(requestType));
+                    if (requestType.equals("CSQ") || requestType.equals("CST")) {
+                        list = new ArrayList<Integer>();
+                        while (scanner.hasNextInt()) {
+                            threadId = scanner.nextInt();
+                            if (threadId < 0) {
+                                break;
+                            }
+                            list.add(threadId);
+                        }
+                        expectedResultList.add(list);
+                    }
+                } else if (requestType.equals("DW")) { 
+                    defaultWaitTime = scanner.nextInt();
+                    log("LockRequest[" + i++ + "]:T" + threadId + "," + requestType + "," + defaultWaitTime);
+                } else if (requestType.equals("W")) {
+                    waitTime = scanner.nextInt();
+                    log("LockRequest[" + i++ + "]:T" + threadId + "," + requestType);
+                    lockRequest = new LockRequest("Thread-" + threadId, getRequestType(requestType), waitTime);
                 } else {
-                    jobId = scanner.nextInt();
-                    datasetId = scanner.nextInt();
-                    PKHashVal = scanner.nextInt();
+                    jobId = Integer.parseInt(scanner.next().substring(1));
+                    datasetId = Integer.parseInt(scanner.next().substring(1));
+                    PKHashVal = Integer.parseInt(scanner.next().substring(1));
                     lockMode = scanner.next();
                     txnContext = jobMap.get(jobId);
                     if (txnContext == null) {
                         txnContext = new TransactionContext(jobId, txnProvider);
                         jobMap.put(jobId, txnContext);
-                        log("created TxnContext!");
                     }
-                    log("LockRequest[" + i++ + "]:" + threadId + "," + requestType + "," + jobId + "," + datasetId + ","
+                    log("LockRequest[" + i++ + "]:T" + threadId + "," + requestType + ",J" + jobId + ",D" + datasetId + ",E"
                             + PKHashVal + "," + lockMode);
                     lockRequest = new LockRequest("Thread-" + threadId, getRequestType(requestType), new DatasetId(
                             datasetId), PKHashVal, getLockMode(lockMode), txnContext);
@@ -309,8 +347,8 @@ class LockRequestController implements Runnable {
             return RequestType.CHECK_SET;
         }
         
-        if (s.equals("KI")) {
-            return RequestType.KILL;
+        if (s.equals("END")) {
+            return RequestType.END;
         }
 
         try {
@@ -521,6 +559,12 @@ class WorkerReadyQueue {
         int queueSize = workerReadyQueue.size();
         int listSize = threadIdList.size();
 
+        s.append("ExpectedList(Set):\t");
+        for (i=0; i < listSize; i++) {
+            s.append(threadIdList.get(i)).append(" ");
+        }
+        s.append("\n");
+        
         while (queueSize < listSize) {
             //wait until workers finish its task
             try {
@@ -537,12 +581,12 @@ class WorkerReadyQueue {
             return false;
         }
 
-        s.append("[Set]ResultThreadList: ");
+        s.append("ResultList(Set):\t");
         for (i = 0; i < listSize; i++) {
             for (j = 0; j < queueSize; j++) {
                 worker = workerReadyQueue.get(j);
                 if (worker.getThreadName().equals("Thread-" + threadIdList.get(i))) {
-                    s.append(threadIdList.get(i)).append(",");
+                    s.append(threadIdList.get(i)).append(" ");
                     resultListSize++;
                     break;
                 }
@@ -563,6 +607,12 @@ class WorkerReadyQueue {
         LockRequestWorker worker = null;
         int queueSize = workerReadyQueue.size();
         int listSize = threadIdList.size();
+        
+        s.append("ExpectedList(Sequence):\t");
+        for (i=0; i < listSize; i++) {
+            s.append(threadIdList.get(i)).append(" ");
+        }
+        s.append("\n");
 
         while (queueSize < listSize) {
             //wait until workers finish its task
@@ -579,14 +629,14 @@ class WorkerReadyQueue {
             return false;
         }
 
-        s.append("[Sequence]ResultThreadList: ");
+        s.append("ResultList(Sequence):\t");
         for (i = 0; i < listSize; i++) {
             worker = workerReadyQueue.get(i);
             if (!worker.getThreadName().equals("Thread-" + threadIdList.get(i))) {
                 log(s.toString());
                 return false;
             } else {
-                s.append(threadIdList.get(i)).append(",");
+                s.append(threadIdList.get(i)).append(" ");
             }
         }
 
