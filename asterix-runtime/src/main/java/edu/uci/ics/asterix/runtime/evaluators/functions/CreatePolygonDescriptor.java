@@ -12,15 +12,15 @@ import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluator;
 import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluatorFactory;
-import edu.uci.ics.hyracks.dataflow.common.data.accessors.ArrayBackedValueStorage;
-import edu.uci.ics.hyracks.dataflow.common.data.accessors.IDataOutputProvider;
+import edu.uci.ics.hyracks.data.std.api.IDataOutputProvider;
+import edu.uci.ics.hyracks.data.std.util.ArrayBackedValueStorage;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.IFrameTupleReference;
 
 public class CreatePolygonDescriptor extends AbstractScalarFunctionDynamicDescriptor {
 
     private static final long serialVersionUID = 1L;
     public final static FunctionIdentifier FID = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "create-polygon",
-            FunctionIdentifier.VARARGS, true);
+            FunctionIdentifier.VARARGS);
     public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
         public IFunctionDescriptor createFunctionDescriptor() {
             return new CreatePolygonDescriptor();
@@ -62,7 +62,8 @@ public class CreatePolygonDescriptor extends AbstractScalarFunctionDynamicDescri
                             outInput.reset();
                             argEvals[i].evaluate(tuple);
                             try {
-                                out.write(outInput.getByteArray(), outInput.getStartOffset() + 1, outInput.getLength() - 1);
+                                out.write(outInput.getByteArray(), outInput.getStartOffset() + 1,
+                                        outInput.getLength() - 1);
                             } catch (IOException e) {
                                 throw new AlgebricksException(e);
                             }

@@ -38,8 +38,6 @@ class LockRequestController implements Runnable {
     String requestFileName;
     long defaultWaitTime;
 
-    //ArrayList<Integer> expectedResultThreadList;
-
     public LockRequestController(String requestFileName) throws ACIDException {
         this.txnProvider = new TransactionProvider("LockManagerPredefinedUnitTest");;
         this.workerReadyQueue = new WorkerReadyQueue();
@@ -201,42 +199,6 @@ class LockRequestController implements Runnable {
 
     public boolean validateExpectedResult(boolean isSequence) {
 
-        /*
-        int threadId = -1;
-        StringBuilder s = new StringBuilder("ExpectedResultList: ");
-        
-        if (expectedResultList == null) {
-            expectedResultList = new ArrayList<Integer>();
-        } else {
-            expectedResultList.clear();
-        }
-
-        if (resultScanner == null) {
-            try {
-                resultScanner = new Scanner(new FileInputStream(resultFileName));
-            } catch (FileNotFoundException e) {
-                e.printStackTrace();
-                System.exit(-1);
-            }
-        }
-
-        try {
-            while (resultScanner.hasNextInt()) {
-                threadId = resultScanner.nextInt();
-                if (threadId < 0) {
-                    break;
-                }
-                s.append(threadId).append(",");
-                expectedResultList.add(threadId);
-            }
-        } catch (InputMismatchException e) {
-            //log(s.toString());
-            e.printStackTrace();
-        }
-        
-        log(s.toString());
-        */
-        
         if (isSequence) {
             return workerReadyQueue.checkSequence(expectedResultList.get(resultListIndex++));
         } else {

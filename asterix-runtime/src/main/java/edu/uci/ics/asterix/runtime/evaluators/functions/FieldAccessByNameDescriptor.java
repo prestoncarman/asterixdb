@@ -20,15 +20,15 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluator;
 import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluatorFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
-import edu.uci.ics.hyracks.dataflow.common.data.accessors.ArrayBackedValueStorage;
-import edu.uci.ics.hyracks.dataflow.common.data.accessors.IDataOutputProvider;
+import edu.uci.ics.hyracks.data.std.api.IDataOutputProvider;
+import edu.uci.ics.hyracks.data.std.util.ArrayBackedValueStorage;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.IFrameTupleReference;
 
 public class FieldAccessByNameDescriptor extends AbstractScalarFunctionDynamicDescriptor {
 
     private static final long serialVersionUID = 1L;
     private static final FunctionIdentifier FID = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
-            "field-access-by-name", 2, true);
+            "field-access-by-name", 2);
     public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
         public IFunctionDescriptor createFunctionDescriptor() {
             return new FieldAccessByNameDescriptor();
@@ -55,7 +55,8 @@ public class FieldAccessByNameDescriptor extends AbstractScalarFunctionDynamicDe
         private final static byte SER_NULL_TYPE_TAG = ATypeTag.NULL.serialize();
         private final static byte SER_RECORD_TYPE_TAG = ATypeTag.RECORD.serialize();
 
-        public FieldAccessByNameEvalFactory(ICopyEvaluatorFactory recordEvalFactory, ICopyEvaluatorFactory fldNameEvalFactory) {
+        public FieldAccessByNameEvalFactory(ICopyEvaluatorFactory recordEvalFactory,
+                ICopyEvaluatorFactory fldNameEvalFactory) {
             this.recordEvalFactory = recordEvalFactory;
             this.fldNameEvalFactory = fldNameEvalFactory;
         }

@@ -16,7 +16,7 @@ import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyAggregateFunctionFactory
 import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluatorFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
-import edu.uci.ics.hyracks.dataflow.common.data.accessors.IDataOutputProvider;
+import edu.uci.ics.hyracks.data.std.api.IDataOutputProvider;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.IFrameTupleReference;
 
 public class NonEmptyStreamAggregateDescriptor extends AbstractAggregateFunctionDynamicDescriptor {
@@ -24,7 +24,7 @@ public class NonEmptyStreamAggregateDescriptor extends AbstractAggregateFunction
     private static final long serialVersionUID = 1L;
 
     public final static FunctionIdentifier FID = new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
-            "non-empty-stream", 0, true);
+            "non-empty-stream", 0);
     public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
         public IFunctionDescriptor createFunctionDescriptor() {
             return new NonEmptyStreamAggregateDescriptor();
