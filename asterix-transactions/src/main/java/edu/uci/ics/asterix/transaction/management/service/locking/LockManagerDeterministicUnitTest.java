@@ -282,6 +282,7 @@ class LockRequestController implements Runnable {
                 } else if (requestType.equals("DW")) { 
                     defaultWaitTime = scanner.nextInt();
                     log("LockRequest[" + i++ + "]:T" + threadId + "," + requestType + "," + defaultWaitTime);
+                    continue;
                 } else if (requestType.equals("W")) {
                     waitTime = scanner.nextInt();
                     log("LockRequest[" + i++ + "]:T" + threadId + "," + requestType);
@@ -349,6 +350,10 @@ class LockRequestController implements Runnable {
         
         if (s.equals("END")) {
             return RequestType.END;
+        }
+        
+        if (s.equals("W")) {
+            return RequestType.WAIT;
         }
 
         try {
