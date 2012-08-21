@@ -1110,7 +1110,6 @@ public class LockManager implements ILockManager {
             //////////////////////////////////////////////////////////////////////////////////////
             //revert the following operations if the caller thread has to wait during this call.
             //[revertOperation1]
-
             entityInfoManager.increaseDatasetLockCount(entityInfo);
             if (entityHashValue == -1) {
                 dLockInfo.increaseLockCount(datasetLockMode);
@@ -1400,6 +1399,7 @@ public class LockManager implements ILockManager {
         throw new ACIDException("Transaction " + txnContext.getJobId()
                 + " should abort (requested by the Lock Manager)");
     }
+    
 
     /**
      * For now, upgrading lock granule from entity-granule to dataset-granule is not supported!!
