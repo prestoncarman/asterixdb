@@ -49,7 +49,7 @@ partitioned by key cid;
 
 load dataset test1.Customers
 using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
-(("path"="nc1:///data/nontagged/customerData.json"),("format"="adm"));
+(("path"="nc1://data/nontagged/customerData.json"),("format"="adm"));
 
 
 insert into dataset test2.Customers(
