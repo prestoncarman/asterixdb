@@ -143,10 +143,9 @@ public class BTreeAccessMethod implements IAccessMethod {
                     }
                     // TODO: For now don't consider prefix searches.
                     // If high and low keys are set, we exit for now.
-                    if (setLowKeys.cardinality() == numSecondaryKeys
-                            && setHighKeys.cardinality() == numSecondaryKeys) {
-                    	doneWithExprs = true;
-                    }             
+                    if (setLowKeys.cardinality() == numSecondaryKeys && setHighKeys.cardinality() == numSecondaryKeys) {
+                        doneWithExprs = true;
+                    }
                     break;
                 }
                 case HIGH_EXCLUSIVE: {
@@ -240,7 +239,7 @@ public class BTreeAccessMethod implements IAccessMethod {
         int numHighKeys = createKeyVarsAndExprs(highKeyLimits, highKeyConstants, keyExprList, keyVarList, context);
 
         BTreeJobGenParams jobGenParams = new BTreeJobGenParams(chosenIndex.getIndexName(), IndexType.BTREE,
-                dataset.getDatasetName(), false, false);
+                dataset.getDataverseName(), dataset.getDatasetName(), false, false);
         jobGenParams.setLowKeyInclusive(lowKeyInclusive[0]);
         jobGenParams.setHighKeyInclusive(highKeyInclusive[0]);
         jobGenParams.setLowKeyVarList(keyVarList, 0, numLowKeys);

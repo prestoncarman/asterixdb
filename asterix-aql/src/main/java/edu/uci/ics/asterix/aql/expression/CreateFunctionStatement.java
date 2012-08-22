@@ -7,26 +7,26 @@ import edu.uci.ics.asterix.aql.base.Statement;
 import edu.uci.ics.asterix.aql.expression.visitor.IAqlExpressionVisitor;
 import edu.uci.ics.asterix.aql.expression.visitor.IAqlVisitorWithVoidReturn;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
-import edu.uci.ics.asterix.om.functions.AsterixFunction;
+import edu.uci.ics.asterix.om.functions.FunctionSignature;
 
 public class CreateFunctionStatement implements Statement {
 
-    private final AsterixFunction asterixFunction;
+    private final FunctionSignature signature;
     private final String functionBody;
     private final boolean ifNotExists;
     private final List<String> paramList;
 
-    public AsterixFunction getaAterixFunction() {
-        return asterixFunction;
+    public FunctionSignature getaAterixFunction() {
+        return signature;
     }
 
     public String getFunctionBody() {
         return functionBody;
     }
 
-    public CreateFunctionStatement(AsterixFunction AsterixFunction, List<VarIdentifier> parameterList,
-            String functionBody, boolean ifNotExists) {
-        this.asterixFunction = AsterixFunction;
+    public CreateFunctionStatement(FunctionSignature signature, List<VarIdentifier> parameterList, String functionBody,
+            boolean ifNotExists) {
+        this.signature = signature;
         this.functionBody = functionBody;
         this.ifNotExists = ifNotExists;
         this.paramList = new ArrayList<String>();
@@ -46,6 +46,10 @@ public class CreateFunctionStatement implements Statement {
 
     public List<String> getParamList() {
         return paramList;
+    }
+
+    public FunctionSignature getSignature() {
+        return signature;
     }
 
     @Override

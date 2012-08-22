@@ -134,11 +134,21 @@ public class UnnestToDataScanRule implements IAlgebraicRewriteRule {
                 if (acv2.getObject().getType().getTypeTag() != ATypeTag.STRING) {
                     return false;
                 }
-                String datasetName = ((AString) acv2.getObject()).getStringValue();
+                String datasetArg = ((AString) acv2.getObject()).getStringValue();
 
                 AqlMetadataProvider mp = (AqlMetadataProvider) context.getMetadataProvider();
                 AqlCompiledMetadataDeclarations metadata = mp.getMetadataDeclarations();
-                Dataset dataset = metadata.findDataset(datasetName);
+                String[] datasetNameComponents = datasetArg.split("\\.");
+                String dataverseName;
+                String datasetName;
+                if (datasetNameComponents.length == 1) {
+                    dataverseName = metadata.getDefaultDataverseName();
+                    datasetName = datasetNameComponents[0];
+                } else {
+                    dataverseName = datasetNameComponents[0];
+                    datasetName = datasetNameComponents[1];
+                }
+                Dataset dataset = metadata.findDataset(dataverseName, datasetName);
 
                 if (dataset == null) {
                     throw new AlgebricksException("Could not find dataset " + datasetName);
@@ -182,7 +192,7 @@ public class UnnestToDataScanRule implements IAlgebraicRewriteRule {
             return null;
         }
         String tName = dataset.getItemTypeName();
-        IAType itemType = metadata.findType(tName);
+        IAType itemType = metadata.findType(dataset.getDataverseName(), tName);
         ExternalFeedDataSource extDataSource = new ExternalFeedDataSource(aqlId, dataset, itemType,
                 AqlDataSource.AqlDataSourceType.EXTERNAL_FEED);
         return extDataSource;

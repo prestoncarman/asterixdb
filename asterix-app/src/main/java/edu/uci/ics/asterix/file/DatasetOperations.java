@@ -84,11 +84,13 @@ public class DatasetOperations {
 
     private static Logger LOGGER = Logger.getLogger(DatasetOperations.class.getName());
 
-    public static JobSpecification[] createDropDatasetJobSpec(CompiledDatasetDropStatement deleteStmt,
+    public static JobSpecification[] createDropDatasetJobSpec(CompiledDatasetDropStatement datasetDropStmt,
             AqlCompiledMetadataDeclarations metadata) throws AlgebricksException, HyracksDataException,
             RemoteException, ACIDException, AsterixException {
 
-        String datasetName = deleteStmt.getDatasetName();
+        String dataverseName = datasetDropStmt.getDataverseName() == null ? metadata.getDefaultDataverseName()
+                : datasetDropStmt.getDataverseName();
+        String datasetName = datasetDropStmt.getDatasetName();
         String datasetPath = metadata.getRelativePath(datasetName);
 
         LOGGER.info("DROP DATASETPATH: " + datasetPath);
@@ -96,7 +98,7 @@ public class DatasetOperations {
         IIndexRegistryProvider<IIndex> indexRegistryProvider = AsterixIndexRegistryProvider.INSTANCE;
         IStorageManagerInterface storageManager = AsterixStorageManagerInterface.INSTANCE;
 
-        Dataset dataset = metadata.findDataset(datasetName);
+        Dataset dataset = metadata.findDataset(dataverseName, datasetName);
         if (dataset == null) {
             throw new AlgebricksException("DROP DATASET: No metadata for dataset " + datasetName);
         }

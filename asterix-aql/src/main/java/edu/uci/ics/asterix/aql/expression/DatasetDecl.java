@@ -21,11 +21,11 @@ import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
 
 public class DatasetDecl implements Statement {
-    protected Identifier name;
-    protected Identifier dataverse;
-    protected Identifier itemTypeName;
-    protected DatasetType datasetType;
-    protected IDatasetDetailsDecl datasetDetailsDecl;
+    protected final Identifier name;
+    protected final Identifier dataverse;
+    protected final Identifier itemTypeName;
+    protected final DatasetType datasetType;
+    protected final IDatasetDetailsDecl datasetDetailsDecl;
 
     public boolean ifNotExists;
 

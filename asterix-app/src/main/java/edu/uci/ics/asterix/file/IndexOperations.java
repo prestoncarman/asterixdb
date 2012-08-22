@@ -39,18 +39,19 @@ public class IndexOperations {
         return secondaryIndexCreator.buildLoadingJobSpec();
     }
 
-    public static JobSpecification buildDropSecondaryIndexJobSpec(CompiledIndexDropStatement deleteStmt,
+    public static JobSpecification buildDropSecondaryIndexJobSpec(CompiledIndexDropStatement indexDropStmt,
             AqlCompiledMetadataDeclarations datasetDecls) throws AlgebricksException, MetadataException {
-        String datasetName = deleteStmt.getDatasetName();
-        String indexName = deleteStmt.getIndexName();
+        String dataverseName = indexDropStmt.getDataverseName() == null ? datasetDecls.getDefaultDataverseName()
+                : indexDropStmt.getDataverseName();
+        String datasetName = indexDropStmt.getDatasetName();
+        String indexName = indexDropStmt.getIndexName();
 
         JobSpecification spec = new JobSpecification();
         IIndexRegistryProvider<IIndex> indexRegistryProvider = AsterixIndexRegistryProvider.INSTANCE;
         IStorageManagerInterface storageManager = AsterixStorageManagerInterface.INSTANCE;
 
         Pair<IFileSplitProvider, AlgebricksPartitionConstraint> splitsAndConstraint = datasetDecls
-                .splitProviderAndPartitionConstraintsForInternalOrFeedDataset(datasetDecls.getDefaultDataverseName(),
-                        datasetName, indexName);
+                .splitProviderAndPartitionConstraintsForInternalOrFeedDataset(dataverseName, datasetName, indexName);
         TreeIndexDropOperatorDescriptor btreeDrop = new TreeIndexDropOperatorDescriptor(spec, storageManager,
                 indexRegistryProvider, splitsAndConstraint.first);
         AlgebricksPartitionConstraintHelper

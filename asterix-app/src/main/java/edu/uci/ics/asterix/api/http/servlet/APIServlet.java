@@ -140,7 +140,7 @@ public class APIServlet extends HttpServlet {
             throws Exception {
 
         String dataverseName = APIFramework.compileDdlStatements(hcc, dummyQ, out, pc, DisplayFormat.TEXT);
-        Job[] dmlJobSpecs = APIFramework.compileDmlStatements(dataverseName, dummyQ, out, pc, DisplayFormat.HTML);
+        Job[] dmlJobSpecs = APIFramework.compileDmlStatements(dummyQ, out, pc, DisplayFormat.HTML);
 
         long startTime = System.currentTimeMillis();
         APIFramework.executeJobArray(hcc, dmlJobSpecs, out, DisplayFormat.HTML);

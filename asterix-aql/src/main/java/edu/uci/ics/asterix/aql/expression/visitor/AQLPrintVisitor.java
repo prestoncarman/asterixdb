@@ -148,7 +148,7 @@ public class AQLPrintVisitor implements IAqlVisitorWithVoidReturn<Integer> {
 
     @Override
     public void visit(CallExpr pf, Integer step) throws AsterixException {
-        out.println(skip(step) + "FunctionCall " + pf.getIdent().toString() + "[");
+        out.println(skip(step) + "FunctionCall " + pf.getFunctionSignature().toString() + "[");
         for (Expression expr : pf.getExprList()) {
             expr.accept(this, step + 1);
         }
@@ -294,7 +294,7 @@ public class AQLPrintVisitor implements IAqlVisitorWithVoidReturn<Integer> {
 
     @Override
     public void visit(FunctionDecl fd, Integer step) throws AsterixException {
-        out.println(skip(step) + "FunctionDecl " + fd.getIdent().getName() + "(" + fd.getParamList().toString()
+        out.println(skip(step) + "FunctionDecl " + fd.getSignature().getName() + "(" + fd.getParamList().toString()
                 + ") {");
         fd.getFuncBody().accept(this, step + 1);
         out.println(skip(step) + "}");

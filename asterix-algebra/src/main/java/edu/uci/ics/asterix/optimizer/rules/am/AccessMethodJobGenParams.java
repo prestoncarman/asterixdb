@@ -20,19 +20,21 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.VariableReference
 public class AccessMethodJobGenParams {
     protected String indexName;
     protected IndexType indexType;
+    protected String dataverseName;
     protected String datasetName;
     protected boolean retainInput;
     protected boolean requiresBroadcast;
 
-    private final int NUM_PARAMS = 5;
+    private final int NUM_PARAMS = 6;
 
     public AccessMethodJobGenParams() {
     }
 
-    public AccessMethodJobGenParams(String indexName, IndexType indexType, String datasetName, boolean retainInput,
-            boolean requiresBroadcast) {
+    public AccessMethodJobGenParams(String indexName, IndexType indexType, String dataverseName, String datasetName,
+            boolean retainInput, boolean requiresBroadcast) {
         this.indexName = indexName;
         this.indexType = indexType;
+        this.dataverseName = dataverseName;
         this.datasetName = datasetName;
         this.retainInput = retainInput;
         this.requiresBroadcast = requiresBroadcast;
@@ -41,6 +43,7 @@ public class AccessMethodJobGenParams {
     public void writeToFuncArgs(List<Mutable<ILogicalExpression>> funcArgs) {
         funcArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(indexName)));
         funcArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createInt32Constant(indexType.ordinal())));
+        funcArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(dataverseName)));
         funcArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createStringConstant(datasetName)));
         funcArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createBooleanConstant(retainInput)));
         funcArgs.add(new MutableObject<ILogicalExpression>(AccessMethodUtils.createBooleanConstant(requiresBroadcast)));
@@ -49,9 +52,10 @@ public class AccessMethodJobGenParams {
     public void readFromFuncArgs(List<Mutable<ILogicalExpression>> funcArgs) {
         indexName = AccessMethodUtils.getStringConstant(funcArgs.get(0));
         indexType = IndexType.values()[AccessMethodUtils.getInt32Constant(funcArgs.get(1))];
-        datasetName = AccessMethodUtils.getStringConstant(funcArgs.get(2));
-        retainInput = AccessMethodUtils.getBooleanConstant(funcArgs.get(3));
-        requiresBroadcast = AccessMethodUtils.getBooleanConstant(funcArgs.get(4));
+        dataverseName = AccessMethodUtils.getStringConstant(funcArgs.get(2));
+        datasetName = AccessMethodUtils.getStringConstant(funcArgs.get(3));
+        retainInput = AccessMethodUtils.getBooleanConstant(funcArgs.get(4));
+        requiresBroadcast = AccessMethodUtils.getBooleanConstant(funcArgs.get(5));
     }
 
     public String getIndexName() {
@@ -60,6 +64,10 @@ public class AccessMethodJobGenParams {
 
     public IndexType getIndexType() {
         return indexType;
+    }
+
+    public String getDataverseName() {
+        return dataverseName;
     }
 
     public String getDatasetName() {

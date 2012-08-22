@@ -57,7 +57,7 @@ public class RTreeSearchPOperator extends IndexSearchPOperator {
         int[] keyIndexes = getKeyIndexes(jobGenParams.getKeyVarList(), inputSchemas);
         AqlMetadataProvider mp = (AqlMetadataProvider) context.getMetadataProvider();
         AqlCompiledMetadataDeclarations metadata = mp.getMetadataDeclarations();
-        Dataset dataset = metadata.findDataset(jobGenParams.getDatasetName());
+        Dataset dataset = metadata.findDataset(jobGenParams.getDataverseName(), jobGenParams.getDatasetName());
         if (dataset == null) {
             throw new AlgebricksException("Unknown dataset " + jobGenParams.getDatasetName());
         }

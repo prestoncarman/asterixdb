@@ -1,5 +1,3 @@
-package edu.uci.ics.asterix.aql.util;
-
 /*
  * Copyright 2009-2011 by The Regents of the University of California
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,6 +12,9 @@ package edu.uci.ics.asterix.aql.util;
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+package edu.uci.ics.asterix.aql.util;
+
 import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.List;
@@ -24,15 +25,8 @@ import edu.uci.ics.asterix.aql.expression.VarIdentifier;
 import edu.uci.ics.asterix.aql.parser.AQLParser;
 import edu.uci.ics.asterix.aql.parser.ParseException;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
-import edu.uci.ics.asterix.common.functions.FunctionConstants;
-import edu.uci.ics.asterix.metadata.MetadataException;
-import edu.uci.ics.asterix.metadata.MetadataManager;
-import edu.uci.ics.asterix.metadata.MetadataTransactionContext;
 import edu.uci.ics.asterix.metadata.entities.Function;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
-import edu.uci.ics.asterix.om.functions.AsterixFunction;
-import edu.uci.ics.asterix.om.functions.AsterixFunctionInfo;
-import edu.uci.ics.hyracks.algebricks.core.algebra.functions.AlgebricksBuiltinFunctions;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.IFunctionInfo;
 
@@ -44,6 +38,7 @@ public class FunctionUtils {
         List<VarIdentifier> varIdentifiers = new ArrayList<VarIdentifier>();
 
         StringBuilder builder = new StringBuilder();
+        builder.append(" use dataverse " + function.getDataverseName() + ";");
         builder.append(" declare function " + function.getName().split("@")[0]);
         builder.append("(");
         for (String param : params) {
@@ -68,7 +63,7 @@ public class FunctionUtils {
             throw new AsterixException(pe);
         }
 
-        FunctionDecl decl = (FunctionDecl) query.getPrologDeclList().get(0);
+        FunctionDecl decl = (FunctionDecl) query.getPrologDeclList().get(1);
         return decl;
     }
 
@@ -76,22 +71,4 @@ public class FunctionUtils {
         return AsterixBuiltinFunctions.getAsterixFunctionInfo(fi);
     }
 
-    /*
-      public static IFunctionInfo getFunctionInfo(MetadataTransactionContext mdTxnCtx, String dataverseName,
-              AsterixFunction asterixFunction) throws MetadataException {
-          FunctionIdentifier fid = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, asterixFunction.getName(),
-                  asterixFunction.getArity());
-          IFunctionInfo finfo = AsterixBuiltinFunctions.getAsterixFunctionInfo(fid);
-          if (fid == null) {
-              fid = new FunctionIdentifier(AlgebricksBuiltinFunctions.ALGEBRICKS_NS, asterixFunction.getName(),
-                      asterixFunction.getArity());
-          }
-          if (fid == null) {
-              Function function = MetadataManager.INSTANCE.getFunction(mdTxnCtx, dataverseName, asterixFunction);
-              if (function != null) {
-                  finfo = new AsterixFunctionInfo(dataverseName, asterixFunction);
-              }
-          }
-          return finfo; // could be null
-      }*/
 }

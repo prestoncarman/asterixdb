@@ -65,6 +65,7 @@ public abstract class SecondaryIndexCreator {
     protected int numPrimaryKeys;
     protected int numSecondaryKeys;
     protected AqlCompiledMetadataDeclarations metadata;
+    protected String dataverseName;
     protected String datasetName;
     protected Dataset dataset;
     protected ARecordType itemType;
@@ -120,27 +121,29 @@ public abstract class SecondaryIndexCreator {
     protected void init(CompiledCreateIndexStatement createIndexStmt, AqlCompiledMetadataDeclarations metadata)
             throws AsterixException, AlgebricksException {
         this.metadata = metadata;
+        dataverseName = createIndexStmt.getDataverseName() == null ? metadata.getDefaultDataverseName()
+                : createIndexStmt.getDataverseName();
         datasetName = createIndexStmt.getDatasetName();
         secondaryIndexName = createIndexStmt.getIndexName();
-        dataset = metadata.findDataset(datasetName);
+        dataset = metadata.findDataset(dataverseName, datasetName);
         if (dataset == null) {
             throw new AsterixException("Unknown dataset " + datasetName);
         }
         if (dataset.getDatasetType() == DatasetType.EXTERNAL) {
             throw new AsterixException("Cannot index an external dataset (" + datasetName + ").");
         }
-        itemType = (ARecordType) metadata.findType(dataset.getItemTypeName());
+        itemType = (ARecordType) metadata.findType(dataset.getDataverseName(), dataset.getItemTypeName());
         payloadSerde = AqlSerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(itemType);
         numPrimaryKeys = DatasetUtils.getPartitioningKeys(dataset).size();
         numSecondaryKeys = createIndexStmt.getKeyFields().size();
         Pair<IFileSplitProvider, AlgebricksPartitionConstraint> primarySplitsAndConstraint = metadata
-                .splitProviderAndPartitionConstraintsForInternalOrFeedDataset(metadata.getDefaultDataverseName(), datasetName,
-                        datasetName);
+                .splitProviderAndPartitionConstraintsForInternalOrFeedDataset(metadata.getDefaultDataverseName(),
+                        datasetName, datasetName);
         primaryFileSplitProvider = primarySplitsAndConstraint.first;
         primaryPartitionConstraint = primarySplitsAndConstraint.second;
         Pair<IFileSplitProvider, AlgebricksPartitionConstraint> secondarySplitsAndConstraint = metadata
-                .splitProviderAndPartitionConstraintsForInternalOrFeedDataset(metadata.getDefaultDataverseName(), datasetName,
-                        secondaryIndexName);
+                .splitProviderAndPartitionConstraintsForInternalOrFeedDataset(metadata.getDefaultDataverseName(),
+                        datasetName, secondaryIndexName);
         secondaryFileSplitProvider = secondarySplitsAndConstraint.first;
         secondaryPartitionConstraint = secondarySplitsAndConstraint.second;
         // Must be called in this order.
@@ -283,8 +286,8 @@ public abstract class SecondaryIndexCreator {
             fieldPermutation[i] = i;
         }
         Pair<IFileSplitProvider, AlgebricksPartitionConstraint> secondarySplitsAndConstraint = metadata
-                .splitProviderAndPartitionConstraintsForInternalOrFeedDataset(metadata.getDefaultDataverseName(), datasetName,
-                        secondaryIndexName);
+                .splitProviderAndPartitionConstraintsForInternalOrFeedDataset(metadata.getDefaultDataverseName(),
+                        datasetName, secondaryIndexName);
         TreeIndexBulkLoadOperatorDescriptor treeIndexBulkLoadOp = new TreeIndexBulkLoadOperatorDescriptor(spec,
                 AsterixStorageManagerInterface.INSTANCE, AsterixIndexRegistryProvider.INSTANCE,
                 secondarySplitsAndConstraint.first, secondaryRecDesc.getTypeTraits(), secondaryComparatorFactories,

@@ -117,7 +117,7 @@ public class PushFieldAccessRule implements IAlgebraicRewriteRule {
         AqlMetadataProvider mp = (AqlMetadataProvider) context.getMetadataProvider();
         AqlCompiledMetadataDeclarations metadata = mp.getMetadataDeclarations();
         AqlSourceId asid = ((IDataSource<AqlSourceId>) scan.getDataSource()).getId();
-        Dataset dataset = metadata.findDataset(asid.getDatasetName());
+        Dataset dataset = metadata.findDataset(asid.getDataverseName(), asid.getDatasetName());
         if (dataset == null) {
             throw new AlgebricksException("Dataset " + asid.getDatasetName() + " not found.");
         }
@@ -136,7 +136,7 @@ public class PushFieldAccessRule implements IAlgebraicRewriteRule {
         } else {
             int pos = ((AInt32) obj).getIntegerValue();
             String tName = dataset.getItemTypeName();
-            IAType t = metadata.findType(tName);
+            IAType t = metadata.findType(dataset.getDataverseName(), tName);
             if (t.getTypeTag() != ATypeTag.RECORD) {
                 return false;
             }
@@ -293,7 +293,7 @@ public class PushFieldAccessRule implements IAlgebraicRewriteRule {
                             AqlSourceId asid = dataSource.getId();
                             AqlMetadataProvider mp = (AqlMetadataProvider) context.getMetadataProvider();
                             AqlCompiledMetadataDeclarations metadata = mp.getMetadataDeclarations();
-                            Dataset dataset = metadata.findDataset(asid.getDatasetName());
+                            Dataset dataset = metadata.findDataset(asid.getDataverseName(), asid.getDatasetName());
                             if (dataset == null) {
                                 throw new AlgebricksException("Dataset " + asid.getDatasetName() + " not found.");
                             }
@@ -310,7 +310,7 @@ public class PushFieldAccessRule implements IAlgebraicRewriteRule {
                             } else {
                                 int pos = ((AInt32) obj).getIntegerValue();
                                 String tName = dataset.getItemTypeName();
-                                IAType t = metadata.findType(tName);
+                                IAType t = metadata.findType(dataset.getDataverseName(), tName);
                                 if (t.getTypeTag() != ATypeTag.RECORD) {
                                     return false;
                                 }

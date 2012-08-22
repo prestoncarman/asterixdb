@@ -161,9 +161,8 @@ public class APIFramework {
         }
     }
 
-    public static Job[] compileDmlStatements(String dataverseName, Query query, PrintWriter out, SessionConfig pc,
-            DisplayFormat pdf) throws AsterixException, AlgebricksException, JSONException, RemoteException,
-            ACIDException {
+    public static Job[] compileDmlStatements(Query query, PrintWriter out, SessionConfig pc, DisplayFormat pdf)
+            throws AsterixException, AlgebricksException, JSONException, RemoteException, ACIDException {
 
         // Begin a transaction against the metadata.
         // Lock the metadata in S mode to protect against other DDL
@@ -179,19 +178,18 @@ public class APIFramework {
                 // metadata successful.
                 MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
                 return new Job[] {};
+
             }
 
             List<Job> dmlJobs = new ArrayList<Job>();
             AqlCompiledMetadataDeclarations metadata = dmlt.getCompiledDeclarations();
-
-            if (!metadata.isConnectedToDataverse())
-                metadata.connectToDataverse(metadata.getDefaultDataverseName());
-
             for (ICompiledDmlStatement stmt : dmlt.getCompiledDmlStatements()) {
+                String dataverse = stmt.getDataverseName() == null ? dmlt.getCompiledDeclarations()
+                        .getDefaultDataverseName() : stmt.getDataverseName();
                 switch (stmt.getKind()) {
                     case LOAD_FROM_FILE: {
                         CompiledLoadFromFileStatement stmtLoad = (CompiledLoadFromFileStatement) stmt;
-                        IDataFormat format = getDataFormat(mdTxnCtx, dataverseName);
+                        IDataFormat format = getDataFormat(mdTxnCtx, dataverse);
                         dmlJobs.add(DatasetOperations.createLoadDatasetJobSpec(stmtLoad, metadata, format));
                         break;
                     }
@@ -202,7 +200,7 @@ public class APIFramework {
                                 pc.isPrintOptimizedLogicalPlanParam(), pc.isPrintPhysicalOpsOnly(), pc.isPrintJob());
                         sc2.setGenerateJobSpec(true);
                         Pair<AqlCompiledMetadataDeclarations, JobSpecification> mj = compileQueryInternal(mdTxnCtx,
-                                dataverseName, writeFromQueryStmt.getQuery(), writeFromQueryStmt.getVarCounter(),
+                                dataverse, writeFromQueryStmt.getQuery(), writeFromQueryStmt.getVarCounter(),
                                 writeFromQueryStmt.getDatasetName(), metadata, sc2, out, pdf,
                                 Statement.Kind.WRITE_FROM_QUERY_RESULT, writeFromQueryStmt);
                         dmlJobs.add(new Job(mj.second));
@@ -215,7 +213,7 @@ public class APIFramework {
                                 pc.isPrintOptimizedLogicalPlanParam(), pc.isPrintPhysicalOpsOnly(), pc.isPrintJob());
                         sc2.setGenerateJobSpec(true);
                         Pair<AqlCompiledMetadataDeclarations, JobSpecification> mj = compileQueryInternal(mdTxnCtx,
-                                dataverseName, stmtInsert.getQuery(), stmtInsert.getVarCounter(),
+                                dataverse, stmtInsert.getQuery(), stmtInsert.getVarCounter(),
                                 stmtInsert.getDatasetName(), metadata, sc2, out, pdf, Statement.Kind.INSERT, stmtInsert);
                         dmlJobs.add(new Job(mj.second));
                         break;
@@ -227,7 +225,7 @@ public class APIFramework {
                                 pc.isPrintOptimizedLogicalPlanParam(), pc.isPrintPhysicalOpsOnly(), pc.isPrintJob());
                         sc2.setGenerateJobSpec(true);
                         Pair<AqlCompiledMetadataDeclarations, JobSpecification> mj = compileQueryInternal(mdTxnCtx,
-                                dataverseName, stmtDelete.getQuery(), stmtDelete.getVarCounter(),
+                                dataverse, stmtDelete.getQuery(dataverse), stmtDelete.getVarCounter(),
                                 stmtDelete.getDatasetName(), metadata, sc2, out, pdf, Statement.Kind.DELETE, stmtDelete);
                         dmlJobs.add(new Job(mj.second));
                         break;
@@ -246,8 +244,8 @@ public class APIFramework {
                                 pc.isPrintOptimizedLogicalPlanParam(), pc.isPrintPhysicalOpsOnly(), pc.isPrintJob());
                         sc2.setGenerateJobSpec(true);
                         Pair<AqlCompiledMetadataDeclarations, JobSpecification> mj = compileQueryInternal(mdTxnCtx,
-                                dataverseName, cbfs.getQuery(), cbfs.getVarCounter(), cbfs.getDatasetName(), metadata,
-                                sc2, out, pdf, Statement.Kind.BEGIN_FEED, cbfs);
+                                dataverse, cbfs.getQuery(), cbfs.getVarCounter(), cbfs.getDatasetName(), metadata, sc2,
+                                out, pdf, Statement.Kind.BEGIN_FEED, cbfs);
                         dmlJobs.add(new Job(mj.second));
                         break;
 
@@ -392,7 +390,7 @@ public class APIFramework {
         }
         long txnId = TransactionIDFactory.generateTransactionId();
         AqlExpressionToPlanTranslator t = new AqlExpressionToPlanTranslator(txnId, mdTxnCtx, rw.getVarCounter(),
-                outputDatasetName, dmlKind, dataverseName, stmt);
+                outputDatasetName, dmlKind,  stmt);
 
         ILogicalPlanAndMetadata planAndMetadata = t.translate(rwQ, metadataDecls);
         boolean isWriteTransaction = false;

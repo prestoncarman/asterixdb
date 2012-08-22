@@ -34,6 +34,11 @@ public class AsterixFunctionInfo implements IFunctionInfo {
         this.functionIdentifier = functionIdentifier;
     }
 
+    public AsterixFunctionInfo(FunctionSignature functionSignature) {
+        this.functionIdentifier = new FunctionIdentifier(functionSignature.getNamespace(), functionSignature.getName(),
+                functionSignature.getArity());
+    }
+
     @Override
     public FunctionIdentifier getFunctionIdentifier() {
         return functionIdentifier;

@@ -207,7 +207,7 @@ public class CloneAndSubstituteVariablesVisitor implements
     public Pair<IAqlExpression, List<VariableSubstitution>> visitCallExpr(CallExpr pf, List<VariableSubstitution> arg)
             throws AsterixException {
         List<Expression> exprList = visitAndCloneExprList(pf.getExprList(), arg);
-        CallExpr f = new CallExpr(pf.getIdent(), exprList);
+        CallExpr f = new CallExpr(pf.getFunctionSignature(), exprList);
         return new Pair<IAqlExpression, List<VariableSubstitution>>(f, arg);
     }
 
@@ -224,7 +224,7 @@ public class CloneAndSubstituteVariablesVisitor implements
         }
 
         Pair<IAqlExpression, List<VariableSubstitution>> p1 = fd.getFuncBody().accept(this, arg);
-        FunctionDecl newF = new FunctionDecl(fd.getIdent(), newList, (Expression) p1.first);
+        FunctionDecl newF = new FunctionDecl(fd.getSignature(), newList, (Expression) p1.first);
         return new Pair<IAqlExpression, List<VariableSubstitution>>(newF, arg);
     }
 

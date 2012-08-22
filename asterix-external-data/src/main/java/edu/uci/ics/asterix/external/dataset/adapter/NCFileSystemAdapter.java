@@ -122,6 +122,9 @@ public class NCFileSystemAdapter extends AbstractDatasourceAdapter implements ID
     protected void configureFormat() throws Exception {
         parserClass = configuration.get(Constants.KEY_PARSER);
         if (parserClass == null) {
+            if (configuration.get(KEY_FORMAT) == null) {
+                throw new IllegalArgumentException(" unspecified data format ");
+            }
             if (Constants.FORMAT_DELIMITED_TEXT.equalsIgnoreCase(configuration.get(KEY_FORMAT))) {
                 parserClass = formatToParserMap.get(FORMAT_DELIMITED_TEXT);
             } else if (Constants.FORMAT_ADM.equalsIgnoreCase(configuration.get(Constants.KEY_FORMAT))) {

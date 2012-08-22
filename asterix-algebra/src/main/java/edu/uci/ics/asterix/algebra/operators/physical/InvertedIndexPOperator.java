@@ -80,7 +80,7 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
 
         AqlMetadataProvider metadataProvider = (AqlMetadataProvider) context.getMetadataProvider();
         AqlCompiledMetadataDeclarations metadata = metadataProvider.getMetadataDeclarations();
-        Dataset dataset = metadata.findDataset(jobGenParams.getDatasetName());
+        Dataset dataset = metadata.findDataset(jobGenParams.getDataverseName(), jobGenParams.getDatasetName());
         int[] keyIndexes = getKeyIndexes(jobGenParams.getKeyVarList(), inputSchemas);
 
         // Build runtime.
@@ -102,8 +102,7 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
             SearchModifierType searchModifierType, IAlgebricksConstantValue similarityThreshold)
             throws AlgebricksException {
         IAObject simThresh = ((AsterixConstantValue) similarityThreshold).getObject();
-        String itemTypeName = dataset.getItemTypeName();
-        IAType itemType = metadata.findType(itemTypeName);
+        IAType itemType = metadata.findType(dataset.getDataverseName(), dataset.getItemTypeName());
         int numPrimaryKeys = DatasetUtils.getPartitioningKeys(dataset).size();
         Index secondaryIndex = metadata.getIndex(dataset.getDataverseName(), dataset.getDatasetName(), indexName);
         if (secondaryIndex == null) {
@@ -153,8 +152,8 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
 
         IAsterixApplicationContextInfo appContext = (IAsterixApplicationContextInfo) context.getAppContext();
         Pair<IFileSplitProvider, AlgebricksPartitionConstraint> secondarySplitsAndConstraint = metadata
-                .splitProviderAndPartitionConstraintsForInternalOrFeedDataset(metadata.getDefaultDataverseName(), datasetName,
-                        indexName);
+                .splitProviderAndPartitionConstraintsForInternalOrFeedDataset(metadata.getDefaultDataverseName(),
+                        datasetName, indexName);
         Pair<IFileSplitProvider, IFileSplitProvider> fileSplitProviders = metadata
                 .getInvertedIndexFileSplitProviders(secondarySplitsAndConstraint.first);
 

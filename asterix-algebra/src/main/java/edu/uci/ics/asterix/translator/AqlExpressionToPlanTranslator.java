@@ -169,20 +169,18 @@ public class AqlExpressionToPlanTranslator extends AbstractAqlTranslator impleme
     private final String outputDatasetName;
     private final Statement.Kind dmlKind;
     private final ICompiledDmlStatement stmt;
-    private final String dataverse;
     private static AtomicLong outputFileID = new AtomicLong(0);
     private static final String OUTPUT_FILE_PREFIX = "OUTPUT_";
 
     private static LogicalVariable METADATA_DUMMY_VAR = new LogicalVariable(-1);
 
     public AqlExpressionToPlanTranslator(long txnId, MetadataTransactionContext mdTxnCtx, int currentVarCounter,
-            String outputDatasetName, Statement.Kind dmlKind, String dataverse, ICompiledDmlStatement stmt) {
+            String outputDatasetName, Statement.Kind dmlKind, ICompiledDmlStatement stmt) {
         this.mdTxnCtx = mdTxnCtx;
         this.txnId = txnId;
         this.context = new TranslationContext(new Counter(currentVarCounter));
         this.outputDatasetName = outputDatasetName;
         this.dmlKind = dmlKind;
-        this.dataverse = dataverse;
         this.stmt = stmt;
     }
 
@@ -318,7 +316,7 @@ public class AqlExpressionToPlanTranslator extends AbstractAqlTranslator impleme
 
         AqlSourceId sourceId = new AqlSourceId(dataverseName, datasetName);
         String itemTypeName = dataset.getItemTypeName();
-        IAType itemType = compiledDeclarations.findType(itemTypeName);
+        IAType itemType = compiledDeclarations.findType(dataverseName, itemTypeName);
         AqlDataSource dataSource = new AqlDataSource(sourceId, dataset, itemType);
         if (dataset.getDatasetType() == DatasetType.EXTERNAL) {
             throw new AlgebricksException("Cannot write output to an external dataset.");
@@ -470,7 +468,7 @@ public class AqlExpressionToPlanTranslator extends AbstractAqlTranslator impleme
     public Pair<ILogicalOperator, LogicalVariable> visitCallExpr(CallExpr fcall, Mutable<ILogicalOperator> tupSource)
             throws AsterixException {
         LogicalVariable v = context.newVar();
-        AsterixFunction fid = fcall.getIdent();
+        FunctionSignature signature = fcall.getFunctionSignature();
         List<Mutable<ILogicalExpression>> args = new ArrayList<Mutable<ILogicalExpression>>();
         Mutable<ILogicalOperator> topOp = tupSource;
 
@@ -500,13 +498,12 @@ public class AqlExpressionToPlanTranslator extends AbstractAqlTranslator impleme
         }
 
         AbstractFunctionCallExpression f;
-        FunctionIdentifier fi = new FunctionIdentifier(dataverse, fid.getName(), fid.getArity());
-        if ((f = lookupUserDefinedFunction(fi, args)) == null) {
-            f = lookupBuiltinFunction(fid.getName(), fid.getArity(), args);
+        if ((f = lookupUserDefinedFunction(signature, args)) == null) {
+            f = lookupBuiltinFunction(signature.getName(), signature.getArity(), args);
         }
 
         if (f == null) {
-            throw new AsterixException(" Unknown function " + fid);
+            throw new AsterixException(" Unknown function " + signature);
         }
 
         // Put hints into function call expr.
@@ -524,19 +521,18 @@ public class AqlExpressionToPlanTranslator extends AbstractAqlTranslator impleme
         return new Pair<ILogicalOperator, LogicalVariable>(op, v);
     }
 
-    private AbstractFunctionCallExpression lookupUserDefinedFunction(FunctionIdentifier fid,
+    private AbstractFunctionCallExpression lookupUserDefinedFunction(FunctionSignature signature,
             List<Mutable<ILogicalExpression>> args) throws MetadataException {
-        if (dataverse == null) {
+        if (signature.getNamespace() == null) {
             return null;
         }
-        Function function = MetadataManager.INSTANCE.getFunction(mdTxnCtx,
-                new FunctionSignature(dataverse, fid.getName(), fid.getArity()));
+        Function function = MetadataManager.INSTANCE.getFunction(mdTxnCtx, signature);
         if (function == null) {
             return null;
         }
         AbstractFunctionCallExpression f = null;
         if (function.getLanguage().equalsIgnoreCase(Function.LANGUAGE_AQL)) {
-            IFunctionInfo finfo = new AsterixFunctionInfo(fid);
+            IFunctionInfo finfo = new AsterixFunctionInfo(signature);
             return new ScalarFunctionCallExpression(finfo, args);
         } else {
             throw new MetadataException(" User defined functions written in " + function.getLanguage()

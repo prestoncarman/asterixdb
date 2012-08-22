@@ -64,7 +64,7 @@ import edu.uci.ics.asterix.aql.expression.WriteFromQueryResultStatement;
 import edu.uci.ics.asterix.aql.expression.WriteStatement;
 import edu.uci.ics.asterix.aql.expression.visitor.IAqlExpressionVisitor;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
-import edu.uci.ics.asterix.om.functions.AsterixFunction;
+import edu.uci.ics.asterix.om.functions.FunctionSignature;
 import edu.uci.ics.hyracks.algebricks.common.utils.Pair;
 
 public class InlineUdfsVisitor implements IAqlExpressionVisitor<Boolean, List<FunctionDecl>> {
@@ -286,7 +286,7 @@ public class InlineUdfsVisitor implements IAqlExpressionVisitor<Boolean, List<Fu
             return new Pair<Boolean, Expression>(r, expr);
         } else {
             CallExpr f = (CallExpr) expr;
-            FunctionDecl implem = findFuncDeclaration(f.getIdent(), arg);
+            FunctionDecl implem = findFuncDeclaration(f.getFunctionSignature(), arg);
             if (implem == null) {
                 boolean r = expr.accept(this, arg);
                 return new Pair<Boolean, Expression>(r, expr);
@@ -337,9 +337,9 @@ public class InlineUdfsVisitor implements IAqlExpressionVisitor<Boolean, List<Fu
         return new Pair<Boolean, ArrayList<Expression>>(changed, newList);
     }
 
-    private static FunctionDecl findFuncDeclaration(AsterixFunction fid, List<FunctionDecl> sequence) {
+    private static FunctionDecl findFuncDeclaration(FunctionSignature fid, List<FunctionDecl> sequence) {
         for (FunctionDecl f : sequence) {
-            if (f.getIdent().equals(fid)) {
+            if (f.getSignature().equals(fid)) {
                 return f;
             }
         }

@@ -142,10 +142,6 @@ public class AqlCompiledMetadataDeclarations {
         return config.get(propertyName);
     }
 
-    public IAType findType(String typeName) {
-        return findType(defaultDataverseName, typeName);
-    }
-
     public IAType findType(String dataverseName, String typeName) {
         Datatype type;
         try {
@@ -178,14 +174,6 @@ public class AqlCompiledMetadataDeclarations {
 
     public Map<String, String[]> getAllStores() {
         return stores;
-    }
-
-    public Dataset findDataset(String datasetName) throws AlgebricksException {
-        try {
-            return metadataManager.getDataset(mdTxnCtx, defaultDataverseName, datasetName);
-        } catch (MetadataException e) {
-            throw new AlgebricksException(e);
-        }
     }
 
     public Dataset findDataset(String dataverseName, String datasetName) throws AlgebricksException {

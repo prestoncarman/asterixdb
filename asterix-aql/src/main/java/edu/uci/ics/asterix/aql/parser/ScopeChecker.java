@@ -4,8 +4,7 @@ import java.util.Stack;
 
 import edu.uci.ics.asterix.aql.context.Scope;
 import edu.uci.ics.asterix.aql.expression.Identifier;
-import edu.uci.ics.asterix.om.functions.AsterixFunction;
-import edu.uci.ics.hyracks.algebricks.common.utils.Pair;
+import edu.uci.ics.asterix.om.functions.FunctionSignature;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.Counter;
 
 public abstract class ScopeChecker {
@@ -17,6 +16,8 @@ public abstract class ScopeChecker {
     protected Stack<Scope> forbiddenScopeStack = new Stack<Scope>();
 
     protected String[] inputLines;
+
+    protected String defaultDataverse;
 
     protected void setInput(String s) {
         inputLines = s.split("\n");
@@ -102,9 +103,9 @@ public abstract class ScopeChecker {
      * 
      * @return functionDescriptor
      */
-    public final AsterixFunction lookupFunctionSignature(String name, int arity) {
-        if (name != null) {
-            return getCurrentScope().findFunctionSignature(name, arity);
+    public final FunctionSignature lookupFunctionSignature(String dataverse, String name, int arity) {
+        if (dataverse != null) {
+            return getCurrentScope().findFunctionSignature(dataverse, name, arity);
         } else {
             return null;
         }

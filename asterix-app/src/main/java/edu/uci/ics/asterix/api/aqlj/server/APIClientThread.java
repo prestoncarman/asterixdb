@@ -230,7 +230,7 @@ public class APIClientThread extends Thread {
             MetadataManager.INSTANCE.init();
             if (q != null) {
                 String dataverse = APIFramework.compileDdlStatements(hcc, q, out, pc, DisplayFormat.TEXT);
-                Job[] dmlJobs = APIFramework.compileDmlStatements(dataverse, q, out, pc, DisplayFormat.TEXT);
+                Job[] dmlJobs = APIFramework.compileDmlStatements(q, out, pc, DisplayFormat.TEXT);
                 APIFramework.executeJobArray(hcc, dmlJobs, out, DisplayFormat.TEXT);
             }
 

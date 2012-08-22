@@ -52,7 +52,6 @@ import edu.uci.ics.asterix.aql.expression.UnorderedListTypeDefinition;
 import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
 import edu.uci.ics.asterix.common.config.GlobalConfig;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
-import edu.uci.ics.asterix.common.functions.FunctionConstants;
 import edu.uci.ics.asterix.common.parse.IParseFileSplitsDecl;
 import edu.uci.ics.asterix.file.DatasetOperations;
 import edu.uci.ics.asterix.file.IndexOperations;
@@ -80,6 +79,7 @@ import edu.uci.ics.asterix.om.types.AUnorderedListType;
 import edu.uci.ics.asterix.om.types.AbstractCollectionType;
 import edu.uci.ics.asterix.om.types.BuiltinType;
 import edu.uci.ics.asterix.om.types.IAType;
+import edu.uci.ics.asterix.om.types.TypeSignature;
 import edu.uci.ics.asterix.translator.AbstractAqlTranslator;
 import edu.uci.ics.asterix.translator.DmlTranslator.CompiledCreateIndexStatement;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
@@ -150,7 +150,8 @@ public class DdlTranslator extends AbstractAqlTranslator {
                             : dd.getDataverse().getValue();
                     String datasetName = dd.getName().getValue();
                     DatasetType dsType = dd.getDatasetType();
-                    String itemTypeName = null;
+                    String itemTypeName = dd.getItemTypeName().getValue();
+
                     IDatasetDetails datasetDetails = null;
                     Dataset ds = MetadataManager.INSTANCE.getDataset(mdTxnCtx, dataverseName, datasetName);
                     if (ds != null) {
@@ -161,7 +162,6 @@ public class DdlTranslator extends AbstractAqlTranslator {
                                     + " already exists.");
                         }
                     }
-                    itemTypeName = dd.getItemTypeName().getValue();
                     Datatype dt = MetadataManager.INSTANCE.getDatatype(mdTxnCtx, dataverseName, itemTypeName);
                     if (dt == null) {
                         throw new AlgebricksException(": type " + itemTypeName + " could not be found.");
@@ -245,11 +245,15 @@ public class DdlTranslator extends AbstractAqlTranslator {
                     break;
                 }
                 case TYPE_DECL: {
-                    checkForDataverseConnection(true);
                     TypeDecl stmtCreateType = (TypeDecl) stmt;
+                    String dataverseName = stmtCreateType.getDataverseName() == null ? compiledDeclarations
+                            .getDefaultDataverseName() : stmtCreateType.getDataverseName().getValue();
                     String typeName = stmtCreateType.getIdent().getValue();
-                    Datatype dt = MetadataManager.INSTANCE.getDatatype(mdTxnCtx,
-                            compiledDeclarations.getDefaultDataverseName(), typeName);
+                    Dataverse dv = MetadataManager.INSTANCE.getDataverse(mdTxnCtx, dataverseName);
+                    if (dv == null) {
+                        throw new AlgebricksException("Unknonw dataverse " + dataverseName);
+                    }
+                    Datatype dt = MetadataManager.INSTANCE.getDatatype(mdTxnCtx, dataverseName, typeName);
                     if (dt != null) {
                         if (!stmtCreateType.getIfNotExists())
                             throw new AlgebricksException("A datatype with this name " + typeName + " already exists.");
@@ -257,11 +261,11 @@ public class DdlTranslator extends AbstractAqlTranslator {
                         if (builtinTypeMap.get(typeName) != null) {
                             throw new AlgebricksException("Cannot redefine builtin type " + typeName + ".");
                         } else {
-                            Map<String, IAType> typeMap = computeTypes(mdTxnCtx, (TypeDecl) stmt);
-                            IAType type = typeMap.get(typeName);
-                            MetadataManager.INSTANCE
-                                    .addDatatype(mdTxnCtx, new Datatype(compiledDeclarations.getDefaultDataverseName(),
-                                            typeName, type, false));
+                            Map<TypeSignature, IAType> typeMap = computeTypes(mdTxnCtx, (TypeDecl) stmt, dataverseName);
+                            TypeSignature typeSignature = new TypeSignature(dataverseName, typeName);
+                            IAType type = typeMap.get(typeSignature);
+                            MetadataManager.INSTANCE.addDatatype(mdTxnCtx, new Datatype(dataverseName, typeName, type,
+                                    false));
                         }
                     }
                     break;
@@ -374,17 +378,16 @@ public class DdlTranslator extends AbstractAqlTranslator {
                     break;
                 }
                 case TYPE_DROP: {
-                    checkForDataverseConnection(true);
-                    TypeDropStatement stmtDelete = (TypeDropStatement) stmt;
-                    String typeName = stmtDelete.getTypeName().getValue();
-                    Datatype dt = MetadataManager.INSTANCE.getDatatype(mdTxnCtx,
-                            compiledDeclarations.getDefaultDataverseName(), typeName);
+                    TypeDropStatement stmtTypeDrop = (TypeDropStatement) stmt;
+                    String dataverseName = stmtTypeDrop.getDataverseName() == null ? compiledDeclarations
+                            .getDefaultDataverseName() : stmtTypeDrop.getDataverseName().getValue();
+                    String typeName = stmtTypeDrop.getTypeName().getValue();
+                    Datatype dt = MetadataManager.INSTANCE.getDatatype(mdTxnCtx, dataverseName, typeName);
                     if (dt == null) {
-                        if (!stmtDelete.getIfExists())
+                        if (!stmtTypeDrop.getIfExists())
                             throw new AlgebricksException("There is no datatype with this name " + typeName + ".");
                     } else
-                        MetadataManager.INSTANCE.dropDatatype(mdTxnCtx, compiledDeclarations.getDefaultDataverseName(),
-                                typeName);
+                        MetadataManager.INSTANCE.dropDatatype(mdTxnCtx, dataverseName, typeName);
                     break;
                 }
                 case NODEGROUP_DROP: {
@@ -400,26 +403,26 @@ public class DdlTranslator extends AbstractAqlTranslator {
                 }
 
                 case CREATE_FUNCTION: {
-                    checkForDataverseConnection(true);
                     CreateFunctionStatement cfs = (CreateFunctionStatement) stmt;
-                    Function function = new Function(compiledDeclarations.getDefaultDataverseName(), cfs
-                            .getaAterixFunction().getName(), cfs.getaAterixFunction().getArity(), cfs.getParamList(),
-                            Function.RETURNTYPE_VOID, cfs.getFunctionBody(), Function.LANGUAGE_AQL,
-                            FunctionKind.SCALAR.toString());
+                    String dataverse = cfs.getSignature().getNamespace();
+                    Dataverse dv = MetadataManager.INSTANCE.getDataverse(mdTxnCtx, dataverse);
+                    if (dv == null) {
+                        throw new AlgebricksException("There is no dataverse with this name " + dataverse + ".");
+                    }
+                    Function function = new Function(dataverse, cfs.getaAterixFunction().getName(), cfs
+                            .getaAterixFunction().getArity(), cfs.getParamList(), Function.RETURNTYPE_VOID,
+                            cfs.getFunctionBody(), Function.LANGUAGE_AQL, FunctionKind.SCALAR.toString());
                     MetadataManager.INSTANCE.addFunction(mdTxnCtx, function);
                     break;
                 }
 
                 case FUNCTION_DROP: {
-                    checkForDataverseConnection(true);
                     FunctionDropStatement stmtDropFunction = (FunctionDropStatement) stmt;
-                    String functionName = stmtDropFunction.getAsterixFunction().getName();
-                    FunctionSignature signature = new FunctionSignature(compiledDeclarations.getDefaultDataverseName(),
-                            functionName, stmtDropFunction.getAsterixFunction().getArity());
+                    FunctionSignature signature = stmtDropFunction.getFunctionSignature();
                     Function function = MetadataManager.INSTANCE.getFunction(mdTxnCtx, signature);
                     if (function == null) {
                         if (!stmtDropFunction.getIfExists())
-                            throw new AlgebricksException("There is no function with this name " + functionName + ".");
+                            throw new AlgebricksException("Unknonw function " + signature);
                     } else {
                         MetadataManager.INSTANCE.dropFunction(mdTxnCtx, signature);
                     }
@@ -491,7 +494,7 @@ public class DdlTranslator extends AbstractAqlTranslator {
             for (JobSpecification job : jobs)
                 runJob(hcc, job);
         }
-        MetadataManager.INSTANCE.dropDataset(mdTxnCtx, compiledDeclarations.getDefaultDataverseName(), datasetName);
+        MetadataManager.INSTANCE.dropDataset(mdTxnCtx, dataverseName, datasetName);
     }
 
     public AqlCompiledMetadataDeclarations getCompiledDeclarations() {
@@ -502,45 +505,47 @@ public class DdlTranslator extends AbstractAqlTranslator {
             String dataverseName, String datasetName, String indexName) throws Exception {
         CompiledIndexDropStatement cds = new CompiledIndexDropStatement(dataverseName, datasetName, indexName);
         runJob(hcc, IndexOperations.buildDropSecondaryIndexJobSpec(cds, compiledDeclarations));
-        MetadataManager.INSTANCE.dropIndex(mdTxnCtx, compiledDeclarations.getDefaultDataverseName(), datasetName,
-                indexName);
+        MetadataManager.INSTANCE.dropIndex(mdTxnCtx, dataverseName, datasetName, indexName);
     }
 
-    private Map<String, IAType> computeTypes(MetadataTransactionContext mdTxnCtx, TypeDecl tDec)
-            throws AlgebricksException, MetadataException {
-        Map<String, IAType> typeMap = new HashMap<String, IAType>();
+    private Map<TypeSignature, IAType> computeTypes(MetadataTransactionContext mdTxnCtx, TypeDecl tDec,
+            String defaultDataverse) throws AlgebricksException, MetadataException {
+        Map<TypeSignature, IAType> typeMap = new HashMap<TypeSignature, IAType>();
         Map<String, Map<ARecordType, List<Integer>>> incompleteFieldTypes = new HashMap<String, Map<ARecordType, List<Integer>>>();
-        Map<String, List<AbstractCollectionType>> incompleteItemTypes = new HashMap<String, List<AbstractCollectionType>>();
-        Map<String, List<String>> incompleteTopLevelTypeReferences = new HashMap<String, List<String>>();
-
-        firstPass(tDec, typeMap, incompleteFieldTypes, incompleteItemTypes, incompleteTopLevelTypeReferences);
-        secondPass(mdTxnCtx, typeMap, incompleteFieldTypes, incompleteItemTypes, incompleteTopLevelTypeReferences);
+        Map<TypeSignature, List<AbstractCollectionType>> incompleteItemTypes = new HashMap<TypeSignature, List<AbstractCollectionType>>();
+        Map<TypeSignature, List<TypeSignature>> incompleteTopLevelTypeReferences = new HashMap<TypeSignature, List<TypeSignature>>();
+        String typeDataverse = tDec.getDataverseName() == null ? defaultDataverse : tDec.getDataverseName().getValue();
+        firstPass(tDec, typeMap, incompleteFieldTypes, incompleteItemTypes, incompleteTopLevelTypeReferences,
+                typeDataverse);
+        secondPass(mdTxnCtx, typeMap, incompleteFieldTypes, incompleteItemTypes, incompleteTopLevelTypeReferences,
+                typeDataverse);
 
         return typeMap;
     }
 
-    private void secondPass(MetadataTransactionContext mdTxnCtx, Map<String, IAType> typeMap,
+    private void secondPass(MetadataTransactionContext mdTxnCtx, Map<TypeSignature, IAType> typeMap,
             Map<String, Map<ARecordType, List<Integer>>> incompleteFieldTypes,
-            Map<String, List<AbstractCollectionType>> incompleteItemTypes,
-            Map<String, List<String>> incompleteTopLevelTypeReferences) throws AlgebricksException, MetadataException {
+            Map<TypeSignature, List<AbstractCollectionType>> incompleteItemTypes,
+            Map<TypeSignature, List<TypeSignature>> incompleteTopLevelTypeReferences, String typeDataverse)
+            throws AlgebricksException, MetadataException {
         // solve remaining top level references
-        for (String trefName : incompleteTopLevelTypeReferences.keySet()) {
+
+        for (TypeSignature typeSignature : incompleteTopLevelTypeReferences.keySet()) {
             IAType t;// = typeMap.get(trefName);
-            Datatype dt = MetadataManager.INSTANCE.getDatatype(mdTxnCtx,
-                    compiledDeclarations.getDefaultDataverseName(), trefName);
+            Datatype dt = MetadataManager.INSTANCE.getDatatype(mdTxnCtx, typeSignature.getNamespace(),
+                    typeSignature.getName());
             if (dt == null) {
-                throw new AlgebricksException("Could not resolve type " + trefName);
+                throw new AlgebricksException("Could not resolve type " + typeSignature);
             } else
                 t = dt.getDatatype();
-            for (String tname : incompleteTopLevelTypeReferences.get(trefName)) {
-                typeMap.put(tname, t);
+            for (TypeSignature sign : incompleteTopLevelTypeReferences.get(typeSignature)) {
+                typeMap.put(sign, t);
             }
         }
         // solve remaining field type references
         for (String trefName : incompleteFieldTypes.keySet()) {
             IAType t;// = typeMap.get(trefName);
-            Datatype dt = MetadataManager.INSTANCE.getDatatype(mdTxnCtx,
-                    compiledDeclarations.getDefaultDataverseName(), trefName);
+            Datatype dt = MetadataManager.INSTANCE.getDatatype(mdTxnCtx, typeDataverse, trefName);
             if (dt == null) {
                 throw new AlgebricksException("Could not resolve type " + trefName);
             } else
@@ -559,60 +564,64 @@ public class DdlTranslator extends AbstractAqlTranslator {
                 }
             }
         }
+
         // solve remaining item type references
-        for (String trefName : incompleteItemTypes.keySet()) {
+        for (TypeSignature typeSignature : incompleteItemTypes.keySet()) {
             IAType t;// = typeMap.get(trefName);
-            Datatype dt = MetadataManager.INSTANCE.getDatatype(mdTxnCtx,
-                    compiledDeclarations.getDefaultDataverseName(), trefName);
+            Datatype dt = MetadataManager.INSTANCE.getDatatype(mdTxnCtx, typeSignature.getNamespace(),
+                    typeSignature.getName());
             if (dt == null) {
-                throw new AlgebricksException("Could not resolve type " + trefName);
+                throw new AlgebricksException("Could not resolve type " + typeSignature);
             } else
                 t = dt.getDatatype();
-            for (AbstractCollectionType act : incompleteItemTypes.get(trefName)) {
+            for (AbstractCollectionType act : incompleteItemTypes.get(typeSignature)) {
                 act.setItemType(t);
             }
         }
     }
 
-    private void firstPass(TypeDecl td, Map<String, IAType> typeMap,
+    private void firstPass(TypeDecl td, Map<TypeSignature, IAType> typeMap,
             Map<String, Map<ARecordType, List<Integer>>> incompleteFieldTypes,
-            Map<String, List<AbstractCollectionType>> incompleteItemTypes,
-            Map<String, List<String>> incompleteTopLevelTypeReferences) throws AlgebricksException {
+            Map<TypeSignature, List<AbstractCollectionType>> incompleteItemTypes,
+            Map<TypeSignature, List<TypeSignature>> incompleteTopLevelTypeReferences, String typeDataverse)
+            throws AlgebricksException {
 
         TypeExpression texpr = td.getTypeDef();
         String tdname = td.getIdent().getValue();
         if (builtinTypeMap.get(tdname) != null) {
             throw new AlgebricksException("Cannot redefine builtin type " + tdname + " .");
         }
+        TypeSignature typeSignature = new TypeSignature(typeDataverse, tdname);
         switch (texpr.getTypeKind()) {
             case TYPEREFERENCE: {
                 TypeReferenceExpression tre = (TypeReferenceExpression) texpr;
-                IAType t = solveTypeReference(tre, typeMap);
+                IAType t = solveTypeReference(typeSignature, typeMap);
                 if (t != null) {
-                    typeMap.put(tdname, t);
+                    typeMap.put(typeSignature, t);
                 } else {
-                    addIncompleteTopLevelTypeReference(tdname, tre, incompleteTopLevelTypeReferences);
+                    addIncompleteTopLevelTypeReference(tdname, tre, incompleteTopLevelTypeReferences, typeDataverse);
                 }
                 break;
             }
             case RECORD: {
                 RecordTypeDefinition rtd = (RecordTypeDefinition) texpr;
-                ARecordType recType = computeRecordType(tdname, rtd, typeMap, incompleteFieldTypes, incompleteItemTypes);
-                typeMap.put(tdname, recType);
+                ARecordType recType = computeRecordType(typeSignature, rtd, typeMap, incompleteFieldTypes,
+                        incompleteItemTypes, typeDataverse);
+                typeMap.put(typeSignature, recType);
                 break;
             }
             case ORDEREDLIST: {
                 OrderedListTypeDefinition oltd = (OrderedListTypeDefinition) texpr;
-                AOrderedListType olType = computeOrderedListType(tdname, oltd, typeMap, incompleteItemTypes,
-                        incompleteFieldTypes);
-                typeMap.put(tdname, olType);
+                AOrderedListType olType = computeOrderedListType(typeSignature, oltd, typeMap, incompleteItemTypes,
+                        incompleteFieldTypes, typeDataverse);
+                typeMap.put(typeSignature, olType);
                 break;
             }
             case UNORDEREDLIST: {
                 UnorderedListTypeDefinition ultd = (UnorderedListTypeDefinition) texpr;
-                AUnorderedListType ulType = computeUnorderedListType(tdname, ultd, typeMap, incompleteItemTypes,
-                        incompleteFieldTypes);
-                typeMap.put(tdname, ulType);
+                AUnorderedListType ulType = computeUnorderedListType(typeSignature, ultd, typeMap, incompleteItemTypes,
+                        incompleteFieldTypes, typeDataverse);
+                typeMap.put(typeSignature, ulType);
                 break;
             }
             default: {
@@ -621,53 +630,60 @@ public class DdlTranslator extends AbstractAqlTranslator {
         }
     }
 
-    private AOrderedListType computeOrderedListType(String typeName, OrderedListTypeDefinition oltd,
-            Map<String, IAType> typeMap, Map<String, List<AbstractCollectionType>> incompleteItemTypes,
-            Map<String, Map<ARecordType, List<Integer>>> incompleteFieldTypes) {
+    private AOrderedListType computeOrderedListType(TypeSignature typeSignature, OrderedListTypeDefinition oltd,
+            Map<TypeSignature, IAType> typeMap, Map<TypeSignature, List<AbstractCollectionType>> incompleteItemTypes,
+            Map<String, Map<ARecordType, List<Integer>>> incompleteFieldTypes, String defaultDataverse) {
         TypeExpression tExpr = oltd.getItemTypeExpression();
+        String typeName = typeSignature != null ? typeSignature.getName() : null;
         AOrderedListType aolt = new AOrderedListType(null, typeName);
-        setCollectionItemType(tExpr, typeMap, incompleteItemTypes, incompleteFieldTypes, aolt);
+        setCollectionItemType(tExpr, typeMap, incompleteItemTypes, incompleteFieldTypes, aolt, defaultDataverse);
         return aolt;
     }
 
-    private AUnorderedListType computeUnorderedListType(String typeName, UnorderedListTypeDefinition ultd,
-            Map<String, IAType> typeMap, Map<String, List<AbstractCollectionType>> incompleteItemTypes,
-            Map<String, Map<ARecordType, List<Integer>>> incompleteFieldTypes) {
+    private AUnorderedListType computeUnorderedListType(TypeSignature typeSignature, UnorderedListTypeDefinition ultd,
+            Map<TypeSignature, IAType> typeMap, Map<TypeSignature, List<AbstractCollectionType>> incompleteItemTypes,
+            Map<String, Map<ARecordType, List<Integer>>> incompleteFieldTypes, String defaulDataverse) {
         TypeExpression tExpr = ultd.getItemTypeExpression();
+        String typeName = typeSignature != null ? typeSignature.getName() : null;
         AUnorderedListType ault = new AUnorderedListType(null, typeName);
-        setCollectionItemType(tExpr, typeMap, incompleteItemTypes, incompleteFieldTypes, ault);
+        setCollectionItemType(tExpr, typeMap, incompleteItemTypes, incompleteFieldTypes, ault, defaulDataverse);
         return ault;
     }
 
-    private void setCollectionItemType(TypeExpression tExpr, Map<String, IAType> typeMap,
-            Map<String, List<AbstractCollectionType>> incompleteItemTypes,
-            Map<String, Map<ARecordType, List<Integer>>> incompleteFieldTypes, AbstractCollectionType act) {
+    private void setCollectionItemType(TypeExpression tExpr, Map<TypeSignature, IAType> typeMap,
+            Map<TypeSignature, List<AbstractCollectionType>> incompleteItemTypes,
+            Map<String, Map<ARecordType, List<Integer>>> incompleteFieldTypes, AbstractCollectionType act,
+            String defaultDataverse) {
         switch (tExpr.getTypeKind()) {
             case ORDEREDLIST: {
                 OrderedListTypeDefinition oltd = (OrderedListTypeDefinition) tExpr;
-                IAType t = computeOrderedListType(null, oltd, typeMap, incompleteItemTypes, incompleteFieldTypes);
+                IAType t = computeOrderedListType(null, oltd, typeMap, incompleteItemTypes, incompleteFieldTypes,
+                        defaultDataverse);
                 act.setItemType(t);
                 break;
             }
             case UNORDEREDLIST: {
                 UnorderedListTypeDefinition ultd = (UnorderedListTypeDefinition) tExpr;
-                IAType t = computeUnorderedListType(null, ultd, typeMap, incompleteItemTypes, incompleteFieldTypes);
+                IAType t = computeUnorderedListType(null, ultd, typeMap, incompleteItemTypes, incompleteFieldTypes,
+                        defaultDataverse);
                 act.setItemType(t);
                 break;
             }
             case RECORD: {
                 RecordTypeDefinition rtd = (RecordTypeDefinition) tExpr;
-                IAType t = computeRecordType(null, rtd, typeMap, incompleteFieldTypes, incompleteItemTypes);
+                IAType t = computeRecordType(null, rtd, typeMap, incompleteFieldTypes, incompleteItemTypes,
+                        defaultDataverse);
                 act.setItemType(t);
                 break;
             }
             case TYPEREFERENCE: {
                 TypeReferenceExpression tre = (TypeReferenceExpression) tExpr;
-                IAType tref = solveTypeReference(tre, typeMap);
+                TypeSignature signature = new TypeSignature(defaultDataverse, tre.getIdent().getValue());
+                IAType tref = solveTypeReference(signature, typeMap);
                 if (tref != null) {
                     act.setItemType(tref);
                 } else {
-                    addIncompleteCollectionTypeReference(act, tre, incompleteItemTypes);
+                    addIncompleteCollectionTypeReference(act, tre, incompleteItemTypes, defaultDataverse);
                 }
                 break;
             }
@@ -677,9 +693,9 @@ public class DdlTranslator extends AbstractAqlTranslator {
         }
     }
 
-    private ARecordType computeRecordType(String typeName, RecordTypeDefinition rtd, Map<String, IAType> typeMap,
-            Map<String, Map<ARecordType, List<Integer>>> incompleteFieldTypes,
-            Map<String, List<AbstractCollectionType>> incompleteItemTypes) {
+    private ARecordType computeRecordType(TypeSignature typeSignature, RecordTypeDefinition rtd,
+            Map<TypeSignature, IAType> typeMap, Map<String, Map<ARecordType, List<Integer>>> incompleteFieldTypes,
+            Map<TypeSignature, List<AbstractCollectionType>> incompleteItemTypes, String defaultDataverse) {
         List<String> names = rtd.getFieldNames();
         int n = names.size();
         String[] fldNames = new String[n];
@@ -689,13 +705,15 @@ public class DdlTranslator extends AbstractAqlTranslator {
             fldNames[i++] = s;
         }
         boolean isOpen = rtd.getRecordKind() == RecordKind.OPEN;
-        ARecordType recType = new ARecordType(typeName, fldNames, fldTypes, isOpen);
+        ARecordType recType = new ARecordType(typeSignature == null ? null : typeSignature.getName(), fldNames,
+                fldTypes, isOpen);
         for (int j = 0; j < n; j++) {
             TypeExpression texpr = rtd.getFieldTypes().get(j);
             switch (texpr.getTypeKind()) {
                 case TYPEREFERENCE: {
                     TypeReferenceExpression tre = (TypeReferenceExpression) texpr;
-                    IAType tref = solveTypeReference(tre, typeMap);
+                    TypeSignature signature = new TypeSignature(defaultDataverse, tre.getIdent().getValue());
+                    IAType tref = solveTypeReference(signature, typeMap);
                     if (tref != null) {
                         if (!rtd.getNullableFields().get(j)) { // not nullable
                             fldTypes[j] = tref;
@@ -712,7 +730,8 @@ public class DdlTranslator extends AbstractAqlTranslator {
                 }
                 case RECORD: {
                     RecordTypeDefinition recTypeDef2 = (RecordTypeDefinition) texpr;
-                    IAType t2 = computeRecordType(null, recTypeDef2, typeMap, incompleteFieldTypes, incompleteItemTypes);
+                    IAType t2 = computeRecordType(null, recTypeDef2, typeMap, incompleteFieldTypes,
+                            incompleteItemTypes, defaultDataverse);
                     if (!rtd.getNullableFields().get(j)) { // not nullable
                         fldTypes[j] = t2;
                     } else { // nullable
@@ -722,13 +741,15 @@ public class DdlTranslator extends AbstractAqlTranslator {
                 }
                 case ORDEREDLIST: {
                     OrderedListTypeDefinition oltd = (OrderedListTypeDefinition) texpr;
-                    IAType t2 = computeOrderedListType(null, oltd, typeMap, incompleteItemTypes, incompleteFieldTypes);
+                    IAType t2 = computeOrderedListType(null, oltd, typeMap, incompleteItemTypes, incompleteFieldTypes,
+                            defaultDataverse);
                     fldTypes[j] = (rtd.getNullableFields().get(j)) ? makeUnionWithNull(null, t2) : t2;
                     break;
                 }
                 case UNORDEREDLIST: {
                     UnorderedListTypeDefinition ultd = (UnorderedListTypeDefinition) texpr;
-                    IAType t2 = computeUnorderedListType(null, ultd, typeMap, incompleteItemTypes, incompleteFieldTypes);
+                    IAType t2 = computeUnorderedListType(null, ultd, typeMap, incompleteItemTypes,
+                            incompleteFieldTypes, defaultDataverse);
                     fldTypes[j] = (rtd.getNullableFields().get(j)) ? makeUnionWithNull(null, t2) : t2;
                     break;
                 }
@@ -750,12 +771,13 @@ public class DdlTranslator extends AbstractAqlTranslator {
     }
 
     private void addIncompleteCollectionTypeReference(AbstractCollectionType collType, TypeReferenceExpression tre,
-            Map<String, List<AbstractCollectionType>> incompleteItemTypes) {
+            Map<TypeSignature, List<AbstractCollectionType>> incompleteItemTypes, String defaultDataverse) {
         String typeName = tre.getIdent().getValue();
+        TypeSignature typeSignature = new TypeSignature(defaultDataverse, typeName);
         List<AbstractCollectionType> typeList = incompleteItemTypes.get(typeName);
         if (typeList == null) {
             typeList = new LinkedList<AbstractCollectionType>();
-            incompleteItemTypes.put(typeName, typeList);
+            incompleteItemTypes.put(typeSignature, typeList);
         }
         typeList.add(collType);
     }
@@ -777,23 +799,24 @@ public class DdlTranslator extends AbstractAqlTranslator {
     }
 
     private void addIncompleteTopLevelTypeReference(String tdeclName, TypeReferenceExpression tre,
-            Map<String, List<String>> incompleteTopLevelTypeReferences) {
+            Map<TypeSignature, List<TypeSignature>> incompleteTopLevelTypeReferences, String defaultDataverse) {
         String name = tre.getIdent().getValue();
-        List<String> refList = incompleteTopLevelTypeReferences.get(name);
+        TypeSignature typeSignature = new TypeSignature(defaultDataverse, name);
+        List<TypeSignature> refList = incompleteTopLevelTypeReferences.get(name);
         if (refList == null) {
-            refList = new LinkedList<String>();
-            incompleteTopLevelTypeReferences.put(name, refList);
+            refList = new LinkedList<TypeSignature>();
+            incompleteTopLevelTypeReferences.put(new TypeSignature(defaultDataverse, tre.getIdent().getValue()),
+                    refList);
         }
-        refList.add(tdeclName);
+        refList.add(typeSignature);
     }
 
-    private IAType solveTypeReference(TypeReferenceExpression tre, Map<String, IAType> typeMap) {
-        String name = tre.getIdent().getValue();
-        IAType builtin = builtinTypeMap.get(name);
+    private IAType solveTypeReference(TypeSignature typeSignature, Map<TypeSignature, IAType> typeMap) {
+        IAType builtin = builtinTypeMap.get(typeSignature.getName());
         if (builtin != null) {
             return builtin;
         } else {
-            return typeMap.get(name);
+            return typeMap.get(typeSignature);
         }
     }
 

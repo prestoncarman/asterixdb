@@ -60,6 +60,8 @@ public class FeedOperations {
 
     private static JobSpecification createSendMessageToFeedJobSpec(CompiledControlFeedStatement controlFeedStatement,
             AqlCompiledMetadataDeclarations metadata) throws AsterixException {
+        String dataverseName = controlFeedStatement.getDataverseName() == null ? metadata.getDefaultDataverseName()
+                : controlFeedStatement.getDataverseName();
         String datasetName = controlFeedStatement.getDatasetName();
         String datasetPath = metadata.getRelativePath(datasetName);
 
@@ -67,7 +69,7 @@ public class FeedOperations {
 
         Dataset dataset;
         try {
-            dataset = metadata.findDataset(datasetName);
+            dataset = metadata.findDataset(dataverseName, datasetName);
         } catch (AlgebricksException e) {
             throw new AsterixException(e);
         }
@@ -100,8 +102,8 @@ public class FeedOperations {
 
         try {
             Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> p = AqlMetadataProvider.buildFeedMessengerRuntime(
-                    spec, metadata, (FeedDatasetDetails) dataset.getDatasetDetails(), metadata.getDefaultDataverseName(),
-                    datasetName, feedMessages);
+                    spec, metadata, (FeedDatasetDetails) dataset.getDatasetDetails(),
+                    metadata.getDefaultDataverseName(), datasetName, feedMessages);
             feedMessenger = p.first;
             messengerPc = p.second;
         } catch (AlgebricksException e) {

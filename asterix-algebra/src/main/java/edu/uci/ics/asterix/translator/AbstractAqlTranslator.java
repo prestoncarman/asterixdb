@@ -16,14 +16,13 @@ import edu.uci.ics.asterix.aql.expression.SetStatement;
 import edu.uci.ics.asterix.aql.expression.TypeDecl;
 import edu.uci.ics.asterix.aql.expression.WriteStatement;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
-import edu.uci.ics.asterix.common.functions.FunctionConstants;
 import edu.uci.ics.asterix.metadata.MetadataException;
 import edu.uci.ics.asterix.metadata.MetadataTransactionContext;
 import edu.uci.ics.asterix.metadata.bootstrap.MetadataConstants;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
 import edu.uci.ics.asterix.metadata.entities.AsterixBuiltinArtifactMap;
 import edu.uci.ics.asterix.metadata.entities.AsterixBuiltinArtifactMap.ARTIFACT_KIND;
-import edu.uci.ics.asterix.om.functions.AsterixFunction;
+import edu.uci.ics.asterix.om.functions.FunctionSignature;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import edu.uci.ics.hyracks.algebricks.data.IAWriterFactory;
 import edu.uci.ics.hyracks.algebricks.runtime.writers.PrinterBasedWriterFactory;
@@ -89,7 +88,7 @@ public abstract class AbstractAqlTranslator {
             throws AsterixException {
         if (compiledDeclarations.getDefaultDataverseName() != null
                 && compiledDeclarations.getDefaultDataverseName().equals(MetadataConstants.METADATA_DATAVERSE_NAME)) {
-        
+
             boolean invalidOperation = false;
             String message = null;
             switch (stmt.getKind()) {
@@ -101,13 +100,14 @@ public abstract class AbstractAqlTranslator {
                             + MetadataConstants.METADATA_DATAVERSE_NAME;
                     break;
                 case FUNCTION_DROP:
-                    AsterixFunction af = ((FunctionDropStatement) stmt).getAsterixFunction();
-                    FunctionIdentifier fId = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, af.getName(),
-                            ((FunctionDropStatement) stmt).getAsterixFunction().getArity());
-                    if (compiledDeclarations.getDefaultDataverseName().equals(MetadataConstants.METADATA_DATAVERSE_NAME)
+                    FunctionSignature signature = ((FunctionDropStatement) stmt).getFunctionSignature();
+                    FunctionIdentifier fId = new FunctionIdentifier(signature.getNamespace(), signature.getName(),
+                            signature.getArity());
+                    if (compiledDeclarations.getDefaultDataverseName()
+                            .equals(MetadataConstants.METADATA_DATAVERSE_NAME)
                             && AsterixBuiltinArtifactMap.isSystemProtectedArtifact(ARTIFACT_KIND.FUNCTION, fId)) {
                         invalidOperation = true;
-                        message = "Invalid Operation cannot drop function " + af + " (protected by system)";
+                        message = "Invalid Operation cannot drop function " + signature + " (protected by system)";
                     }
                     break;
                 case NODEGROUP_DROP:

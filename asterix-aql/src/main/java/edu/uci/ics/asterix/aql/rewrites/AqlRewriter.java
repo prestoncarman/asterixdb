@@ -133,9 +133,9 @@ public final class AqlRewriter {
             return;
         }
         List<FunctionDecl> fdecls = buildFunctionDeclList(topExpr);
-        List<AsterixFunction> funIds = new ArrayList<AsterixFunction>();
+        List<FunctionSignature> funIds = new ArrayList<FunctionSignature>();
         for (FunctionDecl fdecl : fdecls) {
-            funIds.add(fdecl.getIdent());
+            funIds.add(fdecl.getSignature());
         }
 
         List<FunctionDecl> otherFDecls = new ArrayList<FunctionDecl>();
@@ -151,19 +151,19 @@ public final class AqlRewriter {
     }
 
     private void buildOtherUdfs(Expression expression, List<FunctionDecl> functionDecls,
-            List<AsterixFunction> declaredFunctions) throws AsterixException {
+            List<FunctionSignature> declaredFunctions) throws AsterixException {
         if (expression == null) {
             return;
         }
 
-        List<AsterixFunction> functionCalls = getFunctionCalls(expression);
-        for (AsterixFunction funId : functionCalls) {
+        List<FunctionSignature> functionCalls = getFunctionCalls(expression);
+        for (FunctionSignature signature : functionCalls) {
 
-            if (declaredFunctions != null && declaredFunctions.contains(funId)) {
+            if (declaredFunctions != null && declaredFunctions.contains(signature)) {
                 continue;
             }
 
-            FunctionDecl functionDecl = lookupUserDefinedFunctionDecl(funId);
+            FunctionDecl functionDecl = lookupUserDefinedFunctionDecl(signature);
             if (functionDecl != null) {
                 if (functionDecls.contains(functionDecl)) {
                     throw new AsterixException(" Detected recursvity!");
@@ -172,21 +172,20 @@ public final class AqlRewriter {
                     buildOtherUdfs(functionDecl.getFuncBody(), functionDecls, declaredFunctions);
                 }
             } else {
-                if (isBuiltinFunction(funId)) {
+                if (isBuiltinFunction(signature)) {
                     continue;
                 } else {
-                    throw new AsterixException(" unknown function " + funId);
+                    throw new AsterixException(" unknown function " + signature);
                 }
             }
         }
     }
 
-    private FunctionDecl lookupUserDefinedFunctionDecl(AsterixFunction asterixFunction) throws AsterixException {
-        if (dataverseName == null) {
+    private FunctionDecl lookupUserDefinedFunctionDecl(FunctionSignature signature) throws AsterixException {
+        if(signature.getNamespace() == null){
             return null;
         }
-        Function function = MetadataManager.INSTANCE.getFunction(mdTxnCtx, new FunctionSignature(dataverseName,
-                asterixFunction.getName(), asterixFunction.getArity()));
+        Function function = MetadataManager.INSTANCE.getFunction(mdTxnCtx, signature);
         if (function == null) {
             return null;
         }
@@ -194,14 +193,14 @@ public final class AqlRewriter {
 
     }
 
-    private boolean isBuiltinFunction(AsterixFunction asterixFunction) {
+    private boolean isBuiltinFunction(FunctionSignature functionSignature) {
         if (AsterixBuiltinFunctions.isBuiltinCompilerFunction(new FunctionIdentifier(FunctionConstants.ASTERIX_NS,
-                asterixFunction.getName(), asterixFunction.getArity()))) {
+                functionSignature.getName(), functionSignature.getArity()))) {
             return true;
         }
 
         if (AsterixBuiltinFunctions.isBuiltinCompilerFunction(new FunctionIdentifier(
-                AlgebricksBuiltinFunctions.ALGEBRICKS_NS, asterixFunction.getName(), asterixFunction.getArity()))) {
+                AlgebricksBuiltinFunctions.ALGEBRICKS_NS, functionSignature.getName(), functionSignature.getArity()))) {
             return true;
         }
 
@@ -209,38 +208,38 @@ public final class AqlRewriter {
 
     }
 
-    private List<AsterixFunction> getFunctionCalls(Expression expression) throws AsterixException {
+    private List<FunctionSignature> getFunctionCalls(Expression expression) throws AsterixException {
         Map<AsterixFunction, DfsColor> color = new HashMap<AsterixFunction, DfsColor>();
         Map<AsterixFunction, List<AsterixFunction>> arcs = new HashMap<AsterixFunction, List<AsterixFunction>>();
         GatherFunctionCalls gfc = new GatherFunctionCalls();
         expression.accept(gfc, null);
-        List<AsterixFunction> calls = gfc.getCalls();
+        List<FunctionSignature> calls = gfc.getCalls();
         return calls;
     }
 
     private void checkRecursivity(List<FunctionDecl> fdecls) throws AsterixException {
-        Map<AsterixFunction, DfsColor> color = new HashMap<AsterixFunction, DfsColor>();
-        Map<AsterixFunction, List<AsterixFunction>> arcs = new HashMap<AsterixFunction, List<AsterixFunction>>();
+        Map<FunctionSignature, DfsColor> color = new HashMap<FunctionSignature, DfsColor>();
+        Map<FunctionSignature, List<FunctionSignature>> arcs = new HashMap<FunctionSignature, List<FunctionSignature>>();
         for (FunctionDecl fd : fdecls) {
             GatherFunctionCalls gfc = new GatherFunctionCalls();
             fd.getFuncBody().accept(gfc, null);
-            List<AsterixFunction> calls = gfc.getCalls();
-            arcs.put(fd.getIdent(), calls);
-            color.put(fd.getIdent(), DfsColor.WHITE);
+            List<FunctionSignature> calls = gfc.getCalls();
+            arcs.put(fd.getSignature(), calls);
+            color.put(fd.getSignature(), DfsColor.WHITE);
         }
-        for (AsterixFunction a : arcs.keySet()) {
+        for (FunctionSignature a : arcs.keySet()) {
             if (color.get(a) == DfsColor.WHITE) {
                 checkRecursivityDfs(a, arcs, color);
             }
         }
     }
 
-    private void checkRecursivityDfs(AsterixFunction a, Map<AsterixFunction, List<AsterixFunction>> arcs,
-            Map<AsterixFunction, DfsColor> color) throws AsterixException {
+    private void checkRecursivityDfs(FunctionSignature a, Map<FunctionSignature, List<FunctionSignature>> arcs,
+            Map<FunctionSignature, DfsColor> color) throws AsterixException {
         color.put(a, DfsColor.GRAY);
-        List<AsterixFunction> next = arcs.get(a);
+        List<FunctionSignature> next = arcs.get(a);
         if (next != null) {
-            for (AsterixFunction f : next) {
+            for (FunctionSignature f : next) {
                 DfsColor dc = color.get(f);
                 if (dc == DfsColor.GRAY) {
                     throw new AsterixException("Recursive function calls, created by calling " + f + " starting from "
@@ -266,14 +265,14 @@ public final class AqlRewriter {
 
     private static class GatherFunctionCalls implements IAqlExpressionVisitor<Void, Void> {
 
-        private final List<AsterixFunction> calls = new ArrayList<AsterixFunction>();
+        private final List<FunctionSignature> calls = new ArrayList<FunctionSignature>();
 
         public GatherFunctionCalls() {
         }
 
         @Override
         public Void visitCallExpr(CallExpr pf, Void arg) throws AsterixException {
-            calls.add(pf.getIdent());
+            calls.add(pf.getFunctionSignature());
             for (Expression e : pf.getExprList()) {
                 e.accept(this, arg);
             }
@@ -551,7 +550,7 @@ public final class AqlRewriter {
             return null;
         }
 
-        public List<AsterixFunction> getCalls() {
+        public List<FunctionSignature> getCalls() {
             return calls;
         }
 

@@ -4,15 +4,15 @@ import edu.uci.ics.asterix.aql.base.Statement;
 import edu.uci.ics.asterix.aql.expression.visitor.IAqlExpressionVisitor;
 import edu.uci.ics.asterix.aql.expression.visitor.IAqlVisitorWithVoidReturn;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
-import edu.uci.ics.asterix.om.functions.AsterixFunction;
+import edu.uci.ics.asterix.om.functions.FunctionSignature;
 
 public class FunctionDropStatement implements Statement {
 
-    private AsterixFunction asterixFunction;
+    private final FunctionSignature signature;
     private boolean ifExists;
 
-    public FunctionDropStatement(AsterixFunction asterixFunction, boolean ifExists) {
-        this.asterixFunction = asterixFunction;
+    public FunctionDropStatement(FunctionSignature signature, boolean ifExists) {
+        this.signature = signature;
         this.ifExists = ifExists;
     }
 
@@ -21,8 +21,8 @@ public class FunctionDropStatement implements Statement {
         return Kind.FUNCTION_DROP;
     }
 
-    public AsterixFunction getAsterixFunction() {
-        return asterixFunction;
+    public FunctionSignature getFunctionSignature() {
+        return signature;
     }
 
     public boolean getIfExists() {
