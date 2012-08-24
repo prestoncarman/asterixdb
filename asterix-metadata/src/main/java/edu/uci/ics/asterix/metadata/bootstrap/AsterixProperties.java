@@ -25,6 +25,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Properties;
+import java.util.logging.Logger;
 
 import edu.uci.ics.asterix.common.config.GlobalConfig;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
@@ -35,14 +36,16 @@ import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
  */
 public class AsterixProperties implements Serializable {
 
+    private static final Logger LOGGER = Logger.getLogger(MetadataBootstrap.class.getName());
+    
     private static final long serialVersionUID = 1L;
-    private static String metadataNodeName;
     private static Boolean isNewUniverse;
     private static HashSet<String> nodeNames;
     private static Map<String, String[]> stores;
     // If set, then these are the stores for ALL nodes, otherwise consult stores.
     private static String[] allStores;
-    private static String outputDir;    
+    private static String outputDir;
+    private static String metadataNodeName;
     
     public static AsterixProperties INSTANCE = new AsterixProperties();
 
@@ -85,8 +88,7 @@ public class AsterixProperties implements Serializable {
         while (pNames.hasMoreElements()) {
             pn = pNames.nextElement();
             if (pn.equals("MetadataNode")) {
-                val = p.getProperty(pn);
-                metadataNodeName = val;
+                LOGGER.info("Ignoring 'MetadataNode' property in " + fileName + " because it is no longer supported.");
             } else if (pn.equals("NewUniverse")) {
                 val = p.getProperty(pn);
                 newUniverseChosen = true;
@@ -106,22 +108,12 @@ public class AsterixProperties implements Serializable {
                 nodeNames.addAll(stores.keySet());
             }
         }
-        if (metadataNodeName == null)
-            throw new AlgebricksException("You need to specify the metadata node!");
         if (!newUniverseChosen)
             throw new AlgebricksException("You need to specify whether or not you want to start a new universe!");
     }
 
     public Boolean isNewUniverse() {
         return isNewUniverse;
-    }
-
-    public String getMetadataNodeName() {
-        return metadataNodeName;
-    }
-
-    public String getMetadataStore() {
-        return stores.get(metadataNodeName)[0];
     }
 
     public String[] getStores(String nodeName) {
@@ -138,5 +130,17 @@ public class AsterixProperties implements Serializable {
 
     public  String getOutputDir() {
         return outputDir;
+    }
+    
+    public String getMetadataStore() {
+        return getStores(metadataNodeName)[0];
+    }
+    
+    public String getMetadataNodeName() {
+        return metadataNodeName;
+    }
+    
+    public static void setMetadataNodeName(String nodeName) {
+        metadataNodeName = nodeName;
     }
 }

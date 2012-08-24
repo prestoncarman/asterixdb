@@ -246,7 +246,6 @@ public class AqlCompiledMetadataDeclarations {
                 LOGGER.warning("Node " + nd + " has no stores.");
                 throw new AlgebricksException("Node " + nd + " has no stores.");
             } else {
-                System.out.println("NODE STORES: ");
                 for (String s : nodeStores) {
                     System.out.println(s);
                 }

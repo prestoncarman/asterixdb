@@ -53,12 +53,13 @@ public class NCBootstrapImpl implements INCBootstrap {
 
         // Initialize metadata if this node is the metadata node
         IAsterixStateProxy proxy = (IAsterixStateProxy) ncApplicationContext.getDistributedState();
-        isMetadataNode = nodeId.equals(proxy.getAsterixProperties().getMetadataNodeName());
+        String metadataNodeName = proxy.getAsterixProperties().getMetadataNodeName();
+        isMetadataNode = nodeId.equals(metadataNodeName);
         if (isMetadataNode) {
             registerRemoteMetadataNode(proxy);
 
             if (LOGGER.isLoggable(Level.INFO)) {
-                LOGGER.info("Bootstrapping metadata");
+                LOGGER.info("Bootstrapping metadata on node: " + metadataNodeName);
             }
 
             MetadataManager.INSTANCE = new MetadataManager(proxy);

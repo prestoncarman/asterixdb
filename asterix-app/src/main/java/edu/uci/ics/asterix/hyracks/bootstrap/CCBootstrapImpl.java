@@ -19,6 +19,8 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -49,7 +51,8 @@ public class CCBootstrapImpl implements ICCBootstrap {
     private static IAsterixStateProxy proxy;
     private ICCApplicationContext appCtx;
     private ThreadedServer apiServer;
-
+    private Map<String, Set<String>> nodeNameMap;
+    
     @Override
     public void start() throws Exception {
         if (LOGGER.isLoggable(Level.INFO)) {
@@ -60,8 +63,10 @@ public class CCBootstrapImpl implements ICCBootstrap {
         proxy = AsterixStateProxy.registerRemoteObject();
         proxy.setAsterixProperties(AsterixProperties.INSTANCE);
         appCtx.setDistributedState(proxy);
-
+        setNodeNameMap();
+        
         // Create the metadata manager
+        setMetadataNodeName();
         MetadataManager.INSTANCE = new MetadataManager(proxy);
 
         // Setup and start the web interface
@@ -89,6 +94,15 @@ public class CCBootstrapImpl implements ICCBootstrap {
         this.appCtx = appCtx;
     }
 
+    private void setNodeNameMap() throws IOException {
+        nodeNameMap = new HashMap<String, Set<String>>();
+        try {
+            appCtx.getCCContext().getIPAddressNodeMap(nodeNameMap);
+        } catch (Exception e) {
+            throw new IOException("Unable to obtain IP address node map", e);
+        }
+    }
+    
     private void setupWebServer() throws Exception {
         String portStr = System.getProperty(GlobalConfig.WEB_SERVER_PORT_PROPERTY);
         int port = DEFAULT_WEB_SERVER_PORT;
@@ -106,13 +120,6 @@ public class CCBootstrapImpl implements ICCBootstrap {
     private void setupAPIServer() throws Exception {
         // set the APINodeDataServer ports
         int startPort = DEFAULT_API_NODEDATA_SERVER_PORT;
-        Map<String, Set<String>> nodeNameMap = new HashMap<String, Set<String>>();
-        try {
-            appCtx.getCCContext().getIPAddressNodeMap(nodeNameMap);
-        } catch (Exception e) {
-            throw new IOException("Unable to obtain IP address node map", e);
-        }
-
         for (Map.Entry<String, Set<String>> entry : nodeNameMap.entrySet()) {
             Set<String> nodeNames = entry.getValue();
             Iterator<String> it = nodeNames.iterator();
@@ -124,5 +131,20 @@ public class CCBootstrapImpl implements ICCBootstrap {
         }
 
         apiServer = new ThreadedServer(DEFAULT_API_SERVER_PORT, new APIClientThreadFactory(appCtx));
+    }
+    
+    /**
+     * Use node with lowest sorting name as the metadata node.
+     */
+    private void setMetadataNodeName() throws Exception {
+        SortedSet<String> nodeNames = new TreeSet<String>();
+        for (Map.Entry<String, Set<String>> entry : nodeNameMap.entrySet()) {
+            nodeNames.addAll(entry.getValue());
+        }
+        Iterator<String> iter = nodeNames.iterator();
+        if (!iter.hasNext()) {
+            throw new Exception("No nodes found in node name map.");
+        }
+        AsterixProperties.setMetadataNodeName(iter.next());
     }
 }
