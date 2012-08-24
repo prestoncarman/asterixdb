@@ -60,5 +60,6 @@ return $x
 write output to nc1:"rttest/cross-dataverse_insert_across_dataverses.adm";
 
 for $c in dataset('test2.Customers')
+order by $c.cid
 return $c
 
