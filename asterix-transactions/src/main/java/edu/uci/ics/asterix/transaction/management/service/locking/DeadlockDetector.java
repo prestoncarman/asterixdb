@@ -43,7 +43,7 @@ public class DeadlockDetector {
         tempDatasetIdObj = new DatasetId(0);
     }
     
-    public boolean isSafeToAdd(DatasetLockInfo dLockInfo, int eLockInfo, int entityInfo, boolean isDatasetLockInfo) {
+    public boolean isSafeToAdd(DatasetLockInfo dLockInfo, int eLockInfo, int entityInfo, boolean isDatasetLockInfo, boolean isUpgrade) {
         int holder;
         int nextHolder;
         int visitedHolder;
@@ -67,27 +67,21 @@ public class DeadlockDetector {
             getHolderList(datasetId, hashValue, holderList);
         }
         
-        //TODO
         //check whether this caller is upgrader or not
         //if it is upgrader, then handle it as special case in the following manner
         //if there is another upgrader or waiter of which lock mode is not compatible with the caller's lock mode,
         //then this caller's wait causes deadlock.
         if (holderList.get(callerId) != -1) {
-            int count = 0;
-            holderList.beginIterate();
-            holder = holderList.getNextKey();
-            while (holder != -1) {
-                count++;
-                if (count > 1) {
-                    break;
-                }
-                holder = holderList.getNextKey();
+            if (isUpgrade && dLockInfo.getFirstUpgrader() != -1) {
+                return false;
             }
-            
-            if (count == 1) {
-                return false;                
-            }
+            //there is no case such that while a job is holding any mode of lock on a dataset and waits for the same dataset as an waiter. 
+            //But the job may wait for the same dataset as an upgrader.
         }
+        
+        //TODO
+        //check whether when there are multiple resources, the waiter and upgrader should be distinguished or not.
+        //The current logic doesn't distinguish these two types of waiter.
         
         //while holderList is not empty
         holderList.beginIterate();

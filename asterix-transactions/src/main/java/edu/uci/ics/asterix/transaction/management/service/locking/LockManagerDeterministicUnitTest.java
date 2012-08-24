@@ -1,11 +1,9 @@
 package edu.uci.ics.asterix.transaction.management.service.locking;
 
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.InputMismatchException;
 import java.util.NoSuchElementException;
 import java.util.Scanner;
 
@@ -14,6 +12,7 @@ import edu.uci.ics.asterix.transaction.management.service.transaction.ITransacti
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionContext;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionManagementConstants.LockManagerConstants.LockMode;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionProvider;
+import edu.uci.ics.hyracks.api.job.JobId;
 
 public class LockManagerDeterministicUnitTest {
 
@@ -256,7 +255,7 @@ class LockRequestController implements Runnable {
                     lockMode = scanner.next();
                     txnContext = jobMap.get(jobId);
                     if (txnContext == null) {
-                        txnContext = new TransactionContext(jobId, txnProvider);
+                        txnContext = new TransactionContext(new JobId(jobId), txnProvider);
                         jobMap.put(jobId, txnContext);
                     }
                     log("LockRequest[" + i++ + "]:T" + threadId + "," + requestType + ",J" + jobId + ",D" + datasetId + ",E"

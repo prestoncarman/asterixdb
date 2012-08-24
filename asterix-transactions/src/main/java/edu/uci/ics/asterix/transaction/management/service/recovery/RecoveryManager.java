@@ -183,7 +183,7 @@ public class RecoveryManager implements IRecoveryManager {
         if (lsn.getLsn() == TransactionManagementConstants.LogManagerConstants.TERMINAL_LSN) {
             if (LOGGER.isLoggable(Level.INFO)) {
                 LOGGER.info(" no need to roll back as there were no operations by the transaction "
-                        + txnContext.getTransactionId());
+                        + txnContext.getJobId());
             }
             return;
         }

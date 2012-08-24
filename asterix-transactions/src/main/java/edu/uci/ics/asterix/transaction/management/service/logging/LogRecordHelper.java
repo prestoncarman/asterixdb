@@ -145,7 +145,7 @@ public class LogRecordHelper implements ILogRecordHelper {
 
         /* transaction id */
         (logicalLogLocator.getBuffer()).writeLong(logicalLogLocator.getMemoryOffset() + BEGIN_TRANSACTION_ID_POS,
-                context.getTransactionId());
+                context.getJobId());
 
         /* resource Mgr id */
         (logicalLogLocator.getBuffer()).put(logicalLogLocator.getMemoryOffset() + BEGIN_RESOURCE_MGR_ID_POS,

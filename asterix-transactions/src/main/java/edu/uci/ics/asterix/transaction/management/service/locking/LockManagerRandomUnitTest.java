@@ -8,6 +8,7 @@ import edu.uci.ics.asterix.transaction.management.service.transaction.ITransacti
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionContext;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionManagementConstants.LockManagerConstants.LockMode;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionProvider;
+import edu.uci.ics.hyracks.api.job.JobId;
 
 /**
  * LockManagerUnitTest: unit test of LockManager
@@ -97,7 +98,7 @@ public class LockManagerRandomUnitTest {
 
     private static TransactionContext generateTxnContext(TransactionProvider txnProvider) {
         try {
-            return new TransactionContext((long) (jobId++), txnProvider);
+            return new TransactionContext(new JobId(jobId++), txnProvider);
         } catch (ACIDException e) {
             e.printStackTrace();
             return null;
