@@ -111,6 +111,7 @@ public class APIServlet extends HttpServlet {
         	}
         } catch (Exception e) {
             out.println(e.getMessage());
+            e.printStackTrace(out);
        }
     }
 

@@ -1469,14 +1469,21 @@ Expression FieldOrIndexAccessor()throws ParseException:
 Identifier Field() throws ParseException:
 {
   Identifier ident = null;
-
+  Token t;
 }
 {
-  "." < IDENTIFIER >
+  "." (t = < IDENTIFIER > | t = <STRING_LITERAL>)
   	{
     
   	ident = new Identifier();
-	ident.setValue(getToken(0).toString());
+  	String image = t.image.trim();
+  	if (image.startsWith("\"") || image.startsWith("'")) {
+  	    image = image.substring(1);
+  	}
+  	if (image.endsWith("\"") || image.endsWith("'")) {
+  	    image = image.substring(0, image.length() - 1);
+  	}
+	ident.setValue(image);
 
 	  return ident;
 	}

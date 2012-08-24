@@ -58,7 +58,7 @@ public class NonTaggedFieldAccessByNameResultType implements IResultTypeComputer
                 return (ARecordType) type0;
             }
             case ANY: {
-                throw new NotImplementedException();
+                return new ARecordType("UNKNOWN", new String[] { }, new IAType[] { }, true);
             }
             case UNION: {
                 AUnionType u = (AUnionType) type0;
