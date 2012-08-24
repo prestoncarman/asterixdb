@@ -18,9 +18,9 @@ package edu.uci.ics.asterix.metadata.bootstrap;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 import java.util.logging.Logger;
 
 import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
@@ -84,7 +84,7 @@ public class MetadataBootstrap {
 
     private static String metadataNodeName;
     private static String metadataStore;
-    private static HashSet<String> nodeNames;
+    private static Set<String> nodeNames;
     private static String outputDir;
 
     private static final Logger LOGGER = Logger.getLogger(MetadataBootstrap.class.getName());

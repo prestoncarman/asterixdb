@@ -147,5 +147,6 @@ public class CCBootstrapImpl implements ICCBootstrap {
             throw new Exception("No nodes found in node name map.");
         }
         AsterixProperties.INSTANCE.setMetadataNodeName(iter.next());
+        AsterixProperties.INSTANCE.setNodeNames(nodeNames);
     }
 }

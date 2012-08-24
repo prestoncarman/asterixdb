@@ -22,9 +22,9 @@ import java.io.InputStream;
 import java.io.Serializable;
 import java.util.Enumeration;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.logging.Logger;
 
 import edu.uci.ics.asterix.common.config.GlobalConfig;
@@ -37,16 +37,16 @@ import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 public class AsterixProperties implements Serializable {
 
     private static final Logger LOGGER = Logger.getLogger(MetadataBootstrap.class.getName());
-    
+
     private static final long serialVersionUID = 1L;
     private Boolean isNewUniverse;
-    private HashSet<String> nodeNames;
+    private Set<String> nodeNames;
     private Map<String, String[]> stores;
     // If set, then these are the stores for ALL nodes, otherwise consult stores.
     private String[] allStores;
     private String outputDir;
     private String metadataNodeName;
-    
+
     public static final AsterixProperties INSTANCE = new AsterixProperties();
 
     private AsterixProperties() {
@@ -104,8 +104,6 @@ public class AsterixProperties implements Serializable {
                 val = p.getProperty(pn);
                 String[] folderNames = val.split("\\s*,\\s*");
                 stores.put(ncName, folderNames);
-                nodeNames = new HashSet<String>();
-                nodeNames.addAll(stores.keySet());
             }
         }
         if (!newUniverseChosen)
@@ -123,23 +121,27 @@ public class AsterixProperties implements Serializable {
             return stores.get(nodeName);
         }
     }
-    
-    public HashSet<String> getNodeNames() {
+
+    public Set<String> getNodeNames() {
         return nodeNames;
     }
 
-    public  String getOutputDir() {
+    public String getOutputDir() {
         return outputDir;
     }
-    
+
     public String getMetadataStore() {
         return getStores(metadataNodeName)[0];
     }
-    
+
     public String getMetadataNodeName() {
         return metadataNodeName;
     }
-    
+
+    public void setNodeNames(Set<String> nodeNames) {
+        this.nodeNames = nodeNames;
+    }
+
     public void setMetadataNodeName(String nodeName) {
         metadataNodeName = nodeName;
     }
