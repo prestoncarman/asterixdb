@@ -19,7 +19,6 @@ import edu.uci.ics.asterix.common.annotations.TypeDataGen;
 import edu.uci.ics.asterix.metadata.MetadataException;
 import edu.uci.ics.asterix.metadata.MetadataManager;
 import edu.uci.ics.asterix.metadata.MetadataTransactionContext;
-import edu.uci.ics.asterix.metadata.bootstrap.AsterixProperties;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
 import edu.uci.ics.asterix.metadata.entities.AsterixBuiltinTypeMap;
 import edu.uci.ics.asterix.metadata.entities.Datatype;
@@ -63,8 +62,7 @@ public final class MetadataDeclTranslator {
             }
         }
         Map<String, IAType> typeMap = computeTypes();
-        Map<String, String[]> stores = AsterixProperties.INSTANCE.getStores();
-        return new AqlCompiledMetadataDeclarations(mdTxnCtx, dataverseName, outputFile, config, stores, typeMap,
+        return new AqlCompiledMetadataDeclarations(mdTxnCtx, dataverseName, outputFile, config, typeMap,
                 typeDataGenMap, writerFactory, online);
     }
 

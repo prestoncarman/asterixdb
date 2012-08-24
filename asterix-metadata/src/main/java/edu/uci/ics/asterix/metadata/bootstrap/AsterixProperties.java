@@ -40,8 +40,10 @@ public class AsterixProperties implements Serializable {
     private static Boolean isNewUniverse;
     private static HashSet<String> nodeNames;
     private static Map<String, String[]> stores;
-    private static String outputDir;
-
+    // If set, then these are the stores for ALL nodes, otherwise consult stores.
+    private static String[] allStores;
+    private static String outputDir;    
+    
     public static AsterixProperties INSTANCE = new AsterixProperties();
 
     private AsterixProperties() {
@@ -92,6 +94,9 @@ public class AsterixProperties implements Serializable {
             } else if (pn.equals("OutputDir")) {
                 val = p.getProperty(pn);
                 outputDir = val;
+            } else if (pn.equals("AllStores")) {
+                val = p.getProperty(pn);
+                allStores = val.split("\\s*,\\s*");
             } else {
                 String ncName = pn.substring(0, pn.indexOf('.'));
                 val = p.getProperty(pn);
@@ -119,10 +124,14 @@ public class AsterixProperties implements Serializable {
         return stores.get(metadataNodeName)[0];
     }
 
-    public Map<String, String[]> getStores() {
-        return stores;
+    public String[] getStores(String nodeName) {
+        if (allStores != null) {
+            return allStores;
+        } else {
+            return stores.get(nodeName);
+        }
     }
-
+    
     public HashSet<String> getNodeNames() {
         return nodeNames;
     }

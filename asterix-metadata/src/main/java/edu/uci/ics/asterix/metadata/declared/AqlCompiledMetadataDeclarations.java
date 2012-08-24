@@ -19,6 +19,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.logging.Logger;
 
 import edu.uci.ics.asterix.common.annotations.TypeDataGen;
@@ -55,7 +56,6 @@ public class AqlCompiledMetadataDeclarations {
     private final MetadataTransactionContext mdTxnCtx;
     private String dataverseName = null;
     private FileSplit outputFile;
-    private Map<String, String[]> stores;
     private IDataFormat format;
     private Map<String, String> config;
 
@@ -67,17 +67,12 @@ public class AqlCompiledMetadataDeclarations {
     private boolean isConnected = false;
 
     public AqlCompiledMetadataDeclarations(MetadataTransactionContext mdTxnCtx, String dataverseName,
-            FileSplit outputFile, Map<String, String> config, Map<String, String[]> stores, Map<String, IAType> types,
+            FileSplit outputFile, Map<String, String> config, Map<String, IAType> types,
             Map<String, TypeDataGen> typeDataGenMap, IAWriterFactory writerFactory, boolean online) {
         this.mdTxnCtx = mdTxnCtx;
         this.dataverseName = dataverseName;
         this.outputFile = outputFile;
         this.config = config;
-        if (stores == null && online) {
-            this.stores = AsterixProperties.INSTANCE.getStores();
-        } else {
-            this.stores = stores;
-        }
         this.types = types;
         this.typeDataGenMap = typeDataGenMap;
         this.writerFactory = writerFactory;
@@ -164,11 +159,7 @@ public class AqlCompiledMetadataDeclarations {
     }
 
     public String[] getStores(String nodeName) {
-        return stores.get(nodeName);
-    }
-
-    public Map<String, String[]> getAllStores() {
-        return stores;
+        return AsterixProperties.INSTANCE.getStores(nodeName);
     }
 
     public Dataset findDataset(String datasetName) throws AlgebricksException {
@@ -180,13 +171,13 @@ public class AqlCompiledMetadataDeclarations {
     }
 
     public List<Index> getDatasetIndexes(String dataverseName, String datasetName) throws AlgebricksException {
-    	try {
+        try {
             return metadataManager.getDatasetIndexes(mdTxnCtx, dataverseName, datasetName);
         } catch (MetadataException e) {
             throw new AlgebricksException(e);
         }
     }
-    
+
     public Index getDatasetPrimaryIndex(String dataverseName, String datasetName) throws AlgebricksException {
         try {
             return metadataManager.getIndex(mdTxnCtx, dataverseName, datasetName, datasetName);
@@ -202,7 +193,7 @@ public class AqlCompiledMetadataDeclarations {
             throw new AlgebricksException(e);
         }
     }
-    
+
     public void setOutputFile(FileSplit outputFile) {
         this.outputFile = outputFile;
     }
@@ -250,11 +241,15 @@ public class AqlCompiledMetadataDeclarations {
 
         List<FileSplit> splitArray = new ArrayList<FileSplit>();
         for (String nd : nodeGroup) {
-            String[] nodeStores = stores.get(nd);
+            String[] nodeStores = AsterixProperties.INSTANCE.getStores(nd);            
             if (nodeStores == null) {
                 LOGGER.warning("Node " + nd + " has no stores.");
                 throw new AlgebricksException("Node " + nd + " has no stores.");
             } else {
+                System.out.println("NODE STORES: ");
+                for (String s : nodeStores) {
+                    System.out.println(s);
+                }
                 for (int j = 0; j < nodeStores.length; j++) {
                     File f = new File(nodeStores[j] + File.separator + relPathFile);
                     splitArray.add(new FileSplit(nd, new FileReference(f)));
@@ -288,4 +283,9 @@ public class AqlCompiledMetadataDeclarations {
     public MetadataTransactionContext getMetadataTransactionContext() {
         return mdTxnCtx;
     }
+
+    public Set<String> getNodeNames() {
+        return AsterixProperties.INSTANCE.getNodeNames();
+    }
+
 }

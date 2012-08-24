@@ -101,8 +101,7 @@ public class APIClientThread extends Thread {
         // tmpdir which can be overridden
         // Also, use milliseconds in path name of output file to differentiate
         // queries
-        Map<String, String[]> storesMap = AsterixProperties.INSTANCE.getStores();
-        String[] outputStores = storesMap.get(outputNodeName);
+        String[] outputStores = AsterixProperties.INSTANCE.getStores(outputNodeName);
         if (outputStores.length > 0) {
             outputFilePath = outputStores[0] + System.currentTimeMillis() + ".adm";
         } else {
