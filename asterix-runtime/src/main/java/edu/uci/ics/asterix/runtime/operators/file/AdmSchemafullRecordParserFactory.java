@@ -255,7 +255,6 @@ public class AdmSchemafullRecordParserFactory implements ITupleParserFactory {
                         parseConstructor(ATypeTag.INT16, objectType, out);
                         break;
                     }
-                    case AdmLexerConstants.INT_LITERAL:
                     case AdmLexerConstants.INT32_LITERAL: {
                         if (checkType(ATypeTag.INT32, objectType, out)) {
                             parseInt32(token.image, out);
@@ -267,6 +266,7 @@ public class AdmSchemafullRecordParserFactory implements ITupleParserFactory {
                         parseConstructor(ATypeTag.INT32, objectType, out);
                         break;
                     }
+                    case AdmLexerConstants.INT_LITERAL:
                     case AdmLexerConstants.INT64_LITERAL: {
                         if (checkType(ATypeTag.INT64, objectType, out)) {
                             parseInt64(token.image, out);
