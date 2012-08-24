@@ -39,15 +39,15 @@ public class AsterixProperties implements Serializable {
     private static final Logger LOGGER = Logger.getLogger(MetadataBootstrap.class.getName());
     
     private static final long serialVersionUID = 1L;
-    private static Boolean isNewUniverse;
-    private static HashSet<String> nodeNames;
-    private static Map<String, String[]> stores;
+    private Boolean isNewUniverse;
+    private HashSet<String> nodeNames;
+    private Map<String, String[]> stores;
     // If set, then these are the stores for ALL nodes, otherwise consult stores.
-    private static String[] allStores;
-    private static String outputDir;
-    private static String metadataNodeName;
+    private String[] allStores;
+    private String outputDir;
+    private String metadataNodeName;
     
-    public static AsterixProperties INSTANCE = new AsterixProperties();
+    public static final AsterixProperties INSTANCE = new AsterixProperties();
 
     private AsterixProperties() {
         try {
@@ -140,7 +140,7 @@ public class AsterixProperties implements Serializable {
         return metadataNodeName;
     }
     
-    public static void setMetadataNodeName(String nodeName) {
+    public void setMetadataNodeName(String nodeName) {
         metadataNodeName = nodeName;
     }
 }

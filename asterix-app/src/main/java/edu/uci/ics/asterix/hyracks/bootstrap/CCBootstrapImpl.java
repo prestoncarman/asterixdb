@@ -59,14 +59,15 @@ public class CCBootstrapImpl implements ICCBootstrap {
             LOGGER.info("Starting Asterix cluster controller");
         }
 
-        // Set the AsterixStateProxy to be the distributed object
-        proxy = AsterixStateProxy.registerRemoteObject();
-        proxy.setAsterixProperties(AsterixProperties.INSTANCE);
-        appCtx.setDistributedState(proxy);
         setNodeNameMap();
         
         // Create the metadata manager
         setMetadataNodeName();
+
+        // Set the AsterixStateProxy to be the distributed object
+        proxy = AsterixStateProxy.registerRemoteObject();
+        proxy.setAsterixProperties(AsterixProperties.INSTANCE);
+        appCtx.setDistributedState(proxy);
         MetadataManager.INSTANCE = new MetadataManager(proxy);
 
         // Setup and start the web interface
@@ -145,6 +146,6 @@ public class CCBootstrapImpl implements ICCBootstrap {
         if (!iter.hasNext()) {
             throw new Exception("No nodes found in node name map.");
         }
-        AsterixProperties.setMetadataNodeName(iter.next());
+        AsterixProperties.INSTANCE.setMetadataNodeName(iter.next());
     }
 }
