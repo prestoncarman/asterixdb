@@ -31,6 +31,7 @@ import org.eclipse.jetty.servlet.ServletHolder;
 import edu.uci.ics.asterix.api.aqlj.server.APIClientThreadFactory;
 import edu.uci.ics.asterix.api.aqlj.server.ThreadedServer;
 import edu.uci.ics.asterix.api.http.servlet.APIServlet;
+import edu.uci.ics.asterix.api.http.servlet.QueryServlet;
 import edu.uci.ics.asterix.common.config.GlobalConfig;
 import edu.uci.ics.asterix.metadata.MetadataManager;
 import edu.uci.ics.asterix.metadata.api.IAsterixStateProxy;
@@ -48,11 +49,12 @@ public class CCBootstrapImpl implements ICCBootstrap {
     private static final int DEFAULT_API_NODEDATA_SERVER_PORT = 14601;
 
     private Server webServer;
+    private Server queryWebServer;
     private static IAsterixStateProxy proxy;
     private ICCApplicationContext appCtx;
     private ThreadedServer apiServer;
     private Map<String, Set<String>> nodeNameMap;
-    
+
     @Override
     public void start() throws Exception {
         if (LOGGER.isLoggable(Level.INFO)) {
@@ -60,7 +62,7 @@ public class CCBootstrapImpl implements ICCBootstrap {
         }
 
         setNodeNameMap();
-        
+
         // Create the metadata manager
         setMetadataNodeName();
 
@@ -74,6 +76,9 @@ public class CCBootstrapImpl implements ICCBootstrap {
         setupWebServer();
         webServer.start();
 
+        setupQueryWebServer();
+        queryWebServer.start();
+
         // Setup and start the API server
         setupAPIServer();
         apiServer.start();
@@ -85,7 +90,7 @@ public class CCBootstrapImpl implements ICCBootstrap {
             LOGGER.info("Stopping Asterix cluster controller");
         }
         AsterixStateProxy.unregisterRemoteObject();
-        
+
         webServer.stop();
         apiServer.shutdown();
     }
@@ -103,7 +108,7 @@ public class CCBootstrapImpl implements ICCBootstrap {
             throw new IOException("Unable to obtain IP address node map", e);
         }
     }
-    
+
     private void setupWebServer() throws Exception {
         String portStr = System.getProperty(GlobalConfig.WEB_SERVER_PORT_PROPERTY);
         int port = DEFAULT_WEB_SERVER_PORT;
@@ -116,6 +121,20 @@ public class CCBootstrapImpl implements ICCBootstrap {
         context.setContextPath("/");
         webServer.setHandler(context);
         context.addServlet(new ServletHolder(new APIServlet()), "/*");
+    }
+
+    private void setupQueryWebServer() throws Exception {
+        String portStr = System.getProperty(GlobalConfig.WEB_SERVER_PORT_PROPERTY);
+        int port = DEFAULT_WEB_SERVER_PORT + 1;
+        if (portStr != null) {
+            port = Integer.parseInt(portStr) + 1;
+        }
+        queryWebServer = new Server(port);
+
+        ServletContextHandler context = new ServletContextHandler(ServletContextHandler.SESSIONS);
+        context.setContextPath("/");
+        queryWebServer.setHandler(context);
+        context.addServlet(new ServletHolder(new QueryServlet()), "/*");
     }
 
     private void setupAPIServer() throws Exception {
@@ -133,7 +152,7 @@ public class CCBootstrapImpl implements ICCBootstrap {
 
         apiServer = new ThreadedServer(DEFAULT_API_SERVER_PORT, new APIClientThreadFactory(appCtx));
     }
-    
+
     /**
      * Use node with lowest sorting name as the metadata node.
      */

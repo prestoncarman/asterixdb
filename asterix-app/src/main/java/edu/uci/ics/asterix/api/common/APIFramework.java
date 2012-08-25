@@ -558,11 +558,7 @@ public class APIFramework {
         for (int i = 0; i < specs.length; i++) {
             specs[i].setMaxReattempts(0);
             JobId jobId = hcc.startJob(GlobalConfig.HYRACKS_APP_NAME, specs[i]);
-            long startTime = System.currentTimeMillis();
             hcc.waitForCompletion(jobId);
-            long endTime = System.currentTimeMillis();
-            double duration = (endTime - startTime) / 1000.00;
-            out.println("<PRE>Duration: " + duration + "</PRE>");
         }
 
     }
