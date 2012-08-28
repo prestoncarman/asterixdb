@@ -15,6 +15,7 @@
 
 package edu.uci.ics.asterix.metadata.bootstrap;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -99,17 +100,35 @@ public class AsterixProperties implements Serializable {
             } else if (pn.equals("AllStores")) {
                 val = p.getProperty(pn);
                 allStores = val.split("\\s*,\\s*");
+                addSeparatorChar(allStores);
             } else {
                 String ncName = pn.substring(0, pn.indexOf('.'));
                 val = p.getProperty(pn);
                 String[] folderNames = val.split("\\s*,\\s*");
+                addSeparatorChar(folderNames);
                 stores.put(ncName, folderNames);
             }
         }
         if (!newUniverseChosen)
             throw new AlgebricksException("You need to specify whether or not you want to start a new universe!");
     }
-
+    
+    /**
+     * Adds a trailing path separator at the end of path if necessary.
+     */
+    private String addSeparatorChar(String path) {
+        if (path.charAt(path.length() - 1) != File.separatorChar) {
+            return path + File.separatorChar;
+        }
+        return path;
+    }
+    
+    private void addSeparatorChar(String[] paths) {
+        for (int i = 0; i < paths.length; i++) {
+            paths[i] = addSeparatorChar(paths[i]);
+        }
+    }
+    
     public Boolean isNewUniverse() {
         return isNewUniverse;
     }
