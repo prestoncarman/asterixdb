@@ -4,7 +4,7 @@ import java.util.Stack;
 
 import edu.uci.ics.asterix.aql.context.Scope;
 import edu.uci.ics.asterix.aql.expression.Identifier;
-import edu.uci.ics.asterix.om.functions.FunctionSignature;
+import edu.uci.ics.asterix.common.functions.FunctionSignature;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.Counter;
 
 public abstract class ScopeChecker {

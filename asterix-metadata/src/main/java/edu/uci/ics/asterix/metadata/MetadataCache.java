@@ -20,13 +20,15 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import edu.uci.ics.asterix.common.functions.FunctionSignature;
+import edu.uci.ics.asterix.external.dataset.adapter.AdapterIdentifier;
 import edu.uci.ics.asterix.metadata.api.IMetadataEntity;
+import edu.uci.ics.asterix.metadata.entities.Adapter;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
 import edu.uci.ics.asterix.metadata.entities.Datatype;
 import edu.uci.ics.asterix.metadata.entities.Dataverse;
 import edu.uci.ics.asterix.metadata.entities.Function;
 import edu.uci.ics.asterix.metadata.entities.NodeGroup;
-import edu.uci.ics.asterix.om.functions.FunctionSignature;
 
 /**
  * Caches metadata entities such that the MetadataManager does not have to
@@ -45,6 +47,8 @@ public class MetadataCache {
     protected final Map<String, NodeGroup> nodeGroups = new HashMap<String, NodeGroup>();
     // Key is function Identifier . Key of value map is function name.
     protected final Map<FunctionSignature, Function> functions = new HashMap<FunctionSignature, Function>();
+    // Key is adapter Identifier.  
+    protected final Map<AdapterIdentifier, Adapter> adapters = new HashMap<AdapterIdentifier, Adapter>();
 
     // Atomically executes all metadata operations in ctx's log.
     public void commit(MetadataTransactionContext ctx) {
@@ -269,8 +273,8 @@ public class MetadataCache {
 
     public Object addFunctionIfNotExists(Function function) {
         synchronized (functions) {
-            FunctionSignature signature = new FunctionSignature(function.getDataverseName(),
-                    function.getName(), function.getParams().size());
+            FunctionSignature signature = new FunctionSignature(function.getDataverseName(), function.getName(),
+                    function.getParams().size());
             Function fun = functions.get(signature);
             if (fun == null) {
                 return functions.put(signature, function);
@@ -281,13 +285,32 @@ public class MetadataCache {
 
     public Object dropFunction(Function function) {
         synchronized (functions) {
-            FunctionSignature signature = new FunctionSignature(function.getDataverseName(),
-                    function.getName(), function.getParams().size());
+            FunctionSignature signature = new FunctionSignature(function.getDataverseName(), function.getName(),
+                    function.getParams().size());
             Function fun = functions.get(signature);
             if (fun == null) {
                 return null;
             }
             return functions.remove(signature);
+        }
+    }
+
+    public Object addAdapterIfNotExists(Adapter adapter) {
+        synchronized (adapters) {
+            Adapter adapterObject = adapters.get(adapter.getAdapterIdentifier());
+            if (adapterObject != null) {
+                return adapters.put(adapter.getAdapterIdentifier(), adapter);
+            }
+            return null;
+        }
+    }
+
+    public Object dropAdapter(Adapter adapter) {
+        synchronized (adapters) {
+            if (adapters.get(adapter.getAdapterIdentifier()) != null) {
+                return adapters.remove(adapter.getAdapterIdentifier());
+            }
+            return null;
         }
     }
 }

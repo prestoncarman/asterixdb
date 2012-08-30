@@ -18,8 +18,10 @@ package edu.uci.ics.asterix.metadata.api;
 import java.rmi.RemoteException;
 import java.util.List;
 
+import edu.uci.ics.asterix.common.functions.FunctionSignature;
 import edu.uci.ics.asterix.metadata.MetadataException;
 import edu.uci.ics.asterix.metadata.MetadataTransactionContext;
+import edu.uci.ics.asterix.metadata.entities.Adapter;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
 import edu.uci.ics.asterix.metadata.entities.Datatype;
 import edu.uci.ics.asterix.metadata.entities.Dataverse;
@@ -27,7 +29,6 @@ import edu.uci.ics.asterix.metadata.entities.Function;
 import edu.uci.ics.asterix.metadata.entities.Index;
 import edu.uci.ics.asterix.metadata.entities.Node;
 import edu.uci.ics.asterix.metadata.entities.NodeGroup;
-import edu.uci.ics.asterix.om.functions.FunctionSignature;
 import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
 
 /**
@@ -385,6 +386,40 @@ public interface IMetadataManager {
      */
     public void dropFunction(MetadataTransactionContext ctx, FunctionSignature functionSignature)
             throws MetadataException;
+
+    /**
+     * @param mdTxnCtx
+     *            MetadataTransactionContext of an active metadata transaction.
+     * @param function
+     *            An instance of type Adapter that represents the adapter being
+     *            added
+     * @throws MetadataException
+     */
+    public void addAdapter(MetadataTransactionContext mdTxnCtx, Adapter adapter) throws MetadataException;
+
+    /**
+     * @param ctx
+     *            MetadataTransactionContext of an active metadata transaction.
+     * @param dataverseName
+     *            the dataverse associated with the adapter being searched
+     * @param Name
+     *            name of the adapter
+     * @return
+     * @throws MetadataException
+     */
+    public Adapter getAdapter(MetadataTransactionContext ctx, String dataverseName, String name)
+            throws MetadataException;
+
+    /**
+     * @param ctx
+     *            MetadataTransactionContext of an active metadata transaction.
+     * @param dataverseName
+     *            the dataverse associated with the adapter being dropped
+     * @param name
+     *            name of the adapter
+     * @throws MetadataException
+     */
+    public void dropAdapter(MetadataTransactionContext ctx, String dataverseName, String name) throws MetadataException;
 
     /**
      * @param ctx

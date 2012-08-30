@@ -43,6 +43,7 @@ public final class MetadataRecordTypes {
     public static ARecordType NODE_RECORDTYPE;
     public static ARecordType NODEGROUP_RECORDTYPE;
     public static ARecordType FUNCTION_RECORDTYPE;
+    public static ARecordType ADAPTER_RECORDTYPE;
 
     /**
      * Create all metadata record types.
@@ -70,6 +71,7 @@ public final class MetadataRecordTypes {
         NODE_RECORDTYPE = createNodeRecordType();
         NODEGROUP_RECORDTYPE = createNodeGroupRecordType();
         FUNCTION_RECORDTYPE = createFunctionRecordType();
+        ADAPTER_RECORDTYPE = createAdapterRecordType();
 
     }
 
@@ -321,4 +323,18 @@ public final class MetadataRecordTypes {
                 BuiltinType.ASTRING };
         return new ARecordType("FunctionRecordType", fieldNames, fieldTypes, true);
     }
+
+    public static final int ADAPTER_ARECORD_DATAVERSENAME_FIELD_INDEX = 0;
+    public static final int ADAPTER_ARECORD_ADAPTERNAME_FIELD_INDEX = 1;
+    public static final int ADAPTER_ARECORD_ADAPTERCLASSNAME_FIELD_INDEX = 2;
+    public static final int ADAPTER_ARECORD_ADAPTERTYPE_FIELD_INDEX = 3;
+    public static final int ADAPTER_ARECORD_ADAPTER_TIMESTAMP_FIELD_INDEX = 4;
+
+    private static ARecordType createAdapterRecordType() {
+        String[] fieldNames = { "DataverseName", "Name", "Classname", "Type", "Timestamp" };
+        IAType[] fieldTypes = { BuiltinType.ASTRING, BuiltinType.ASTRING, BuiltinType.ASTRING, BuiltinType.ASTRING,
+                BuiltinType.ASTRING };
+        return new ARecordType("AdapterRecordType", fieldNames, fieldTypes, true);
+    }
+
 }

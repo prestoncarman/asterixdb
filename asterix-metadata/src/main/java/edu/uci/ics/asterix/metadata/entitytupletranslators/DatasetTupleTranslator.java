@@ -30,6 +30,7 @@ import edu.uci.ics.asterix.builders.IARecordBuilder;
 import edu.uci.ics.asterix.builders.RecordBuilder;
 import edu.uci.ics.asterix.common.config.DatasetConfig;
 import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
+import edu.uci.ics.asterix.common.functions.FunctionSignature;
 import edu.uci.ics.asterix.formats.nontagged.AqlSerializerDeserializerProvider;
 import edu.uci.ics.asterix.metadata.IDatasetDetails;
 import edu.uci.ics.asterix.metadata.bootstrap.MetadataPrimaryIndexes;
@@ -142,13 +143,20 @@ public class DatasetTupleTranslator extends AbstractTupleTranslator<Dataset> {
                     String functionIdentifier = ((AString) datasetDetailsRecord
                             .getValueByPos(MetadataRecordTypes.FEED_DETAILS_ARECORD_FUNCTION_FIELD_INDEX))
                             .getStringValue();
+                    String[] nameComponents1 = functionIdentifier.split(".");
+                    String functionDataverse = nameComponents1[0];
+                    String[] nameComponents2 = nameComponents1[1].split("@");
+                    String functionName = nameComponents2[0];
+                    FunctionSignature signature = new FunctionSignature(functionDataverse, functionName,
+                            Integer.parseInt(nameComponents2[1]));
 
                     String feedState = ((AString) datasetDetailsRecord
                             .getValueByPos(MetadataRecordTypes.FEED_DETAILS_ARECORD_STATE_FIELD_INDEX))
                             .getStringValue();
 
                     datasetDetails = new FeedDatasetDetails(fileStructure, partitioningStrategy, partitioningKey,
-                            partitioningKey, groupName, adapter, properties, functionIdentifier, feedState);
+                            partitioningKey, groupName, adapter, properties, signature, feedState);
+
                 }
                 break;
             }

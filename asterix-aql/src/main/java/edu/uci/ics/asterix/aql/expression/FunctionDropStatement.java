@@ -4,7 +4,7 @@ import edu.uci.ics.asterix.aql.base.Statement;
 import edu.uci.ics.asterix.aql.expression.visitor.IAqlExpressionVisitor;
 import edu.uci.ics.asterix.aql.expression.visitor.IAqlVisitorWithVoidReturn;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
-import edu.uci.ics.asterix.om.functions.FunctionSignature;
+import edu.uci.ics.asterix.common.functions.FunctionSignature;
 
 public class FunctionDropStatement implements Statement {
 

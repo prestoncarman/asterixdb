@@ -52,6 +52,7 @@ import edu.uci.ics.asterix.aql.expression.UnorderedListTypeDefinition;
 import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
 import edu.uci.ics.asterix.common.config.GlobalConfig;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
+import edu.uci.ics.asterix.common.functions.FunctionSignature;
 import edu.uci.ics.asterix.common.parse.IParseFileSplitsDecl;
 import edu.uci.ics.asterix.file.DatasetOperations;
 import edu.uci.ics.asterix.file.IndexOperations;
@@ -70,7 +71,6 @@ import edu.uci.ics.asterix.metadata.entities.Function;
 import edu.uci.ics.asterix.metadata.entities.Index;
 import edu.uci.ics.asterix.metadata.entities.InternalDatasetDetails;
 import edu.uci.ics.asterix.metadata.entities.NodeGroup;
-import edu.uci.ics.asterix.om.functions.FunctionSignature;
 import edu.uci.ics.asterix.om.types.AOrderedListType;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.ATypeTag;
@@ -148,6 +148,9 @@ public class DdlTranslator extends AbstractAqlTranslator {
                     DatasetDecl dd = (DatasetDecl) stmt;
                     String dataverseName = dd.getDataverse() == null ? compiledDeclarations.getDefaultDataverseName()
                             : dd.getDataverse().getValue();
+                    if (dataverseName == null) {
+                        throw new AlgebricksException(" dataverse not specified ");
+                    }
                     String datasetName = dd.getName().getValue();
                     DatasetType dsType = dd.getDatasetType();
                     String itemTypeName = dd.getItemTypeName().getValue();
@@ -197,14 +200,15 @@ public class DdlTranslator extends AbstractAqlTranslator {
                                     .getPartitioningExprs();
                             String ngName = ((FeedDetailsDecl) dd.getDatasetDetailsDecl()).getNodegroupName()
                                     .getValue();
-                            String adapter = ((FeedDetailsDecl) dd.getDatasetDetailsDecl()).getAdapterClassname();
-                            Map<String, String> properties = ((FeedDetailsDecl) dd.getDatasetDetailsDecl())
-                                    .getProperties();
-                            String functionIdentifier = ((FeedDetailsDecl) dd.getDatasetDetailsDecl())
-                                    .getFunctionIdentifier();
+                            String adapter = ((FeedDetailsDecl) dd.getDatasetDetailsDecl())
+                                    .getAdapterFactoryClassname();
+                            Map<String, String> configuration = ((FeedDetailsDecl) dd.getDatasetDetailsDecl())
+                                    .getConfiguration();
+                            FunctionSignature signature = ((FeedDetailsDecl) dd.getDatasetDetailsDecl())
+                                    .getFunctionSignature();
                             datasetDetails = new FeedDatasetDetails(InternalDatasetDetails.FileStructure.BTREE,
                                     InternalDatasetDetails.PartitioningStrategy.HASH, partitioningExprs,
-                                    partitioningExprs, ngName, adapter, properties, functionIdentifier,
+                                    partitioningExprs, ngName, adapter, configuration, signature,
                                     FeedDatasetDetails.FeedState.INACTIVE.toString());
                             break;
                         }
@@ -222,6 +226,9 @@ public class DdlTranslator extends AbstractAqlTranslator {
                     CreateIndexStatement stmtCreateIndex = (CreateIndexStatement) stmt;
                     String dataverseName = stmtCreateIndex.getDataverseName() == null ? compiledDeclarations
                             .getDefaultDataverseName() : stmtCreateIndex.getDataverseName().getValue();
+                    if (dataverseName == null) {
+                        throw new AlgebricksException(" dataverse not specified ");
+                    }
                     String datasetName = stmtCreateIndex.getDatasetName().getValue();
                     Dataset ds = MetadataManager.INSTANCE.getDataset(mdTxnCtx, dataverseName, datasetName);
                     if (ds == null) {
@@ -248,6 +255,9 @@ public class DdlTranslator extends AbstractAqlTranslator {
                     TypeDecl stmtCreateType = (TypeDecl) stmt;
                     String dataverseName = stmtCreateType.getDataverseName() == null ? compiledDeclarations
                             .getDefaultDataverseName() : stmtCreateType.getDataverseName().getValue();
+                    if (dataverseName == null) {
+                        throw new AlgebricksException(" dataverse not specified ");
+                    }
                     String typeName = stmtCreateType.getIdent().getValue();
                     Dataverse dv = MetadataManager.INSTANCE.getDataverse(mdTxnCtx, dataverseName);
                     if (dv == null) {
@@ -332,6 +342,9 @@ public class DdlTranslator extends AbstractAqlTranslator {
                     DropStatement stmtDelete = (DropStatement) stmt;
                     String dataverseName = stmtDelete.getDataverseName() == null ? compiledDeclarations
                             .getDefaultDataverseName() : stmtDelete.getDataverseName().getValue();
+                    if (dataverseName == null) {
+                        throw new AlgebricksException(" dataverse not specified ");
+                    }
                     String datasetName = stmtDelete.getDatasetName().getValue();
                     Dataset ds = MetadataManager.INSTANCE.getDataset(mdTxnCtx, dataverseName, datasetName);
                     if (ds == null) {
@@ -358,7 +371,9 @@ public class DdlTranslator extends AbstractAqlTranslator {
                     String datasetName = stmtIndexDrop.getDatasetName().getValue();
                     String dataverseName = stmtIndexDrop.getDataverseName() == null ? compiledDeclarations
                             .getDefaultDataverseName() : stmtIndexDrop.getDataverseName().getValue();
-
+                    if (dataverseName == null) {
+                        throw new AlgebricksException(" dataverse not specified ");
+                    }
                     Dataset ds = MetadataManager.INSTANCE.getDataset(mdTxnCtx, dataverseName, datasetName);
                     if (ds == null)
                         throw new AlgebricksException("There is no dataset with this name " + datasetName
@@ -381,6 +396,9 @@ public class DdlTranslator extends AbstractAqlTranslator {
                     TypeDropStatement stmtTypeDrop = (TypeDropStatement) stmt;
                     String dataverseName = stmtTypeDrop.getDataverseName() == null ? compiledDeclarations
                             .getDefaultDataverseName() : stmtTypeDrop.getDataverseName().getValue();
+                    if (dataverseName == null) {
+                        throw new AlgebricksException(" dataverse not specified ");
+                    }
                     String typeName = stmtTypeDrop.getTypeName().getValue();
                     Datatype dt = MetadataManager.INSTANCE.getDatatype(mdTxnCtx, dataverseName, typeName);
                     if (dt == null) {
@@ -404,7 +422,11 @@ public class DdlTranslator extends AbstractAqlTranslator {
 
                 case CREATE_FUNCTION: {
                     CreateFunctionStatement cfs = (CreateFunctionStatement) stmt;
-                    String dataverse = cfs.getSignature().getNamespace();
+                    String dataverse = cfs.getSignature().getNamespace() == null ? compiledDeclarations
+                            .getDefaultDataverseName() : cfs.getSignature().getNamespace();
+                    if (dataverse == null) {
+                        throw new AlgebricksException(" dataverse not specified ");
+                    }
                     Dataverse dv = MetadataManager.INSTANCE.getDataverse(mdTxnCtx, dataverse);
                     if (dv == null) {
                         throw new AlgebricksException("There is no dataverse with this name " + dataverse + ".");

@@ -30,6 +30,8 @@ import edu.uci.ics.asterix.metadata.MetadataManager;
 import edu.uci.ics.asterix.metadata.MetadataTransactionContext;
 import edu.uci.ics.asterix.metadata.api.IMetadataManager;
 import edu.uci.ics.asterix.metadata.bootstrap.AsterixProperties;
+import edu.uci.ics.asterix.metadata.bootstrap.MetadataConstants;
+import edu.uci.ics.asterix.metadata.entities.Adapter;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
 import edu.uci.ics.asterix.metadata.entities.Datatype;
 import edu.uci.ics.asterix.metadata.entities.Dataverse;
@@ -296,6 +298,18 @@ public class AqlCompiledMetadataDeclarations {
 
     public MetadataTransactionContext getMetadataTransactionContext() {
         return mdTxnCtx;
+    }
+
+    public Adapter getAdapter(String dataverseName, String adapterName) throws MetadataException {
+        Adapter adapter = null;
+        // search in default namespace (built-in adapter)
+        adapter = metadataManager.getAdapter(mdTxnCtx, MetadataConstants.METADATA_DATAVERSE_NAME, adapterName);
+
+        // search in dataverse (user-defined adapter)
+        if (adapter == null) {
+            adapter = metadataManager.getAdapter(mdTxnCtx, dataverseName, adapterName);
+        }
+        return adapter;
     }
 
 }

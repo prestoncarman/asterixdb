@@ -2,7 +2,7 @@ package edu.uci.ics.asterix.aql.context;
 
 import java.util.HashMap;
 
-import edu.uci.ics.asterix.om.functions.FunctionSignature;
+import edu.uci.ics.asterix.common.functions.FunctionSignature;
 
 public class FunctionExpressionMap extends HashMap<Integer, FunctionSignature> {
     /**

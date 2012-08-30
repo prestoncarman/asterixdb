@@ -40,7 +40,7 @@ import edu.uci.ics.asterix.aql.context.RootScopeFactory;
 import edu.uci.ics.asterix.common.annotations.*;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
 import edu.uci.ics.asterix.om.functions.AsterixFunction;
-import edu.uci.ics.asterix.om.functions.FunctionSignature;
+import edu.uci.ics.asterix.common.functions.FunctionSignature;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IExpressionAnnotation;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IndexedNLJoinExpressionAnnotation;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
@@ -612,7 +612,7 @@ FunctionDropStatement FunctionDropStatement() throws ParseException :
   }
   
    "@"
-  (<INTEGER_LITERAL>)? 
+  <INTEGER_LITERAL> 
   {  
      Token t= getToken(0);
 	 arity = new Integer(t.image);
@@ -727,30 +727,30 @@ DatasetDecl DatasetDeclaration(DatasetType datasetType) throws ParseException :
 InternalDetailsDecl InternalDatasetDeclaration() throws ParseException :
 {
     InternalDetailsDecl idd = null;
+    List<String> partitioningExprs = new ArrayList<String>();
+    Identifier nodeGroupName=null;
 }
 {
-  {
-    idd = new InternalDetailsDecl();
-  }
   "partitioned" "by" "key"
   < IDENTIFIER >
   {
-    	 idd.addPartitioningExpr(token.image);
+         partitioningExprs.add(token.image); 
   }
   (
     "," < IDENTIFIER >
     {
-      	idd.addPartitioningExpr(token.image);
+         partitioningExprs.add(token.image); 
     }
   )*
   (
   "on" < IDENTIFIER >
     {
-    	idd.setNodegroupName(new Identifier(token.image));
+        nodeGroupName = new Identifier(token.image);
     }
   )?
   ";"
   {
+    idd = new InternalDetailsDecl(nodeGroupName, partitioningExprs);
     return idd;
   }
 }
@@ -792,19 +792,23 @@ ExternalDetailsDecl ExternalDatasetDeclaration() throws ParseException :
 FeedDetailsDecl FeedDatasetDeclaration() throws ParseException :
 {
     FeedDetailsDecl fdd = null;
-    String adapterClassname = null;
+    String adapterFactoryClassname = null;
     Map < String, String > properties;
+	Pair<Identifier,Identifier> nameComponents;
+	List<String> partitioningExprs = new ArrayList<String>();
+    Identifier nodeGroupName=null;
+    String adapterFactoryClassName=null;
+    FunctionSignature appliedFunction=null;
+	String dataverse;
+	String functionName;
+	int arity;
 }
 {
-  {
-    fdd = new FeedDetailsDecl();
-  }
-  
    "using"
    
     <STRING_LITERAL>
     {
-      adapterClassname = removeQuotesAndEscapes(token.image);
+      adapterFactoryClassname = removeQuotesAndEscapes(token.image);
     }
 
     {
@@ -812,33 +816,42 @@ FeedDetailsDecl FeedDatasetDeclaration() throws ParseException :
     }
   
   ("apply" "function" 
-  < IDENTIFIER >
   {
-      fdd.setFunctionIdentifier(token.image);
+  nameComponents = getDotSeparatedPair();
+  dataverse = nameComponents.first != null ? nameComponents.first.getValue() : defaultDataverse;
+  functionName = nameComponents.second.getValue();
   }
+  ("@" <IDENTIFIER> 
+     {
+        arity = Integer.parseInt(token.image);
+     }
+  )
+  
+  {
+    appliedFunction = new FunctionSignature(dataverse, functionName, arity);
+  }   
   )?
   
   "partitioned" "by" "key"
   < IDENTIFIER >
   {
-    	 fdd.addPartitioningExpr(token.image);
+    	 partitioningExprs.add(token.image);
   }
   (
     "," < IDENTIFIER >
     {
-      	fdd.addPartitioningExpr(token.image);
+    	 partitioningExprs.add(token.image);
     }
   )*
   (
   "on" < IDENTIFIER >
   {
-    	fdd.setNodegroupName(new Identifier(token.image));
+    	nodeGroupName = new Identifier(token.image);
   }
   )?
   ";"
   {
-    fdd.setAdapterClassname(adapterClassname);
-    fdd.setProperties(properties);
+    fdd = new FeedDetailsDecl(adapterFactoryClassName, properties, appliedFunction, nodeGroupName, partitioningExprs);
     return fdd;
   }
 }

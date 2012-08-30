@@ -16,13 +16,13 @@ import edu.uci.ics.asterix.aql.expression.SetStatement;
 import edu.uci.ics.asterix.aql.expression.TypeDecl;
 import edu.uci.ics.asterix.aql.expression.WriteStatement;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
+import edu.uci.ics.asterix.common.functions.FunctionSignature;
 import edu.uci.ics.asterix.metadata.MetadataException;
 import edu.uci.ics.asterix.metadata.MetadataTransactionContext;
 import edu.uci.ics.asterix.metadata.bootstrap.MetadataConstants;
 import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
 import edu.uci.ics.asterix.metadata.entities.AsterixBuiltinArtifactMap;
 import edu.uci.ics.asterix.metadata.entities.AsterixBuiltinArtifactMap.ARTIFACT_KIND;
-import edu.uci.ics.asterix.om.functions.FunctionSignature;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import edu.uci.ics.hyracks.algebricks.data.IAWriterFactory;
 import edu.uci.ics.hyracks.algebricks.runtime.writers.PrinterBasedWriterFactory;
@@ -42,6 +42,10 @@ public abstract class AbstractAqlTranslator {
         for (Statement stmt : statements) {
             switch (stmt.getKind()) {
                 case TYPE_DECL: {
+                    if (defaultDataverse == null && ((TypeDecl) stmt).getDataverseName() == null) {
+                        throw new AsterixException(" Dataverse not specified for type:"
+                                + ((TypeDecl) stmt).getIdent().getValue());
+                    }
                     typeDeclarations.add((TypeDecl) stmt);
                     break;
                 }

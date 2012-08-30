@@ -1,4 +1,4 @@
-package edu.uci.ics.asterix.om.functions;
+package edu.uci.ics.asterix.common.functions;
 
 import java.io.Serializable;
 
@@ -12,7 +12,7 @@ public class FunctionSignature implements Serializable {
         this.namespace = namespace;
         this.name = name;
         this.arity = arity;
-        rep = namespace + ":" + name + "@" + arity;
+        rep = namespace + "." + name + "@" + arity;
     }
 
     public boolean equals(Object o) {

@@ -26,10 +26,14 @@ import java.util.logging.Logger;
 import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
 import edu.uci.ics.asterix.common.config.DatasetConfig.IndexType;
 import edu.uci.ics.asterix.common.context.AsterixAppRuntimeContext;
+import edu.uci.ics.asterix.common.functions.FunctionConstants;
+import edu.uci.ics.asterix.external.adapter.factory.IAdapterFactory;
+import edu.uci.ics.asterix.external.dataset.adapter.AdapterIdentifier;
 import edu.uci.ics.asterix.metadata.IDatasetDetails;
 import edu.uci.ics.asterix.metadata.MetadataManager;
 import edu.uci.ics.asterix.metadata.MetadataTransactionContext;
 import edu.uci.ics.asterix.metadata.api.IMetadataIndex;
+import edu.uci.ics.asterix.metadata.entities.Adapter;
 import edu.uci.ics.asterix.metadata.entities.AsterixBuiltinTypeMap;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
 import edu.uci.ics.asterix.metadata.entities.Datatype;
@@ -97,7 +101,8 @@ public class MetadataBootstrap {
         primaryIndexes = new IMetadataIndex[] { MetadataPrimaryIndexes.DATAVERSE_DATASET,
                 MetadataPrimaryIndexes.DATASET_DATASET, MetadataPrimaryIndexes.DATATYPE_DATASET,
                 MetadataPrimaryIndexes.INDEX_DATASET, MetadataPrimaryIndexes.NODE_DATASET,
-                MetadataPrimaryIndexes.NODEGROUP_DATASET, MetadataPrimaryIndexes.FUNCTION_DATASET };
+                MetadataPrimaryIndexes.NODEGROUP_DATASET, MetadataPrimaryIndexes.FUNCTION_DATASET,
+                MetadataPrimaryIndexes.ADAPTER_DATASET };
         secondaryIndexes = new IMetadataIndex[] { MetadataSecondaryIndexes.GROUPNAME_ON_DATASET_INDEX,
                 MetadataSecondaryIndexes.DATATYPENAME_ON_DATASET_INDEX,
                 MetadataSecondaryIndexes.DATATYPENAME_ON_DATATYPE_INDEX };
@@ -167,6 +172,7 @@ public class MetadataBootstrap {
                 insertInitialIndexes(mdTxnCtx);
                 insertNodes(mdTxnCtx);
                 insertInitialGroups(mdTxnCtx);
+                insertInitialAdapters(mdTxnCtx);
                 LOGGER.info("FINISHED CREATING METADATA B-TREES.");
             } else {
                 for (int i = 0; i < primaryIndexes.length; i++) {
@@ -303,6 +309,26 @@ public class MetadataBootstrap {
         NodeGroup defaultGroup = new NodeGroup(MetadataConstants.METADATA_DEFAULT_NODEGROUP_NAME, nodes);
         MetadataManager.INSTANCE.addNodegroup(mdTxnCtx, defaultGroup);
 
+    }
+
+    private static void insertInitialAdapters(MetadataTransactionContext mdTxnCtx) throws Exception {
+        String[] builtInAdapterClassNames = new String[] {
+                "edu.uci.ics.asterix.external.adapter.factory.NCFileSystemAdapterFactory",
+                "edu.uci.ics.asterix.external.adapter.factory.HDFSAdapterFactory",
+                "edu.uci.ics.asterix.external.adapter.factory.PullBasedTwitterAdapterFactory",
+                "edu.uci.ics.asterix.external.adapter.factory.RSSFeedAdapterFactory",
+                "edu.uci.ics.asterix.external.adapter.factory.CNNFeedAdapterFactory", };
+        Adapter adapter;
+        for (String adapterClassName : builtInAdapterClassNames) {
+            adapter = getAdapter(adapterClassName);
+            MetadataManager.INSTANCE.addAdapter(mdTxnCtx, adapter);
+        }
+    }
+
+    private static Adapter getAdapter(String adapterFactoryClassName) throws Exception {
+        String adapterName = ((IAdapterFactory) (Class.forName(adapterFactoryClassName).newInstance())).getName();
+        return new Adapter(new AdapterIdentifier(MetadataConstants.METADATA_DATAVERSE_NAME, adapterName), adapterFactoryClassName,
+                Adapter.AdapterType.INTERNAL);
     }
 
     public static void createIndex(IMetadataIndex dataset) throws Exception {

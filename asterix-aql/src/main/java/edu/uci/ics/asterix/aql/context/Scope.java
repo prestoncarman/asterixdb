@@ -5,8 +5,7 @@ import java.util.HashMap;
 import edu.uci.ics.asterix.aql.expression.Identifier;
 import edu.uci.ics.asterix.aql.expression.VarIdentifier;
 import edu.uci.ics.asterix.aql.parser.ScopeChecker;
-import edu.uci.ics.asterix.om.functions.FunctionSignature;
-import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
+import edu.uci.ics.asterix.common.functions.FunctionSignature;
 
 public final class Scope {
     private Scope parent;

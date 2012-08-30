@@ -16,16 +16,23 @@
 package edu.uci.ics.asterix.metadata.declared;
 
 import java.io.File;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
 import edu.uci.ics.asterix.common.config.GlobalConfig;
 import edu.uci.ics.asterix.common.dataflow.IAsterixApplicationContextInfo;
 import edu.uci.ics.asterix.common.parse.IParseFileSplitsDecl;
 import edu.uci.ics.asterix.dataflow.data.nontagged.valueproviders.AqlPrimitiveValueProviderFactory;
-import edu.uci.ics.asterix.external.data.adapter.api.IDatasourceAdapter;
-import edu.uci.ics.asterix.external.data.adapter.api.IDatasourceReadAdapter;
+import edu.uci.ics.asterix.external.adapter.factory.IExternalDatasetAdapterFactory;
+import edu.uci.ics.asterix.external.adapter.factory.IFeedDatasetAdapterFactory;
+import edu.uci.ics.asterix.external.adapter.factory.IFeedDatasetAdapterFactory.FeedAdapterType;
+import edu.uci.ics.asterix.external.adapter.factory.IGenericFeedDatasetAdapterFactory;
+import edu.uci.ics.asterix.external.adapter.factory.ITypedFeedDatasetAdapterFactory;
 import edu.uci.ics.asterix.external.data.operator.ExternalDataScanOperatorDescriptor;
+import edu.uci.ics.asterix.external.dataset.adapter.IDatasourceAdapter;
+import edu.uci.ics.asterix.external.dataset.adapter.IFeedDatasourceAdapter;
 import edu.uci.ics.asterix.feed.comm.IFeedMessage;
 import edu.uci.ics.asterix.feed.mgmt.FeedId;
 import edu.uci.ics.asterix.feed.operator.FeedIntakeOperatorDescriptor;
@@ -34,6 +41,9 @@ import edu.uci.ics.asterix.formats.base.IDataFormat;
 import edu.uci.ics.asterix.formats.nontagged.AqlBinaryComparatorFactoryProvider;
 import edu.uci.ics.asterix.formats.nontagged.AqlSerializerDeserializerProvider;
 import edu.uci.ics.asterix.formats.nontagged.AqlTypeTraitProvider;
+import edu.uci.ics.asterix.metadata.bootstrap.MetadataBootstrap;
+import edu.uci.ics.asterix.metadata.bootstrap.MetadataConstants;
+import edu.uci.ics.asterix.metadata.entities.Adapter;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
 import edu.uci.ics.asterix.metadata.entities.ExternalDatasetDetails;
 import edu.uci.ics.asterix.metadata.entities.FeedDatasetDetails;
@@ -94,6 +104,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
     private final long txnId;
     private boolean isWriteTransaction;
     private final AqlCompiledMetadataDeclarations metadata;
+    private static final Map<String, String> adapterFactoryMapping = initializeAdapterFactoryMapping();
 
     public AqlMetadataProvider(long txnId, boolean isWriteTransaction, AqlCompiledMetadataDeclarations metadata) {
         this.txnId = txnId;
@@ -163,9 +174,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         String itemTypeName = dataset.getItemTypeName();
         IAType itemType = metadata.findType(dataset.getDataverseName(), itemTypeName);
         if (dataSource instanceof ExternalFeedDataSource) {
-            FeedDatasetDetails datasetDetails = (FeedDatasetDetails) dataset.getDatasetDetails();
-            return buildFeedIntakeRuntime(jobSpec, metadata.getDefaultDataverseName(), dataset.getDatasetName(),
-                    itemType, datasetDetails, metadata.getFormat());
+            return buildFeedIntakeRuntime(jobSpec, dataset);
         } else {
             return buildExternalDataScannerRuntime(jobSpec, itemType,
                     (ExternalDatasetDetails) dataset.getDatasetDetails(), metadata.getFormat());
@@ -173,19 +182,39 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
     }
 
     @SuppressWarnings("rawtypes")
-    public static Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> buildExternalDataScannerRuntime(
+    public Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> buildExternalDataScannerRuntime(
             JobSpecification jobSpec, IAType itemType, ExternalDatasetDetails datasetDetails, IDataFormat format)
             throws AlgebricksException {
         if (itemType.getTypeTag() != ATypeTag.RECORD) {
             throw new AlgebricksException("Can only scan datasets of records.");
         }
 
-        IDatasourceReadAdapter adapter;
+        IExternalDatasetAdapterFactory adapterFactory;
+        IDatasourceAdapter adapter;
+        String adapterName;
+        Adapter adapterEntity;
+        String adapterFactoryClassname;
         try {
-            adapter = (IDatasourceReadAdapter) Class.forName(datasetDetails.getAdapter()).newInstance();
+            adapterName = datasetDetails.getAdapter();
+            adapterEntity = metadata.getAdapter(MetadataConstants.METADATA_DATAVERSE_NAME, adapterName);
+            if (adapterEntity != null) {
+                adapterFactoryClassname = adapterEntity.getClassname();
+                adapterFactory = (IExternalDatasetAdapterFactory) Class.forName(adapterFactoryClassname).newInstance();
+            } else {
+                adapterFactoryClassname = adapterFactoryMapping.get(adapterName);
+                if (adapterFactoryClassname == null) {
+                    throw new AlgebricksException(" Unknown adapter :" + adapterName);
+                }
+                adapterFactory = (IExternalDatasetAdapterFactory) Class.forName(adapterFactoryClassname).newInstance();
+            }
+
+            adapter = ((IExternalDatasetAdapterFactory) adapterFactory).createAdapter(datasetDetails.getProperties(),
+                    itemType);
+        } catch (AlgebricksException ae) {
+            throw ae;
         } catch (Exception e) {
             e.printStackTrace();
-            throw new AlgebricksException("unable to load the adapter class " + e);
+            throw new AlgebricksException("unable to load the adapter factory class " + e);
         }
 
         if (!(adapter.getAdapterType().equals(IDatasourceAdapter.AdapterType.READ) || adapter.getAdapterType().equals(
@@ -194,19 +223,12 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         }
         ARecordType rt = (ARecordType) itemType;
 
-        try {
-            adapter.configure(datasetDetails.getProperties(), itemType);
-        } catch (Exception e) {
-            e.printStackTrace();
-            throw new AlgebricksException("unable to configure the datasource adapter " + e);
-        }
-
         ISerializerDeserializer payloadSerde = format.getSerdeProvider().getSerializerDeserializer(itemType);
         RecordDescriptor scannerDesc = new RecordDescriptor(new ISerializerDeserializer[] { payloadSerde });
 
         ExternalDataScanOperatorDescriptor dataScanner = new ExternalDataScanOperatorDescriptor(jobSpec,
-                datasetDetails.getAdapter(), datasetDetails.getProperties(), rt, scannerDesc);
-        dataScanner.setDatasourceAdapter(adapter);
+                adapterFactoryClassname, datasetDetails.getProperties(), rt, scannerDesc);
+
         AlgebricksPartitionConstraint constraint = adapter.getPartitionConstraint();
         return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(dataScanner, constraint);
     }
@@ -235,36 +257,43 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
     }
 
     @SuppressWarnings("rawtypes")
-    public static Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> buildFeedIntakeRuntime(
-            JobSpecification jobSpec, String dataverse, String dataset, IAType itemType,
-            FeedDatasetDetails datasetDetails, IDataFormat format) throws AlgebricksException {
-        if (itemType.getTypeTag() != ATypeTag.RECORD) {
-            throw new AlgebricksException("Can only consume records.");
-        }
+    public Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> buildFeedIntakeRuntime(JobSpecification jobSpec,
+            Dataset dataset) throws AlgebricksException {
+
+        FeedDatasetDetails datasetDetails = (FeedDatasetDetails) dataset.getDatasetDetails();
+        Adapter adapterEntity;
         IDatasourceAdapter adapter;
+        IFeedDatasetAdapterFactory adapterFactory;
+        IAType adapterOutputType;
+
         try {
-            adapter = (IDatasourceAdapter) Class.forName(datasetDetails.getAdapter()).newInstance();
+            adapterEntity = metadata.getAdapter(null, datasetDetails.getAdapterFactory());
+            adapterFactory = (IFeedDatasetAdapterFactory) Class.forName(adapterEntity.getClassname()).newInstance();
+            if (adapterFactory.getFeedAdapterType().equals(FeedAdapterType.TYPED)) {
+                adapter = ((ITypedFeedDatasetAdapterFactory) adapterFactory).createAdapter(datasetDetails
+                        .getProperties());
+                adapterOutputType = ((IFeedDatasourceAdapter) adapter).getAdapterOutputType();
+            } else {
+                String outputTypeName = datasetDetails.getProperties().get(
+                        IGenericFeedDatasetAdapterFactory.KEY_TYPE_NAME);
+                adapterOutputType = metadata.findType(null, outputTypeName);
+                adapter = ((IGenericFeedDatasetAdapterFactory) adapterFactory).createAdapter(
+                        datasetDetails.getProperties(), adapterOutputType);
+            }
         } catch (Exception e) {
-            e.printStackTrace();
-            throw new AlgebricksException("unable to load the adapter class " + e);
+            throw new AlgebricksException(e);
         }
 
-        ARecordType rt = (ARecordType) itemType;
-        try {
-            adapter.configure(datasetDetails.getProperties(), itemType);
-        } catch (Exception e) {
-            e.printStackTrace();
-            throw new AlgebricksException("unable to configure the datasource adapter " + e);
-        }
-
-        ISerializerDeserializer payloadSerde = format.getSerdeProvider().getSerializerDeserializer(itemType);
+        ISerializerDeserializer payloadSerde = metadata.getFormat().getSerdeProvider()
+                .getSerializerDeserializer(adapterOutputType);
         RecordDescriptor feedDesc = new RecordDescriptor(new ISerializerDeserializer[] { payloadSerde });
 
-        FeedIntakeOperatorDescriptor feedIngestor = new FeedIntakeOperatorDescriptor(jobSpec, new FeedId(dataverse,
-                dataset), datasetDetails.getAdapter(), datasetDetails.getProperties(), rt, feedDesc);
+        FeedIntakeOperatorDescriptor feedIngestor = new FeedIntakeOperatorDescriptor(jobSpec, new FeedId(
+                dataset.getDataverseName(), dataset.getDatasetName()), adapterEntity.getClassname(),
+                datasetDetails.getProperties(), (ARecordType) adapterOutputType, feedDesc);
 
-        AlgebricksPartitionConstraint constraint = adapter.getPartitionConstraint();
-        return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(feedIngestor, constraint);
+        return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(feedIngestor,
+                adapter.getPartitionConstraint());
     }
 
     public static Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> buildFeedMessengerRuntime(
@@ -771,5 +800,20 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
     @Override
     public IFunctionInfo lookupFunction(FunctionIdentifier fid) {
         return AsterixBuiltinFunctions.lookupFunction(fid);
+    }
+
+    private static Map<String, String> initializeAdapterFactoryMapping() {
+        Map<String, String> adapterFactoryMapping = new HashMap<String, String>();
+        adapterFactoryMapping.put("edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter",
+                "edu.uci.ics.asterix.external.adapter.factory.NCFileSystemAdapterFactory");
+        adapterFactoryMapping.put("edu.uci.ics.asterix.external.dataset.adapter.HDFSAdapter",
+                "edu.uci.ics.asterix.external.adapter.factory.HDFSAdapterFactory");
+        adapterFactoryMapping.put("edu.uci.ics.asterix.external.dataset.adapter.PullBasedTwitterAdapter",
+                "edu.uci.ics.asterix.external.dataset.adapter.PullBasedTwitterAdapterFactory");
+        adapterFactoryMapping.put("edu.uci.ics.asterix.external.dataset.adapter.RSSFeedAdapter",
+                "edu.uci.ics.asterix.external.dataset.adapter..RSSFeedAdapterFactory");
+        adapterFactoryMapping.put("edu.uci.ics.asterix.external.dataset.adapter.CNNFeedAdapter",
+                "edu.uci.ics.asterix.external.dataset.adapter.CNNFeedAdapterFactory");
+        return adapterFactoryMapping;
     }
 }

@@ -20,7 +20,9 @@ import java.rmi.Remote;
 import java.rmi.RemoteException;
 import java.util.List;
 
+import edu.uci.ics.asterix.common.functions.FunctionSignature;
 import edu.uci.ics.asterix.metadata.MetadataException;
+import edu.uci.ics.asterix.metadata.entities.Adapter;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
 import edu.uci.ics.asterix.metadata.entities.Datatype;
 import edu.uci.ics.asterix.metadata.entities.Dataverse;
@@ -28,7 +30,6 @@ import edu.uci.ics.asterix.metadata.entities.Function;
 import edu.uci.ics.asterix.metadata.entities.Index;
 import edu.uci.ics.asterix.metadata.entities.Node;
 import edu.uci.ics.asterix.metadata.entities.NodeGroup;
-import edu.uci.ics.asterix.om.functions.FunctionSignature;
 import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
 
 /**
@@ -371,13 +372,13 @@ public interface IMetadataNode extends Remote, Serializable {
      * @param txnId
      *            A globally unique id for an active metadata transaction.
      * @param functionSignature
-     *           An instance of functionSignature representing the function 
+     *            An instance of functionSignature representing the function
      * @return
      * @throws MetadataException
      * @throws RemoteException
      */
-    public Function getFunction(long txnId, FunctionSignature functionSignature)
-            throws MetadataException, RemoteException;
+    public Function getFunction(long txnId, FunctionSignature functionSignature) throws MetadataException,
+            RemoteException;
 
     /**
      * Deletes a function , acquiring local locks on behalf of the given
@@ -386,14 +387,13 @@ public interface IMetadataNode extends Remote, Serializable {
      * @param txnId
      *            A globally unique id for an active metadata transaction.
      * @param functionSignature
-     *           An instance of functionSignature representing the function 
+     *            An instance of functionSignature representing the function
      * @throws MetadataException
      *             For example, there are still datasets partitioned on the node
      *             group to be deleted.
      * @throws RemoteException
      */
-    public void dropFunction(long txnId,  FunctionSignature functionSignature)
-            throws MetadataException, RemoteException;
+    public void dropFunction(long txnId, FunctionSignature functionSignature) throws MetadataException, RemoteException;
 
     /**
      * @param txnId
@@ -408,13 +408,43 @@ public interface IMetadataNode extends Remote, Serializable {
     public void addFunction(long txnId, Function function) throws MetadataException, RemoteException;
 
     /**
-     * 
      * @param ctx
      * @param dataverseName
      * @return
      * @throws MetadataException
      * @throws RemoteException
      */
-    public List<Function> getDataverseFunctions(long txnId, String dataverseName)
-            throws MetadataException, RemoteException;
+    public List<Function> getDataverseFunctions(long txnId, String dataverseName) throws MetadataException,
+            RemoteException;
+
+    public Adapter getAdapter(long txnId, String dataverseName, String adapterName) throws MetadataException,
+            RemoteException;
+
+    /**
+     * Deletes a adapter , acquiring local locks on behalf of the given
+     * transaction id.
+     * 
+     * @param txnId
+     *            A globally unique id for an active metadata transaction.
+     * @param dataverseName
+     *            dataverse asociated with the adapter that is to be deleted.
+     * @param adapterName
+     *            Name of adapter to be deleted. MetadataException for example,
+     *            if the adapter does not exists.
+     * @throws RemoteException
+     */
+    public void dropAdapter(long txnId, String dataverseName, String adapterName) throws MetadataException,
+            RemoteException;
+
+    /**
+     * @param txnId
+     *            A globally unique id for an active metadata transaction.
+     * @param adapter
+     *            Adapter to be inserted
+     * @throws MetadataException
+     *             for example, if the adapter already exists.
+     * @throws RemoteException
+     */
+    public void addAdapter(long txnId, Adapter adapter) throws MetadataException, RemoteException;
+
 }

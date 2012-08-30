@@ -18,10 +18,12 @@ package edu.uci.ics.asterix.metadata;
 import java.rmi.RemoteException;
 import java.util.List;
 
+import edu.uci.ics.asterix.common.functions.FunctionSignature;
 import edu.uci.ics.asterix.metadata.api.IAsterixStateProxy;
 import edu.uci.ics.asterix.metadata.api.IMetadataManager;
 import edu.uci.ics.asterix.metadata.api.IMetadataNode;
 import edu.uci.ics.asterix.metadata.bootstrap.MetadataConstants;
+import edu.uci.ics.asterix.metadata.entities.Adapter;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
 import edu.uci.ics.asterix.metadata.entities.Datatype;
 import edu.uci.ics.asterix.metadata.entities.Dataverse;
@@ -29,7 +31,6 @@ import edu.uci.ics.asterix.metadata.entities.Function;
 import edu.uci.ics.asterix.metadata.entities.Index;
 import edu.uci.ics.asterix.metadata.entities.Node;
 import edu.uci.ics.asterix.metadata.entities.NodeGroup;
-import edu.uci.ics.asterix.om.functions.FunctionSignature;
 import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionIDFactory;
 
@@ -348,6 +349,17 @@ public class MetadataManager implements IMetadataManager {
     }
 
     @Override
+    public void addAdapter(MetadataTransactionContext mdTxnCtx, Adapter adapter) throws MetadataException {
+        try {
+            metadataNode.addAdapter(mdTxnCtx.getTxnId(), adapter);
+        } catch (RemoteException e) {
+            throw new MetadataException(e);
+        }
+        mdTxnCtx.addAdapter(adapter);
+
+    }
+
+    @Override
     public void dropIndex(MetadataTransactionContext ctx, String dataverseName, String datasetName, String indexName)
             throws MetadataException {
         try {
@@ -504,4 +516,26 @@ public class MetadataManager implements IMetadataManager {
         // uncommitted functions.
         return dataverseFunctions;
     }
+
+    @Override
+    public void dropAdapter(MetadataTransactionContext ctx, String dataverseName, String name) throws MetadataException {
+        try {
+            metadataNode.dropAdapter(ctx.getTxnId(), dataverseName, name);
+        } catch (RemoteException e) {
+            throw new MetadataException(e);
+        }
+    }
+
+    @Override
+    public Adapter getAdapter(MetadataTransactionContext ctx, String dataverseName, String name)
+            throws MetadataException {
+        Adapter adapter = null;
+        try {
+            adapter = metadataNode.getAdapter(ctx.getTxnId(), dataverseName, name);
+        } catch (RemoteException e) {
+            throw new MetadataException(e);
+        }
+        return adapter;
+    }
+
 }

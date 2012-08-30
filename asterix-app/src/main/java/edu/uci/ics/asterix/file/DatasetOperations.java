@@ -214,8 +214,11 @@ public class DatasetOperations {
 
         ExternalDatasetDetails externalDatasetDetails = new ExternalDatasetDetails(loadStmt.getAdapter(),
                 loadStmt.getProperties());
-        Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> p = AqlMetadataProvider
-                .buildExternalDataScannerRuntime(spec, itemType, externalDatasetDetails, format);
+        AqlMetadataProvider metadataProvider = new AqlMetadataProvider(metadata.getMetadataTransactionContext()
+                .getTxnId(), true, metadata);
+
+        Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> p = metadataProvider.buildExternalDataScannerRuntime(
+                spec, itemType, externalDatasetDetails, format);
         IOperatorDescriptor scanner = p.first;
         AlgebricksPartitionConstraint scannerPc = p.second;
         RecordDescriptor recDesc = computePayloadKeyRecordDescriptor(dataset, itemType, payloadSerde, format);
