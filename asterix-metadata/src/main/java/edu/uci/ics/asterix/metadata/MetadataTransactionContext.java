@@ -121,8 +121,8 @@ public class MetadataTransactionContext extends MetadataCache {
         logAndApply(new MetadataLogicalOperation(nodeGroup, false));
     }
 
-    public void dropFunction(String dataverseName, AsterixFunction asterixFunction) {
-        Function function = new Function(dataverseName, asterixFunction.getName(), asterixFunction.getArity(), null,
+    public void dropFunction(FunctionSignature signature) {
+        Function function = new Function(signature.getNamespace(), signature.getName(), signature.getArity(), null,
                 null, null, null, null);
         droppedCache.addFunctionIfNotExists(function);
         logAndApply(new MetadataLogicalOperation(function, false));

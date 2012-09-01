@@ -46,9 +46,12 @@ public class FunctionTupleTranslator extends AbstractTupleTranslator<Function> {
     public static final int FUNCTION_DATAVERSENAME_TUPLE_FIELD_INDEX = 0;
     // Second key field.
     public static final int FUNCTION_FUNCTIONNAME_TUPLE_FIELD_INDEX = 1;
+    // Third key field.
+    public static final int FUNCTION_FUNCTIONARITY_TUPLE_FIELD_INDEX = 2;
 
+    
     // Payload field containing serialized Function.
-    public static final int FUNCTION_PAYLOAD_TUPLE_FIELD_INDEX = 2;
+    public static final int FUNCTION_PAYLOAD_TUPLE_FIELD_INDEX = 3;
 
     @SuppressWarnings("unchecked")
     private ISerializerDeserializer<ARecord> recordSerDes = AqlSerializerDeserializerProvider.INSTANCE

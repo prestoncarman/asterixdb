@@ -45,6 +45,16 @@ public class FunctionDecl implements Statement {
     }
 
     @Override
+    public int hashCode() {
+        return signature.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        return (o instanceof FunctionDecl && ((FunctionDecl) o).getSignature().equals(signature));
+    }
+
+    @Override
     public Kind getKind() {
         return Kind.FUNCTION_DECL;
     }

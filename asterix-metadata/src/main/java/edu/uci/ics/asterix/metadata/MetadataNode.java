@@ -295,8 +295,7 @@ public class MetadataNode implements IMetadataNode {
             if (dataverseFunctions != null && dataverseFunctions.size() > 0) {
                 // Drop all functions in this dataverse.
                 for (Function function : dataverseFunctions) {
-                    dropFunction(txnId, new FunctionSignature(dataverseName, function.getName(), function.getParams()
-                            .size()));
+                    dropFunction(txnId, new FunctionSignature(dataverseName, function.getName(), function.getArity()));
                 }
             }
 
@@ -719,7 +718,8 @@ public class MetadataNode implements IMetadataNode {
     public Function getFunction(long txnId, FunctionSignature functionSignature) throws MetadataException,
             RemoteException {
         try {
-            ITupleReference searchKey = createTuple(functionSignature.getNamespace(), functionSignature.getName());
+            ITupleReference searchKey = createTuple(functionSignature.getNamespace(), functionSignature.getName(), ""
+                    + functionSignature.getArity());
             FunctionTupleTranslator tupleReaderWriter = new FunctionTupleTranslator(false);
             List<Function> results = new ArrayList<Function>();
             IValueExtractor<Function> valueExtractor = new MetadataEntityValueExtractor<Function>(tupleReaderWriter);
@@ -832,6 +832,28 @@ public class MetadataNode implements IMetadataNode {
             throw new MetadataException(e);
         }
     }
+
+    /*
+     *
+     * 
+       @Override
+    public List<Dataset> getDataverseDatasets(long txnId, String dataverseName) throws MetadataException,
+            RemoteException {
+        try {
+            ITupleReference searchKey = createTuple(dataverseName);
+            DatasetTupleTranslator tupleReaderWriter = new DatasetTupleTranslator(false);
+            IValueExtractor<Dataset> valueExtractor = new MetadataEntityValueExtractor<Dataset>(tupleReaderWriter);
+            List<Dataset> results = new ArrayList<Dataset>();
+            searchIndex(txnId, MetadataPrimaryIndexes.DATASET_DATASET, searchKey, valueExtractor, results);
+            return results;
+        } catch (Exception e) {
+            throw new MetadataException(e);
+        }
+    }
+
+
+     
+     */
 
     @Override
     public void addAdapter(long txnId, Adapter adapter) throws MetadataException, RemoteException {

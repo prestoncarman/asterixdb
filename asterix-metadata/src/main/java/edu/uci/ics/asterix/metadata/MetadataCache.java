@@ -98,12 +98,10 @@ public class MetadataCache {
         synchronized (dataverses) {
             synchronized (datasets) {
                 synchronized (datatypes) {
-                    synchronized (functions) {
-                        if (!dataverses.containsKey(dataverse)) {
-                            datasets.put(dataverse.getDataverseName(), new HashMap<String, Dataset>());
-                            datatypes.put(dataverse.getDataverseName(), new HashMap<String, Datatype>());
-                            return dataverses.put(dataverse.getDataverseName(), dataverse);
-                        }
+                    if (!dataverses.containsKey(dataverse)) {
+                        datasets.put(dataverse.getDataverseName(), new HashMap<String, Dataset>());
+                        datatypes.put(dataverse.getDataverseName(), new HashMap<String, Datatype>());
+                        return dataverses.put(dataverse.getDataverseName(), dataverse);
                     }
                     return null;
                 }
@@ -155,6 +153,15 @@ public class MetadataCache {
                     synchronized (functions) {
                         datasets.remove(dataverse.getDataverseName());
                         datatypes.remove(dataverse.getDataverseName());
+                        List<FunctionSignature> markedForRemoval = new ArrayList<FunctionSignature>();
+                        for (FunctionSignature signature : functions.keySet()) {
+                            if (signature.getNamespace().equals(dataverse.getDataverseName())) {
+                                markedForRemoval.add(signature);
+                            }
+                        }
+                        for (FunctionSignature signature : markedForRemoval) {
+                            functions.remove(signature);
+                        }
                         return dataverses.remove(dataverse.getDataverseName());
                     }
                 }

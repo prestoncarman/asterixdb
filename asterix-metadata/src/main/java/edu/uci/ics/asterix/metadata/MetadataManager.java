@@ -459,6 +459,7 @@ public class MetadataManager implements IMetadataManager {
         } catch (RemoteException e) {
             throw new MetadataException(e);
         }
+        ctx.dropFunction(functionSignature);
     }
 
     @Override
