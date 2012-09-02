@@ -52,19 +52,6 @@ import edu.uci.ics.hyracks.algebricks.common.utils.Triple;
 
 public class AQLParser extends ScopeChecker {
 
-/*
-    private void printHints(Token t) {
-       //System.err.println("token="+t.image+"\t special="+t.specialToken); 
-       if (t.specialToken == null) return;
-       Token tmp_t = t.specialToken;
-       while (tmp_t.specialToken != null) tmp_t = tmp_t.specialToken;    
-       while (tmp_t != null) {
-         System.out.println(tmp_t.image);
-         tmp_t = tmp_t.next;
-       }
-    }
-*/
-  
     // optimizer hints
     private static final String HASH_GROUP_BY_HINT = "hash";
     private static final String BROADCAST_JOIN_HINT = "bcast";

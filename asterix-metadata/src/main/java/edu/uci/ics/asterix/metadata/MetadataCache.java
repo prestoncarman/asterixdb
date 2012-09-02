@@ -21,7 +21,6 @@ import java.util.List;
 import java.util.Map;
 
 import edu.uci.ics.asterix.common.functions.FunctionSignature;
-import edu.uci.ics.asterix.external.dataset.adapter.AdapterIdentifier;
 import edu.uci.ics.asterix.metadata.api.IMetadataEntity;
 import edu.uci.ics.asterix.metadata.entities.Adapter;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
@@ -47,8 +46,8 @@ public class MetadataCache {
     protected final Map<String, NodeGroup> nodeGroups = new HashMap<String, NodeGroup>();
     // Key is function Identifier . Key of value map is function name.
     protected final Map<FunctionSignature, Function> functions = new HashMap<FunctionSignature, Function>();
-    // Key is adapter Identifier.  
-    protected final Map<AdapterIdentifier, Adapter> adapters = new HashMap<AdapterIdentifier, Adapter>();
+    // Key is adapter Dataverse. Key of value mao is the adapter name  
+    protected final Map<String, Map<String, Adapter>> adapters = new HashMap<String, Map<String, Adapter>>();
 
     // Atomically executes all metadata operations in ctx's log.
     public void commit(MetadataTransactionContext ctx) {
@@ -82,11 +81,14 @@ public class MetadataCache {
                 synchronized (datasets) {
                     synchronized (datatypes) {
                         synchronized (functions) {
-                            dataverses.clear();
-                            nodeGroups.clear();
-                            datasets.clear();
-                            datatypes.clear();
-                            functions.clear();
+                            synchronized (adapters) {
+                                dataverses.clear();
+                                nodeGroups.clear();
+                                datasets.clear();
+                                datatypes.clear();
+                                functions.clear();
+                                adapters.clear();
+                            }
                         }
                     }
                 }
@@ -101,6 +103,7 @@ public class MetadataCache {
                     if (!dataverses.containsKey(dataverse)) {
                         datasets.put(dataverse.getDataverseName(), new HashMap<String, Dataset>());
                         datatypes.put(dataverse.getDataverseName(), new HashMap<String, Datatype>());
+                        adapters.put(dataverse.getDataverseName(), new HashMap<String, Adapter>());
                         return dataverses.put(dataverse.getDataverseName(), dataverse);
                     }
                     return null;
@@ -153,13 +156,14 @@ public class MetadataCache {
                     synchronized (functions) {
                         datasets.remove(dataverse.getDataverseName());
                         datatypes.remove(dataverse.getDataverseName());
-                        List<FunctionSignature> markedForRemoval = new ArrayList<FunctionSignature>();
+                        adapters.remove(dataverse.getDataverseName());
+                        List<FunctionSignature> markedFunctionsForRemoval = new ArrayList<FunctionSignature>();
                         for (FunctionSignature signature : functions.keySet()) {
                             if (signature.getNamespace().equals(dataverse.getDataverseName())) {
-                                markedForRemoval.add(signature);
+                                markedFunctionsForRemoval.add(signature);
                             }
                         }
-                        for (FunctionSignature signature : markedForRemoval) {
+                        for (FunctionSignature signature : markedFunctionsForRemoval) {
                             functions.remove(signature);
                         }
                         return dataverses.remove(dataverse.getDataverseName());
@@ -304,9 +308,15 @@ public class MetadataCache {
 
     public Object addAdapterIfNotExists(Adapter adapter) {
         synchronized (adapters) {
-            Adapter adapterObject = adapters.get(adapter.getAdapterIdentifier());
+            Adapter adapterObject = adapters.get(adapter.getAdapterIdentifier().getNamespace()).get(
+                    adapter.getAdapterIdentifier().getAdapterName());
             if (adapterObject != null) {
-                return adapters.put(adapter.getAdapterIdentifier(), adapter);
+                Map<String, Adapter> adaptersInDataverse = adapters.get(adapter.getAdapterIdentifier().getNamespace());
+                if (adaptersInDataverse == null) {
+                    adaptersInDataverse = new HashMap<String, Adapter>();
+                    adapters.put(adapter.getAdapterIdentifier().getNamespace(), adaptersInDataverse);
+                }
+                return adaptersInDataverse.put(adapter.getAdapterIdentifier().getAdapterName(), adapter);
             }
             return null;
         }
@@ -314,8 +324,9 @@ public class MetadataCache {
 
     public Object dropAdapter(Adapter adapter) {
         synchronized (adapters) {
-            if (adapters.get(adapter.getAdapterIdentifier()) != null) {
-                return adapters.remove(adapter.getAdapterIdentifier());
+            Map<String, Adapter> adaptersInDataverse = adapters.get(adapter.getAdapterIdentifier().getNamespace());
+            if (adaptersInDataverse != null) {
+                return adaptersInDataverse.remove(adapter.getAdapterIdentifier().getAdapterName());
             }
             return null;
         }

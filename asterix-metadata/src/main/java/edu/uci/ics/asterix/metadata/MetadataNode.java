@@ -833,28 +833,6 @@ public class MetadataNode implements IMetadataNode {
         }
     }
 
-    /*
-     *
-     * 
-       @Override
-    public List<Dataset> getDataverseDatasets(long txnId, String dataverseName) throws MetadataException,
-            RemoteException {
-        try {
-            ITupleReference searchKey = createTuple(dataverseName);
-            DatasetTupleTranslator tupleReaderWriter = new DatasetTupleTranslator(false);
-            IValueExtractor<Dataset> valueExtractor = new MetadataEntityValueExtractor<Dataset>(tupleReaderWriter);
-            List<Dataset> results = new ArrayList<Dataset>();
-            searchIndex(txnId, MetadataPrimaryIndexes.DATASET_DATASET, searchKey, valueExtractor, results);
-            return results;
-        } catch (Exception e) {
-            throw new MetadataException(e);
-        }
-    }
-
-
-     
-     */
-
     @Override
     public void addAdapter(long txnId, Adapter adapter) throws MetadataException, RemoteException {
         try {
