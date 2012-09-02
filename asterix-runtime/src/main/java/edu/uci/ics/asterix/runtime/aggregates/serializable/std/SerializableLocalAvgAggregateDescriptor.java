@@ -170,8 +170,6 @@ public class SerializableLocalAvgAggregateDescriptor extends AbstractSerializabl
                         state[start + 16] = aggType.serialize();
                     }
 
-                    
-                    
                     @Override
                     public void finish(byte[] state, int start, int len, DataOutput result) throws AlgebricksException {
                         double sum = BufferSerDeUtil.getDouble(state, start);
