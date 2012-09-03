@@ -594,7 +594,7 @@ public class MetadataNode implements IMetadataNode {
     private List<String> getDatasetNamesDeclaredByThisDatatype(long txnId, String dataverseName, String datatypeName)
             throws MetadataException, RemoteException {
         try {
-            ITupleReference searchKey = createTuple(dataverseName, dataverseName);
+            ITupleReference searchKey = createTuple(dataverseName, datatypeName);
             List<String> results = new ArrayList<String>();
             IValueExtractor<String> valueExtractor = new DatasetNameValueExtractor();
             searchIndex(txnId, MetadataSecondaryIndexes.DATATYPENAME_ON_DATASET_INDEX, searchKey, valueExtractor,

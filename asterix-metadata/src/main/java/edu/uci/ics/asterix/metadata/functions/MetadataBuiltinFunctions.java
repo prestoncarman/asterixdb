@@ -57,7 +57,9 @@ public class MetadataBuiltinFunctions {
                 Pair<String, String> datasetInfo = getDatasetInfo(metadata, datasetArg);
                 String dataverseName = datasetInfo.first;
                 String datasetName = datasetInfo.second;
-
+                if (dataverseName == null) {
+                    throw new AlgebricksException("Unspecified dataverse!");
+                }
                 Dataset dataset = metadata.findDataset(dataverseName, datasetName);
                 if (dataset == null) {
                     throw new AlgebricksException("Could not find dataset " + datasetName + " in dataverse "
@@ -98,6 +100,9 @@ public class MetadataBuiltinFunctions {
                 Pair<String, String> datasetInfo = getDatasetInfo(metadata, datasetArg);
                 String dataverseName = datasetInfo.first;
                 String datasetName = datasetInfo.second;
+                if (dataverseName == null) {
+                    throw new AlgebricksException("Unspecified dataverse!");
+                }
                 Dataset dataset = metadata.findDataset(dataverseName, datasetName);
                 if (dataset == null) {
                     throw new AlgebricksException("Could not find dataset " + datasetName + " in dataverse "

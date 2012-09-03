@@ -45,6 +45,7 @@ import edu.uci.ics.asterix.om.types.AUnionType;
 import edu.uci.ics.asterix.om.types.AbstractCollectionType;
 import edu.uci.ics.asterix.om.types.BuiltinType;
 import edu.uci.ics.asterix.om.types.IAType;
+import edu.uci.ics.asterix.om.types.TypeSignature;
 import edu.uci.ics.asterix.tools.translator.ADGenDmlTranslator;
 import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.NotImplementedException;
@@ -913,8 +914,8 @@ public class AdmDataGen {
 
     private final File schemaFile;
     private final File outputDir;
-    private Map<String, IAType> typeMap;
-    private Map<String, TypeDataGen> typeAnnotMap;
+    private Map<TypeSignature, IAType> typeMap;
+    private Map<TypeSignature, TypeDataGen> typeAnnotMap;
     private DataGeneratorContext dgCtx;
 
     public AdmDataGen(File schemaFile, File outputDir) {
@@ -938,8 +939,8 @@ public class AdmDataGen {
     }
 
     public void dataGen() throws Exception {
-        for (Map.Entry<String, IAType> me : typeMap.entrySet()) {
-            String tn = me.getKey();
+        for (Map.Entry<TypeSignature, IAType> me : typeMap.entrySet()) {
+            TypeSignature tn = me.getKey();
             TypeDataGen tdg = typeAnnotMap.get(tn);
             if (tdg.isDataGen()) {
                 IAType t = me.getValue();

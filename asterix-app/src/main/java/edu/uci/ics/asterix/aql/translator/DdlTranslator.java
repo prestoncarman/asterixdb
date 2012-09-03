@@ -271,7 +271,8 @@ public class DdlTranslator extends AbstractAqlTranslator {
                         if (builtinTypeMap.get(typeName) != null) {
                             throw new AlgebricksException("Cannot redefine builtin type " + typeName + ".");
                         } else {
-                            Map<TypeSignature, IAType> typeMap = computeTypes(mdTxnCtx, (TypeDecl) stmt, dataverseName);
+                            // Map<TypeSignature, IAType> typeMap = computeTypes(mdTxnCtx, (TypeDecl) stmt, dataverseName);
+                            Map<TypeSignature, IAType> typeMap = compiledDeclarations.getTypeDeclarations();
                             TypeSignature typeSignature = new TypeSignature(dataverseName, typeName);
                             IAType type = typeMap.get(typeSignature);
                             MetadataManager.INSTANCE.addDatatype(mdTxnCtx, new Datatype(dataverseName, typeName, type,

@@ -39,6 +39,7 @@ import edu.uci.ics.asterix.metadata.entities.Index;
 import edu.uci.ics.asterix.metadata.entities.InternalDatasetDetails;
 import edu.uci.ics.asterix.metadata.entities.NodeGroup;
 import edu.uci.ics.asterix.om.types.IAType;
+import edu.uci.ics.asterix.om.types.TypeSignature;
 import edu.uci.ics.asterix.runtime.formats.NonTaggedDataFormat;
 import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksAbsolutePartitionConstraint;
 import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksPartitionConstraint;
@@ -62,17 +63,17 @@ public class AqlCompiledMetadataDeclarations {
     private IDataFormat format;
     private Map<String, String> config;
 
-    private final Map<String, IAType> types;
-    private final Map<String, TypeDataGen> typeDataGenMap;
+    private final Map<TypeSignature, IAType> types;
+    private final Map<TypeSignature, TypeDataGen> typeDataGenMap;
     private final IAWriterFactory writerFactory;
 
     private IMetadataManager metadataManager = MetadataManager.INSTANCE;
     private boolean isConnected = false;
 
     public AqlCompiledMetadataDeclarations(MetadataTransactionContext mdTxnCtx, String dataverseName,
-            FileSplit outputFile, Map<String, String> config, Map<String, String[]> stores, Map<String, IAType> types,
-            Map<String, TypeDataGen> typeDataGenMap, IAWriterFactory writerFactory, boolean online)
-            throws AsterixException {
+            FileSplit outputFile, Map<String, String> config, Map<String, String[]> stores,
+            Map<TypeSignature, IAType> types, Map<TypeSignature, TypeDataGen> typeDataGenMap,
+            IAWriterFactory writerFactory, boolean online) throws AsterixException {
         this.mdTxnCtx = mdTxnCtx;
         this.outputFile = outputFile;
         this.config = config;
@@ -284,11 +285,11 @@ public class AqlCompiledMetadataDeclarations {
         return dataverseName + File.separator + fileName;
     }
 
-    public Map<String, TypeDataGen> getTypeDataGenMap() {
+    public Map<TypeSignature, TypeDataGen> getTypeDataGenMap() {
         return typeDataGenMap;
     }
 
-    public Map<String, IAType> getTypeDeclarations() {
+    public Map<TypeSignature, IAType> getTypeDeclarations() {
         return types;
     }
 
