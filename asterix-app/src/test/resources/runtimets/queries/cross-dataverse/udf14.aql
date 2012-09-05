@@ -1,0 +1,14 @@
+/*
+ * Description  : Create UDF to multiply two integers
+ * Expected Res : Success
+ * Date         : 4th September 2012
+ */
+
+drop dataverse test if exists;
+create dataverse test;
+
+create function test.foo($a,$b) {
+$a*$b
+}
+
+test.foo(400,200)

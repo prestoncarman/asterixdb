@@ -1,0 +1,7 @@
+// negative test
+// do not use use dataverse statement
+
+for $l in dataset('Dataset')
+return $l
+
+// current returns NPE

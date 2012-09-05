@@ -1,0 +1,17 @@
+/*
+ * Description  : Pass an ordered list as input to UDF and return the zeroth element of that list.
+ * Expected Res : Success
+ * Date         : 4th September 2012
+ */
+
+// This test is returning NPE...
+
+drop dataverse test if exists;
+create dataverse test;
+
+create function test.echo($list){
+$list
+}
+
+for $a in [[1,2],["A","B"],["UCLA","UCSD","UCR","UCI"]]
+return test.echo($a)
