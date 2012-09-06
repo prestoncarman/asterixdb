@@ -2,8 +2,10 @@ package edu.uci.ics.asterix.aql.rewrites;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import edu.uci.ics.asterix.aql.base.Clause;
 import edu.uci.ics.asterix.aql.base.Expression;
@@ -142,7 +144,7 @@ public final class AqlRewriter {
         buildOtherUdfs(topExpr.getBody(), otherFDecls, funIds);
         fdecls.addAll(otherFDecls);
         if (!fdecls.isEmpty()) {
-            checkRecursivity(fdecls);
+            // checkRecursivity(fdecls);
             InlineUdfsVisitor visitor = new InlineUdfsVisitor(context);
             while (topExpr.accept(visitor, fdecls)) {
                 // loop until no more changes
@@ -156,7 +158,7 @@ public final class AqlRewriter {
             return;
         }
 
-        List<FunctionSignature> functionCalls = getFunctionCalls(expression);
+        Set<FunctionSignature> functionCalls = getFunctionCalls(expression);
         for (FunctionSignature signature : functionCalls) {
 
             if (declaredFunctions != null && declaredFunctions.contains(signature)) {
@@ -182,7 +184,7 @@ public final class AqlRewriter {
     }
 
     private FunctionDecl lookupUserDefinedFunctionDecl(FunctionSignature signature) throws AsterixException {
-        if(signature.getNamespace() == null){
+        if (signature.getNamespace() == null) {
             return null;
         }
         Function function = MetadataManager.INSTANCE.getFunction(mdTxnCtx, signature);
@@ -208,22 +210,23 @@ public final class AqlRewriter {
 
     }
 
-    private List<FunctionSignature> getFunctionCalls(Expression expression) throws AsterixException {
+    private Set<FunctionSignature> getFunctionCalls(Expression expression) throws AsterixException {
         Map<AsterixFunction, DfsColor> color = new HashMap<AsterixFunction, DfsColor>();
         Map<AsterixFunction, List<AsterixFunction>> arcs = new HashMap<AsterixFunction, List<AsterixFunction>>();
         GatherFunctionCalls gfc = new GatherFunctionCalls();
         expression.accept(gfc, null);
-        List<FunctionSignature> calls = gfc.getCalls();
+        Set<FunctionSignature> calls = gfc.getCalls();
         return calls;
     }
 
+    /*
     private void checkRecursivity(List<FunctionDecl> fdecls) throws AsterixException {
         Map<FunctionSignature, DfsColor> color = new HashMap<FunctionSignature, DfsColor>();
         Map<FunctionSignature, List<FunctionSignature>> arcs = new HashMap<FunctionSignature, List<FunctionSignature>>();
         for (FunctionDecl fd : fdecls) {
             GatherFunctionCalls gfc = new GatherFunctionCalls();
             fd.getFuncBody().accept(gfc, null);
-            List<FunctionSignature> calls = gfc.getCalls();
+            Set<FunctionSignature> calls = gfc.getCalls();
             arcs.put(fd.getSignature(), calls);
             color.put(fd.getSignature(), DfsColor.WHITE);
         }
@@ -232,7 +235,7 @@ public final class AqlRewriter {
                 checkRecursivityDfs(a, arcs, color);
             }
         }
-    }
+    }*/
 
     private void checkRecursivityDfs(FunctionSignature a, Map<FunctionSignature, List<FunctionSignature>> arcs,
             Map<FunctionSignature, DfsColor> color) throws AsterixException {
@@ -265,7 +268,7 @@ public final class AqlRewriter {
 
     private static class GatherFunctionCalls implements IAqlExpressionVisitor<Void, Void> {
 
-        private final List<FunctionSignature> calls = new ArrayList<FunctionSignature>();
+        private final Set<FunctionSignature> calls = new HashSet<FunctionSignature>();
 
         public GatherFunctionCalls() {
         }
@@ -550,7 +553,7 @@ public final class AqlRewriter {
             return null;
         }
 
-        public List<FunctionSignature> getCalls() {
+        public Set<FunctionSignature> getCalls() {
             return calls;
         }
 

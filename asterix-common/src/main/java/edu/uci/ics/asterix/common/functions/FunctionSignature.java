@@ -20,7 +20,8 @@ public class FunctionSignature implements Serializable {
             return false;
         } else {
             FunctionSignature f = ((FunctionSignature) o);
-            return namespace.equals(f.getNamespace()) && name.equals(f.getName()) && arity == f.getArity();
+            return ((namespace != null && namespace.equals(f.getNamespace()) || (namespace == null && f.getNamespace() == null)))
+                    && name.equals(f.getName()) && arity == f.getArity();
         }
     }
 
