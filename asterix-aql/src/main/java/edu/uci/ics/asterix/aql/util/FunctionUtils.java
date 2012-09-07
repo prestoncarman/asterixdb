@@ -39,6 +39,7 @@ public class FunctionUtils {
 
         StringBuilder builder = new StringBuilder();
         builder.append(" use dataverse " + function.getDataverseName() + ";");
+        builder.append("\n");
         builder.append(" declare function " + function.getName().split("@")[0]);
         builder.append("(");
         for (String param : params) {
@@ -52,7 +53,9 @@ public class FunctionUtils {
         }
         builder.append(")");
         builder.append("{");
+        builder.append("\n");
         builder.append(functionBody);
+        builder.append("\n");
         builder.append("}");
         AQLParser parser = new AQLParser(new StringReader(new String(builder)));
 
