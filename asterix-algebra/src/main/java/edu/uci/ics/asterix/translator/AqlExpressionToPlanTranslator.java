@@ -97,6 +97,7 @@ import edu.uci.ics.asterix.om.functions.AsterixFunction;
 import edu.uci.ics.asterix.om.functions.AsterixFunctionInfo;
 import edu.uci.ics.asterix.om.types.BuiltinType;
 import edu.uci.ics.asterix.om.types.IAType;
+import edu.uci.ics.asterix.transaction.management.service.transaction.JobId;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.NotImplementedException;
 import edu.uci.ics.hyracks.algebricks.common.utils.Pair;
@@ -160,7 +161,7 @@ public class AqlExpressionToPlanTranslator extends AbstractAqlTranslator
 		IAqlExpressionVisitor<Pair<ILogicalOperator, LogicalVariable>, Mutable<ILogicalOperator>> {
 
 	private final MetadataTransactionContext mdTxnCtx;
-	private final long txnId;
+	private final JobId jobId;
 	private TranslationContext context;
 	private String outputDatasetName;
 	private Statement.Kind dmlKind;
@@ -169,11 +170,11 @@ public class AqlExpressionToPlanTranslator extends AbstractAqlTranslator
 
 	private static LogicalVariable METADATA_DUMMY_VAR = new LogicalVariable(-1);
 
-	public AqlExpressionToPlanTranslator(long txnId,
+	public AqlExpressionToPlanTranslator(JobId jobId,
 			MetadataTransactionContext mdTxnCtx, int currentVarCounter,
 			String outputDatasetName, Statement.Kind dmlKind) {
 		this.mdTxnCtx = mdTxnCtx;
-		this.txnId = txnId;
+		this.jobId = jobId;
 		this.context = new TranslationContext(new Counter(currentVarCounter));
 		this.outputDatasetName = outputDatasetName;
 		this.dmlKind = dmlKind;
@@ -327,7 +328,7 @@ public class AqlExpressionToPlanTranslator extends AbstractAqlTranslator
 
 		globalPlanRoots.add(new MutableObject<ILogicalOperator>(topOp));
 		ILogicalPlan plan = new ALogicalPlanImpl(globalPlanRoots);
-		AqlMetadataProvider metadataProvider = new AqlMetadataProvider(txnId,
+		AqlMetadataProvider metadataProvider = new AqlMetadataProvider(jobId,
 				isTransactionalWrite, compiledDeclarations);
 		ILogicalPlanAndMetadata planAndMetadata = new AqlLogicalPlanAndMetadataImpl(
 				plan, metadataProvider);

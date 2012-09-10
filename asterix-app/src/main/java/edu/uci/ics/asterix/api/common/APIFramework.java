@@ -33,7 +33,7 @@ import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
 import edu.uci.ics.asterix.optimizer.base.RuleCollections;
 import edu.uci.ics.asterix.runtime.job.listener.JobEventListenerFactory;
 import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
-import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionIDFactory;
+import edu.uci.ics.asterix.transaction.management.service.transaction.JobIdFactory;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionManagementConstants.LockManagerConstants.LockMode;
 import edu.uci.ics.asterix.translator.AqlExpressionToPlanTranslator;
 import edu.uci.ics.asterix.translator.DmlTranslator;
@@ -392,8 +392,8 @@ public class APIFramework {
             }
 
         }
-        long txnId = TransactionIDFactory.generateTransactionId();
-        AqlExpressionToPlanTranslator t = new AqlExpressionToPlanTranslator(txnId, mdTxnCtx, rw.getVarCounter(),
+        edu.uci.ics.asterix.transaction.management.service.transaction.JobId asterixJobId = JobIdFactory.generateJobId();
+        AqlExpressionToPlanTranslator t = new AqlExpressionToPlanTranslator(asterixJobId, mdTxnCtx, rw.getVarCounter(),
                 outputDatasetName, dmlKind);
 
         ILogicalPlanAndMetadata planAndMetadata = t.translate(rwQ, metadataDecls);
@@ -528,7 +528,7 @@ public class APIFramework {
 
         JobSpecification spec = compiler.createJob(AsterixAppContextInfoImpl.INSTANCE);
         // set the job event listener
-        spec.setJobletEventListenerFactory(new JobEventListenerFactory(txnId, isWriteTransaction));
+        spec.setJobletEventListenerFactory(new JobEventListenerFactory(asterixJobId, isWriteTransaction));
         if (pc.isPrintJob()) {
             switch (pdf) {
                 case HTML: {

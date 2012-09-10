@@ -22,7 +22,6 @@ import java.util.logging.Logger;
 import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
 import edu.uci.ics.asterix.transaction.management.service.logging.LogActionType;
 import edu.uci.ics.asterix.transaction.management.service.logging.LogType;
-import edu.uci.ics.hyracks.api.job.JobId;
 
 /**
  * An implementation of the @see ITransactionManager interface that provides

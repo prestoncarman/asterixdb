@@ -15,7 +15,6 @@
 package edu.uci.ics.asterix.transaction.management.service.transaction;
 
 import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
-import edu.uci.ics.hyracks.api.job.JobId;
 
 /**
  * Provides APIs for managing life cycle of a transaction, that is beginning a
@@ -66,7 +65,7 @@ public interface ITransactionManager {
      * @param txnContext
      *            the transaction context associated with the transaction
      * @throws ACIDException
-     * @see transactionContext
+     * @see transactionContextimport edu.uci.ics.hyracks.api.job.JobId;
      * @see ACIDException
      */
     public void commitTransaction(TransactionContext txnContext) throws ACIDException;

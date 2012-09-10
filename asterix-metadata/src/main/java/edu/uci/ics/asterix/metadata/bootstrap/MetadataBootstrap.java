@@ -241,7 +241,7 @@ public class MetadataBootstrap {
                     primaryIndexes[i].getNodeGroupName());
             MetadataManager.INSTANCE.addDataset(mdTxnCtx, new Dataset(primaryIndexes[i].getDataverseName(),
                     primaryIndexes[i].getIndexedDatasetName(), primaryIndexes[i].getPayloadRecordType().getTypeName(),
-                    id, DatasetType.INTERNAL));
+                    id, DatasetType.INTERNAL, primaryIndexes[i].getDatasetId().getId()));
         }
     }
 

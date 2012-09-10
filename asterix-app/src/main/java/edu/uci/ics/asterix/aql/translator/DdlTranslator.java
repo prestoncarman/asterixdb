@@ -234,8 +234,8 @@ public class DdlTranslator extends AbstractAqlTranslator {
 				}
 				}
 				MetadataManager.INSTANCE.addDataset(mdTxnCtx, new Dataset(
-						compiledDeclarations.getDataverseName(), datasetName,
-						itemTypeName, datasetDetails, dsType));
+						compiledDeclarations.getDataverseName(),
+						datasetName, itemTypeName, datasetDetails, dsType));
 				if (dd.getDatasetType() == DatasetType.INTERNAL
 						|| dd.getDatasetType() == DatasetType.FEED) {
 					runCreateDatasetJob(hcc, datasetName);

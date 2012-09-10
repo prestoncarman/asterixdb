@@ -15,6 +15,7 @@
 package edu.uci.ics.asterix.transaction.management.service.locking;
 
 import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
+import edu.uci.ics.asterix.transaction.management.service.transaction.DatasetId;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionContext;
 
 /**

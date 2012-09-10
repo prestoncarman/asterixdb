@@ -30,7 +30,7 @@ import edu.uci.ics.asterix.transaction.management.service.logging.LogUtil;
 import edu.uci.ics.asterix.transaction.management.service.logging.LogicalLogLocator;
 import edu.uci.ics.asterix.transaction.management.service.transaction.IResourceManager;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionContext;
-import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionIDFactory;
+import edu.uci.ics.asterix.transaction.management.service.transaction.JobIdFactory;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionProvider;
 
 public class TransactionWorkloadSimulator {
@@ -99,7 +99,7 @@ class SingleTransactionContextFactory {
 
     public static TransactionContext getContext(TransactionProvider provider) throws ACIDException {
         if (context == null) {
-            context = new TransactionContext(TransactionIDFactory.generateTransactionId(), provider);
+            context = new TransactionContext(JobIdFactory.generateJobId(), provider);
         }
         return context;
     }
@@ -108,7 +108,7 @@ class SingleTransactionContextFactory {
 class MultipleTransactionContextFactory {
 
     public static TransactionContext getContext(TransactionProvider provider) throws ACIDException {
-        return new TransactionContext(TransactionIDFactory.generateTransactionId(), provider);
+        return new TransactionContext(JobIdFactory.generateJobId(), provider);
     }
 }
 

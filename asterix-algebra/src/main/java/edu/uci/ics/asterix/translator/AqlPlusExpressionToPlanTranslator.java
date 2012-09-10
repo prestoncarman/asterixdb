@@ -97,6 +97,7 @@ import edu.uci.ics.asterix.om.functions.AsterixFunctionInfo;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.BuiltinType;
 import edu.uci.ics.asterix.om.types.IAType;
+import edu.uci.ics.asterix.transaction.management.service.transaction.JobId;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.NotImplementedException;
 import edu.uci.ics.hyracks.algebricks.common.utils.Pair;
@@ -198,7 +199,7 @@ public class AqlPlusExpressionToPlanTranslator extends AbstractAqlTranslator
 		}
 	}
 
-	private final long txnId;
+	private final JobId jobId;
 	private final MetadataTransactionContext mdTxnCtx;
 	private TranslationContext context;
 	private String outputDatasetName;
@@ -206,10 +207,10 @@ public class AqlPlusExpressionToPlanTranslator extends AbstractAqlTranslator
 	private MetaScopeILogicalOperator metaScopeOp = new MetaScopeILogicalOperator();
 	private static LogicalVariable METADATA_DUMMY_VAR = new LogicalVariable(-1);
 
-	public AqlPlusExpressionToPlanTranslator(long txnId,
+	public AqlPlusExpressionToPlanTranslator(JobId jobId,
 			MetadataTransactionContext mdTxnCtx, Counter currentVarCounter,
 			String outputDatasetName) {
-		this.txnId = txnId;
+		this.jobId = jobId;
 		this.mdTxnCtx = mdTxnCtx;
 		this.context = new TranslationContext(currentVarCounter);
 		this.outputDatasetName = outputDatasetName;
@@ -300,7 +301,7 @@ public class AqlPlusExpressionToPlanTranslator extends AbstractAqlTranslator
 
 		globalPlanRoots.add(new MutableObject<ILogicalOperator>(topOp));
 		ILogicalPlan plan = new ALogicalPlanImpl(globalPlanRoots);
-		AqlMetadataProvider metadataProvider = new AqlMetadataProvider(txnId,
+		AqlMetadataProvider metadataProvider = new AqlMetadataProvider(jobId,
 				isTransactionalWrite, compiledDeclarations);
 		ILogicalPlanAndMetadata planAndMetadata = new AqlLogicalPlanAndMetadataImpl(
 				plan, metadataProvider);

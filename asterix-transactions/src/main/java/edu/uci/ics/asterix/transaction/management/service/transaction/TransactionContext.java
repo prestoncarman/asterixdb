@@ -23,7 +23,6 @@ import edu.uci.ics.asterix.transaction.management.resource.ICloseable;
 import edu.uci.ics.asterix.transaction.management.service.logging.LogUtil;
 import edu.uci.ics.asterix.transaction.management.service.logging.LogicalLogLocator;
 import edu.uci.ics.asterix.transaction.management.service.transaction.ITransactionManager.TransactionState;
-import edu.uci.ics.hyracks.api.job.JobId;
 
 /**
  * Represents a holder object that contains all information related to a
