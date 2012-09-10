@@ -19,6 +19,7 @@ import java.rmi.RemoteException;
 import java.util.List;
 
 import edu.uci.ics.asterix.metadata.api.IAsterixStateProxy;
+import edu.uci.ics.asterix.metadata.api.IMetadataIndex;
 import edu.uci.ics.asterix.metadata.api.IMetadataManager;
 import edu.uci.ics.asterix.metadata.api.IMetadataNode;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
@@ -123,7 +124,7 @@ public class MetadataManager implements IMetadataManager {
     }
 
     @Override
-    public void lock(MetadataTransactionContext ctx, int lockMode) throws RemoteException, ACIDException {
+    public void lock(MetadataTransactionContext ctx, byte lockMode) throws RemoteException, ACIDException {
         metadataNode.lock(ctx.getJobId(), lockMode);
     }
 
@@ -483,5 +484,14 @@ public class MetadataManager implements IMetadataManager {
         }
         return function;
 
+    }
+
+    @Override
+    public void initializeDatasetIdFactory(MetadataTransactionContext ctx) throws MetadataException {
+        try {
+            metadataNode.initializeDatasetIdFactory(ctx.getJobId());
+        } catch (RemoteException e) {
+            throw new MetadataException(e);
+        }
     }
 }

@@ -82,6 +82,7 @@ import edu.uci.ics.asterix.om.types.AUnorderedListType;
 import edu.uci.ics.asterix.om.types.AbstractCollectionType;
 import edu.uci.ics.asterix.om.types.BuiltinType;
 import edu.uci.ics.asterix.om.types.IAType;
+import edu.uci.ics.asterix.transaction.management.service.transaction.DatasetIdFactory;
 import edu.uci.ics.asterix.translator.AbstractAqlTranslator;
 import edu.uci.ics.asterix.translator.DmlTranslator.CompiledCreateIndexStatement;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
@@ -235,7 +236,7 @@ public class DdlTranslator extends AbstractAqlTranslator {
 				}
 				MetadataManager.INSTANCE.addDataset(mdTxnCtx, new Dataset(
 						compiledDeclarations.getDataverseName(),
-						datasetName, itemTypeName, datasetDetails, dsType));
+						datasetName, itemTypeName, datasetDetails, dsType, DatasetIdFactory.generateDatasetId()));
 				if (dd.getDatasetType() == DatasetType.INTERNAL
 						|| dd.getDatasetType() == DatasetType.FEED) {
 					runCreateDatasetJob(hcc, datasetName);

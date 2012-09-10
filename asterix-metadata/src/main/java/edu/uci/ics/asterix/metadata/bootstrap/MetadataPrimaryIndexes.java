@@ -33,13 +33,15 @@ public class MetadataPrimaryIndexes {
     public static IMetadataIndex NODEGROUP_DATASET;
     public static IMetadataIndex FUNCTION_DATASET;
     
-    public static final int DATAVERSE_DATASET_ID = 0;
-    public static final int DATASET_DATASET_ID = 1;
-    public static final int DATATYPE_DATASET_ID = 2;
-    public static final int INDEX_DATASET_ID = 3;
-    public static final int NODE_DATASET_ID = 4;
-    public static final int NODEGROUP_DATASET_ID = 5;
-    public static final int FUNCTION_DATASET_ID = 6;
+    public static final int METADATA_DATASET_ID = 0;
+    public static final int DATAVERSE_DATASET_ID = 1;
+    public static final int DATASET_DATASET_ID = 2;
+    public static final int DATATYPE_DATASET_ID = 3;
+    public static final int INDEX_DATASET_ID = 4;
+    public static final int NODE_DATASET_ID = 5;
+    public static final int NODEGROUP_DATASET_ID = 6;
+    public static final int FUNCTION_DATASET_ID = 7;
+    public static final int FIRST_AVAILABLE_USER_DATASET_ID = 8;
 
 
     /**

@@ -541,7 +541,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         TreeIndexInsertUpdateDeleteOperatorDescriptor btreeBulkLoad = new TreeIndexInsertUpdateDeleteOperatorDescriptor(
                 spec, recordDesc, appContext.getStorageManagerInterface(), appContext.getIndexRegistryProvider(),
                 splitsAndConstraint.first, typeTraits, comparatorFactories, fieldPermutation, indexOp,
-                new BTreeDataflowHelperFactory(), null, NoOpOperationCallbackProvider.INSTANCE, jobId);
+                new BTreeDataflowHelperFactory(), null, NoOpOperationCallbackProvider.INSTANCE, jobId, dataset.getDatasetId());
         return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(btreeBulkLoad, splitsAndConstraint.second);
     }
 
@@ -683,7 +683,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         TreeIndexInsertUpdateDeleteOperatorDescriptor btreeBulkLoad = new TreeIndexInsertUpdateDeleteOperatorDescriptor(
                 spec, recordDesc, appContext.getStorageManagerInterface(), appContext.getIndexRegistryProvider(),
                 splitsAndConstraint.first, typeTraits, comparatorFactories, fieldPermutation, indexOp,
-                new BTreeDataflowHelperFactory(), filterFactory, NoOpOperationCallbackProvider.INSTANCE, jobId);
+                new BTreeDataflowHelperFactory(), filterFactory, NoOpOperationCallbackProvider.INSTANCE, jobId, dataset.getDatasetId());
         return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(btreeBulkLoad, splitsAndConstraint.second);
     }
 
@@ -745,7 +745,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
                 spec, recordDesc, appContext.getStorageManagerInterface(), appContext.getIndexRegistryProvider(),
                 splitsAndConstraint.first, typeTraits, comparatorFactories, fieldPermutation, indexOp,
                 new RTreeDataflowHelperFactory(valueProviderFactories), filterFactory,
-                NoOpOperationCallbackProvider.INSTANCE, jobId);
+                NoOpOperationCallbackProvider.INSTANCE, jobId, dataset.getDatasetId());
         return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(rtreeUpdate, splitsAndConstraint.second);
     }
 

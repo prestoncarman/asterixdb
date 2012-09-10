@@ -53,6 +53,8 @@ import edu.uci.ics.asterix.om.base.AMutableString;
 import edu.uci.ics.asterix.om.base.AString;
 import edu.uci.ics.asterix.om.types.BuiltinType;
 import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
+import edu.uci.ics.asterix.transaction.management.service.transaction.DatasetId;
+import edu.uci.ics.asterix.transaction.management.service.transaction.DatasetIdFactory;
 import edu.uci.ics.asterix.transaction.management.service.transaction.JobId;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionContext;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionManagementConstants.LockManagerConstants.LockMode;
@@ -83,6 +85,7 @@ public class MetadataNode implements IMetadataNode {
 
     // TODO: Temporary transactional resource id for metadata.
     private static final byte[] metadataResourceId = MetadataNode.class.toString().getBytes();
+    private static final DatasetId METADATA_DATASET_ID = new DatasetId(MetadataPrimaryIndexes.METADATA_DATASET_ID);
 
     private IndexRegistry<IIndex> indexRegistry;
     private TransactionProvider transactionProvider;
@@ -121,15 +124,15 @@ public class MetadataNode implements IMetadataNode {
     }
 
     @Override
-    public boolean lock(JobId jobId, int lockMode) throws ACIDException, RemoteException {
+    public void lock(JobId jobId, byte lockMode) throws ACIDException, RemoteException {
         TransactionContext txnCtx = transactionProvider.getTransactionManager().getTransactionContext(jobId);
-        return transactionProvider.getLockManager().lock(txnCtx, metadataResourceId, lockMode, null);
+        transactionProvider.getLockManager().lock(METADATA_DATASET_ID, -1, lockMode, txnCtx);
     }
 
     @Override
-    public boolean unlock(JobId jobId) throws ACIDException, RemoteException {
+    public void unlock(JobId jobId) throws ACIDException, RemoteException {
         TransactionContext txnCtx = transactionProvider.getTransactionManager().getTransactionContext(jobId);
-        return transactionProvider.getLockManager().unlock(metadataResourceId, null, txnCtx);
+        transactionProvider.getLockManager().unlock(METADATA_DATASET_ID, -1, txnCtx);
     }
 
     @Override
@@ -161,7 +164,7 @@ public class MetadataNode implements IMetadataNode {
                 addIndex(jobId, primaryIndex);
                 ITupleReference nodeGroupTuple = createTuple(id.getNodeGroupName(), dataset.getDataverseName(),
                         dataset.getDatasetName());
-                insertTupleIntoIndex(jobId,  MetadataSecondaryIndexes.GROUPNAME_ON_DATASET_INDEX, nodeGroupTuple);
+                insertTupleIntoIndex(jobId, MetadataSecondaryIndexes.GROUPNAME_ON_DATASET_INDEX, nodeGroupTuple);
             }
             // Add entry in datatype secondary index.
             ITupleReference dataTypeTuple = createTuple(dataset.getDataverseName(), dataset.getItemTypeName(),
@@ -709,7 +712,7 @@ public class MetadataNode implements IMetadataNode {
             FunctionTupleTranslator tupleReaderWriter = new FunctionTupleTranslator(false);
             List<Function> results = new ArrayList<Function>();
             IValueExtractor<Function> valueExtractor = new MetadataEntityValueExtractor<Function>(tupleReaderWriter);
-            searchIndex(jobId,  MetadataPrimaryIndexes.FUNCTION_DATASET, searchKey, valueExtractor, results);
+            searchIndex(jobId, MetadataPrimaryIndexes.FUNCTION_DATASET, searchKey, valueExtractor, results);
             if (results.isEmpty()) {
                 return null;
             }
@@ -795,6 +798,43 @@ public class MetadataNode implements IMetadataNode {
         } finally {
             rangeCursor.close();
         }
+    }
+
+    @Override
+    public void initializeDatasetIdFactory(JobId jobId) throws MetadataException, RemoteException {
+        int mostRecentDatasetId = MetadataPrimaryIndexes.FIRST_AVAILABLE_USER_DATASET_ID;
+        int fileId = MetadataPrimaryIndexes.DATASET_DATASET.getFileId();
+        BTree btree = (BTree) indexRegistry.get(fileId);
+        btree.open(fileId);
+        ITreeIndexFrame leafFrame = btree.getLeafFrameFactory().createFrame();
+        ITreeIndexAccessor indexAccessor = btree.createAccessor();
+
+        ITreeIndexCursor rangeCursor = new BTreeRangeSearchCursor((IBTreeLeafFrame) leafFrame, false);
+        DatasetTupleTranslator tupleReaderWriter = new DatasetTupleTranslator(false);
+        IValueExtractor<Dataset> valueExtractor = new MetadataEntityValueExtractor<Dataset>(tupleReaderWriter);
+        RangePredicate rangePred = new RangePredicate(null, null, true, true, null, null);
+
+        try {
+            indexAccessor.search(rangeCursor, rangePred);
+            int datasetId;
+
+            try {
+                while (rangeCursor.hasNext()) {
+                    rangeCursor.next();
+                    datasetId = ((Dataset) valueExtractor.getValue(jobId, rangeCursor.getTuple())).getDatasetId();
+                    if (mostRecentDatasetId < datasetId) {
+                        mostRecentDatasetId = datasetId;
+                    }
+                }
+            } finally {
+                rangeCursor.close();
+            }
+
+        } catch (Exception e) {
+            throw new MetadataException(e);
+        }
+        
+        DatasetIdFactory.initialize(mostRecentDatasetId);
     }
 
     // TODO: Can use Hyrack's TupleUtils for this, once we switch to a newer

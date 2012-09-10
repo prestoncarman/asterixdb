@@ -73,7 +73,7 @@ public interface IMetadataNode extends Remote, Serializable {
      * @throws ACIDException
      * @throws RemoteException
      */
-    public boolean lock(JobId jobId, int lockMode) throws ACIDException, RemoteException;
+    public void lock(JobId jobId, byte lockMode) throws ACIDException, RemoteException;
 
     /**
      * Releases all local locks of given transaction id.
@@ -81,7 +81,7 @@ public interface IMetadataNode extends Remote, Serializable {
      * @throws ACIDException
      * @throws RemoteException
      */
-    public boolean unlock(JobId jobId) throws ACIDException, RemoteException;
+    public void unlock(JobId jobId) throws ACIDException, RemoteException;
 
     /**
      * Inserts a new dataverse into the metadata, acquiring local locks on
@@ -419,4 +419,6 @@ public interface IMetadataNode extends Remote, Serializable {
 	 */
 	public void addFunction(JobId jobId, Function function)
 			throws MetadataException, RemoteException;
+
+    public void initializeDatasetIdFactory(JobId jobId) throws MetadataException, RemoteException;
 }

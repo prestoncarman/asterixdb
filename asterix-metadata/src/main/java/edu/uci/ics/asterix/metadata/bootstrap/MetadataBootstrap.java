@@ -178,6 +178,7 @@ public class MetadataBootstrap {
                 }
                 LOGGER.info("FINISHED ENLISTMENT OF METADATA B-TREES.");
             }
+            MetadataManager.INSTANCE.initializeDatasetIdFactory(mdTxnCtx);
             MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
         } catch (Exception e) {
             MetadataManager.INSTANCE.abortTransaction(mdTxnCtx);

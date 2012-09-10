@@ -46,24 +46,28 @@ public class TreeIndexInsertUpdateDeleteOperatorDescriptor extends AbstractTreeI
     private final IndexOp op;
 
     private final JobId jobId;
+    
+    private final int datasetId;
 
     /**
      * TODO: Index operators should live in Hyracks. Right now, they are needed
      * here in Asterix as a hack to provide transactionIDs. The Asterix verions
      * of this operator will disappear and the operator will come from Hyracks
      * once the LSM/Recovery/Transactions world has been introduced.
+     * @param datasetId TODO
      */
     public TreeIndexInsertUpdateDeleteOperatorDescriptor(JobSpecification spec, RecordDescriptor recDesc,
             IStorageManagerInterface storageManager, IIndexRegistryProvider<IIndex> indexRegistryProvider,
             IFileSplitProvider fileSplitProvider, ITypeTraits[] typeTraits,
             IBinaryComparatorFactory[] comparatorFactories, int[] fieldPermutation, IndexOp op,
             IIndexDataflowHelperFactory dataflowHelperFactory, ITupleFilterFactory tupleFilterFactory,
-            IOperationCallbackProvider opCallbackProvider, JobId jobId) {
+            IOperationCallbackProvider opCallbackProvider, JobId jobId, int datasetId) {
         super(spec, 1, 1, recDesc, storageManager, indexRegistryProvider, fileSplitProvider, typeTraits,
                 comparatorFactories, dataflowHelperFactory, tupleFilterFactory, false, opCallbackProvider);
         this.fieldPermutation = fieldPermutation;
         this.op = op;
         this.jobId = jobId;
+        this.datasetId = datasetId;
     }
 
     @Override
@@ -78,6 +82,6 @@ public class TreeIndexInsertUpdateDeleteOperatorDescriptor extends AbstractTreeI
             throw new RuntimeException(" could not obtain context for invalid transaction id " + jobId);
         }
         return new TreeIndexInsertUpdateDeleteOperatorNodePushable(txnContext, this, ctx, partition, fieldPermutation,
-                recordDescProvider, op);
+                recordDescProvider, op, datasetId);
     }
 }
