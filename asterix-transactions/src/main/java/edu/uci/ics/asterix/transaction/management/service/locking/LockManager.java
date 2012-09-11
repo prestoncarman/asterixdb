@@ -1299,6 +1299,7 @@ public class LockManager implements ILockManager {
         int waiterId = -1;
         LockWaiter waiter;
         int waiterCount = 0;
+        boolean isInterruptedExceptionOccurred = false;
 
         if (duplicatedWaiterObjId != -1 || isDeadlockFree(dLockInfo, eLockInfo, entityInfo, isDatasetLockInfo, isUpgrade)) {//deadlock free -> wait
             if (duplicatedWaiterObjId == -1) {
@@ -1350,9 +1351,16 @@ public class LockManager implements ILockManager {
                         }
                         waiter.wait();
                     } catch (InterruptedException e) {
+                        //TODO figure-out what is the appropriate way to handle this exception
                         e.printStackTrace();
+                        isInterruptedExceptionOccurred = true;
+                        waiter.setWait(false);
                     }
                 }
+            }
+            
+            if (isInterruptedExceptionOccurred) {
+                throw new ACIDException("InterruptedException is caught");
             }
 
             //waiter woke up -> remove/deallocate waiter object and abort if timeout
