@@ -44,7 +44,7 @@ public class LockManager implements ILockManager {
 
     private static final Logger LOGGER = Logger.getLogger(LockManager.class.getName());
     private static final int LOCK_MANAGER_INITIAL_HASH_TABLE_SIZE = 50;// do we need this?
-    public static final boolean IS_DEBUG_MODE = true;//false
+    public static final boolean IS_DEBUG_MODE = false;//true
 
     private TransactionProvider txnProvider;
 
@@ -596,7 +596,7 @@ public class LockManager implements ILockManager {
     }
 
     @Override
-    public synchronized void releaseLocks(TransactionContext txnContext) throws ACIDException {
+    public void releaseLocks(TransactionContext txnContext) throws ACIDException {
         LockWaiter waiterObj;
         int entityInfo;
         int prevEntityInfo;
@@ -619,6 +619,10 @@ public class LockManager implements ILockManager {
         }
 
         JobInfo jobInfo = jobHT.get(jobId);
+        if (jobInfo == null) {
+            unlatchLockTable();
+            return ;
+        }
 
         //remove waiterObj of JobInfo 
         //[Notice]
