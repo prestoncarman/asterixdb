@@ -1,6 +1,5 @@
 package edu.uci.ics.asterix.metadata.functions;
 
-import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
 import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
 import edu.uci.ics.asterix.om.base.AString;
@@ -53,7 +52,7 @@ public class MetadataBuiltinFunctions {
                 }
                 AsterixConstantValue acv = (AsterixConstantValue) ((ConstantExpression) a1).getValue();
                 String datasetArg = ((AString) acv.getObject()).getStringValue();
-                AqlCompiledMetadataDeclarations metadata = ((AqlMetadataProvider) mp).getMetadataDeclarations();
+                AqlMetadataProvider metadata = ((AqlMetadataProvider) mp);
                 Pair<String, String> datasetInfo = getDatasetInfo(metadata, datasetArg);
                 String dataverseName = datasetInfo.first;
                 String datasetName = datasetInfo.second;
@@ -96,7 +95,7 @@ public class MetadataBuiltinFunctions {
                 }
                 AsterixConstantValue acv = (AsterixConstantValue) ((ConstantExpression) a1).getValue();
                 String datasetArg = ((AString) acv.getObject()).getStringValue();
-                AqlCompiledMetadataDeclarations metadata = ((AqlMetadataProvider) mp).getMetadataDeclarations();
+                AqlMetadataProvider metadata = ((AqlMetadataProvider) mp);
                 Pair<String, String> datasetInfo = getDatasetInfo(metadata, datasetArg);
                 String dataverseName = datasetInfo.first;
                 String datasetName = datasetInfo.second;
@@ -118,12 +117,13 @@ public class MetadataBuiltinFunctions {
         });
     }
 
-    private static Pair<String, String> getDatasetInfo(AqlCompiledMetadataDeclarations metadata, String datasetArg) {
+    private static Pair<String, String> getDatasetInfo(AqlMetadataProvider metadata, String datasetArg) {
         String[] datasetNameComponents = datasetArg.split("\\.");
         String dataverseName;
         String datasetName;
         if (datasetNameComponents.length == 1) {
-            dataverseName = metadata.getDefaultDataverseName();
+            dataverseName = metadata.getDefaultDataverse() == null ? null : metadata.getDefaultDataverse()
+                    .getDataverseName();
             datasetName = datasetNameComponents[0];
         } else {
             dataverseName = datasetNameComponents[0];

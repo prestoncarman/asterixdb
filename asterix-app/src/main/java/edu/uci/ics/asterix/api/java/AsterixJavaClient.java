@@ -2,19 +2,19 @@ package edu.uci.ics.asterix.api.java;
 
 import java.io.PrintWriter;
 import java.io.Reader;
+import java.util.List;
 
 import edu.uci.ics.asterix.api.common.APIFramework;
 import edu.uci.ics.asterix.api.common.APIFramework.DisplayFormat;
 import edu.uci.ics.asterix.api.common.AsterixHyracksIntegrationUtil;
 import edu.uci.ics.asterix.api.common.Job;
 import edu.uci.ics.asterix.api.common.SessionConfig;
-import edu.uci.ics.asterix.aql.expression.Query;
+import edu.uci.ics.asterix.aql.base.Statement;
 import edu.uci.ics.asterix.aql.parser.AQLParser;
 import edu.uci.ics.asterix.aql.parser.ParseException;
+import edu.uci.ics.asterix.aql.translator.AqlTranslator;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
 import edu.uci.ics.asterix.metadata.MetadataManager;
-import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
-import edu.uci.ics.hyracks.algebricks.common.utils.Pair;
 import edu.uci.ics.hyracks.api.client.IHyracksClientConnection;
 import edu.uci.ics.hyracks.api.job.JobSpecification;
 
@@ -50,9 +50,9 @@ public class AsterixJavaClient {
             return;
         }
         AQLParser parser = new AQLParser(queryText);
-        Query q;
+        List<Statement> aqlStatements;
         try {
-            q = (Query) parser.Statement();
+            aqlStatements = parser.Statement();
         } catch (ParseException pe) {
             throw new AsterixException(pe);
         }
@@ -62,21 +62,9 @@ public class AsterixJavaClient {
                 false, printRewrittenExpressions, printLogicalPlan, printOptimizedPlan, printPhysicalOpsOnly, printJob);
         pc.setGenerateJobSpec(generateBinaryRuntime);
 
-        String dataverseName = null;
-        if (q != null) {
-            dataverseName = APIFramework.compileDdlStatements(hcc, q, writer, pc, DisplayFormat.TEXT);
-            dmlJobs = APIFramework.compileDmlStatements(q, writer, pc, DisplayFormat.TEXT);
-        }
-
-        if (q.isDummyQuery()) {
-            return;
-        }
-
-        Pair<AqlCompiledMetadataDeclarations, JobSpecification> metadataAndSpec = APIFramework.compileQuery(
-                dataverseName, q, parser.getVarCounter(), null, null, pc, writer, DisplayFormat.TEXT, null, null);
-        if (metadataAndSpec != null) {
-            queryJobSpec = metadataAndSpec.second;
-        }
+        
+        AqlTranslator aqlTranslator = new AqlTranslator(aqlStatements, writer, pc, DisplayFormat.TEXT);
+        aqlTranslator.compileExecute(hcc);
         writer.flush();
     }
 

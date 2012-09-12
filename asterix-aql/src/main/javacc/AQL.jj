@@ -95,8 +95,8 @@ public class AQLParser extends ScopeChecker {
 			File file = new File(args[0]);
 			Reader fis = new BufferedReader(new InputStreamReader(new FileInputStream(file), "UTF-8"));
 		    AQLParser parser = new AQLParser(fis);
-		    Statement st = parser.Statement();
-		    st.accept(new AQLPrintVisitor(), 0);
+		    List<Statement> st = parser.Statement();
+		    //st.accept(new AQLPrintVisitor(), 0);
 	}
 
 
@@ -105,11 +105,11 @@ public class AQLParser extends ScopeChecker {
 PARSER_END(AQLParser)
 
 
-Statement Statement() throws ParseException:
+List<Statement> Statement() throws ParseException:
 {
-  Query query = null;
   scopeStack.push(RootScopeFactory.createRootScope(this));
   List<Statement> decls = new ArrayList<Statement>();
+  Query query=null;
 }
 {
     (
@@ -227,21 +227,19 @@ Statement Statement() throws ParseException:
 	  	   } ";" 
 	  	   | "alter" "feed"  {
       	        decls.add(AlterFeedDeclaration());
-           } ";"            
-                                                     
-        )*
-        (query = Query())?
+           } ";"
+            
+           )*
+            (query = Query())?
       )
 
       <EOF>
     )
     {
-      if (query == null) {
-        query = new Query(true);
-      }
-      query.setPrologDeclList(decls);
-    
-      return query;
+     if(query!=null){
+      	decls.add(query);
+     }
+     return decls;  
     }
 }
 
@@ -1336,6 +1334,7 @@ Query Query()throws ParseException:
     (";")?
     {
       query.setBody(expr);
+      query.setVarCounter(getVarCounter());
       return query;
     }
      

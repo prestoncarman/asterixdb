@@ -19,8 +19,8 @@ import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.List;
 
+import edu.uci.ics.asterix.aql.base.Statement;
 import edu.uci.ics.asterix.aql.expression.FunctionDecl;
-import edu.uci.ics.asterix.aql.expression.Query;
 import edu.uci.ics.asterix.aql.expression.VarIdentifier;
 import edu.uci.ics.asterix.aql.parser.AQLParser;
 import edu.uci.ics.asterix.aql.parser.ParseException;
@@ -32,43 +32,44 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.functions.IFunctionInfo;
 
 public class FunctionUtils {
 
-    public static FunctionDecl getFunctionDecl(Function function) throws AsterixException {
-        String functionBody = function.getFunctionBody();
-        List<String> params = function.getParams();
-        List<VarIdentifier> varIdentifiers = new ArrayList<VarIdentifier>();
+	public static FunctionDecl getFunctionDecl(Function function)
+			throws AsterixException {
+		String functionBody = function.getFunctionBody();
+		List<String> params = function.getParams();
+		List<VarIdentifier> varIdentifiers = new ArrayList<VarIdentifier>();
 
-        StringBuilder builder = new StringBuilder();
-        builder.append(" use dataverse " + function.getDataverseName() + ";");
-        builder.append(" declare function " + function.getName().split("@")[0]);
-        builder.append("(");
-        for (String param : params) {
-            VarIdentifier varId = new VarIdentifier(param);
-            varIdentifiers.add(varId);
-            builder.append(param);
-            builder.append(",");
-        }
-        if (params.size() > 0) {
-            builder.delete(builder.length() - 1, builder.length());
-        }
-        builder.append(")");
-        builder.append("{");
-        builder.append(functionBody);
-        builder.append("}");
-        AQLParser parser = new AQLParser(new StringReader(new String(builder)));
+		StringBuilder builder = new StringBuilder();
+		builder.append(" use dataverse " + function.getDataverseName() + ";");
+		builder.append(" declare function " + function.getName().split("@")[0]);
+		builder.append("(");
+		for (String param : params) {
+			VarIdentifier varId = new VarIdentifier(param);
+			varIdentifiers.add(varId);
+			builder.append(param);
+			builder.append(",");
+		}
+		if (params.size() > 0) {
+			builder.delete(builder.length() - 1, builder.length());
+		}
+		builder.append(")");
+		builder.append("{");
+		builder.append(functionBody);
+		builder.append("}");
+		AQLParser parser = new AQLParser(new StringReader(new String(builder)));
 
-        Query query = null;
-        try {
-            query = (Query) parser.Statement();
-        } catch (ParseException pe) {
-            throw new AsterixException(pe);
-        }
+		List<Statement> statements = null;
+		try {
+			statements = parser.Statement();
+		} catch (ParseException pe) {
+			throw new AsterixException(pe);
+		}
 
-        FunctionDecl decl = (FunctionDecl) query.getPrologDeclList().get(1);
-        return decl;
-    }
+		FunctionDecl decl = (FunctionDecl) statements.get(1);
+		return decl;
+	}
 
-    public static IFunctionInfo getFunctionInfo(FunctionIdentifier fi) {
-        return AsterixBuiltinFunctions.getAsterixFunctionInfo(fi);
-    }
+	public static IFunctionInfo getFunctionInfo(FunctionIdentifier fi) {
+		return AsterixBuiltinFunctions.getAsterixFunctionInfo(fi);
+	}
 
 }

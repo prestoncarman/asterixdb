@@ -9,10 +9,10 @@ import org.json.JSONException;
 
 import edu.uci.ics.asterix.api.common.Job.SubmissionMode;
 import edu.uci.ics.asterix.aql.base.Statement;
+import edu.uci.ics.asterix.aql.expression.FunctionDecl;
 import edu.uci.ics.asterix.aql.expression.Query;
 import edu.uci.ics.asterix.aql.expression.visitor.AQLPrintVisitor;
 import edu.uci.ics.asterix.aql.rewrites.AqlRewriter;
-import edu.uci.ics.asterix.aql.translator.DdlTranslator;
 import edu.uci.ics.asterix.common.api.AsterixAppContextInfoImpl;
 import edu.uci.ics.asterix.common.config.GlobalConfig;
 import edu.uci.ics.asterix.common.config.OptimizationConfUtil;
@@ -21,30 +21,16 @@ import edu.uci.ics.asterix.dataflow.data.common.AqlExpressionTypeComputer;
 import edu.uci.ics.asterix.dataflow.data.common.AqlMergeAggregationExpressionFactory;
 import edu.uci.ics.asterix.dataflow.data.common.AqlNullableTypeComputer;
 import edu.uci.ics.asterix.dataflow.data.common.AqlPartialAggregationTypeComputer;
-import edu.uci.ics.asterix.file.DatasetOperations;
-import edu.uci.ics.asterix.file.FeedOperations;
-import edu.uci.ics.asterix.file.IndexOperations;
 import edu.uci.ics.asterix.formats.base.IDataFormat;
 import edu.uci.ics.asterix.jobgen.AqlLogicalExpressionJobGen;
 import edu.uci.ics.asterix.metadata.MetadataManager;
 import edu.uci.ics.asterix.metadata.MetadataTransactionContext;
-import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
 import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
 import edu.uci.ics.asterix.metadata.entities.Dataverse;
 import edu.uci.ics.asterix.optimizer.base.RuleCollections;
 import edu.uci.ics.asterix.runtime.job.listener.JobEventListenerFactory;
 import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
-import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionIDFactory;
-import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionManagementConstants.LockManagerConstants.LockMode;
 import edu.uci.ics.asterix.translator.AqlExpressionToPlanTranslator;
-import edu.uci.ics.asterix.translator.DmlTranslator;
-import edu.uci.ics.asterix.translator.DmlTranslator.CompiledBeginFeedStatement;
-import edu.uci.ics.asterix.translator.DmlTranslator.CompiledControlFeedStatement;
-import edu.uci.ics.asterix.translator.DmlTranslator.CompiledCreateIndexStatement;
-import edu.uci.ics.asterix.translator.DmlTranslator.CompiledDeleteStatement;
-import edu.uci.ics.asterix.translator.DmlTranslator.CompiledInsertStatement;
-import edu.uci.ics.asterix.translator.DmlTranslator.CompiledLoadFromFileStatement;
-import edu.uci.ics.asterix.translator.DmlTranslator.CompiledWriteFromQueryResultStatement;
 import edu.uci.ics.asterix.translator.DmlTranslator.ICompiledDmlStatement;
 import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksPartitionConstraint;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
@@ -54,7 +40,7 @@ import edu.uci.ics.hyracks.algebricks.compiler.api.ICompiler;
 import edu.uci.ics.hyracks.algebricks.compiler.api.ICompilerFactory;
 import edu.uci.ics.hyracks.algebricks.compiler.rewriter.rulecontrollers.SequentialFixpointRuleController;
 import edu.uci.ics.hyracks.algebricks.compiler.rewriter.rulecontrollers.SequentialOnceRuleController;
-import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalPlanAndMetadata;
+import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalPlan;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IOptimizationContext;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IExpressionEvalSizeComputer;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IExpressionTypeComputer;
@@ -144,197 +130,8 @@ public class APIFramework {
         HTML
     }
 
-    public static String compileDdlStatements(IHyracksClientConnection hcc, Query query, PrintWriter out,
-            SessionConfig pc, DisplayFormat pdf) throws Exception {
-        // Begin a transaction against the metadata.
-        // Lock the metadata in X mode to protect against other DDL and DML.
-        MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
-        MetadataManager.INSTANCE.lock(mdTxnCtx, LockMode.EXCLUSIVE);
-        try {
-            DdlTranslator ddlt = new DdlTranslator(mdTxnCtx, query.getPrologDeclList(), out, pc, pdf);
-            ddlt.translate(hcc, false);
-            MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
-            return ddlt.getCompiledDeclarations().getDefaultDataverseName();
-        } catch (Exception e) {
-            MetadataManager.INSTANCE.abortTransaction(mdTxnCtx);
-            throw e;
-        }
-    }
-
-    public static Job[] compileDmlStatements(Query query, PrintWriter out, SessionConfig pc, DisplayFormat pdf)
-            throws AsterixException, AlgebricksException, JSONException, RemoteException, ACIDException {
-
-        // Begin a transaction against the metadata.
-        // Lock the metadata in S mode to protect against other DDL
-        // modifications.
-        MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
-        MetadataManager.INSTANCE.lock(mdTxnCtx, LockMode.SHARED);
-        try {
-            DmlTranslator dmlt = new DmlTranslator(mdTxnCtx, query.getPrologDeclList());
-            dmlt.translate();
-
-            if (dmlt.getCompiledDmlStatements().size() == 0) {
-                // There is no DML to run. Consider the transaction against the
-                // metadata successful.
-                MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
-                return new Job[] {};
-
-            }
-
-            List<Job> dmlJobs = new ArrayList<Job>();
-            AqlCompiledMetadataDeclarations metadata = dmlt.getCompiledDeclarations();
-            for (ICompiledDmlStatement stmt : dmlt.getCompiledDmlStatements()) {
-                String dataverse = stmt.getDataverseName() == null ? dmlt.getCompiledDeclarations()
-                        .getDefaultDataverseName() : stmt.getDataverseName();
-                switch (stmt.getKind()) {
-                    case LOAD_FROM_FILE: {
-                        CompiledLoadFromFileStatement stmtLoad = (CompiledLoadFromFileStatement) stmt;
-                        IDataFormat format = getDataFormat(mdTxnCtx, dataverse);
-                        dmlJobs.add(DatasetOperations.createLoadDatasetJobSpec(stmtLoad, metadata, format));
-                        break;
-                    }
-                    case WRITE_FROM_QUERY_RESULT: {
-                        CompiledWriteFromQueryResultStatement writeFromQueryStmt = (CompiledWriteFromQueryResultStatement) stmt;
-                        SessionConfig sc2 = new SessionConfig(pc.getPort(), true, pc.isPrintExprParam(),
-                                pc.isPrintRewrittenExprParam(), pc.isPrintLogicalPlanParam(),
-                                pc.isPrintOptimizedLogicalPlanParam(), pc.isPrintPhysicalOpsOnly(), pc.isPrintJob());
-                        sc2.setGenerateJobSpec(true);
-                        Pair<AqlCompiledMetadataDeclarations, JobSpecification> mj = compileQueryInternal(mdTxnCtx,
-                                dataverse, writeFromQueryStmt.getQuery(), writeFromQueryStmt.getVarCounter(),
-                                writeFromQueryStmt.getDatasetName(), metadata, sc2, out, pdf,
-                                Statement.Kind.WRITE_FROM_QUERY_RESULT, writeFromQueryStmt);
-                        dmlJobs.add(new Job(mj.second));
-                        break;
-                    }
-                    case INSERT: {
-                        CompiledInsertStatement stmtInsert = (CompiledInsertStatement) stmt;
-                        SessionConfig sc2 = new SessionConfig(pc.getPort(), true, pc.isPrintExprParam(),
-                                pc.isPrintRewrittenExprParam(), pc.isPrintLogicalPlanParam(),
-                                pc.isPrintOptimizedLogicalPlanParam(), pc.isPrintPhysicalOpsOnly(), pc.isPrintJob());
-                        sc2.setGenerateJobSpec(true);
-                        Pair<AqlCompiledMetadataDeclarations, JobSpecification> mj = compileQueryInternal(mdTxnCtx,
-                                dataverse, stmtInsert.getQuery(), stmtInsert.getVarCounter(),
-                                stmtInsert.getDatasetName(), metadata, sc2, out, pdf, Statement.Kind.INSERT, stmtInsert);
-                        dmlJobs.add(new Job(mj.second));
-                        break;
-                    }
-                    case DELETE: {
-                        CompiledDeleteStatement stmtDelete = (CompiledDeleteStatement) stmt;
-                        SessionConfig sc2 = new SessionConfig(pc.getPort(), true, pc.isPrintExprParam(),
-                                pc.isPrintRewrittenExprParam(), pc.isPrintLogicalPlanParam(),
-                                pc.isPrintOptimizedLogicalPlanParam(), pc.isPrintPhysicalOpsOnly(), pc.isPrintJob());
-                        sc2.setGenerateJobSpec(true);
-                        Pair<AqlCompiledMetadataDeclarations, JobSpecification> mj = compileQueryInternal(mdTxnCtx,
-                                dataverse, stmtDelete.getQuery(dataverse), stmtDelete.getVarCounter(),
-                                stmtDelete.getDatasetName(), metadata, sc2, out, pdf, Statement.Kind.DELETE, stmtDelete);
-                        dmlJobs.add(new Job(mj.second));
-                        break;
-                    }
-                    case CREATE_INDEX: {
-                        CompiledCreateIndexStatement cis = (CompiledCreateIndexStatement) stmt;
-                        JobSpecification jobSpec = IndexOperations.buildSecondaryIndexLoadingJobSpec(cis, metadata);
-                        dmlJobs.add(new Job(jobSpec));
-                        break;
-                    }
-
-                    case BEGIN_FEED: {
-                        CompiledBeginFeedStatement cbfs = (CompiledBeginFeedStatement) stmt;
-                        SessionConfig sc2 = new SessionConfig(pc.getPort(), true, pc.isPrintExprParam(),
-                                pc.isPrintRewrittenExprParam(), pc.isPrintLogicalPlanParam(),
-                                pc.isPrintOptimizedLogicalPlanParam(), pc.isPrintPhysicalOpsOnly(), pc.isPrintJob());
-                        sc2.setGenerateJobSpec(true);
-                        Pair<AqlCompiledMetadataDeclarations, JobSpecification> mj = compileQueryInternal(mdTxnCtx,
-                                dataverse, cbfs.getQuery(), cbfs.getVarCounter(), cbfs.getDatasetName(), metadata, sc2,
-                                out, pdf, Statement.Kind.BEGIN_FEED, cbfs);
-                        dmlJobs.add(new Job(mj.second));
-                        break;
-
-                    }
-
-                    case CONTROL_FEED: {
-                        CompiledControlFeedStatement cfs = (CompiledControlFeedStatement) stmt;
-                        Job job = new Job(FeedOperations.buildControlFeedJobSpec(cfs, metadata),
-                                SubmissionMode.ASYNCHRONOUS);
-                        dmlJobs.add(job);
-                        break;
-                    }
-                    default: {
-                        throw new IllegalArgumentException();
-                    }
-                }
-            }
-            if (pc.isPrintJob()) {
-                int i = 0;
-                for (Job js : dmlJobs) {
-                    out.println("<H1>Hyracks job number " + i + ":</H1>");
-                    out.println("<PRE>");
-                    out.println(js.getJobSpec().toJSON().toString(1));
-                    out.println(js.getJobSpec().getUserConstraints());
-                    out.println(js.getSubmissionMode());
-                    out.println("</PRE>");
-                    i++;
-                }
-            }
-            // close connection to dataverse
-            if (metadata.isConnectedToDataverse())
-                metadata.disconnectFromDataverse();
-
-            Job[] jobs = dmlJobs.toArray(new Job[0]);
-            MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
-            return jobs;
-        } catch (AsterixException e) {
-            MetadataManager.INSTANCE.abortTransaction(mdTxnCtx);
-            throw e;
-        } catch (AlgebricksException e) {
-            MetadataManager.INSTANCE.abortTransaction(mdTxnCtx);
-            throw e;
-        } catch (JSONException e) {
-            MetadataManager.INSTANCE.abortTransaction(mdTxnCtx);
-            throw e;
-        } catch (Exception e) {
-            MetadataManager.INSTANCE.abortTransaction(mdTxnCtx);
-            throw new AsterixException(e);
-        }
-    }
-
-    public static Pair<AqlCompiledMetadataDeclarations, JobSpecification> compileQuery(String dataverseName, Query q,
-            int varCounter, String outputDatasetName, AqlCompiledMetadataDeclarations metadataDecls, SessionConfig pc,
-            PrintWriter out, DisplayFormat pdf, Statement.Kind dmlKind, ICompiledDmlStatement statement)
-            throws AsterixException, AlgebricksException, JSONException, RemoteException, ACIDException {
-        MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
-        try {
-            MetadataManager.INSTANCE.lock(mdTxnCtx, LockMode.SHARED);
-            Pair<AqlCompiledMetadataDeclarations, JobSpecification> result = compileQueryInternal(mdTxnCtx,
-                    dataverseName, q, varCounter, outputDatasetName, metadataDecls, pc, out, pdf, dmlKind, statement);
-            MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
-            return result;
-        } catch (AsterixException e) {
-            MetadataManager.INSTANCE.abortTransaction(mdTxnCtx);
-            throw e;
-        } catch (AlgebricksException e) {
-            MetadataManager.INSTANCE.abortTransaction(mdTxnCtx);
-            throw e;
-        } catch (JSONException e) {
-            MetadataManager.INSTANCE.abortTransaction(mdTxnCtx);
-            throw e;
-        } catch (RemoteException e) {
-            MetadataManager.INSTANCE.abortTransaction(mdTxnCtx);
-            throw e;
-        } catch (ACIDException e) {
-            MetadataManager.INSTANCE.abortTransaction(mdTxnCtx);
-            throw e;
-        } catch (Exception e) {
-            MetadataManager.INSTANCE.abortTransaction(mdTxnCtx);
-            throw new AsterixException(e);
-        }
-    }
-
-    public static Pair<AqlCompiledMetadataDeclarations, JobSpecification> compileQueryInternal(
-            MetadataTransactionContext mdTxnCtx, String dataverseName, Query q, int varCounter,
-            String outputDatasetName, AqlCompiledMetadataDeclarations metadataDecls, SessionConfig pc, PrintWriter out,
-            DisplayFormat pdf, Statement.Kind dmlKind, ICompiledDmlStatement stmt) throws AsterixException,
-            AlgebricksException, JSONException, RemoteException, ACIDException {
-
+    public static Pair<Query, Integer> reWriteQuery(List<FunctionDecl> declaredFunctions, AqlMetadataProvider metadataProvider,
+            Query q, SessionConfig pc, PrintWriter out, DisplayFormat pdf) throws AsterixException {
         if (!pc.isPrintPhysicalOpsOnly() && pc.isPrintExprParam()) {
             out.println();
             switch (pdf) {
@@ -358,9 +155,17 @@ public class APIFramework {
                 }
             }
         }
-        AqlRewriter rw = new AqlRewriter(q, varCounter, mdTxnCtx, dataverseName);
+        AqlRewriter rw = new AqlRewriter(declaredFunctions, q, metadataProvider.getMetadataTxnContext());
         rw.rewrite();
         Query rwQ = rw.getExpr();
+        return new Pair(rwQ, rw.getVarCounter());
+    }
+
+    public static JobSpecification compileQuery(List<FunctionDecl> declaredFunctions,
+            AqlMetadataProvider queryMetadataProvider, Query rwQ, int varCounter, String outputDatasetName,
+            SessionConfig pc, PrintWriter out, DisplayFormat pdf, ICompiledDmlStatement statement)
+            throws AsterixException, AlgebricksException, JSONException, RemoteException, ACIDException {
+
         if (!pc.isPrintPhysicalOpsOnly() && pc.isPrintRewrittenExprParam()) {
             out.println();
 
@@ -376,7 +181,7 @@ public class APIFramework {
                 }
             }
 
-            if (q != null) {
+            if (rwQ != null) {
                 rwQ.accept(new AQLPrintVisitor(out), 0);
             }
 
@@ -388,21 +193,12 @@ public class APIFramework {
             }
 
         }
-        long txnId = TransactionIDFactory.generateTransactionId();
-        AqlExpressionToPlanTranslator t = new AqlExpressionToPlanTranslator(txnId, mdTxnCtx, rw.getVarCounter(),
-                outputDatasetName, dmlKind,  stmt);
 
-        ILogicalPlanAndMetadata planAndMetadata = t.translate(rwQ, metadataDecls);
-        boolean isWriteTransaction = false;
-        AqlMetadataProvider mp = (AqlMetadataProvider) planAndMetadata.getMetadataProvider();
-        if (metadataDecls == null) {
-            metadataDecls = mp.getMetadataDeclarations();
-        }
-        isWriteTransaction = mp.isWriteTransaction();
+        AqlExpressionToPlanTranslator t = new AqlExpressionToPlanTranslator(queryMetadataProvider, varCounter,
+                outputDatasetName, statement);
 
-        if (outputDatasetName == null && metadataDecls.getOutputFile() == null) {
-            throw new AlgebricksException("Unknown output file: `write output to nc:\"file\"' statement missing.");
-        }
+        ILogicalPlan plan = t.translate(rwQ);
+        boolean isWriteTransaction = queryMetadataProvider.isWriteTransaction();
 
         LogicalOperatorPrettyPrintVisitor pvisitor = new LogicalOperatorPrettyPrintVisitor();
         if (!pc.isPrintPhysicalOpsOnly() && pc.isPrintLogicalPlanParam()) {
@@ -419,9 +215,9 @@ public class APIFramework {
                 }
             }
 
-            if (q != null) {
+            if (rwQ != null) {
                 StringBuilder buffer = new StringBuilder();
-                PlanPrettyPrinter.printPlan(planAndMetadata.getPlan(), buffer, pvisitor, 0);
+                PlanPrettyPrinter.printPlan(plan, buffer, pvisitor, 0);
                 out.print(buffer);
             }
 
@@ -453,7 +249,7 @@ public class APIFramework {
                 AqlOptimizationContextFactory.INSTANCE);
         builder.setLogicalRewrites(buildDefaultLogicalRewrites());
         builder.setPhysicalRewrites(buildDefaultPhysicalRewrites());
-        IDataFormat format = metadataDecls.getFormat();
+        IDataFormat format = queryMetadataProvider.getFormat();
         ICompilerFactory compilerFactory = builder.create();
         builder.setFrameSize(frameSize);
         builder.setExpressionEvalSizeComputer(format.getExpressionEvalSizeComputer());
@@ -464,15 +260,14 @@ public class APIFramework {
 
         OptimizationConfUtil.getPhysicalOptimizationConfig().setFrameSize(frameSize);
         builder.setPhysicalOptimizationConfig(OptimizationConfUtil.getPhysicalOptimizationConfig());
-        ICompiler compiler = compilerFactory.createCompiler(planAndMetadata.getPlan(),
-                planAndMetadata.getMetadataProvider(), t.getVarCounter());
+        ICompiler compiler = compilerFactory.createCompiler(plan, queryMetadataProvider, t.getVarCounter());
         if (pc.isOptimize()) {
             compiler.optimize();
             if (pc.isPrintOptimizedLogicalPlanParam()) {
                 if (pc.isPrintPhysicalOpsOnly()) {
                     // For Optimizer tests.
                     StringBuilder buffer = new StringBuilder();
-                    PlanPrettyPrinter.printPhysicalOps(planAndMetadata.getPlan(), buffer, 0);
+                    PlanPrettyPrinter.printPhysicalOps(plan, buffer, 0);
                     out.print(buffer);
                 } else {
                     switch (pdf) {
@@ -486,9 +281,9 @@ public class APIFramework {
                             break;
                         }
                     }
-                    if (q != null) {
+                    if (rwQ != null) {
                         StringBuilder buffer = new StringBuilder();
-                        PlanPrettyPrinter.printPlan(planAndMetadata.getPlan(), buffer, pvisitor, 0);
+                        PlanPrettyPrinter.printPlan(plan, buffer, pvisitor, 0);
                         out.print(buffer);
                     }
                     switch (pdf) {
@@ -504,11 +299,11 @@ public class APIFramework {
         if (!pc.isGenerateJobSpec()) {
             // Job spec not requested. Consider transaction against metadata
             // committed.
-            MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
+            MetadataManager.INSTANCE.commitTransaction(queryMetadataProvider.getMetadataTxnContext());
             return null;
         }
 
-        AlgebricksPartitionConstraint clusterLocs = planAndMetadata.getClusterLocations();
+        AlgebricksPartitionConstraint clusterLocs = queryMetadataProvider.getClusterLocations();
         builder.setBinaryBooleanInspectorFactory(format.getBinaryBooleanInspectorFactory());
         builder.setBinaryIntegerInspectorFactory(format.getBinaryIntegerInspectorFactory());
         builder.setClusterLocations(clusterLocs);
@@ -524,7 +319,8 @@ public class APIFramework {
 
         JobSpecification spec = compiler.createJob(AsterixAppContextInfoImpl.INSTANCE);
         // set the job event listener
-        spec.setJobletEventListenerFactory(new JobEventListenerFactory(txnId, isWriteTransaction));
+        spec.setJobletEventListenerFactory(new JobEventListenerFactory(queryMetadataProvider.getTxnId(),
+                isWriteTransaction));
         if (pc.isPrintJob()) {
             switch (pdf) {
                 case HTML: {
@@ -537,7 +333,7 @@ public class APIFramework {
                     break;
                 }
             }
-            if (q != null) {
+            if (rwQ != null) {
                 out.println(spec.toJSON().toString(1));
                 out.println(spec.getUserConstraints());
             }
@@ -548,7 +344,7 @@ public class APIFramework {
                 }
             }
         }
-        return new Pair<AqlCompiledMetadataDeclarations, JobSpecification>(metadataDecls, spec);
+        return spec;
     }
 
     public static void executeJobArray(IHyracksClientConnection hcc, JobSpecification[] specs, PrintWriter out,

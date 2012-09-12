@@ -1,202 +1,35 @@
 package edu.uci.ics.asterix.translator;
 
-import java.rmi.RemoteException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 import edu.uci.ics.asterix.aql.base.Clause;
 import edu.uci.ics.asterix.aql.base.Expression;
-import edu.uci.ics.asterix.aql.base.Statement;
 import edu.uci.ics.asterix.aql.base.Statement.Kind;
-import edu.uci.ics.asterix.aql.expression.BeginFeedStatement;
 import edu.uci.ics.asterix.aql.expression.CallExpr;
-import edu.uci.ics.asterix.aql.expression.ControlFeedStatement;
 import edu.uci.ics.asterix.aql.expression.ControlFeedStatement.OperationType;
-import edu.uci.ics.asterix.aql.expression.CreateIndexStatement;
-import edu.uci.ics.asterix.aql.expression.DeleteStatement;
 import edu.uci.ics.asterix.aql.expression.FLWOGRExpression;
 import edu.uci.ics.asterix.aql.expression.FieldAccessor;
 import edu.uci.ics.asterix.aql.expression.FieldBinding;
 import edu.uci.ics.asterix.aql.expression.ForClause;
 import edu.uci.ics.asterix.aql.expression.Identifier;
-import edu.uci.ics.asterix.aql.expression.InsertStatement;
 import edu.uci.ics.asterix.aql.expression.LiteralExpr;
-import edu.uci.ics.asterix.aql.expression.LoadFromFileStatement;
 import edu.uci.ics.asterix.aql.expression.Query;
 import edu.uci.ics.asterix.aql.expression.RecordConstructor;
 import edu.uci.ics.asterix.aql.expression.VariableExpr;
 import edu.uci.ics.asterix.aql.expression.WhereClause;
-import edu.uci.ics.asterix.aql.expression.WriteFromQueryResultStatement;
 import edu.uci.ics.asterix.aql.literal.StringLiteral;
-import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
 import edu.uci.ics.asterix.common.config.DatasetConfig.IndexType;
-import edu.uci.ics.asterix.common.exceptions.AsterixException;
 import edu.uci.ics.asterix.common.functions.FunctionConstants;
 import edu.uci.ics.asterix.common.functions.FunctionSignature;
-import edu.uci.ics.asterix.metadata.IDatasetDetails;
-import edu.uci.ics.asterix.metadata.MetadataException;
-import edu.uci.ics.asterix.metadata.MetadataManager;
-import edu.uci.ics.asterix.metadata.MetadataTransactionContext;
-import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
+import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
-import edu.uci.ics.asterix.metadata.entities.Index;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.IAType;
-import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 
 public class DmlTranslator extends AbstractAqlTranslator {
-
-    private final MetadataTransactionContext mdTxnCtx;
-    private final List<Statement> aqlStatements;
-    private AqlCompiledMetadataDeclarations compiledDeclarations;
-    private List<ICompiledDmlStatement> compiledDmlStatements;
-
-    public DmlTranslator(MetadataTransactionContext mdTxnCtx, List<Statement> aqlStatements) {
-        this.mdTxnCtx = mdTxnCtx;
-        this.aqlStatements = aqlStatements;
-    }
-
-    public void translate() throws AsterixException, RemoteException, ACIDException, MetadataException {
-        compiledDeclarations = compileMetadata(mdTxnCtx, aqlStatements, true);
-        compiledDmlStatements = compileDmlStatements();
-    }
-
-    public AqlCompiledMetadataDeclarations getCompiledDeclarations() {
-        return compiledDeclarations;
-    }
-
-    public List<ICompiledDmlStatement> getCompiledDmlStatements() {
-        return compiledDmlStatements;
-    }
-
-    private List<ICompiledDmlStatement> compileDmlStatements() throws AsterixException, MetadataException {
-        List<ICompiledDmlStatement> dmlStatements = new ArrayList<ICompiledDmlStatement>();
-        for (Statement stmt : aqlStatements) {
-            validateOperation(compiledDeclarations, stmt);
-            switch (stmt.getKind()) {
-                case LOAD_FROM_FILE: {
-                    LoadFromFileStatement loadStmt = (LoadFromFileStatement) stmt;
-                    String dataverseName = loadStmt.getDataverseName() == null ? compiledDeclarations
-                            .getDefaultDataverseName() : loadStmt.getDataverseName().getValue();
-                    CompiledLoadFromFileStatement cls = new CompiledLoadFromFileStatement(dataverseName, loadStmt
-                            .getDatasetName().getValue(), loadStmt.getAdapter(), loadStmt.getProperties(),
-                            loadStmt.dataIsAlreadySorted());
-                    dmlStatements.add(cls);
-                    // Also load the dataset's secondary indexes.
-                    List<Index> datasetIndexes = MetadataManager.INSTANCE.getDatasetIndexes(mdTxnCtx, dataverseName,
-                            loadStmt.getDatasetName().getValue());
-                    for (Index index : datasetIndexes) {
-                        if (!index.isSecondaryIndex()) {
-                            continue;
-                        }
-                        // Create CompiledCreateIndexStatement from metadata entity 'index'.
-                        CompiledCreateIndexStatement cis = new CompiledCreateIndexStatement(index.getIndexName(),
-                                dataverseName, index.getDatasetName(), index.getKeyFieldNames(), index.getGramLength(),
-                                index.getIndexType());
-                        dmlStatements.add(cis);
-                    }
-                    break;
-                }
-                case WRITE_FROM_QUERY_RESULT: {
-                    WriteFromQueryResultStatement st1 = (WriteFromQueryResultStatement) stmt;
-                    String dataverseName = st1.getDataverseName() == null ? compiledDeclarations
-                            .getDefaultDataverseName() : st1.getDataverseName().getValue();
-                    CompiledWriteFromQueryResultStatement clfrqs = new CompiledWriteFromQueryResultStatement(
-                            dataverseName, st1.getDatasetName().getValue(), st1.getQuery(), st1.getVarCounter());
-                    dmlStatements.add(clfrqs);
-                    break;
-                }
-                case CREATE_INDEX: {
-                    CreateIndexStatement cis = (CreateIndexStatement) stmt;
-                    // Assumptions: We first processed the DDL, which added the secondary index to the metadata.
-                    // If the index's dataset is being loaded in this 'session', then let the load add 
-                    // the CompiledCreateIndexStatement to dmlStatements, and don't add it again here.
-                    // It's better to have the load handle this because:
-                    // 1. There may be more secondary indexes to load, which were possibly created in an earlier session.
-                    // 2. If the create index stmt came before the load stmt, then we would first create an empty index only to load it again later. 
-                    // This may cause problems because the index would be considered loaded (even though it was loaded empty). 
-                    String loadDatasetStmtDataverse = null;
-                    String ciStmtDataverse = null;
-                    for (Statement s : aqlStatements) {
-                        if (s.getKind() != Kind.LOAD_FROM_FILE) {
-                            continue;
-                        }
-                        LoadFromFileStatement loadStmt = (LoadFromFileStatement) s;
-                        loadDatasetStmtDataverse = loadStmt.getDataverseName() == null ? compiledDeclarations
-                                .getDefaultDataverseName() : loadStmt.getDataverseName().getValue();
-                        ciStmtDataverse = loadStmt.getDataverseName() == null ? compiledDeclarations
-                                .getDefaultDataverseName() : loadStmt.getDataverseName().getValue();
-
-                        if (loadStmt.getDatasetName().equals(cis.getDatasetName())
-                                && loadDatasetStmtDataverse.equals(ciStmtDataverse)) {
-                            cis.setNeedToCreate(false);
-                        }
-                    }
-                    if (cis.getNeedToCreate()) {
-                        CompiledCreateIndexStatement ccis = new CompiledCreateIndexStatement(cis.getIndexName()
-                                .getValue(), ciStmtDataverse, cis.getDatasetName().getValue(), cis.getFieldExprs(),
-                                cis.getGramLength(), cis.getIndexType());
-                        dmlStatements.add(ccis);
-                    }
-                    break;
-                }
-                case INSERT: {
-                    InsertStatement is = (InsertStatement) stmt;
-                    String dataverseName = is.getDataverseName() == null ? compiledDeclarations
-                            .getDefaultDataverseName() : is.getDataverseName().getValue();
-                    CompiledInsertStatement clfrqs = new CompiledInsertStatement(dataverseName, is.getDatasetName()
-                            .getValue(), is.getQuery(), is.getVarCounter());
-                    dmlStatements.add(clfrqs);
-                    break;
-                }
-                case DELETE: {
-                    DeleteStatement ds = (DeleteStatement) stmt;
-                    String dataverseName = ds.getDataverseName() == null ? compiledDeclarations
-                            .getDefaultDataverseName() : ds.getDataverseName().getValue();
-
-                    CompiledDeleteStatement clfrqs = new CompiledDeleteStatement(ds.getVariableExpr(), dataverseName,
-                            ds.getDatasetName().getValue(), ds.getCondition(), ds.getDieClause(), ds.getVarCounter(),
-                            compiledDeclarations);
-                    dmlStatements.add(clfrqs);
-                    break;
-                }
-
-                case BEGIN_FEED: {
-                    BeginFeedStatement bfs = (BeginFeedStatement) stmt;
-                    String dataverseName = bfs.getDataverseName() == null ? compiledDeclarations
-                            .getDefaultDataverseName() : bfs.getDataverseName().getValue();
-
-                    CompiledBeginFeedStatement cbfs = new CompiledBeginFeedStatement(dataverseName, bfs
-                            .getDatasetName().getValue(), bfs.getQuery(), bfs.getVarCounter());
-                    dmlStatements.add(cbfs);
-                    Dataset dataset;
-                    dataset = MetadataManager.INSTANCE.getDataset(mdTxnCtx,
-                            compiledDeclarations.getDefaultDataverseName(), bfs.getDatasetName().getValue());
-                    IDatasetDetails datasetDetails = dataset.getDatasetDetails();
-                    if (datasetDetails.getDatasetType() != DatasetType.FEED) {
-                        throw new IllegalArgumentException("Dataset " + bfs.getDatasetName().getValue()
-                                + " is not a feed dataset");
-                    }
-                    bfs.initialize(mdTxnCtx, dataset);
-                    cbfs.setQuery(bfs.getQuery());
-                    break;
-                }
-
-                case CONTROL_FEED: {
-                    ControlFeedStatement cfs = (ControlFeedStatement) stmt;
-                    CompiledControlFeedStatement clcfs = new CompiledControlFeedStatement(cfs.getOperationType(), cfs
-                            .getDataverseName().getValue(), cfs.getDatasetName().getValue(),
-                            cfs.getAlterAdapterConfParams());
-                    dmlStatements.add(clcfs);
-                    break;
-
-                }
-            }
-        }
-        return dmlStatements;
-    }
 
     public static interface ICompiledDmlStatement {
 
@@ -474,18 +307,17 @@ public class DmlTranslator extends AbstractAqlTranslator {
         private Expression condition;
         private Clause dieClause;
         private int varCounter;
-        private AqlCompiledMetadataDeclarations compiledDeclarations;
+        private AqlMetadataProvider metadataProvider;
 
         public CompiledDeleteStatement(VariableExpr var, String dataverseName, String datasetName,
-                Expression condition, Clause dieClause, int varCounter,
-                AqlCompiledMetadataDeclarations compiledDeclarations) {
+                Expression condition, Clause dieClause, int varCounter, AqlMetadataProvider metadataProvider) {
             this.var = var;
             this.dataverseName = dataverseName;
             this.datasetName = datasetName;
             this.condition = condition;
             this.dieClause = dieClause;
             this.varCounter = varCounter;
-            this.compiledDeclarations = compiledDeclarations;
+            this.metadataProvider = metadataProvider;
         }
 
         @Override
@@ -510,7 +342,7 @@ public class DmlTranslator extends AbstractAqlTranslator {
             return dieClause;
         }
 
-        public Query getQuery(String dataverse) throws AlgebricksException {
+        public Query getQuery() throws AlgebricksException {
 
             List<Expression> arguments = new ArrayList<Expression>();
             LiteralExpr argumentLiteral = new LiteralExpr(new StringLiteral(datasetName));
@@ -530,12 +362,12 @@ public class DmlTranslator extends AbstractAqlTranslator {
                 clauseList.add(dieClause);
             }
 
-            Dataset dataset = compiledDeclarations.findDataset(dataverse, datasetName);
+            Dataset dataset = metadataProvider.findDataset(dataverseName, datasetName);
             if (dataset == null) {
                 throw new AlgebricksException("Unknown dataset " + datasetName);
             }
             String itemTypeName = dataset.getItemTypeName();
-            IAType itemType = compiledDeclarations.findType(dataset.getDataverseName(), itemTypeName);
+            IAType itemType = metadataProvider.findType(dataset.getDataverseName(), itemTypeName);
             ARecordType recType = (ARecordType) itemType;
             String[] fieldNames = recType.getFieldNames();
             List<FieldBinding> fieldBindings = new ArrayList<FieldBinding>();

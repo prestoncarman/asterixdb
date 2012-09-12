@@ -14,6 +14,7 @@
  */
 package edu.uci.ics.asterix.file;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
@@ -24,7 +25,6 @@ import edu.uci.ics.asterix.feed.comm.AlterFeedMessage;
 import edu.uci.ics.asterix.feed.comm.FeedMessage;
 import edu.uci.ics.asterix.feed.comm.IFeedMessage;
 import edu.uci.ics.asterix.feed.comm.IFeedMessage.MessageType;
-import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
 import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
 import edu.uci.ics.asterix.metadata.entities.FeedDatasetDetails;
@@ -43,13 +43,13 @@ public class FeedOperations {
     private static final Logger LOGGER = Logger.getLogger(IndexOperations.class.getName());
 
     public static JobSpecification buildControlFeedJobSpec(CompiledControlFeedStatement controlFeedStatement,
-            AqlCompiledMetadataDeclarations datasetDecls) throws AsterixException, AlgebricksException {
+            AqlMetadataProvider metadataProvider) throws AsterixException, AlgebricksException {
         switch (controlFeedStatement.getOperationType()) {
             case ALTER:
             case SUSPEND:
             case RESUME:
             case END: {
-                return createSendMessageToFeedJobSpec(controlFeedStatement, datasetDecls);
+                return createSendMessageToFeedJobSpec(controlFeedStatement, metadataProvider);
             }
             default: {
                 throw new AsterixException("Unknown Operation Type: " + controlFeedStatement.getOperationType());
@@ -59,17 +59,17 @@ public class FeedOperations {
     }
 
     private static JobSpecification createSendMessageToFeedJobSpec(CompiledControlFeedStatement controlFeedStatement,
-            AqlCompiledMetadataDeclarations metadata) throws AsterixException {
-        String dataverseName = controlFeedStatement.getDataverseName() == null ? metadata.getDefaultDataverseName()
-                : controlFeedStatement.getDataverseName();
+            AqlMetadataProvider metadataProvider) throws AsterixException {
+        String dataverseName = controlFeedStatement.getDataverseName() == null ? metadataProvider
+                .getDefaultDataverseName() : controlFeedStatement.getDataverseName();
         String datasetName = controlFeedStatement.getDatasetName();
-        String datasetPath = metadata.getRelativePath(datasetName);
+        String datasetPath = dataverseName + File.separator + datasetName;
 
         LOGGER.info(" DATASETPATH: " + datasetPath);
 
         Dataset dataset;
         try {
-            dataset = metadata.findDataset(dataverseName, datasetName);
+            dataset = metadataProvider.findDataset(dataverseName, datasetName);
         } catch (AlgebricksException e) {
             throw new AsterixException(e);
         }
@@ -101,9 +101,9 @@ public class FeedOperations {
         }
 
         try {
-            Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> p = AqlMetadataProvider.buildFeedMessengerRuntime(
-                    spec, metadata, (FeedDatasetDetails) dataset.getDatasetDetails(),
-                    metadata.getDefaultDataverseName(), datasetName, feedMessages);
+            Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> p = metadataProvider.buildFeedMessengerRuntime(
+                    metadataProvider, spec, (FeedDatasetDetails) dataset.getDatasetDetails(),
+                    metadataProvider.getDefaultDataverseName(), datasetName, feedMessages);
             feedMessenger = p.first;
             messengerPc = p.second;
         } catch (AlgebricksException e) {

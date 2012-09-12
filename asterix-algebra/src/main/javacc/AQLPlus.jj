@@ -83,8 +83,8 @@ public class AQLPlusParser extends ScopeChecker {
 			File file = new File(args[0]);
 			Reader fis = new BufferedReader(new InputStreamReader(new FileInputStream(file), "UTF-8"));
 		    AQLPlusParser parser = new AQLPlusParser(fis);
-		    Statement st = parser.Statement();
-		    st.accept(new AQLPrintVisitor(), 0);
+		    List<Statement> st = parser.Statement();
+		//    st.accept(new AQLPrintVisitor(), 0);
 		    
 //		    System.out.println("FunctionCalls not found:");
 //		    for(FunctionDescriptor fd: notFoundFunctionList)
@@ -104,7 +104,7 @@ public class AQLPlusParser extends ScopeChecker {
 PARSER_END(AQLPlusParser)
 
 
-Statement Statement() throws ParseException:
+List<Statement> Statement() throws ParseException:
 {
   Query query = null;
   // scopeStack.push(RootScopeFactory.createRootScope(this));
@@ -137,26 +137,20 @@ Statement Statement() throws ParseException:
           | "set" {
                        decls.add(SetStatement());
                     }
+          |          
+            {
+             decls.add(Query()) ;
+           } ";"
                                                      
+                                                      
         )*
-        (query = Query())?
       )
 
       <EOF>
     )
     {
-      if (query == null) {
-        query = new Query(true);
-      }
-      query.setPrologDeclList(decls);
-    
-//        for(FunctionDecl fdc : fdList)
-//        {
-//        	FunctionDescriptor fd = (FunctionDescriptor) fdc.getIdent();
-//                notFoundFunctionList.remove(fd);
-//        }
-// }
-      return query;
+     
+     return decls;  
     }
 }
 

@@ -6,7 +6,6 @@ import java.util.List;
 import org.apache.commons.lang3.mutable.Mutable;
 
 import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
-import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
 import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
 import edu.uci.ics.asterix.om.types.ARecordType;
@@ -94,8 +93,7 @@ public class OptimizableOperatorSubTree {
         if (dataverseName == null || datasetName == null) {
             return false;
         }
-        AqlCompiledMetadataDeclarations metadata = metadataProvider.getMetadataDeclarations();
-        dataset = metadata.findDataset(dataverseName, datasetName);
+        dataset = metadataProvider.findDataset(dataverseName, datasetName);
         if (dataset == null) {
             throw new AlgebricksException("No metadata for dataset " + datasetName);
         }
@@ -103,7 +101,7 @@ public class OptimizableOperatorSubTree {
             return false;
         }
         // Get the record type for that dataset.
-        IAType itemType = metadata.findType(dataverseName, dataset.getItemTypeName());
+        IAType itemType = metadataProvider.findType(dataverseName, dataset.getItemTypeName());
         if (itemType.getTypeTag() != ATypeTag.RECORD) {
             return false;
         }

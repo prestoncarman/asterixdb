@@ -11,6 +11,7 @@ import org.apache.commons.lang3.mutable.MutableObject;
 
 import edu.uci.ics.asterix.aql.base.Clause;
 import edu.uci.ics.asterix.aql.base.Expression;
+import edu.uci.ics.asterix.aql.base.Statement;
 import edu.uci.ics.asterix.aql.base.Expression.Kind;
 import edu.uci.ics.asterix.aql.expression.BeginFeedStatement;
 import edu.uci.ics.asterix.aql.expression.CallExpr;
@@ -82,8 +83,6 @@ import edu.uci.ics.asterix.common.functions.FunctionConstants;
 import edu.uci.ics.asterix.common.functions.FunctionSignature;
 import edu.uci.ics.asterix.formats.base.IDataFormat;
 import edu.uci.ics.asterix.metadata.MetadataTransactionContext;
-import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
-import edu.uci.ics.asterix.metadata.declared.AqlLogicalPlanAndMetadataImpl;
 import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
 import edu.uci.ics.asterix.metadata.declared.FileSplitDataSink;
 import edu.uci.ics.asterix.metadata.declared.FileSplitSinkId;
@@ -106,7 +105,6 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.base.Counter;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalPlan;
-import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalPlanAndMetadata;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalOperatorTag;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.OperatorAnnotations;
@@ -195,19 +193,21 @@ public class AqlPlusExpressionToPlanTranslator extends AbstractAqlTranslator imp
     }
 
     private final long txnId;
-    private final MetadataTransactionContext mdTxnCtx;
-    private TranslationContext context;
+   private TranslationContext context;
     private String outputDatasetName;
     private ICompiledDmlStatement stmt;
+    private AqlMetadataProvider metadataProvider;
 
     private MetaScopeLogicalVariable metaScopeExp = new MetaScopeLogicalVariable();
     private MetaScopeILogicalOperator metaScopeOp = new MetaScopeILogicalOperator();
     private static LogicalVariable METADATA_DUMMY_VAR = new LogicalVariable(-1);
 
-    public AqlPlusExpressionToPlanTranslator(long txnId, MetadataTransactionContext mdTxnCtx,
+    
+    
+    public AqlPlusExpressionToPlanTranslator(long txnId, AqlMetadataProvider metadataProvider,
             Counter currentVarCounter, String outputDatasetName, ICompiledDmlStatement stmt) {
         this.txnId = txnId;
-        this.mdTxnCtx = mdTxnCtx;
+        this.metadataProvider = metadataProvider;
         this.context = new TranslationContext(currentVarCounter);
         this.outputDatasetName = outputDatasetName;
         this.stmt = stmt;
@@ -218,21 +218,13 @@ public class AqlPlusExpressionToPlanTranslator extends AbstractAqlTranslator imp
         return context.getVarCounter();
     }
 
-    public ILogicalPlanAndMetadata translate(Query expr) throws AlgebricksException, AsterixException {
+    public ILogicalPlan translate(Query expr) throws AlgebricksException, AsterixException {
         return translate(expr, null);
     }
 
-    public ILogicalPlanAndMetadata translate(Query expr, AqlCompiledMetadataDeclarations compiledDeclarations)
+    public ILogicalPlan translate(Query expr, AqlMetadataProvider metadata)
             throws AlgebricksException, AsterixException {
-        if (expr == null) {
-            return null;
-        }
-        if (compiledDeclarations == null) {
-            compiledDeclarations = compileMetadata(mdTxnCtx, expr.getPrologDeclList(), true);
-        }
-        if (!compiledDeclarations.isConnectedToDataverse())
-            compiledDeclarations.connectToDataverse(compiledDeclarations.getDefaultDataverseName());
-        IDataFormat format = compiledDeclarations.getFormat();
+        IDataFormat format = metadata.getFormat();
         if (format == null) {
             throw new AlgebricksException("Data format has not been set.");
         }
@@ -249,19 +241,19 @@ public class AqlPlusExpressionToPlanTranslator extends AbstractAqlTranslator imp
         if (outputDatasetName == null) {
             List<Mutable<ILogicalExpression>> writeExprList = new ArrayList<Mutable<ILogicalExpression>>(1);
             writeExprList.add(new MutableObject<ILogicalExpression>(new VariableReferenceExpression(resVar)));
-            FileSplitSinkId fssi = new FileSplitSinkId(compiledDeclarations.getOutputFile());
+            FileSplitSinkId fssi = new FileSplitSinkId(metadata.getOutputFile());
             FileSplitDataSink sink = new FileSplitDataSink(fssi, null);
             topOp = new WriteOperator(writeExprList, sink);
             topOp.getInputs().add(new MutableObject<ILogicalOperator>(project));
         } else {
-            Dataset dataset = compiledDeclarations.findDataset(stmt.getDataverseName(), outputDatasetName);
+            Dataset dataset = metadata.findDataset(stmt.getDataverseName(), outputDatasetName);
             if (dataset == null) {
                 throw new AlgebricksException("Cannot find dataset " + outputDatasetName);
             }
             if (dataset.getDatasetType() == DatasetType.EXTERNAL) {
                 throw new AlgebricksException("Cannot write output to an external dataset.");
             }
-            ARecordType itemType = (ARecordType) compiledDeclarations.findType(dataset.getDataverseName(),
+            ARecordType itemType = (ARecordType) metadata.findType(dataset.getDataverseName(),
                     dataset.getItemTypeName());
             List<String> partitioningKeys = DatasetUtils.getPartitioningKeys(dataset);
             ArrayList<LogicalVariable> vars = new ArrayList<LogicalVariable>();
@@ -283,10 +275,7 @@ public class AqlPlusExpressionToPlanTranslator extends AbstractAqlTranslator imp
 
         globalPlanRoots.add(new MutableObject<ILogicalOperator>(topOp));
         ILogicalPlan plan = new ALogicalPlanImpl(globalPlanRoots);
-        AqlMetadataProvider metadataProvider = new AqlMetadataProvider(txnId, isTransactionalWrite,
-                compiledDeclarations);
-        ILogicalPlanAndMetadata planAndMetadata = new AqlLogicalPlanAndMetadataImpl(plan, metadataProvider);
-        return planAndMetadata;
+        return plan;
     }
 
     public ILogicalPlan translate(List<Clause> clauses) throws AlgebricksException, AsterixException {

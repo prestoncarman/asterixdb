@@ -308,7 +308,6 @@ public class CloneAndSubstituteVariablesVisitor implements
         Query newQ = new Query();
         Pair<IAqlExpression, List<VariableSubstitution>> p1 = q.getBody().accept(this, arg);
         newQ.setBody((Expression) p1.first);
-        newQ.setPrologDeclList(q.getPrologDeclList());
         return new Pair<IAqlExpression, List<VariableSubstitution>>(newQ, p1.second);
     }
 

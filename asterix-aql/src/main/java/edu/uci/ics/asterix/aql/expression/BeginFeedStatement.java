@@ -1,6 +1,7 @@
 package edu.uci.ics.asterix.aql.expression;
 
 import java.io.StringReader;
+import java.util.List;
 
 import edu.uci.ics.asterix.aql.base.Statement;
 import edu.uci.ics.asterix.aql.expression.visitor.IAqlExpressionVisitor;
@@ -61,10 +62,10 @@ public class BeginFeedStatement implements Statement {
         builder.append(";");
         AQLParser parser = new AQLParser(new StringReader(builder.toString()));
 
-        Query compiledQuery;
+        List<Statement> statements;
         try {
-            compiledQuery = (Query) parser.Statement();
-            query = ((InsertStatement) compiledQuery.getPrologDeclList().get(0)).getQuery();
+            statements = parser.Statement();
+            query = ((InsertStatement) statements.get(0)).getQuery();
         } catch (ParseException pe) {
             throw new MetadataException(pe);
         }

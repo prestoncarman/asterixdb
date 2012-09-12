@@ -6,13 +6,12 @@ import java.util.List;
 import org.apache.commons.lang3.mutable.Mutable;
 
 import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
-import edu.uci.ics.asterix.metadata.MetadataManager;
-import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
 import edu.uci.ics.asterix.metadata.declared.AqlDataSource;
 import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
 import edu.uci.ics.asterix.metadata.declared.AqlSourceId;
 import edu.uci.ics.asterix.metadata.declared.ExternalFeedDataSource;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
+import edu.uci.ics.asterix.metadata.entities.Dataverse;
 import edu.uci.ics.asterix.metadata.utils.DatasetUtils;
 import edu.uci.ics.asterix.om.base.AString;
 import edu.uci.ics.asterix.om.constants.AsterixConstantValue;
@@ -76,20 +75,23 @@ public class UnnestToDataScanRule implements IAlgebraicRewriteRule {
                 }
                 String datasetArg = ((AString) acv2.getObject()).getStringValue();
 
-                AqlMetadataProvider mp = (AqlMetadataProvider) context.getMetadataProvider();
-                AqlCompiledMetadataDeclarations metadata = mp.getMetadataDeclarations();
+                AqlMetadataProvider metadataProvider = (AqlMetadataProvider) context.getMetadataProvider();
                 String[] datasetNameComponents = datasetArg.split("\\.");
                 String dataverseName;
                 String datasetName;
                 if (datasetNameComponents.length == 1) {
-                    dataverseName = metadata.getDefaultDataverseName();
+                    Dataverse defaultDataverse = metadataProvider.getDefaultDataverse();
+                    if (defaultDataverse == null) {
+                        throw new AlgebricksException("Unresolved dataset " + datasetArg + " Dataverse not specified.");
+                    }
+                    dataverseName = defaultDataverse.getDataverseName();
                     datasetName = datasetNameComponents[0];
                 } else {
                     dataverseName = datasetNameComponents[0];
                     datasetName = datasetNameComponents[1];
                 }
 
-                Dataset dataset = metadata.findDataset(dataverseName, datasetName);
+                Dataset dataset = metadataProvider.findDataset(dataverseName, datasetName);
                 if (dataset == null) {
                     throw new AlgebricksException("Could not find dataset " + datasetName + " in dataverse "
                             + dataverseName);
@@ -107,7 +109,7 @@ public class UnnestToDataScanRule implements IAlgebraicRewriteRule {
                 }
                 v.add(unnest.getVariable());
 
-                DataSourceScanOperator scan = new DataSourceScanOperator(v, mp.findDataSource(asid));
+                DataSourceScanOperator scan = new DataSourceScanOperator(v, metadataProvider.findDataSource(asid));
                 List<Mutable<ILogicalOperator>> scanInpList = scan.getInputs();
                 scanInpList.addAll(unnest.getInputs());
                 opRef.setValue(scan);
@@ -136,19 +138,22 @@ public class UnnestToDataScanRule implements IAlgebraicRewriteRule {
                 }
                 String datasetArg = ((AString) acv2.getObject()).getStringValue();
 
-                AqlMetadataProvider mp = (AqlMetadataProvider) context.getMetadataProvider();
-                AqlCompiledMetadataDeclarations metadata = mp.getMetadataDeclarations();
+                AqlMetadataProvider metadataProvider = (AqlMetadataProvider) context.getMetadataProvider();
                 String[] datasetNameComponents = datasetArg.split("\\.");
                 String dataverseName;
                 String datasetName;
                 if (datasetNameComponents.length == 1) {
-                    dataverseName = metadata.getDefaultDataverseName();
+                    Dataverse defaultDataverse = metadataProvider.getDefaultDataverse();
+                    if (defaultDataverse == null) {
+                        throw new AlgebricksException("Unresolved dataset " + datasetArg + " Dataverse not specified.");
+                    }
+                    dataverseName = defaultDataverse.getDataverseName();
                     datasetName = datasetNameComponents[0];
                 } else {
                     dataverseName = datasetNameComponents[0];
                     datasetName = datasetNameComponents[1];
                 }
-                Dataset dataset = metadata.findDataset(dataverseName, datasetName);
+                Dataset dataset = metadataProvider.findDataset(dataverseName, datasetName);
 
                 if (dataset == null) {
                     throw new AlgebricksException("Could not find dataset " + datasetName);
@@ -158,7 +163,7 @@ public class UnnestToDataScanRule implements IAlgebraicRewriteRule {
                     throw new IllegalArgumentException("invalid dataset type:" + dataset.getDatasetType());
                 }
 
-                AqlSourceId asid = new AqlSourceId(metadata.getDefaultDataverseName(), datasetName);
+                AqlSourceId asid = new AqlSourceId(dataverseName, datasetName);
 
                 ArrayList<LogicalVariable> v = new ArrayList<LogicalVariable>();
 
@@ -171,7 +176,7 @@ public class UnnestToDataScanRule implements IAlgebraicRewriteRule {
                 v.add(unnest.getVariable());
 
                 DataSourceScanOperator scan = new DataSourceScanOperator(v, createDummyFeedDataSource(asid, dataset,
-                        metadata));
+                        metadataProvider));
 
                 List<Mutable<ILogicalOperator>> scanInpList = scan.getInputs();
                 scanInpList.addAll(unnest.getInputs());
@@ -187,12 +192,14 @@ public class UnnestToDataScanRule implements IAlgebraicRewriteRule {
     }
 
     private AqlDataSource createDummyFeedDataSource(AqlSourceId aqlId, Dataset dataset,
-            AqlCompiledMetadataDeclarations metadata) throws AlgebricksException {
-        if (!aqlId.getDataverseName().equals(metadata.getDefaultDataverseName())) {
+            AqlMetadataProvider metadataProvider) throws AlgebricksException {
+        if (!aqlId.getDataverseName().equals(
+                metadataProvider.getDefaultDataverse() == null ? null : metadataProvider.getDefaultDataverse()
+                        .getDataverseName())) {
             return null;
         }
         String tName = dataset.getItemTypeName();
-        IAType itemType = metadata.findType(dataset.getDataverseName(), tName);
+        IAType itemType = metadataProvider.findType(dataset.getDataverseName(), tName);
         ExternalFeedDataSource extDataSource = new ExternalFeedDataSource(aqlId, dataset, itemType,
                 AqlDataSource.AqlDataSourceType.EXTERNAL_FEED);
         return extDataSource;

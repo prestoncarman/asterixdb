@@ -5,26 +5,24 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.util.List;
 
 import javax.servlet.ServletContext;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
-import edu.uci.ics.asterix.api.common.APIFramework;
 import edu.uci.ics.asterix.api.common.APIFramework.DisplayFormat;
-import edu.uci.ics.asterix.api.common.Job;
 import edu.uci.ics.asterix.api.common.SessionConfig;
-import edu.uci.ics.asterix.aql.expression.Query;
+import edu.uci.ics.asterix.aql.base.Statement;
 import edu.uci.ics.asterix.aql.parser.AQLParser;
 import edu.uci.ics.asterix.aql.parser.ParseException;
-import edu.uci.ics.asterix.common.config.GlobalConfig;
+import edu.uci.ics.asterix.aql.translator.AqlTranslator;
+import edu.uci.ics.asterix.aql.translator.ExecutionResult;
 import edu.uci.ics.asterix.metadata.MetadataManager;
-import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
-import edu.uci.ics.hyracks.algebricks.common.utils.Pair;
+import edu.uci.ics.asterix.metadata.MetadataTransactionContext;
 import edu.uci.ics.hyracks.api.client.HyracksConnection;
 import edu.uci.ics.hyracks.api.client.IHyracksClientConnection;
-import edu.uci.ics.hyracks.api.job.JobSpecification;
 
 public class APIServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
@@ -58,42 +56,39 @@ public class APIServlet extends HttpServlet {
                 }
             }
             AQLParser parser = new AQLParser(query);
-            Query q = (Query) parser.Statement();
-            SessionConfig pc = new SessionConfig(port, true, isSet(printExprParam), isSet(printRewrittenExprParam),
+            List<Statement> aqlStatements = parser.Statement();
+            SessionConfig sessionConfig = new SessionConfig(port, true, isSet(printExprParam), isSet(printRewrittenExprParam),
                     isSet(printLogicalPlanParam), isSet(printOptimizedLogicalPlanParam), false, isSet(printJob));
-            pc.setGenerateJobSpec(true);
+            sessionConfig.setGenerateJobSpec(true);
 
             MetadataManager.INSTANCE.init();
             String dataverseName = null;
 
-            if (q != null) {
-                dataverseName = postDmlStatement(hcc, q, out, pc);
+            MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
+            AqlTranslator aqlTranslator = new AqlTranslator(aqlStatements, out, sessionConfig, DisplayFormat.HTML);
+            List<ExecutionResult> executionResults = null;
+            double duration = 0;
+            try {
+                long startTime = System.currentTimeMillis();
+                executionResults = aqlTranslator.compileExecute(hcc);
+                MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
+                long endTime = System.currentTimeMillis();
+                duration = (endTime - startTime) / 1000.00;
+                out.println("<PRE>Duration of all jobs: " + duration + "</PRE>");
+            } catch (Exception e) {
+
             }
 
-            if (q.isDummyQuery()) {
-                return;
-            }
-
-            Pair<AqlCompiledMetadataDeclarations, JobSpecification> metadataAndSpec = APIFramework.compileQuery(
-                    dataverseName, q, parser.getVarCounter(), null, null, pc, out, DisplayFormat.HTML, null, null);
-            JobSpecification spec = metadataAndSpec.second;
-            GlobalConfig.ASTERIX_LOGGER.info(spec.toJSON().toString(1));
-            AqlCompiledMetadataDeclarations metadata = metadataAndSpec.first;
-            long startTime = System.currentTimeMillis();
-            APIFramework.executeJobArray(hcc, new JobSpecification[] { spec }, out, DisplayFormat.HTML);
-            long endTime = System.currentTimeMillis();
-            double duration = (endTime - startTime) / 1000.00;
             out.println("<H1>Result:</H1>");
 
             out.println("<PRE>");
-            out.println(metadata.getOutputFile().getNodeName() + ":"
-                    + metadata.getOutputFile().getLocalFile().getFile().getPath());
+            out.println(executionResults.get(0).getResultPath());
             out.println("Duration: " + duration);
             out.println("</PRE>");
 
             if (isSet(strDisplayResult)) {
                 out.println("<PRE>");
-                displayFile(metadata.getOutputFile().getLocalFile().getFile(), out);
+                displayFile(new File(executionResults.get(0).getResultPath()), out);
                 out.println("</PRE>");
             }
         } catch (ParseException pe) {
@@ -134,20 +129,6 @@ public class APIServlet extends HttpServlet {
                 // "<input type = \"checkbox\" name = \"show-tuples\" value=\"true\">show the entire tuples<P>"
                 + "<input type=\"submit\"/>" + "</center>" + "</form>";
         out.println(form);
-    }
-
-    private String postDmlStatement(IHyracksClientConnection hcc, Query dummyQ, PrintWriter out, SessionConfig pc)
-            throws Exception {
-
-        String dataverseName = APIFramework.compileDdlStatements(hcc, dummyQ, out, pc, DisplayFormat.TEXT);
-        Job[] dmlJobSpecs = APIFramework.compileDmlStatements(dummyQ, out, pc, DisplayFormat.HTML);
-
-        long startTime = System.currentTimeMillis();
-        APIFramework.executeJobArray(hcc, dmlJobSpecs, out, DisplayFormat.HTML);
-        long endTime = System.currentTimeMillis();
-        double duration = (endTime - startTime) / 1000.00;
-        out.println("<PRE>Duration of all jobs: " + duration + "</PRE>");
-        return dataverseName;
     }
 
     private static boolean isSet(String requestParameter) {

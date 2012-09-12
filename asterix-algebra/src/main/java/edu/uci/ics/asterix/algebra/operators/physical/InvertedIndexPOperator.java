@@ -4,7 +4,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import edu.uci.ics.asterix.common.dataflow.IAsterixApplicationContextInfo;
-import edu.uci.ics.asterix.metadata.declared.AqlCompiledMetadataDeclarations;
+import edu.uci.ics.asterix.metadata.MetadataException;
+import edu.uci.ics.asterix.metadata.MetadataManager;
 import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
 import edu.uci.ics.asterix.metadata.declared.AqlSourceId;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
@@ -79,13 +80,18 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
         jobGenParams.readFromFuncArgs(unnestFuncExpr.getArguments());
 
         AqlMetadataProvider metadataProvider = (AqlMetadataProvider) context.getMetadataProvider();
-        AqlCompiledMetadataDeclarations metadata = metadataProvider.getMetadataDeclarations();
-        Dataset dataset = metadata.findDataset(jobGenParams.getDataverseName(), jobGenParams.getDatasetName());
+        Dataset dataset;
+        try {
+            dataset = MetadataManager.INSTANCE.getDataset(metadataProvider.getMetadataTxnContext(),
+                    jobGenParams.getDataverseName(), jobGenParams.getDatasetName());
+        } catch (MetadataException e) {
+            throw new AlgebricksException(e);
+        }
         int[] keyIndexes = getKeyIndexes(jobGenParams.getKeyVarList(), inputSchemas);
 
         // Build runtime.
-        Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> invIndexSearch = buildInvertedIndexRuntime(metadata,
-                context, builder.getJobSpec(), unnestMapOp, opSchema, jobGenParams.getRetainInput(),
+        Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> invIndexSearch = buildInvertedIndexRuntime(
+                metadataProvider, context, builder.getJobSpec(), unnestMapOp, opSchema, jobGenParams.getRetainInput(),
                 jobGenParams.getDatasetName(), dataset, jobGenParams.getIndexName(), jobGenParams.getSearchKeyType(),
                 keyIndexes, jobGenParams.getSearchModifierType(), jobGenParams.getSimilarityThreshold());
         // Contribute operator in hyracks job.
@@ -96,81 +102,90 @@ public class InvertedIndexPOperator extends IndexSearchPOperator {
     }
 
     public static Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> buildInvertedIndexRuntime(
-            AqlCompiledMetadataDeclarations metadata, JobGenContext context, JobSpecification jobSpec,
+            AqlMetadataProvider metadataProvider, JobGenContext context, JobSpecification jobSpec,
             UnnestMapOperator unnestMap, IOperatorSchema opSchema, boolean retainInput, String datasetName,
             Dataset dataset, String indexName, ATypeTag searchKeyType, int[] keyFields,
             SearchModifierType searchModifierType, IAlgebricksConstantValue similarityThreshold)
             throws AlgebricksException {
         IAObject simThresh = ((AsterixConstantValue) similarityThreshold).getObject();
-        IAType itemType = metadata.findType(dataset.getDataverseName(), dataset.getItemTypeName());
-        int numPrimaryKeys = DatasetUtils.getPartitioningKeys(dataset).size();
-        Index secondaryIndex = metadata.getIndex(dataset.getDataverseName(), dataset.getDatasetName(), indexName);
-        if (secondaryIndex == null) {
-            throw new AlgebricksException("Code generation error: no index " + indexName + " for dataset "
-                    + datasetName);
-        }
-        List<String> secondaryKeyFields = secondaryIndex.getKeyFieldNames();
-        int numSecondaryKeys = secondaryKeyFields.size();
-        if (numSecondaryKeys != 1) {
-            throw new AlgebricksException(
-                    "Cannot use "
-                            + numSecondaryKeys
-                            + " fields as a key for an inverted index. There can be only one field as a key for the inverted index index.");
-        }
-        if (itemType.getTypeTag() != ATypeTag.RECORD) {
-            throw new AlgebricksException("Only record types can be indexed.");
-        }
-        ARecordType recordType = (ARecordType) itemType;
-        Pair<IAType, Boolean> keyPairType = Index.getNonNullableKeyFieldType(secondaryKeyFields.get(0), recordType);
-        IAType secondaryKeyType = keyPairType.first;
-        if (secondaryKeyType == null) {
-            throw new AlgebricksException("Could not find field " + secondaryKeyFields.get(0) + " in the schema.");
+        IAType itemType;
+        try {
+            itemType = MetadataManager.INSTANCE.getDatatype(metadataProvider.getMetadataTxnContext(),
+                    dataset.getDataverseName(), dataset.getItemTypeName()).getDatatype();
+            int numPrimaryKeys = DatasetUtils.getPartitioningKeys(dataset).size();
+            Index secondaryIndex = MetadataManager.INSTANCE.getIndex(metadataProvider.getMetadataTxnContext(),
+                    dataset.getDataverseName(), dataset.getDatasetName(), indexName);
+            if (secondaryIndex == null) {
+                throw new AlgebricksException("Code generation error: no index " + indexName + " for dataset "
+                        + datasetName);
+            }
+            List<String> secondaryKeyFields = secondaryIndex.getKeyFieldNames();
+            int numSecondaryKeys = secondaryKeyFields.size();
+            if (numSecondaryKeys != 1) {
+                throw new AlgebricksException(
+                        "Cannot use "
+                                + numSecondaryKeys
+                                + " fields as a key for an inverted index. There can be only one field as a key for the inverted index index.");
+            }
+            if (itemType.getTypeTag() != ATypeTag.RECORD) {
+                throw new AlgebricksException("Only record types can be indexed.");
+            }
+            ARecordType recordType = (ARecordType) itemType;
+            Pair<IAType, Boolean> keyPairType = Index.getNonNullableKeyFieldType(secondaryKeyFields.get(0), recordType);
+            IAType secondaryKeyType = keyPairType.first;
+            if (secondaryKeyType == null) {
+                throw new AlgebricksException("Could not find field " + secondaryKeyFields.get(0) + " in the schema.");
+            }
+
+            // TODO: For now we assume the type of the generated tokens is the same as the indexed field.
+            // We need a better way of expressing this because tokens may be hashed, or an inverted-index may index a list type, etc.
+            ITypeTraits[] tokenTypeTraits = new ITypeTraits[numSecondaryKeys];
+            IBinaryComparatorFactory[] tokenComparatorFactories = new IBinaryComparatorFactory[numSecondaryKeys];
+            for (int i = 0; i < numSecondaryKeys; i++) {
+                tokenComparatorFactories[i] = InvertedIndexAccessMethod
+                        .getTokenBinaryComparatorFactory(secondaryKeyType);
+                tokenTypeTraits[i] = InvertedIndexAccessMethod.getTokenTypeTrait(secondaryKeyType);
+            }
+
+            IVariableTypeEnvironment typeEnv = context.getTypeEnvironment(unnestMap);
+            List<LogicalVariable> outputVars = unnestMap.getVariables();
+            if (retainInput) {
+                outputVars = new ArrayList<LogicalVariable>();
+                VariableUtilities.getLiveVariables(unnestMap, outputVars);
+            }
+            RecordDescriptor outputRecDesc = JobGenHelper.mkRecordDescriptor(typeEnv, opSchema, context);
+
+            int start = outputRecDesc.getFieldCount() - numPrimaryKeys;
+            IBinaryComparatorFactory[] invListsComparatorFactories = JobGenHelper
+                    .variablesToAscBinaryComparatorFactories(outputVars, start, numPrimaryKeys, typeEnv, context);
+            ITypeTraits[] invListsTypeTraits = JobGenHelper.variablesToTypeTraits(outputVars, start, numPrimaryKeys,
+                    typeEnv, context);
+
+            IAsterixApplicationContextInfo appContext = (IAsterixApplicationContextInfo) context.getAppContext();
+            Pair<IFileSplitProvider, AlgebricksPartitionConstraint> secondarySplitsAndConstraint = metadataProvider
+                    .splitProviderAndPartitionConstraintsForInternalOrFeedDataset(dataset.getDataverseName(),
+                            datasetName, indexName);
+            Pair<IFileSplitProvider, IFileSplitProvider> fileSplitProviders = metadataProvider
+                    .getInvertedIndexFileSplitProviders(secondarySplitsAndConstraint.first);
+
+            // TODO: Here we assume there is only one search key field.
+            int queryField = keyFields[0];
+            // Get tokenizer and search modifier factories.
+            IInvertedIndexSearchModifierFactory searchModifierFactory = InvertedIndexAccessMethod
+                    .getSearchModifierFactory(searchModifierType, simThresh, secondaryIndex);
+            IBinaryTokenizerFactory queryTokenizerFactory = InvertedIndexAccessMethod.getBinaryTokenizerFactory(
+                    searchModifierType, searchKeyType, secondaryIndex);
+            InvertedIndexSearchOperatorDescriptor invIndexSearchOp = new InvertedIndexSearchOperatorDescriptor(jobSpec,
+                    queryField, appContext.getStorageManagerInterface(), fileSplitProviders.first,
+                    fileSplitProviders.second, appContext.getIndexRegistryProvider(), tokenTypeTraits,
+                    tokenComparatorFactories, invListsTypeTraits, invListsComparatorFactories,
+                    new BTreeDataflowHelperFactory(), queryTokenizerFactory, searchModifierFactory, outputRecDesc,
+                    retainInput, NoOpOperationCallbackProvider.INSTANCE);
+            return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(invIndexSearchOp,
+                    secondarySplitsAndConstraint.second);
+        } catch (MetadataException e) {
+            throw new AlgebricksException(e);
         }
 
-        // TODO: For now we assume the type of the generated tokens is the same as the indexed field.
-        // We need a better way of expressing this because tokens may be hashed, or an inverted-index may index a list type, etc.
-        ITypeTraits[] tokenTypeTraits = new ITypeTraits[numSecondaryKeys];
-        IBinaryComparatorFactory[] tokenComparatorFactories = new IBinaryComparatorFactory[numSecondaryKeys];
-        for (int i = 0; i < numSecondaryKeys; i++) {
-            tokenComparatorFactories[i] = InvertedIndexAccessMethod.getTokenBinaryComparatorFactory(secondaryKeyType);
-            tokenTypeTraits[i] = InvertedIndexAccessMethod.getTokenTypeTrait(secondaryKeyType);
-        }
-
-        IVariableTypeEnvironment typeEnv = context.getTypeEnvironment(unnestMap);
-        List<LogicalVariable> outputVars = unnestMap.getVariables();
-        if (retainInput) {
-            outputVars = new ArrayList<LogicalVariable>();
-            VariableUtilities.getLiveVariables(unnestMap, outputVars);
-        }
-        RecordDescriptor outputRecDesc = JobGenHelper.mkRecordDescriptor(typeEnv, opSchema, context);
-
-        int start = outputRecDesc.getFieldCount() - numPrimaryKeys;
-        IBinaryComparatorFactory[] invListsComparatorFactories = JobGenHelper.variablesToAscBinaryComparatorFactories(
-                outputVars, start, numPrimaryKeys, typeEnv, context);
-        ITypeTraits[] invListsTypeTraits = JobGenHelper.variablesToTypeTraits(outputVars, start, numPrimaryKeys,
-                typeEnv, context);
-
-        IAsterixApplicationContextInfo appContext = (IAsterixApplicationContextInfo) context.getAppContext();
-        Pair<IFileSplitProvider, AlgebricksPartitionConstraint> secondarySplitsAndConstraint = metadata
-                .splitProviderAndPartitionConstraintsForInternalOrFeedDataset(metadata.getDefaultDataverseName(),
-                        datasetName, indexName);
-        Pair<IFileSplitProvider, IFileSplitProvider> fileSplitProviders = metadata
-                .getInvertedIndexFileSplitProviders(secondarySplitsAndConstraint.first);
-
-        // TODO: Here we assume there is only one search key field.
-        int queryField = keyFields[0];
-        // Get tokenizer and search modifier factories.
-        IInvertedIndexSearchModifierFactory searchModifierFactory = InvertedIndexAccessMethod.getSearchModifierFactory(
-                searchModifierType, simThresh, secondaryIndex);
-        IBinaryTokenizerFactory queryTokenizerFactory = InvertedIndexAccessMethod.getBinaryTokenizerFactory(
-                searchModifierType, searchKeyType, secondaryIndex);
-        InvertedIndexSearchOperatorDescriptor invIndexSearchOp = new InvertedIndexSearchOperatorDescriptor(jobSpec,
-                queryField, appContext.getStorageManagerInterface(), fileSplitProviders.first,
-                fileSplitProviders.second, appContext.getIndexRegistryProvider(), tokenTypeTraits,
-                tokenComparatorFactories, invListsTypeTraits, invListsComparatorFactories,
-                new BTreeDataflowHelperFactory(), queryTokenizerFactory, searchModifierFactory, outputRecDesc,
-                retainInput, NoOpOperationCallbackProvider.INSTANCE);
-        return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(invIndexSearchOp,
-                secondarySplitsAndConstraint.second);
     }
 }
