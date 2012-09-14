@@ -25,8 +25,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.logging.Logger;
 
-import org.json.JSONException;
-
 import edu.uci.ics.asterix.api.aqlj.common.AQLJException;
 import edu.uci.ics.asterix.api.aqlj.common.AQLJProtocol;
 import edu.uci.ics.asterix.api.aqlj.common.AQLJStream;

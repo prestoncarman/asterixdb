@@ -82,12 +82,17 @@ public class APIServlet extends HttpServlet {
             out.println("<H1>Result:</H1>");
 
             out.println("<PRE>");
-            out.println(executionResults.get(0).getResultPath());
+            for(ExecutionResult result: executionResults){
+                out.println(result.getStatement() + ":" + result.getResultPath);
+            }
             out.println("Duration: " + duration);
             out.println("</PRE>");
-
+        
             if (isSet(strDisplayResult)) {
                 out.println("<PRE>");
+                for(ExecutionResult result: executionResults){
+                    out.println(result.getStatement() + ":" + result.getResultPath);
+                }   
                 displayFile(new File(executionResults.get(0).getResultPath()), out);
                 out.println("</PRE>");
             }

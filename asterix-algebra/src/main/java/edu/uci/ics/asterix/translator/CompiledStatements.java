@@ -1,3 +1,17 @@
+/*
+ * Copyright 2009-2011 by The Regents of the University of California
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * you may obtain a copy of the License from
+ * 
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package edu.uci.ics.asterix.translator;
 
 import java.util.ArrayList;
@@ -29,11 +43,185 @@ import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 
-public class DmlTranslator extends AbstractAqlTranslator {
+public class CompiledStatements {
 
-    public static interface ICompiledDmlStatement {
+    public static interface ICompiledStatement {
 
-        public abstract Kind getKind();
+        public Kind getKind();
+    }
+
+    public static class CompiledWriteFromQueryResultStatement implements ICompiledDmlStatement {
+
+        private String dataverseName;
+        private String datasetName;
+        private Query query;
+        private int varCounter;
+
+        public CompiledWriteFromQueryResultStatement(String dataverseName, String datasetName, Query query,
+                int varCounter) {
+            this.dataverseName = dataverseName;
+            this.datasetName = datasetName;
+            this.query = query;
+            this.varCounter = varCounter;
+        }
+
+        public String getDataverseName() {
+            return dataverseName;
+        }
+
+        public String getDatasetName() {
+            return datasetName;
+        }
+
+        public int getVarCounter() {
+            return varCounter;
+        }
+
+        public Query getQuery() {
+            return query;
+        }
+
+        @Override
+        public Kind getKind() {
+            return Kind.WRITE_FROM_QUERY_RESULT;
+        }
+
+    }
+
+    public static class CompiledDatasetDropStatement implements ICompiledStatement {
+        private final String dataverseName;
+        private final String datasetName;
+
+        public CompiledDatasetDropStatement(String dataverseName, String datasetName) {
+            this.dataverseName = dataverseName;
+            this.datasetName = datasetName;
+        }
+
+        public String getDataverseName() {
+            return dataverseName;
+        }
+
+        public String getDatasetName() {
+            return datasetName;
+        }
+
+        @Override
+        public Kind getKind() {
+            return Kind.DATASET_DROP;
+        }
+    }
+
+    // added by yasser
+    public static class CompiledCreateDataverseStatement implements ICompiledStatement {
+        private String dataverseName;
+        private String format;
+
+        public CompiledCreateDataverseStatement(String dataverseName, String format) {
+            this.dataverseName = dataverseName;
+            this.format = format;
+        }
+
+        public String getDataverseName() {
+            return dataverseName;
+        }
+
+        public String getFormat() {
+            return format;
+        }
+
+        @Override
+        public Kind getKind() {
+            return Kind.CREATE_DATAVERSE;
+        }
+    }
+
+    public static class CompiledNodeGroupDropStatement implements ICompiledStatement {
+        private String nodeGroupName;
+
+        public CompiledNodeGroupDropStatement(String nodeGroupName) {
+            this.nodeGroupName = nodeGroupName;
+        }
+
+        public String getNodeGroupName() {
+            return nodeGroupName;
+        }
+
+        @Override
+        public Kind getKind() {
+            return Kind.NODEGROUP_DROP;
+        }
+    }
+
+    public static class CompiledIndexDropStatement implements ICompiledStatement {
+        private String dataverseName;
+        private String datasetName;
+        private String indexName;
+
+        public CompiledIndexDropStatement(String dataverseName, String datasetName, String indexName) {
+            this.dataverseName = dataverseName;
+            this.datasetName = datasetName;
+            this.indexName = indexName;
+        }
+
+        public String getDataverseName() {
+            return dataverseName;
+        }
+
+        public String getDatasetName() {
+            return datasetName;
+        }
+
+        public String getIndexName() {
+            return indexName;
+        }
+
+        @Override
+        public Kind getKind() {
+            return Kind.INDEX_DROP;
+        }
+    }
+
+    public static class CompiledDataverseDropStatement implements ICompiledStatement {
+        private String dataverseName;
+        private boolean ifExists;
+
+        public CompiledDataverseDropStatement(String dataverseName, boolean ifExists) {
+            this.dataverseName = dataverseName;
+            this.ifExists = ifExists;
+        }
+
+        public String getDataverseName() {
+            return dataverseName;
+        }
+
+        public boolean getIfExists() {
+            return ifExists;
+        }
+
+        @Override
+        public Kind getKind() {
+            return Kind.DATAVERSE_DROP;
+        }
+    }
+
+    public static class CompiledTypeDropStatement implements ICompiledStatement {
+        private String typeName;
+
+        public CompiledTypeDropStatement(String nodeGroupName) {
+            this.typeName = nodeGroupName;
+        }
+
+        public String getTypeName() {
+            return typeName;
+        }
+
+        @Override
+        public Kind getKind() {
+            return Kind.TYPE_DROP;
+        }
+    }
+
+    public static interface ICompiledDmlStatement extends ICompiledStatement {
 
         public String getDataverseName();
 
@@ -130,46 +318,6 @@ public class DmlTranslator extends AbstractAqlTranslator {
         public Kind getKind() {
             return Kind.LOAD_FROM_FILE;
         }
-    }
-
-    public static class CompiledWriteFromQueryResultStatement implements ICompiledDmlStatement {
-
-        private String dataverseName;
-        private String datasetName;
-        private Query query;
-        private int varCounter;
-
-        public CompiledWriteFromQueryResultStatement(String dataverseName, String datasetName, Query query,
-                int varCounter) {
-            this.dataverseName = dataverseName;
-            this.datasetName = datasetName;
-            this.query = query;
-            this.varCounter = varCounter;
-        }
-
-        @Override
-        public String getDatasetName() {
-            return datasetName;
-        }
-
-        @Override
-        public String getDataverseName() {
-            return dataverseName;
-        }
-
-        public int getVarCounter() {
-            return varCounter;
-        }
-
-        public Query getQuery() {
-            return query;
-        }
-
-        @Override
-        public Kind getKind() {
-            return Kind.WRITE_FROM_QUERY_RESULT;
-        }
-
     }
 
     public static class CompiledInsertStatement implements ICompiledDmlStatement {

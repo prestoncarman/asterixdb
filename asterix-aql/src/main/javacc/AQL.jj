@@ -228,9 +228,12 @@ List<Statement> Statement() throws ParseException:
 	  	   | "alter" "feed"  {
       	        decls.add(AlterFeedDeclaration());
            } ";"
-            
+           
+           | (query = Query()) {
+               decls.add(query);
+           }
            )*
-            (query = Query())?
+          //  (query = Query())?
       )
 
       <EOF>

@@ -52,9 +52,12 @@ public class FunctionUtils {
 			builder.delete(builder.length() - 1, builder.length());
 		}
 		builder.append(")");
-		builder.append("{");
-		builder.append(functionBody);
-		builder.append("}");
+        builder.append("{");
+        builder.append("\n");
+        builder.append(functionBody);
+        builder.append("\n");
+        builder.append("}");
+        
 		AQLParser parser = new AQLParser(new StringReader(new String(builder)));
 
 		List<Statement> statements = null;

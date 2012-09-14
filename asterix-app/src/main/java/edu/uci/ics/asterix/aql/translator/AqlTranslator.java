@@ -57,8 +57,6 @@ import edu.uci.ics.asterix.aql.expression.TypeDecl;
 import edu.uci.ics.asterix.aql.expression.TypeDropStatement;
 import edu.uci.ics.asterix.aql.expression.WriteFromQueryResultStatement;
 import edu.uci.ics.asterix.aql.expression.WriteStatement;
-import edu.uci.ics.asterix.aql.translator.DdlTranslator.CompiledDatasetDropStatement;
-import edu.uci.ics.asterix.aql.translator.DdlTranslator.CompiledIndexDropStatement;
 import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
 import edu.uci.ics.asterix.common.config.GlobalConfig;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
@@ -86,14 +84,16 @@ import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.asterix.om.types.TypeSignature;
 import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
 import edu.uci.ics.asterix.translator.AbstractAqlTranslator;
-import edu.uci.ics.asterix.translator.DmlTranslator.CompiledBeginFeedStatement;
-import edu.uci.ics.asterix.translator.DmlTranslator.CompiledControlFeedStatement;
-import edu.uci.ics.asterix.translator.DmlTranslator.CompiledCreateIndexStatement;
-import edu.uci.ics.asterix.translator.DmlTranslator.CompiledDeleteStatement;
-import edu.uci.ics.asterix.translator.DmlTranslator.CompiledInsertStatement;
-import edu.uci.ics.asterix.translator.DmlTranslator.CompiledLoadFromFileStatement;
-import edu.uci.ics.asterix.translator.DmlTranslator.CompiledWriteFromQueryResultStatement;
-import edu.uci.ics.asterix.translator.DmlTranslator.ICompiledDmlStatement;
+import edu.uci.ics.asterix.translator.CompiledStatements.CompiledBeginFeedStatement;
+import edu.uci.ics.asterix.translator.CompiledStatements.CompiledControlFeedStatement;
+import edu.uci.ics.asterix.translator.CompiledStatements.CompiledCreateIndexStatement;
+import edu.uci.ics.asterix.translator.CompiledStatements.CompiledDatasetDropStatement;
+import edu.uci.ics.asterix.translator.CompiledStatements.CompiledDeleteStatement;
+import edu.uci.ics.asterix.translator.CompiledStatements.CompiledIndexDropStatement;
+import edu.uci.ics.asterix.translator.CompiledStatements.CompiledInsertStatement;
+import edu.uci.ics.asterix.translator.CompiledStatements.CompiledLoadFromFileStatement;
+import edu.uci.ics.asterix.translator.CompiledStatements.CompiledWriteFromQueryResultStatement;
+import edu.uci.ics.asterix.translator.CompiledStatements.ICompiledDmlStatement;
 import edu.uci.ics.asterix.translator.TypeTranslator;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.common.utils.Pair;
@@ -220,41 +220,6 @@ public class AqlTranslator extends AbstractAqlTranslator {
                         handleWriteFromQueryResultStatement(metadataProvider, stmt, hcc);
                         break;
                     }
-                    /*
-                    case CREATE_INDEX: {
-                        CreateIndexStatement cis = (CreateIndexStatement) stmt;
-                        // Assumptions: We first processed the DDL, which added the secondary index to the metadata.
-                        // If the index's dataset is being loaded in this 'session', then let the load add 
-                        // the CompiledCreateIndexStatement to dmlStatements, and don't add it again here.
-                        // It's better to have the load handle this because:
-                        // 1. There may be more secondary indexes to load, which were possibly created in an earlier session.
-                        // 2. If the create index stmt came before the load stmt, then we would first create an empty index only to load it again later. 
-                        // This may cause problems because the index would be considered loaded (even though it was loaded empty). 
-                        String loadDatasetStmtDataverse = null;
-                        String ciStmtDataverse = null;
-                        for (Statement s : aqlStatements) {
-                            if (s.getKind() != Kind.LOAD_FROM_FILE) {
-                                continue;
-                            }
-                            LoadFromFileStatement loadStmt = (LoadFromFileStatement) s;
-                            loadDatasetStmtDataverse = loadStmt.getDataverseName() == null ? compiledDeclarations
-                                    .getDefaultDataverseName() : loadStmt.getDataverseName().getValue();
-                            ciStmtDataverse = loadStmt.getDataverseName() == null ? compiledDeclarations
-                                    .getDefaultDataverseName() : loadStmt.getDataverseName().getValue();
-
-                            if (loadStmt.getDatasetName().equals(cis.getDatasetName())
-                                    && loadDatasetStmtDataverse.equals(ciStmtDataverse)) {
-                                cis.setNeedToCreate(false);
-                            }
-                        }
-                        if (cis.getNeedToCreate()) {
-                            CompiledCreateIndexStatement ccis = new CompiledCreateIndexStatement(cis.getIndexName()
-                                    .getValue(), ciStmtDataverse, cis.getDatasetName().getValue(), cis.getFieldExprs(),
-                                    cis.getGramLength(), cis.getIndexType());
-                            dmlStatements.add(ccis);
-                        }
-                        break;
-                    }*/
                     case INSERT: {
                         handleInsertStatement(metadataProvider, stmt, hcc);
                         break;
