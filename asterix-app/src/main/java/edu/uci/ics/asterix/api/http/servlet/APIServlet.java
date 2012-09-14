@@ -79,21 +79,24 @@ public class APIServlet extends HttpServlet {
 
             }
 
+            int queryCount = 1;
             out.println("<H1>Result:</H1>");
-
             out.println("<PRE>");
             for(ExecutionResult result: executionResults){
-                out.println(result.getStatement() + ":" + result.getResultPath);
+                out.println("Query:" + queryCount++ + ":" + " " + result.getResultPath());
             }
             out.println("Duration: " + duration);
             out.println("</PRE>");
         
+            queryCount = 1;
             if (isSet(strDisplayResult)) {
                 out.println("<PRE>");
                 for(ExecutionResult result: executionResults){
-                    out.println(result.getStatement() + ":" + result.getResultPath);
+                    out.println("Query:" + queryCount++ + ":" + " " + result.getResultPath());
+                    displayFile(new File(result.getResultPath()), out);
+                    out.println();
                 }   
-                displayFile(new File(executionResults.get(0).getResultPath()), out);
+                
                 out.println("</PRE>");
             }
         } catch (ParseException pe) {
