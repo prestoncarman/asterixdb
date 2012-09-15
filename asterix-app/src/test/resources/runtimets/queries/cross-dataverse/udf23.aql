@@ -1,0 +1,15 @@
+/*
+ * Description  : Create UDF and invoke it in limit clause
+ * Expected Res : Success
+ * Date         : Sep 5th 2012
+ */
+
+write output to nc1:"rttest/cross-dataverse_udf23.adm";
+
+create function numRows(){
+6
+}
+   
+for $l in dataset('Metadata.Dataset')
+limit numRows()
+return $l
