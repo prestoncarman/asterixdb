@@ -26,4 +26,5 @@ $b+$c
 }
 
 for $l in dataset('Metadata.Function')
+where $l.DataverseName='testdv1'
 return $l;

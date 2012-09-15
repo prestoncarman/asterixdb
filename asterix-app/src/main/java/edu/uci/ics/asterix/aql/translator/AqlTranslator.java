@@ -246,9 +246,6 @@ public class AqlTranslator extends AbstractAqlTranslator {
                     }
 
                     case WRITE: {
-                        if (outputFile != null) {
-                            throw new AsterixException("Multiple 'write' statements.");
-                        }
                         WriteStatement ws = (WriteStatement) stmt;
                         File f = new File(ws.getFileName());
                         outputFile = new FileSplit(ws.getNcName().getValue(), new FileReference(f));
@@ -644,60 +641,51 @@ public class AqlTranslator extends AbstractAqlTranslator {
 
     private void handleWriteFromQueryResultStatement(AqlMetadataProvider metadataProvider, Statement stmt,
             IHyracksClientConnection hcc) throws Exception {
-        MetadataTransactionContext mdTxnCtx = metadataProvider.getMetadataTxnContext();
         WriteFromQueryResultStatement st1 = (WriteFromQueryResultStatement) stmt;
         String dataverseName = st1.getDataverseName() == null ? activeDefaultDataverse == null ? null
                 : activeDefaultDataverse.getDataverseName() : st1.getDataverseName().getValue();
         CompiledWriteFromQueryResultStatement clfrqs = new CompiledWriteFromQueryResultStatement(dataverseName, st1
                 .getDatasetName().getValue(), st1.getQuery(), st1.getVarCounter());
 
-        SessionConfig sc2 = new SessionConfig(sessionConfig.getPort(), true, sessionConfig.isPrintExprParam(),
-                sessionConfig.isPrintRewrittenExprParam(), sessionConfig.isPrintLogicalPlanParam(),
-                sessionConfig.isPrintOptimizedLogicalPlanParam(), sessionConfig.isPrintPhysicalOpsOnly(),
-                sessionConfig.isPrintJob());
-        sc2.setGenerateJobSpec(true);
-        JobSpecification mj = APIFramework.compileQuery(declaredFunctions, metadataProvider, st1.getQuery(),
-                st1.getVarCounter(), st1.getDatasetName().getValue(), sc2, out, pdf, clfrqs);
-        MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
-        runJob(hcc, (new Job(mj)).getJobSpec());
+        Pair<JobSpecification, FileSplit> compiled = rewriteCompileQuery(metadataProvider, clfrqs.getQuery(), clfrqs);
+        runJob(hcc, compiled.first);
     }
 
     private void handleInsertStatement(AqlMetadataProvider metadataProvider, Statement stmt,
             IHyracksClientConnection hcc) throws Exception {
         metadataProvider.setWriteTransaction(true);
-        MetadataTransactionContext mdTxnCtx = metadataProvider.getMetadataTxnContext();
         InsertStatement stmtInsert = (InsertStatement) stmt;
         String dataverseName = stmtInsert.getDataverseName() == null ? activeDefaultDataverse == null ? null
                 : activeDefaultDataverse.getDataverseName() : stmtInsert.getDataverseName().getValue();
         CompiledInsertStatement clfrqs = new CompiledInsertStatement(dataverseName, stmtInsert.getDatasetName()
                 .getValue(), stmtInsert.getQuery(), stmtInsert.getVarCounter());
-
-        Pair<Query, Integer> reWrittenQuery = APIFramework.reWriteQuery(declaredFunctions, metadataProvider,
-                clfrqs.getQuery(), sessionConfig, out, pdf);
-        MetadataManager.INSTANCE.commitTransaction(mdTxnCtx); //TODO : check double committing here..
-
-        Pair<JobSpecification, FileSplit> compiled = compileQuery(sessionConfig, reWrittenQuery.first,
-                metadataProvider, reWrittenQuery.second, clfrqs);
+        Pair<JobSpecification, FileSplit> compiled = rewriteCompileQuery(metadataProvider, clfrqs.getQuery(), clfrqs);
         runJob(hcc, compiled.first);
     }
 
     private void handleDeleteStatement(AqlMetadataProvider metadataProvider, Statement stmt,
             IHyracksClientConnection hcc) throws Exception {
         metadataProvider.setWriteTransaction(true);
-        MetadataTransactionContext mdTxnCtx = metadataProvider.getMetadataTxnContext();
         DeleteStatement stmtDelete = (DeleteStatement) stmt;
         String dataverseName = stmtDelete.getDataverseName() == null ? activeDefaultDataverse == null ? null
                 : activeDefaultDataverse.getDataverseName() : stmtDelete.getDataverseName().getValue();
         CompiledDeleteStatement clfrqs = new CompiledDeleteStatement(stmtDelete.getVariableExpr(), dataverseName,
                 stmtDelete.getDatasetName().getValue(), stmtDelete.getCondition(), stmtDelete.getDieClause(),
                 stmtDelete.getVarCounter(), metadataProvider);
-
-        Pair<Query, Integer> reWrittenQuery = APIFramework.reWriteQuery(declaredFunctions, metadataProvider,
-                clfrqs.getQuery(), sessionConfig, out, pdf);
-        MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
-        Pair<JobSpecification, FileSplit> compiled = compileQuery(sessionConfig, reWrittenQuery.first,
-                metadataProvider, reWrittenQuery.second, clfrqs);
+        Pair<JobSpecification, FileSplit> compiled = rewriteCompileQuery(metadataProvider, clfrqs.getQuery(), clfrqs);
         runJob(hcc, compiled.first);
+    }
+
+    private Pair<JobSpecification, FileSplit> rewriteCompileQuery(AqlMetadataProvider metadataProvider, Query query,
+            ICompiledDmlStatement stmt) throws AsterixException, RemoteException, AlgebricksException, JSONException,
+            ACIDException {
+        Pair<Query, Integer> reWrittenQuery = APIFramework.reWriteQuery(declaredFunctions, metadataProvider, query,
+                sessionConfig, out, pdf);
+        MetadataManager.INSTANCE.commitTransaction(metadataProvider.getMetadataTxnContext());
+        Pair<JobSpecification, FileSplit> compiled = compileQuery(sessionConfig, reWrittenQuery.first,
+                metadataProvider, reWrittenQuery.second, stmt);
+        return compiled;
+
     }
 
     private Pair<JobSpecification, FileSplit> compileQuery(SessionConfig sessionConfig, Query query,
@@ -712,7 +700,7 @@ public class AqlTranslator extends AbstractAqlTranslator {
         JobSpecification spec = APIFramework.compileQuery(declaredFunctions, metadataProvider, query, varCounter,
                 statement == null ? null : statement.getDatasetName(), sessionConfig, out, pdf, statement);
         sessionConfig.setGenerateJobSpec(false);
-        return new Pair(spec, metadataProvider.getOutputFile());
+        return new Pair<JobSpecification, FileSplit>(spec, metadataProvider.getOutputFile());
     }
 
     private void handleBeginFeedStatement(AqlMetadataProvider metadataProvider, Statement stmt,
@@ -756,14 +744,7 @@ public class AqlTranslator extends AbstractAqlTranslator {
 
     private ExecutionResult handleQuery(AqlMetadataProvider metadataProvider, Query query, IHyracksClientConnection hcc)
             throws Exception {
-        MetadataTransactionContext mdTxnCtx = metadataProvider.getMetadataTxnContext();
-        Pair<Query, Integer> reWrittenQuery = APIFramework.reWriteQuery(declaredFunctions, metadataProvider, query,
-                sessionConfig, out, pdf);
-        MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
-
-        Pair<JobSpecification, FileSplit> compiled = compileQuery(sessionConfig, reWrittenQuery.first,
-                metadataProvider, reWrittenQuery.second, null);
-
+        Pair<JobSpecification, FileSplit> compiled = rewriteCompileQuery(metadataProvider, query, null);
         runJob(hcc, compiled.first);
         GlobalConfig.ASTERIX_LOGGER.info(compiled.first.toJSON().toString(1));
         return new ExecutionResult(query, compiled.second.getLocalFile().getFile().getAbsolutePath());

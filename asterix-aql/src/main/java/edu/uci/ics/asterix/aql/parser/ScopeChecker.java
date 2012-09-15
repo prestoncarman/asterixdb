@@ -148,7 +148,7 @@ public abstract class ScopeChecker {
 
     public String extractFragment(int beginLine, int beginColumn, int endLine, int endColumn) {
         StringBuilder extract = new StringBuilder();
-        extract.append(inputLines[beginLine - 1].length() > 1 ? inputLines[beginLine - 1].substring(beginColumn + 1)
+        extract.append(inputLines[beginLine - 1].trim().length() > 1 ? inputLines[beginLine - 1].trim().substring(beginColumn)
                 : "");
         for (int i = beginLine + 1; i < endLine; i++) {
             extract.append("\n");

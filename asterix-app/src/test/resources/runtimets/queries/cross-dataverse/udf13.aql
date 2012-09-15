@@ -10,7 +10,7 @@ create dataverse test;
 write output to nc1:"rttest/cross-dataverse_udf13.adm";
 
 create function test.foo($a,$b) {
-$a-$b
+$a - $b
 }
 
 test.foo(400,200)

@@ -88,7 +88,6 @@ import edu.uci.ics.hyracks.algebricks.data.IPrinterFactory;
 import edu.uci.ics.hyracks.algebricks.runtime.base.IPushRuntimeFactory;
 import edu.uci.ics.hyracks.algebricks.runtime.base.IScalarEvaluatorFactory;
 import edu.uci.ics.hyracks.algebricks.runtime.operators.std.SinkWriterRuntimeFactory;
-import edu.uci.ics.hyracks.algebricks.runtime.writers.PrinterBasedWriterFactory;
 import edu.uci.ics.hyracks.api.dataflow.IOperatorDescriptor;
 import edu.uci.ics.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
@@ -123,7 +122,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
     private Map<String, String> config;
     private IAWriterFactory writerFactory;
     private FileSplit outputFile;
-    
+
     private final Dataverse defaultDataverse;
 
     private static final Map<String, String> adapterFactoryMapping = initializeAdapterFactoryMapping();
@@ -132,10 +131,10 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         return config.get(propertyName);
     }
 
-    public void setConfig(Map<String,String> config){
-       this.config = config; 
+    public void setConfig(Map<String, String> config) {
+        this.config = config;
     }
-   
+
     public Map<String, String[]> getAllStores() {
         return stores;
     }
@@ -385,6 +384,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
                 feedMessages);
         return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(feedMessenger, spPc.second);
     }
+
 
     public Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> buildBtreeRuntime(JobSpecification jobSpec,
             List<LogicalVariable> outputVars, IOperatorSchema opSchema, IVariableTypeEnvironment typeEnv,

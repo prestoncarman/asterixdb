@@ -4,7 +4,6 @@ scan/temp_types_02.aql
 fuzzyjoin/dblp-splits-3_1.aql
 fuzzyjoin/events-users-aqlplus_1.aql
 subset-collection/04.aql
-quantifiers/everysat_01.aql
 custord/freq-clerk.aql
 custord/denorm-cust-order_01.aql
 custord/denorm-cust-order_03.aql
@@ -37,4 +36,15 @@ failure/delete.aql
 failure/insert-rtree.aql
 failure/insert.aql
 failure/q1_pricing_summary_report_failure.aql
-
+string/startwith03.aql
+aggregate/droptype.aql
+cross-dataverse/cross-dv08.aql
+cross-dataverse/cross-dv13.aql
+cross-dataverse/cross-dv16.aql
+cross-dataverse/cross-dv17.aql
+cross-dataverse/cross-dv18.aql
+cross-dataverse/udf03.aql
+cross-dataverse/udf15.aql
+cross-dataverse/udf24.aql
+cross-dataverse/udf25.aql
+cross-dataverse/udf26.aql

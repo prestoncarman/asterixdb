@@ -104,12 +104,20 @@ public class InlineUdfsVisitor implements IAqlExpressionVisitor<Boolean, List<Fu
     public Boolean visitRecordConstructor(RecordConstructor rc, List<FunctionDecl> arg) throws AsterixException {
         boolean changed = false;
         for (FieldBinding b : rc.getFbList()) {
-            if (b.getLeftExpr().accept(this, arg)) {
+        	Pair<Boolean, Expression> leftExprInlined = inlineUdfsInExpr(b.getLeftExpr(), arg);
+        	b.setLeftExpr(leftExprInlined.second);
+        	changed = changed | leftExprInlined.first;
+        	Pair<Boolean, Expression> rightExprInlined = inlineUdfsInExpr(b.getRightExpr(), arg);
+        	b.setRightExpr(rightExprInlined.second);
+        	changed = changed | rightExprInlined.first;
+        	
+        	/*
+        	if (b.getLeftExpr().accept(this, arg)) {
                 changed = true;
             }
             if (b.getRightExpr().accept(this, arg)) {
                 changed = true;
-            }
+            }*/
         }
         return changed;
     }

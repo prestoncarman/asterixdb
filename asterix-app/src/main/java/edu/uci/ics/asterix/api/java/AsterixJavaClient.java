@@ -49,7 +49,12 @@ public class AsterixJavaClient {
         if (queryText == null) {
             return;
         }
-        AQLParser parser = new AQLParser(queryText);
+        int ch;
+        StringBuilder builder = new StringBuilder();
+        while ((ch = queryText.read()) != -1) {
+            builder.append((char)ch);
+        }
+        AQLParser parser = new AQLParser(builder.toString());
         List<Statement> aqlStatements;
         try {
             aqlStatements = parser.Statement();
@@ -62,7 +67,6 @@ public class AsterixJavaClient {
                 false, printRewrittenExpressions, printLogicalPlan, printOptimizedPlan, printPhysicalOpsOnly, printJob);
         pc.setGenerateJobSpec(generateBinaryRuntime);
 
-        
         AqlTranslator aqlTranslator = new AqlTranslator(aqlStatements, writer, pc, DisplayFormat.TEXT);
         aqlTranslator.compileExecute(hcc);
         writer.flush();

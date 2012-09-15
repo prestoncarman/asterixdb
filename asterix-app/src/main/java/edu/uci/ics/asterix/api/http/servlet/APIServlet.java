@@ -20,7 +20,6 @@ import edu.uci.ics.asterix.aql.parser.ParseException;
 import edu.uci.ics.asterix.aql.translator.AqlTranslator;
 import edu.uci.ics.asterix.aql.translator.ExecutionResult;
 import edu.uci.ics.asterix.metadata.MetadataManager;
-import edu.uci.ics.asterix.metadata.MetadataTransactionContext;
 import edu.uci.ics.hyracks.api.client.HyracksConnection;
 import edu.uci.ics.hyracks.api.client.IHyracksClientConnection;
 
@@ -57,46 +56,37 @@ public class APIServlet extends HttpServlet {
             }
             AQLParser parser = new AQLParser(query);
             List<Statement> aqlStatements = parser.Statement();
-            SessionConfig sessionConfig = new SessionConfig(port, true, isSet(printExprParam), isSet(printRewrittenExprParam),
-                    isSet(printLogicalPlanParam), isSet(printOptimizedLogicalPlanParam), false, isSet(printJob));
+            SessionConfig sessionConfig = new SessionConfig(port, true, isSet(printExprParam),
+                    isSet(printRewrittenExprParam), isSet(printLogicalPlanParam),
+                    isSet(printOptimizedLogicalPlanParam), false, isSet(printJob));
             sessionConfig.setGenerateJobSpec(true);
-
             MetadataManager.INSTANCE.init();
-            String dataverseName = null;
-
-            MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
             AqlTranslator aqlTranslator = new AqlTranslator(aqlStatements, out, sessionConfig, DisplayFormat.HTML);
             List<ExecutionResult> executionResults = null;
             double duration = 0;
-            try {
-                long startTime = System.currentTimeMillis();
-                executionResults = aqlTranslator.compileExecute(hcc);
-                MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
-                long endTime = System.currentTimeMillis();
-                duration = (endTime - startTime) / 1000.00;
-                out.println("<PRE>Duration of all jobs: " + duration + "</PRE>");
-            } catch (Exception e) {
-
-            }
+            long startTime = System.currentTimeMillis();
+            executionResults = aqlTranslator.compileExecute(hcc);
+            long endTime = System.currentTimeMillis();
+            duration = (endTime - startTime) / 1000.00;
+            out.println("<PRE>Duration of all jobs: " + duration + "</PRE>");
 
             int queryCount = 1;
             out.println("<H1>Result:</H1>");
             out.println("<PRE>");
-            for(ExecutionResult result: executionResults){
+            for (ExecutionResult result : executionResults) {
                 out.println("Query:" + queryCount++ + ":" + " " + result.getResultPath());
             }
             out.println("Duration: " + duration);
             out.println("</PRE>");
-        
+
             queryCount = 1;
             if (isSet(strDisplayResult)) {
                 out.println("<PRE>");
-                for(ExecutionResult result: executionResults){
+                for (ExecutionResult result : executionResults) {
                     out.println("Query:" + queryCount++ + ":" + " " + result.getResultPath());
                     displayFile(new File(result.getResultPath()), out);
                     out.println();
-                }   
-                
+                }
                 out.println("</PRE>");
             }
         } catch (ParseException pe) {
