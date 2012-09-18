@@ -23,4 +23,5 @@ create index idx1 on test.dst01(name);
 drop index test.dst01.idx1;
 
 for $l in dataset('Metadata.Index')
+where $l.DatasetName = 'dst01'
 return $l
