@@ -14,10 +14,10 @@ id : int32,
 name : string
 }
 
-create dataset testdv.t1(testdv.testtype) partitioned by key id;
+create dataset testdv.t1(testtype) partitioned by key id;
 
 create index idx1 on testdv.t1(name);
 
 for $l in dataset('Metadata.Index')
-where $l.DataverseName='testdv' and $l.DatatypeName='testtype'
+where $l.DataverseName='testdv' 
 return $l

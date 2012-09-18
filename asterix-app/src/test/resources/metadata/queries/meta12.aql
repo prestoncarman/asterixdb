@@ -18,7 +18,7 @@ name : string
 
 create dataset test.dst01(testtype) partitioned by key id;
 
-create index test.dst01.idx1 on test.dst01(name);
+create index idx1 on test.dst01(name);
 
 drop index test.dst01.idx1;
 
