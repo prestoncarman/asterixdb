@@ -285,7 +285,7 @@ public class MetadataCache {
     public Object addFunctionIfNotExists(Function function) {
         synchronized (functions) {
             FunctionSignature signature = new FunctionSignature(function.getDataverseName(), function.getName(),
-                    function.getParams().size());
+                    function.getArity());
             Function fun = functions.get(signature);
             if (fun == null) {
                 return functions.put(signature, function);
@@ -297,7 +297,7 @@ public class MetadataCache {
     public Object dropFunction(Function function) {
         synchronized (functions) {
             FunctionSignature signature = new FunctionSignature(function.getDataverseName(), function.getName(),
-                    function.getParams().size());
+                    function.getArity());
             Function fun = functions.get(signature);
             if (fun == null) {
                 return null;

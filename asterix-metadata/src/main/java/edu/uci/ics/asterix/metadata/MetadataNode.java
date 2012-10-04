@@ -240,7 +240,7 @@ public class MetadataNode implements IMetadataNode {
 
         } catch (BTreeDuplicateKeyException e) {
             throw new MetadataException("A function with this name " + function.getName() + " and arity "
-                    + function.getParams().size() + " already exists in dataverse '" + function.getDataverseName()
+                    + function.getArity() + " already exists in dataverse '" + function.getDataverseName()
                     + "'.", e);
         } catch (Exception e) {
             throw new MetadataException(e);

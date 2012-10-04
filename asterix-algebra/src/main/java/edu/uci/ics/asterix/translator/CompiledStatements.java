@@ -493,7 +493,8 @@ public class CompiledStatements {
         public Query getQuery() throws AlgebricksException {
 
             List<Expression> arguments = new ArrayList<Expression>();
-            LiteralExpr argumentLiteral = new LiteralExpr(new StringLiteral(datasetName));
+            String arg = dataverseName == null ? datasetName : dataverseName + "." + datasetName;
+            LiteralExpr argumentLiteral = new LiteralExpr(new StringLiteral(arg));
             arguments.add(argumentLiteral);
 
             CallExpr callExpression = new CallExpr(new FunctionSignature(FunctionConstants.ASTERIX_NS, "dataset", 1),

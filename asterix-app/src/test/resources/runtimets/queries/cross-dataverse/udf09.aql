@@ -28,4 +28,4 @@ create function test.readDataset($a) {
 $a
 }
    
-test.readDataset(for $a in dataset('test.t1') return $a);
+test.readDataset(for $a in dataset('test.t1') order by $a.id return $a);
