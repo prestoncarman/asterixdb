@@ -35,7 +35,7 @@ import edu.uci.ics.asterix.aql.base.Statement;
 import edu.uci.ics.asterix.aql.parser.AQLParser;
 import edu.uci.ics.asterix.aql.parser.ParseException;
 import edu.uci.ics.asterix.aql.translator.AqlTranslator;
-import edu.uci.ics.asterix.aql.translator.ExecutionResult;
+import edu.uci.ics.asterix.aql.translator.QueryResult;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
 import edu.uci.ics.asterix.hyracks.bootstrap.AsterixNodeState;
 import edu.uci.ics.asterix.metadata.MetadataManager;
@@ -48,8 +48,8 @@ import edu.uci.ics.hyracks.api.client.IHyracksClientConnection;
 /**
  * This class is the client handler for the APIServer. The AQLJ protocol is used
  * for communicating with the client. The client, for example, may send a
- * message to execute an AQL statement. It is up to this class to process that
- * AQL statement and pass back the results, if any, to the client.
+ * message to execute a set containing one or more AQL statements. It is up to this class to process each
+ * AQL statement (in the original order) and pass back the results, if any, to the client.
  * 
  * @author zheilbron
  */
@@ -214,7 +214,7 @@ public class APIClientThread extends Thread {
     }
 
     private String executeStatement(String stmt) throws IOException, AQLJException {
-        List<ExecutionResult> executionResults = null;
+        List<QueryResult> executionResults = null;
         PrintWriter out = new PrintWriter(System.out);
         try {
             AQLParser parser = new AQLParser(new StringReader(stmt));
@@ -226,7 +226,7 @@ public class APIClientThread extends Thread {
             MetadataManager.INSTANCE.init();
             if (statements != null && statements.size() > 0) {
                 AqlTranslator translator = new AqlTranslator(statements, out, pc, DisplayFormat.TEXT);
-                executionResults = translator.compileExecute(hcc);
+                executionResults = translator.compileAndExecute(hcc);
             }
         } catch (ParseException e) {
             e.printStackTrace();

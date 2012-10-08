@@ -18,7 +18,7 @@ import edu.uci.ics.asterix.aql.base.Statement;
 import edu.uci.ics.asterix.aql.parser.AQLParser;
 import edu.uci.ics.asterix.aql.parser.ParseException;
 import edu.uci.ics.asterix.aql.translator.AqlTranslator;
-import edu.uci.ics.asterix.aql.translator.ExecutionResult;
+import edu.uci.ics.asterix.aql.translator.QueryResult;
 import edu.uci.ics.asterix.metadata.MetadataManager;
 import edu.uci.ics.hyracks.api.client.HyracksConnection;
 import edu.uci.ics.hyracks.api.client.IHyracksClientConnection;
@@ -62,10 +62,10 @@ public class APIServlet extends HttpServlet {
             sessionConfig.setGenerateJobSpec(true);
             MetadataManager.INSTANCE.init();
             AqlTranslator aqlTranslator = new AqlTranslator(aqlStatements, out, sessionConfig, DisplayFormat.HTML);
-            List<ExecutionResult> executionResults = null;
+            List<QueryResult> executionResults = null;
             double duration = 0;
             long startTime = System.currentTimeMillis();
-            executionResults = aqlTranslator.compileExecute(hcc);
+            executionResults = aqlTranslator.compileAndExecute(hcc);
             long endTime = System.currentTimeMillis();
             duration = (endTime - startTime) / 1000.00;
             out.println("<PRE>Duration of all jobs: " + duration + "</PRE>");
@@ -73,7 +73,7 @@ public class APIServlet extends HttpServlet {
             int queryCount = 1;
             out.println("<H1>Result:</H1>");
             out.println("<PRE>");
-            for (ExecutionResult result : executionResults) {
+            for (QueryResult result : executionResults) {
                 out.println("Query:" + queryCount++ + ":" + " " + result.getResultPath());
             }
             out.println("Duration: " + duration);
@@ -82,7 +82,7 @@ public class APIServlet extends HttpServlet {
             queryCount = 1;
             if (isSet(strDisplayResult)) {
                 out.println("<PRE>");
-                for (ExecutionResult result : executionResults) {
+                for (QueryResult result : executionResults) {
                     out.println("Query:" + queryCount++ + ":" + " " + result.getResultPath());
                     displayFile(new File(result.getResultPath()), out);
                     out.println();

@@ -240,8 +240,7 @@ public class MetadataNode implements IMetadataNode {
 
         } catch (BTreeDuplicateKeyException e) {
             throw new MetadataException("A function with this name " + function.getName() + " and arity "
-                    + function.getArity() + " already exists in dataverse '" + function.getDataverseName()
-                    + "'.", e);
+                    + function.getArity() + " already exists in dataverse '" + function.getDataverseName() + "'.", e);
         } catch (Exception e) {
             throw new MetadataException(e);
         }
@@ -289,13 +288,23 @@ public class MetadataNode implements IMetadataNode {
                 }
             }
 
-            // As a side effect, acquires an S lock on the 'function' dataset
+            // As a side effect, acquires an S lock on the 'Function' dataset
             // on behalf of txnId.
             List<Function> dataverseFunctions = getDataverseFunctions(txnId, dataverseName);
             if (dataverseFunctions != null && dataverseFunctions.size() > 0) {
                 // Drop all functions in this dataverse.
                 for (Function function : dataverseFunctions) {
                     dropFunction(txnId, new FunctionSignature(dataverseName, function.getName(), function.getArity()));
+                }
+            }
+
+            // As a side effect, acquires an S lock on the 'Adapter' dataset
+            // on behalf of txnId.
+            List<Adapter> dataverseAdapters = getDataverseAdapters(txnId, dataverseName);
+            if (dataverseAdapters != null && dataverseAdapters.size() > 0) {
+                // Drop all functions in this dataverse.
+                for (Adapter adapter : dataverseAdapters) {
+                    dropAdapter(txnId, dataverseName, adapter.getAdapterIdentifier().getAdapterName());
                 }
             }
 
@@ -893,6 +902,21 @@ public class MetadataNode implements IMetadataNode {
                 return null;
             }
             return results.get(0);
+        } catch (Exception e) {
+            throw new MetadataException(e);
+        }
+    }
+
+    @Override
+    public List<Adapter> getDataverseAdapters(long txnId, String dataverseName) throws MetadataException,
+            RemoteException {
+        try {
+            ITupleReference searchKey = createTuple(dataverseName);
+            AdapterTupleTranslator tupleReaderWriter = new AdapterTupleTranslator(false);
+            IValueExtractor<Adapter> valueExtractor = new MetadataEntityValueExtractor<Adapter>(tupleReaderWriter);
+            List<Adapter> results = new ArrayList<Adapter>();
+            searchIndex(txnId, MetadataPrimaryIndexes.ADAPTER_DATASET, searchKey, valueExtractor, results);
+            return results;
         } catch (Exception e) {
             throw new MetadataException(e);
         }

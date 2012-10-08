@@ -90,9 +90,12 @@ public class DatasetOperations {
             AqlMetadataProvider metadataProvider) throws AlgebricksException, HyracksDataException, RemoteException,
             ACIDException, AsterixException {
 
-        String dataverseName = datasetDropStmt.getDataverseName() == null ? metadataProvider.getDefaultDataverse() == null ? null
-                : metadataProvider.getDefaultDataverse().getDataverseName()
-                : datasetDropStmt.getDataverseName();
+        String dataverseName = null;
+        if (datasetDropStmt.getDataverseName() != null) {
+            dataverseName = datasetDropStmt.getDataverseName();
+        } else if (metadataProvider.getDefaultDataverse() != null) {
+            dataverseName = metadataProvider.getDefaultDataverse().getDataverseName();
+        }
 
         String datasetName = datasetDropStmt.getDatasetName();
         String datasetPath = dataverseName + File.separator + datasetName;

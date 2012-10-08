@@ -11,33 +11,31 @@ import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyAggregateFunctionFactory
 import edu.uci.ics.hyracks.algebricks.runtime.base.ICopyEvaluatorFactory;
 import edu.uci.ics.hyracks.data.std.api.IDataOutputProvider;
 
-public class MinAggregateDescriptor extends
-		AbstractAggregateFunctionDynamicDescriptor {
+public class MinAggregateDescriptor extends AbstractAggregateFunctionDynamicDescriptor {
 
-	private static final long serialVersionUID = 1L;
-	public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
-		public IFunctionDescriptor createFunctionDescriptor() {
-			return new MinAggregateDescriptor();
-		}
-	};
+    private static final long serialVersionUID = 1L;
+    public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
+        public IFunctionDescriptor createFunctionDescriptor() {
+            return new MinAggregateDescriptor();
+        }
+    };
 
-	@Override
-	public FunctionIdentifier getIdentifier() {
-		return AsterixBuiltinFunctions.MIN;
-	}
+    @Override
+    public FunctionIdentifier getIdentifier() {
+        return AsterixBuiltinFunctions.MIN;
+    }
 
-	@Override
-	public ICopyAggregateFunctionFactory createAggregateFunctionFactory(
-			final ICopyEvaluatorFactory[] args) throws AlgebricksException {
-		return new ICopyAggregateFunctionFactory() {
-			private static final long serialVersionUID = 1L;
+    @Override
+    public ICopyAggregateFunctionFactory createAggregateFunctionFactory(final ICopyEvaluatorFactory[] args)
+            throws AlgebricksException {
+        return new ICopyAggregateFunctionFactory() {
+            private static final long serialVersionUID = 1L;
 
-			@Override
-			public ICopyAggregateFunction createAggregateFunction(
-					final IDataOutputProvider provider)
-					throws AlgebricksException {
-				return new MinMaxAggregateFunction(args, provider, true, false);
-			}
-		};
-	}
+            @Override
+            public ICopyAggregateFunction createAggregateFunction(final IDataOutputProvider provider)
+                    throws AlgebricksException {
+                return new MinMaxAggregateFunction(args, provider, true, false);
+            }
+        };
+    }
 }

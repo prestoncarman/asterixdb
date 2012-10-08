@@ -20,15 +20,13 @@ import edu.uci.ics.asterix.om.base.AMutableRecord;
 import edu.uci.ics.asterix.om.base.AMutableString;
 import edu.uci.ics.asterix.om.base.IAObject;
 import edu.uci.ics.asterix.om.types.ARecordType;
-import edu.uci.ics.asterix.om.types.BuiltinType;
-import edu.uci.ics.asterix.om.types.IAType;
 
 @SuppressWarnings("rawtypes")
 public class RSSFeedClient extends PullBasedFeedClient {
 
     private final String feedURL;
     private long id = 0;
-    private String id_prefix;
+    private String idPrefix;
     private boolean feedModified = false;
 
     private Queue<SyndEntryImpl> rssFeedBuffer = new LinkedList<SyndEntryImpl>();
@@ -39,6 +37,7 @@ public class RSSFeedClient extends PullBasedFeedClient {
     private final FeedFetcher fetcher;
     private final FetcherEventListenerImpl listener;
     private final URL feedUrl;
+    private ARecordType recordType;
     String[] tupleFieldValues;
 
     public boolean isFeedModified() {
@@ -51,25 +50,17 @@ public class RSSFeedClient extends PullBasedFeedClient {
 
     public RSSFeedClient(RSSFeedAdapter adapter, String feedURL, String id_prefix) throws MalformedURLException {
         this.feedURL = feedURL;
-        this.id_prefix = id_prefix;
+        this.idPrefix = id_prefix;
         feedUrl = new URL(feedURL);
         feedInfoCache = HashMapFeedInfoCache.getInstance();
         fetcher = new HttpURLFeedFetcher(feedInfoCache);
         listener = new FetcherEventListenerImpl(this);
         fetcher.addFetcherEventListener(listener);
-
         mutableFields = new IAObject[] { new AMutableString(null), new AMutableString(null), new AMutableString(null),
                 new AMutableString(null) };
-        recordType = new ARecordType("FeedRecordType", new String[] { "id", "title", "description", "link" },
-                new IAType[] { BuiltinType.ASTRING, BuiltinType.ASTRING, BuiltinType.ASTRING, BuiltinType.ASTRING },
-                false);
-
+        recordType = adapter.getAdapterOutputType();
         mutableRecord = new AMutableRecord(recordType, mutableFields);
         tupleFieldValues = new String[recordType.getFieldNames().length];
-    }
-
-    public ARecordType getRecordType() {
-        return recordType;
     }
 
     @Override
@@ -78,7 +69,7 @@ public class RSSFeedClient extends PullBasedFeedClient {
         if (feedEntry == null) {
             return false;
         }
-        tupleFieldValues[0] = id_prefix + ":" + id;
+        tupleFieldValues[0] = idPrefix + ":" + id;
         tupleFieldValues[1] = feedEntry.getTitle();
         tupleFieldValues[2] = feedEntry.getDescription().getValue();
         tupleFieldValues[3] = feedEntry.getLink();

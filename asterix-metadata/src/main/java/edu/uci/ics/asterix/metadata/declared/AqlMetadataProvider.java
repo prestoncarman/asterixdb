@@ -346,13 +346,14 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         IAType adapterOutputType;
 
         try {
-            adapterEntity = MetadataManager.INSTANCE.getAdapter(mdTxnCtx, null, datasetDetails.getAdapterFactory());
+            adapterEntity = MetadataManager.INSTANCE.getAdapter(mdTxnCtx, MetadataConstants.METADATA_DATAVERSE_NAME,
+                    datasetDetails.getAdapterFactory());
             adapterFactory = (IFeedDatasetAdapterFactory) Class.forName(adapterEntity.getClassname()).newInstance();
             if (adapterFactory.getFeedAdapterType().equals(FeedAdapterType.TYPED)) {
                 adapter = ((ITypedFeedDatasetAdapterFactory) adapterFactory).createAdapter(datasetDetails
                         .getProperties());
                 adapterOutputType = ((IFeedDatasourceAdapter) adapter).getAdapterOutputType();
-            } else {
+            } else { 
                 String outputTypeName = datasetDetails.getProperties().get(
                         IGenericFeedDatasetAdapterFactory.KEY_TYPE_NAME);
                 adapterOutputType = MetadataManager.INSTANCE.getDatatype(mdTxnCtx, null, outputTypeName).getDatatype();
@@ -384,7 +385,6 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
                 feedMessages);
         return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(feedMessenger, spPc.second);
     }
-
 
     public Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> buildBtreeRuntime(JobSpecification jobSpec,
             List<LogicalVariable> outputVars, IOperatorSchema opSchema, IVariableTypeEnvironment typeEnv,

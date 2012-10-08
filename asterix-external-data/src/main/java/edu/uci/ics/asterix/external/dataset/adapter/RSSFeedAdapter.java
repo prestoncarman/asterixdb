@@ -24,6 +24,8 @@ import edu.uci.ics.asterix.feed.intake.RSSFeedClient;
 import edu.uci.ics.asterix.feed.managed.adapter.IManagedFeedAdapter;
 import edu.uci.ics.asterix.feed.managed.adapter.IMutableFeedAdapter;
 import edu.uci.ics.asterix.om.types.ARecordType;
+import edu.uci.ics.asterix.om.types.BuiltinType;
+import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksCountPartitionConstraint;
 import edu.uci.ics.hyracks.api.context.IHyracksTaskContext;
 
@@ -35,6 +37,7 @@ public class RSSFeedAdapter extends PullBasedAdapter implements IManagedFeedAdap
     private Map<String, String> alteredParams = new HashMap<String, String>();
     private String id_prefix = "";
     private int interval = 10;
+    private ARecordType recordType;
 
     private IPullBasedFeedClient rssFeedClient;
 
@@ -97,6 +100,9 @@ public class RSSFeedAdapter extends PullBasedAdapter implements IManagedFeedAdap
         }
         initializeFeedURLs(rssURLProperty);
         configurePartitionConstraints();
+        recordType = new ARecordType("FeedRecordType", new String[] { "id", "title", "description", "link" },
+                new IAType[] { BuiltinType.ASTRING, BuiltinType.ASTRING, BuiltinType.ASTRING, BuiltinType.ASTRING },
+                false);
     }
 
     private void initializeFeedURLs(String rssURLProperty) {
@@ -142,7 +148,7 @@ public class RSSFeedAdapter extends PullBasedAdapter implements IManagedFeedAdap
 
     @Override
     public ARecordType getAdapterOutputType() {
-        return ((RSSFeedClient) rssFeedClient).getRecordType();
+        return recordType;
     }
 
 }

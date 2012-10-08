@@ -782,7 +782,6 @@ FeedDetailsDecl FeedDatasetDeclaration() throws ParseException :
 	Pair<Identifier,Identifier> nameComponents;
 	List<String> partitioningExprs = new ArrayList<String>();
     Identifier nodeGroupName=null;
-    String adapterFactoryClassName=null;
     FunctionSignature appliedFunction=null;
 	String dataverse;
 	String functionName;
@@ -836,7 +835,7 @@ FeedDetailsDecl FeedDatasetDeclaration() throws ParseException :
   )?
   ";"
   {
-    fdd = new FeedDetailsDecl(adapterFactoryClassName, properties, appliedFunction, nodeGroupName, partitioningExprs);
+    fdd = new FeedDetailsDecl(adapterFactoryClassname, properties, appliedFunction, nodeGroupName, partitioningExprs);
     return fdd;
   }
 }

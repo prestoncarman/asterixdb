@@ -127,7 +127,7 @@ public final class MetadataRecordTypes {
 
     public static final int FEED_DETAILS_ARECORD_FILESTRUCTURE_FIELD_INDEX = 0;
     public static final int FEED_DETAILS_ARECORD_PARTITIONSTRATEGY_FIELD_INDEX = 1;
-    public static final int FEEDL_DETAILS_ARECORD_PARTITIONKEY_FIELD_INDEX = 2;
+    public static final int FEED_DETAILS_ARECORD_PARTITIONKEY_FIELD_INDEX = 2;
     public static final int FEED_DETAILS_ARECORD_PRIMARYKEY_FIELD_INDEX = 3;
     public static final int FEED_DETAILS_ARECORD_GROUPNAME_FIELD_INDEX = 4;
     public static final int FEED_DETAILS_ARECORD_ADAPTER_FIELD_INDEX = 5;

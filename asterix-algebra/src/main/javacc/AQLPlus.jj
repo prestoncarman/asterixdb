@@ -84,16 +84,6 @@ public class AQLPlusParser extends ScopeChecker {
 			Reader fis = new BufferedReader(new InputStreamReader(new FileInputStream(file), "UTF-8"));
 		    AQLPlusParser parser = new AQLPlusParser(fis);
 		    List<Statement> st = parser.Statement();
-		//    st.accept(new AQLPrintVisitor(), 0);
-		    
-//		    System.out.println("FunctionCalls not found:");
-//		    for(FunctionDescriptor fd: notFoundFunctionList)
-//		    {
-//			if(lookupFunctionSignature(fd.getValue(), fd.getArity())!=null)
-//				notFoundFunctionList.remove(fd);
-//		    }
-//			System.out.println(notFoundFunctionList.toString());
-
 	}
 
     public void initScope() {
@@ -1055,9 +1045,13 @@ Expression FunctionCallExpr() throws ParseException:
   String id2=null;
 }
 {  
-    ( <IDENTIFIER> { dataverse = defaultDataverse; funcName = token.image;} ("." <IDENTIFIER> { dataverse = funcName; funcName = token.image;})? | <DATASET> {dataverse = MetadataConstants.METADATA_DATAVERSE_NAME; funcName = getToken(0).toString();})
+    ( <IDENTIFIER> { dataverse = defaultDataverse; funcName = token.image;} 
+     ("." <IDENTIFIER> { dataverse = funcName; funcName = token.image;})? 
+     | 
+     <DATASET> {dataverse = MetadataConstants.METADATA_DATAVERSE_NAME; funcName = getToken(0).toString();}
+    )
     {
-       hint = getHint(token);
+       hint=getHint(token);
     }
      <LEFTPAREN> (tmp = Expression()
      {

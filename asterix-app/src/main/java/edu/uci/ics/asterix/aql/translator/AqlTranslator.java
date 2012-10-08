@@ -134,9 +134,9 @@ public class AqlTranslator extends AbstractAqlTranslator {
         return functionDecls;
     }
 
-    public List<ExecutionResult> compileExecute(IHyracksClientConnection hcc) throws AlgebricksException,
+    public List<QueryResult> compileAndExecute(IHyracksClientConnection hcc) throws AlgebricksException,
             RemoteException, ACIDException, AsterixException {
-        List<ExecutionResult> executionResult = new ArrayList<ExecutionResult>();
+        List<QueryResult> executionResult = new ArrayList<QueryResult>();
         FileSplit outputFile = null;
         IAWriterFactory writerFactory = PrinterBasedWriterFactory.INSTANCE;
         Map<String, String> config = new HashMap<String, String>();
@@ -262,7 +262,6 @@ public class AqlTranslator extends AbstractAqlTranslator {
                 }
 
             } catch (Exception e) {
-                e.printStackTrace();
                 MetadataManager.INSTANCE.abortTransaction(mdTxnCtx);
                 throw new AlgebricksException(e);
             }
@@ -735,19 +734,21 @@ public class AqlTranslator extends AbstractAqlTranslator {
             IHyracksClientConnection hcc) throws Exception {
         MetadataTransactionContext mdTxnCtx = metadataProvider.getMetadataTxnContext();
         ControlFeedStatement cfs = (ControlFeedStatement) stmt;
-        CompiledControlFeedStatement clcfs = new CompiledControlFeedStatement(cfs.getOperationType(), cfs
-                .getDataverseName().getValue(), cfs.getDatasetName().getValue(), cfs.getAlterAdapterConfParams());
+        String dataverseName = cfs.getDataverseName() == null ? activeDefaultDataverse == null ? null
+                : activeDefaultDataverse.getDataverseName() : cfs.getDatasetName().getValue();
+        CompiledControlFeedStatement clcfs = new CompiledControlFeedStatement(cfs.getOperationType(), dataverseName,
+                cfs.getDatasetName().getValue(), cfs.getAlterAdapterConfParams());
         Job job = new Job(FeedOperations.buildControlFeedJobSpec(clcfs, metadataProvider), SubmissionMode.ASYNCHRONOUS);
         MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
         runJob(hcc, job.getJobSpec());
     }
 
-    private ExecutionResult handleQuery(AqlMetadataProvider metadataProvider, Query query, IHyracksClientConnection hcc)
+    private QueryResult handleQuery(AqlMetadataProvider metadataProvider, Query query, IHyracksClientConnection hcc)
             throws Exception {
         Pair<JobSpecification, FileSplit> compiled = rewriteCompileQuery(metadataProvider, query, null);
         runJob(hcc, compiled.first);
         GlobalConfig.ASTERIX_LOGGER.info(compiled.first.toJSON().toString(1));
-        return new ExecutionResult(query, compiled.second.getLocalFile().getFile().getAbsolutePath());
+        return new QueryResult(query, compiled.second.getLocalFile().getFile().getAbsolutePath());
     }
 
     private void runCreateDatasetJob(IHyracksClientConnection hcc, Dataverse dataverse, String datasetName,

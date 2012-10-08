@@ -11,6 +11,7 @@ public class HiveAdapterFactory implements IExternalDatasetAdapterFactory {
     @Override
     public IDatasourceAdapter createAdapter(Map<String, String> configuration, IAType type) throws Exception {
         HiveAdapter hiveAdapter = new HiveAdapter(type);
+        hiveAdapter.configure(configuration);
         return hiveAdapter;
     }
 

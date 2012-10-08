@@ -46,7 +46,7 @@ public class MetadataCache {
     protected final Map<String, NodeGroup> nodeGroups = new HashMap<String, NodeGroup>();
     // Key is function Identifier . Key of value map is function name.
     protected final Map<FunctionSignature, Function> functions = new HashMap<FunctionSignature, Function>();
-    // Key is adapter Dataverse. Key of value mao is the adapter name  
+    // Key is adapter dataverse. Key of value map is the adapter name  
     protected final Map<String, Map<String, Adapter>> adapters = new HashMap<String, Map<String, Adapter>>();
 
     // Atomically executes all metadata operations in ctx's log.

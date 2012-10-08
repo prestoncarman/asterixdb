@@ -20,14 +20,12 @@ import java.io.IOException;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.ARecordSerializerDeserializer;
 import edu.uci.ics.asterix.om.base.AMutableRecord;
-import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 
 public abstract class PullBasedFeedClient implements IPullBasedFeedClient {
 
-	protected ARecordType recordType;
 	protected ARecordSerializerDeserializer recordSerDe;
 	protected AMutableRecord mutableRecord;
 	protected boolean messageReceived;
@@ -56,14 +54,13 @@ public abstract class PullBasedFeedClient implements IPullBasedFeedClient {
 
 	}
 
-	public void displayFeedRecord() {
-		StringBuilder builder = new StringBuilder();
-		int numFields = recordType.getFieldNames().length;
-		for (int i = 0; i < numFields; i++) {
-			builder.append(mutableRecord.getValueByPos(i).toString());
-			builder.append("|");
-		}
-	}
+	/*
+	 * public void displayFeedRecord() { StringBuilder builder = new
+	 * StringBuilder(); int numFields = recordType.getFieldNames().length; for
+	 * (int i = 0; i < numFields; i++) {
+	 * builder.append(mutableRecord.getValueByPos(i).toString());
+	 * builder.append("|"); } }
+	 */
 
 	@Override
 	public void suspend() throws Exception {

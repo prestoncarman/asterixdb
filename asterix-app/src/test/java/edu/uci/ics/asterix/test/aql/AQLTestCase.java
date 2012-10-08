@@ -40,7 +40,6 @@ public class AQLTestCase extends TestCase {
         GlobalConfig.ASTERIX_LOGGER.info(queryFile.toString());
         try {
             statements = parser.Statement();
-       //     st.accept(new AQLPrintVisitor(), 0);
         } catch (ParseException e) {
             GlobalConfig.ASTERIX_LOGGER.warning("Failed while testing file " + fis);
             StringWriter sw = new StringWriter();

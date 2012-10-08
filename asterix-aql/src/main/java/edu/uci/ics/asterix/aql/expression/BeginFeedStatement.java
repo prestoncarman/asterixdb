@@ -33,13 +33,13 @@ public class BeginFeedStatement implements Statement {
     public void initialize(MetadataTransactionContext mdTxnCtx, Dataset dataset) throws MetadataException {
         query = new Query();
         FeedDatasetDetails feedDetails = (FeedDatasetDetails) dataset.getDatasetDetails();
-        String functionName = feedDetails.getFunction().getName();
+        String functionName = feedDetails.getFunction() == null ? null : feedDetails.getFunction().getName();
         StringBuilder builder = new StringBuilder();
         builder.append("insert into dataset " + datasetName + " ");
 
         if (functionName == null) {
             builder.append(" (" + " for $x in feed-ingest ('" + datasetName + "') ");
-            builder.append(" return $x" + " );");
+            builder.append(" return $x");
         } else {
             int arity = feedDetails.getFunction().getArity();
             FunctionSignature signature = new FunctionSignature(dataset.getDataverseName(), functionName, arity);

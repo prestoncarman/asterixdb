@@ -17,12 +17,12 @@ package edu.uci.ics.asterix.aql.translator;
 import edu.uci.ics.asterix.aql.base.Statement;
 import edu.uci.ics.asterix.aql.expression.Query;
 
-public class ExecutionResult {
+public class QueryResult {
 
     private final Query query;
     private final String resultPath;
 
-    public ExecutionResult(Query statement, String resultPath) {
+    public QueryResult(Query statement, String resultPath) {
         this.query = statement;
         this.resultPath = resultPath;
     }

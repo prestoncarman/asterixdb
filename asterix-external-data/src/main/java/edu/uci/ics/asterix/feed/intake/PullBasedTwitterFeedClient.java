@@ -17,8 +17,6 @@ import edu.uci.ics.asterix.om.base.AMutableRecord;
 import edu.uci.ics.asterix.om.base.AMutableString;
 import edu.uci.ics.asterix.om.base.IAObject;
 import edu.uci.ics.asterix.om.types.ARecordType;
-import edu.uci.ics.asterix.om.types.BuiltinType;
-import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.hyracks.api.context.IHyracksTaskContext;
 
 public class PullBasedTwitterFeedClient extends PullBasedFeedClient {
@@ -31,18 +29,16 @@ public class PullBasedTwitterFeedClient extends PullBasedFeedClient {
     private int requestInterval = 10; // seconds
     private Queue<Tweet> tweetBuffer = new LinkedList<Tweet>();
 
-    private String[] fieldNames = { "id", "username", "location", "text", "timestamp" };
-    private IAType[] fieldTypes = { BuiltinType.ASTRING, BuiltinType.ASTRING, BuiltinType.ASTRING, BuiltinType.ASTRING,
-            BuiltinType.ASTRING };
     IAObject[] mutableFields;
     String[] tupleFieldValues;
+    private ARecordType recordType;
 
     public PullBasedTwitterFeedClient(IHyracksTaskContext ctx, PullBasedTwitterAdapter adapter) {
         this.id_prefix = ctx.getJobletContext().getApplicationContext().getNodeId();
         twitter = new TwitterFactory().getInstance();
         mutableFields = new IAObject[] { new AMutableString(null), new AMutableString(null), new AMutableString(null),
                 new AMutableString(null), new AMutableString(null) };
-        recordType = new ARecordType("FeedRecordType", fieldNames, fieldTypes, false);
+        recordType = adapter.getAdapterOutputType();
         recordSerDe = new ARecordSerializerDeserializer(recordType);
         mutableRecord = new AMutableRecord(recordType, mutableFields);
         initialize(adapter.getConfiguration());
@@ -97,7 +93,7 @@ public class PullBasedTwitterFeedClient extends PullBasedFeedClient {
 
     @Override
     public void resetOnFailure(Exception e) throws AsterixException {
-        //TOOO: implement resetting logic for Twitter
+        // TOOO: implement resetting logic for Twitter
     }
 
 }

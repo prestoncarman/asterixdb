@@ -101,7 +101,7 @@ public class FeedDatasetDetails extends InternalDatasetDetails {
         }
         fieldValue.reset();
         listBuilder.write(fieldValue.getDataOutput(), true);
-        feedRecordBuilder.addField(MetadataRecordTypes.FEEDL_DETAILS_ARECORD_PARTITIONKEY_FIELD_INDEX, fieldValue);
+        feedRecordBuilder.addField(MetadataRecordTypes.FEED_DETAILS_ARECORD_PARTITIONKEY_FIELD_INDEX, fieldValue);
 
         // write field 3
         listBuilder.reset((AOrderedListType) MetadataRecordTypes.FEED_DETAILS_RECORDTYPE.getFieldTypes()[3]);

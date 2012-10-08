@@ -381,7 +381,7 @@ public interface IMetadataNode extends Remote, Serializable {
             RemoteException;
 
     /**
-     * Deletes a function , acquiring local locks on behalf of the given
+     * Deletes a function, acquiring local locks on behalf of the given
      * transaction id.
      * 
      * @param txnId
@@ -410,11 +410,21 @@ public interface IMetadataNode extends Remote, Serializable {
     /**
      * @param ctx
      * @param dataverseName
-     * @return
+     * @return List<Function> A list containing the functions in the specified dataverse
      * @throws MetadataException
      * @throws RemoteException
      */
     public List<Function> getDataverseFunctions(long txnId, String dataverseName) throws MetadataException,
+            RemoteException;
+
+    /**
+     * @param ctx
+     * @param dataverseName
+     * @return List<Adapter> A list containing the adapters in the specified dataverse
+     * @throws MetadataException
+     * @throws RemoteException
+     */
+    public List<Adapter> getDataverseAdapters(long txnId, String dataverseName) throws MetadataException,
             RemoteException;
 
     public Adapter getAdapter(long txnId, String dataverseName, String adapterName) throws MetadataException,

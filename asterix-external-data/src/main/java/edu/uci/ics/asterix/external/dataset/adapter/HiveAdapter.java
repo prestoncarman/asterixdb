@@ -33,6 +33,7 @@ public class HiveAdapter extends AbstractDatasourceAdapter {
 
     public HiveAdapter(IAType atype) {
         this.hdfsAdapter = new HDFSAdapter(atype);
+        this.atype = atype;
     }
 
     @Override
