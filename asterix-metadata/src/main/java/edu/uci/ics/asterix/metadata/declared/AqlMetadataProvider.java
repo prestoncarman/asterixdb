@@ -346,14 +346,13 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         IAType adapterOutputType;
 
         try {
-            adapterEntity = MetadataManager.INSTANCE.getAdapter(mdTxnCtx, MetadataConstants.METADATA_DATAVERSE_NAME,
-                    datasetDetails.getAdapterFactory());
+            adapterEntity = MetadataManager.INSTANCE.getAdapter(mdTxnCtx, null, datasetDetails.getAdapterFactory());
             adapterFactory = (IFeedDatasetAdapterFactory) Class.forName(adapterEntity.getClassname()).newInstance();
             if (adapterFactory.getFeedAdapterType().equals(FeedAdapterType.TYPED)) {
                 adapter = ((ITypedFeedDatasetAdapterFactory) adapterFactory).createAdapter(datasetDetails
                         .getProperties());
                 adapterOutputType = ((IFeedDatasourceAdapter) adapter).getAdapterOutputType();
-            } else { 
+            } else {
                 String outputTypeName = datasetDetails.getProperties().get(
                         IGenericFeedDatasetAdapterFactory.KEY_TYPE_NAME);
                 adapterOutputType = MetadataManager.INSTANCE.getDatatype(mdTxnCtx, null, outputTypeName).getDatatype();
@@ -385,6 +384,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
                 feedMessages);
         return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(feedMessenger, spPc.second);
     }
+
 
     public Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> buildBtreeRuntime(JobSpecification jobSpec,
             List<LogicalVariable> outputVars, IOperatorSchema opSchema, IVariableTypeEnvironment typeEnv,
@@ -1062,26 +1062,6 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         try {
             return MetadataManager.INSTANCE.getDatasetIndexes(mdTxnCtx, dataverseName, datasetName);
         } catch (MetadataException e) {
-            throw new AlgebricksException(e);
-        }
-    }
-
-    public IDataFormat getDataFormat(String dataverse) throws AlgebricksException {
-        Dataverse dv;
-        try {
-            dv = MetadataManager.INSTANCE.getDataverse(mdTxnCtx, dataverse);
-        } catch (Exception e) {
-            throw new AlgebricksException(e);
-        }
-        if (dv == null) {
-            throw new AlgebricksException("There is no dataverse with this name " + dataverse + " to connect to.");
-        }
-
-        IDataFormat format;
-        try {
-            format = (IDataFormat) Class.forName(dv.getDataFormat()).newInstance();
-            return format;
-        } catch (Exception e) {
             throw new AlgebricksException(e);
         }
     }

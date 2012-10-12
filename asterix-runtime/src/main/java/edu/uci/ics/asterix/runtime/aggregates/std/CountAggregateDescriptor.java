@@ -36,7 +36,8 @@ public class CountAggregateDescriptor extends AbstractAggregateFunctionDynamicDe
             private static final long serialVersionUID = 1L;
 
             @Override
-            public ICopyAggregateFunction createAggregateFunction(IDataOutputProvider provider) throws AlgebricksException {
+            public ICopyAggregateFunction createAggregateFunction(IDataOutputProvider provider)
+                    throws AlgebricksException {
                 return new CountAggregateFunction(args, provider);
             }
         };

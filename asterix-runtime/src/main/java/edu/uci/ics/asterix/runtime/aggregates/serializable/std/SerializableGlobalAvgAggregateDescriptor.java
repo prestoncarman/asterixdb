@@ -6,7 +6,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-import edu.uci.ics.asterix.common.functions.FunctionConstants;
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.ADoubleSerializerDeserializer;
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.AInt64SerializerDeserializer;
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.ARecordSerializerDeserializer;
@@ -115,7 +114,7 @@ public class SerializableGlobalAvgAggregateDescriptor extends AbstractSerializab
                         inputVal.reset();
                         eval.evaluate(tuple);
                         byte[] serBytes = inputVal.getByteArray();
-                        ATypeTag typeTag = EnumDeserializer.ATYPETAGDESERIALIZER.deserialize(serBytes[0]);                        
+                        ATypeTag typeTag = EnumDeserializer.ATYPETAGDESERIALIZER.deserialize(serBytes[0]);
                         switch (typeTag) {
                             case NULL: {
                                 metNull = true;
@@ -133,7 +132,7 @@ public class SerializableGlobalAvgAggregateDescriptor extends AbstractSerializab
                                 throw new AlgebricksException("Global-Avg is not defined for values of type "
                                         + EnumDeserializer.ATYPETAGDESERIALIZER.deserialize(serBytes[0]));
                             }
-                        }                        
+                        }
                         int offset1 = ARecordSerializerDeserializer.getFieldOffsetById(serBytes, 0, 1, true);
                         if (offset1 == 0) // the sum is null
                             metNull = true;
