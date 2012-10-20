@@ -252,6 +252,7 @@ public class AqlTranslator extends AbstractAqlTranslator {
                         if (ws.getWriterClassName() != null) {
                             try {
                                 writerFactory = (IAWriterFactory) Class.forName(ws.getWriterClassName()).newInstance();
+                                MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
                             } catch (Exception e) {
                                 throw new AsterixException(e);
                             }
@@ -403,9 +404,8 @@ public class AqlTranslator extends AbstractAqlTranslator {
             JobSpecification loadIndexJobSpec = IndexOperations
                     .buildSecondaryIndexLoadingJobSpec(cis, metadataProvider);
             runJob(hcc, loadIndexJobSpec);
-            MetadataManager.INSTANCE.commitTransaction(metadataProvider.getMetadataTxnContext());
         }
-
+        MetadataManager.INSTANCE.commitTransaction(metadataProvider.getMetadataTxnContext());
     }
 
     private void handleCreateTypeStatement(AqlMetadataProvider metadataProvider, Statement stmt)
@@ -791,8 +791,8 @@ public class AqlTranslator extends AbstractAqlTranslator {
                 ncNames.add(id.getValue());
             }
             MetadataManager.INSTANCE.addNodegroup(mdTxnCtx, new NodeGroup(ngName, ncNames));
-            MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
         }
+        MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
     }
 
     private void runJob(IHyracksClientConnection hcc, Job job) throws Exception {
