@@ -19,7 +19,7 @@ id : string,
 name : string,
 sex : string,
 dept : string,
-salary : int32,
+salary : int64,
 interests : {{string}}
 }
 

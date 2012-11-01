@@ -4,7 +4,7 @@ create dataverse tpch;
 use dataverse tpch;
 
 create type RegionType as closed {
-  r_regionkey: int32,
+  r_regionkey: int64,
   r_name: string,
   r_comment: string
 }

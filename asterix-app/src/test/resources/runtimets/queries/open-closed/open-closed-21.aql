@@ -11,15 +11,15 @@ create dataverse test;
 use dataverse test;
 
 create type TestType as open {
-id:int32
+id:int64
 }
 
 create dataset dtst01(TestType) partitioned by key id;
 
 create type Emp as open {
-id:int32,
+id:int64,
 name:string,
-age:int8,
+age:int64,
 sex:string,
 dob:date
 }

@@ -13,7 +13,7 @@ create dataverse test;
 use dataverse test;
 
 create type TestType as closed {
-id:int32,
+id:int64,
 description:string,
 name:string,
 optnl_fld:string?

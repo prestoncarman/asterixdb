@@ -15,7 +15,7 @@ create type Emp as closed {
 id:int64,
 fname:string,
 lname:string,
-age:int32,
+age:int64,
 dept:string
 }
 

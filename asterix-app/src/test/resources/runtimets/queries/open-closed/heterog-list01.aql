@@ -11,12 +11,12 @@ create dataverse test;
 use dataverse test;
 
 create type BatterType as {
-id:int32,
+id:int64,
 descrpt:string
 }
 
 create type TestType as closed {
-id:int32,
+id:int64,
 description:string,
 name:string,
 batters:{{BatterType}}

@@ -12,9 +12,9 @@ use dataverse test;
 write output to nc1:"rttest/open-closed-22.adm";
 
 create type Emp as closed {
-id:int32,
+id:int64,
 name:string,
-age:int8?,
+age:int64?,
 dept:string?,
 sex:string,
 dob:date?
