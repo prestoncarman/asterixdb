@@ -15,7 +15,7 @@ create type AddressType as open{
 }
 create type Dept as open{
 	name: string,
-	id: int32
+	id: int64
 }
 
 create type testtype as closed {

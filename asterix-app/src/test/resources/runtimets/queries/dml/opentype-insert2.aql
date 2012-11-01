@@ -10,7 +10,7 @@ create dataverse test;
 use dataverse test;
 
 create type TestType as open {
-	id:int32
+	id:int64
 }
 
 create dataset testds(TestType) partitioned by key id;
