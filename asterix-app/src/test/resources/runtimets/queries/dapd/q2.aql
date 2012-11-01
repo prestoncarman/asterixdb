@@ -11,7 +11,7 @@ create type AddressType as closed {
 }
 
 create type EventType as closed {
-  event_id: int32, 
+  event_id: int64, 
   name: string,
   location: AddressType	?,
   organizers: {{ 
@@ -21,7 +21,7 @@ create type EventType as closed {
   }},
   sponsoring_sigs: [
     {
-      sig_id: int32,
+      sig_id: int64,
       chapter_name: string
     }
   ],

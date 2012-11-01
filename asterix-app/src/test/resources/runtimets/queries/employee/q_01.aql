@@ -5,14 +5,14 @@ create dataverse test;
 use dataverse test;
 
 create type EmpType as open {
-  id: int32, 
+  id: int64, 
   name: string,
   address: {
-  number: int32, 
+  number: int64, 
   street: string,
   city: string
    },
-  age: int32?,
+  age: int64?,
   interests: {{string}}?,
   children: [string]?
 }

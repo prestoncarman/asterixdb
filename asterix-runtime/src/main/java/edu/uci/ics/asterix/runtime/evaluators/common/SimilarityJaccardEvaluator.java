@@ -208,6 +208,11 @@ public class SimilarityJaccardEvaluator implements ICopyEvaluator {
                 cmp = AqlBinaryComparatorFactoryProvider.INTEGER_POINTABLE_INSTANCE.createBinaryComparator();
                 break;
             }
+            case INT64: {
+                hashFunc = AqlBinaryHashFunctionFactoryProvider.LONG_POINTABLE_INSTANCE.createBinaryHashFunction();
+                cmp = AqlBinaryComparatorFactoryProvider.LONG_POINTABLE_INSTANCE.createBinaryComparator();
+                break;
+            }
             case FLOAT: {
                 hashFunc = AqlBinaryHashFunctionFactoryProvider.FLOAT_POINTABLE_INSTANCE.createBinaryHashFunction();
                 cmp = AqlBinaryComparatorFactoryProvider.FLOAT_POINTABLE_INSTANCE.createBinaryComparator();
@@ -243,6 +248,9 @@ public class SimilarityJaccardEvaluator implements ICopyEvaluator {
         switch (itemTypeTag) {
             case INT32: {
                 return 4;
+            }
+            case INT64: {
+                return 8;
             }
             case FLOAT: {
                 return 4;

@@ -10,7 +10,7 @@ create dataverse test;
 use dataverse test;
 
 create type MyRecord as closed {
-  id: int32,
+  id: int64,
   point: point?,
   kwds: string,
   line1: line,
@@ -21,7 +21,7 @@ create type MyRecord as closed {
 }
 
 create type MyMiniRecord as closed {
-  id: int32,
+  id: int64,
   point: point?
 }
 

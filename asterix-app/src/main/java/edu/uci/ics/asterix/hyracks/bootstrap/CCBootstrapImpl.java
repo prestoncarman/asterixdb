@@ -92,6 +92,7 @@ public class CCBootstrapImpl implements ICCBootstrap {
         AsterixStateProxy.unregisterRemoteObject();
 
         webServer.stop();
+        queryWebServer.stop();
         apiServer.shutdown();
     }
 

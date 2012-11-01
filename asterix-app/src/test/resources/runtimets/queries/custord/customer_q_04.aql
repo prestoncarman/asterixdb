@@ -5,19 +5,19 @@ create dataverse test;
 use dataverse test;
 
 create type AddressType as open {
-  number: int32, 
+  number: int64, 
   street: string,
   city: string
 }
 
 create type CustomerType as closed {
-  cid: int32, 
+  cid: int64, 
   name: string,
-  cashBack: int32,
-  age: int32?,
+  cashBack: int64,
+  age: int64?,
   address: AddressType?,
   lastorder: {
-    oid: int32,
+    oid: int64,
     total: float
   }
 }
@@ -30,5 +30,5 @@ write output to nc1:"rttest/custord_customer_q_04.adm";
       
 for $c in dataset('Customers')
 let $rec := { "cashBack":$c.cashBack, "cashBack+5": $c.cashBack+5, "cashBack-5": $c.cashBack -5, "cashBack*5": $c.cashBack*5, "cashBack/5": $c.cashBack/ 5, "-cashBack": -$c.cashBack}
-where $c.cid >= int32("3") 
+where $c.cid >= int64("3") 
 return { "id": $c.cid, "custname":$c.name, "age" : $c.age, "MathcashBack": $rec }

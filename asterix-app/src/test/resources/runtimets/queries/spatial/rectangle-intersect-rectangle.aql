@@ -3,7 +3,7 @@ create dataverse test;
 use dataverse test;
 
 create type MyRecord as open {
-  id: int32,
+  id: int64,
   point: point,
   kwds: string
 }
@@ -15,7 +15,7 @@ using "edu.uci.ics.asterix.external.dataset.adapter.NCFileSystemAdapter"
 write output to nc1:"rttest/spatial_rectangle-intersect-rectangle.adm";
 
 for $o in dataset('MyData')
-where spatial-intersect($o.rec, create-rectangle(create-point(-1.0,5.0), create-point(4.5,9.0)))
+where spatial-intersect($o.rec, create-rectangle(create-point(4.5,9.0), create-point(-1.0,5.0)))
 order by $o.id
 return {"id":$o.id}
  

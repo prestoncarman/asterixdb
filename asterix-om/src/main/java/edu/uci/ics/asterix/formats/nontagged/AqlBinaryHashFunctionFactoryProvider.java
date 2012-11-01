@@ -16,6 +16,7 @@ import edu.uci.ics.hyracks.data.std.accessors.PointableBinaryHashFunctionFactory
 import edu.uci.ics.hyracks.data.std.primitive.DoublePointable;
 import edu.uci.ics.hyracks.data.std.primitive.FloatPointable;
 import edu.uci.ics.hyracks.data.std.primitive.IntegerPointable;
+import edu.uci.ics.hyracks.data.std.primitive.LongPointable;
 import edu.uci.ics.hyracks.data.std.primitive.UTF8StringPointable;
 
 
@@ -24,6 +25,7 @@ public class AqlBinaryHashFunctionFactoryProvider implements IBinaryHashFunction
     private static final long serialVersionUID = 1L;
     public static final AqlBinaryHashFunctionFactoryProvider INSTANCE = new AqlBinaryHashFunctionFactoryProvider();
     public static final PointableBinaryHashFunctionFactory INTEGER_POINTABLE_INSTANCE = new PointableBinaryHashFunctionFactory(IntegerPointable.FACTORY);
+    public static final PointableBinaryHashFunctionFactory LONG_POINTABLE_INSTANCE = new PointableBinaryHashFunctionFactory(LongPointable.FACTORY);
     public static final PointableBinaryHashFunctionFactory FLOAT_POINTABLE_INSTANCE = new PointableBinaryHashFunctionFactory(FloatPointable.FACTORY);
     public static final PointableBinaryHashFunctionFactory DOUBLE_POINTABLE_INSTANCE = new PointableBinaryHashFunctionFactory(DoublePointable.FACTORY);
     public static final PointableBinaryHashFunctionFactory UTF8STRING_POINTABLE_INSTANCE = new PointableBinaryHashFunctionFactory(UTF8StringPointable.FACTORY);
