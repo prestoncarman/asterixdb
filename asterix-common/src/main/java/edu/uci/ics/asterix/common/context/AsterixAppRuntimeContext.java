@@ -12,9 +12,11 @@ import edu.uci.ics.hyracks.storage.am.common.dataflow.IIndex;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.IndexRegistry;
 import edu.uci.ics.hyracks.storage.common.buffercache.BufferCache;
 import edu.uci.ics.hyracks.storage.common.buffercache.ClockPageReplacementStrategy;
+import edu.uci.ics.hyracks.storage.common.buffercache.DelayPageCleanerPolicy;
 import edu.uci.ics.hyracks.storage.common.buffercache.HeapBufferAllocator;
 import edu.uci.ics.hyracks.storage.common.buffercache.IBufferCache;
 import edu.uci.ics.hyracks.storage.common.buffercache.ICacheMemoryAllocator;
+import edu.uci.ics.hyracks.storage.common.buffercache.IPageCleanerPolicy;
 import edu.uci.ics.hyracks.storage.common.buffercache.IPageReplacementStrategy;
 import edu.uci.ics.hyracks.storage.common.file.IFileMapManager;
 import edu.uci.ics.hyracks.storage.common.file.IFileMapProvider;
@@ -22,7 +24,7 @@ import edu.uci.ics.hyracks.storage.common.file.IFileMapProvider;
 public class AsterixAppRuntimeContext {
     private static final int DEFAULT_BUFFER_CACHE_PAGE_SIZE = 32768;
     private final INCApplicationContext ncApplicationContext;
-    
+
     private IndexRegistry<IIndex> indexRegistry;
     private IFileMapManager fileMapManager;
     private IBufferCache bufferCache;
@@ -42,8 +44,10 @@ public class AsterixAppRuntimeContext {
         // Initialize the buffer cache
         ICacheMemoryAllocator allocator = new HeapBufferAllocator();
         IPageReplacementStrategy prs = new ClockPageReplacementStrategy();
+        IPageCleanerPolicy pageCleanerPolicy = new DelayPageCleanerPolicy(1000);
         IIOManager ioMgr = ncApplicationContext.getRootContext().getIOManager();
-        bufferCache = new BufferCache(ioMgr, allocator, prs, fileMapManager, pageSize, numPages, Integer.MAX_VALUE);
+        bufferCache = new BufferCache(ioMgr, allocator, prs, pageCleanerPolicy, fileMapManager, pageSize, numPages,
+                Integer.MAX_VALUE);
 
         // Initialize the index registry
         indexRegistry = new IndexRegistry<IIndex>();

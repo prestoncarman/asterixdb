@@ -60,8 +60,8 @@
 		</dependency>
 		<dependency>
 			<groupId>edu.uci.ics.hyracks</groupId>
-			<artifactId>hyracks-algebricks-compiler</artifactId>
-			<version>0.2.2-SNAPSHOT</version>
+			<artifactId>algebricks-compiler</artifactId>
+			<version>0.2.3-SNAPSHOT</version>
 		</dependency>
 		<dependency>
 			<groupId>org.json</groupId>
