@@ -22,7 +22,7 @@ import java.util.List;
 
 import edu.uci.ics.asterix.common.functions.FunctionSignature;
 import edu.uci.ics.asterix.metadata.MetadataException;
-import edu.uci.ics.asterix.metadata.entities.Adapter;
+import edu.uci.ics.asterix.metadata.entities.DatasourceAdapter;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
 import edu.uci.ics.asterix.metadata.entities.Datatype;
 import edu.uci.ics.asterix.metadata.entities.Dataverse;
@@ -424,10 +424,10 @@ public interface IMetadataNode extends Remote, Serializable {
      * @throws MetadataException
      * @throws RemoteException
      */
-    public List<Adapter> getDataverseAdapters(long txnId, String dataverseName) throws MetadataException,
+    public List<DatasourceAdapter> getDataverseAdapters(long txnId, String dataverseName) throws MetadataException,
             RemoteException;
 
-    public Adapter getAdapter(long txnId, String dataverseName, String adapterName) throws MetadataException,
+    public DatasourceAdapter getAdapter(long txnId, String dataverseName, String adapterName) throws MetadataException,
             RemoteException;
 
     /**
@@ -455,6 +455,6 @@ public interface IMetadataNode extends Remote, Serializable {
      *             for example, if the adapter already exists.
      * @throws RemoteException
      */
-    public void addAdapter(long txnId, Adapter adapter) throws MetadataException, RemoteException;
+    public void addAdapter(long txnId, DatasourceAdapter adapter) throws MetadataException, RemoteException;
 
 }

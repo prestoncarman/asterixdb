@@ -18,7 +18,7 @@ import edu.uci.ics.asterix.external.dataset.adapter.AdapterIdentifier;
 import edu.uci.ics.asterix.metadata.MetadataCache;
 import edu.uci.ics.asterix.metadata.api.IMetadataEntity;
 
-public class Adapter implements IMetadataEntity {
+public class DatasourceAdapter implements IMetadataEntity {
 
     public enum AdapterType {
         INTERNAL,
@@ -29,7 +29,7 @@ public class Adapter implements IMetadataEntity {
     private final String classname;
     private final AdapterType type;
 
-    public Adapter(AdapterIdentifier adapterIdentifier, String classname, AdapterType type) {
+    public DatasourceAdapter(AdapterIdentifier adapterIdentifier, String classname, AdapterType type) {
         this.adapterIdentifier = adapterIdentifier;
         this.classname = classname;
         this.type = type;

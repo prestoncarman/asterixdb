@@ -25,14 +25,14 @@ import edu.uci.ics.asterix.formats.nontagged.AqlSerializerDeserializerProvider;
 import edu.uci.ics.asterix.metadata.MetadataException;
 import edu.uci.ics.asterix.metadata.bootstrap.MetadataPrimaryIndexes;
 import edu.uci.ics.asterix.metadata.bootstrap.MetadataRecordTypes;
-import edu.uci.ics.asterix.metadata.entities.Adapter;
-import edu.uci.ics.asterix.metadata.entities.Adapter.AdapterType;
+import edu.uci.ics.asterix.metadata.entities.DatasourceAdapter;
+import edu.uci.ics.asterix.metadata.entities.DatasourceAdapter.AdapterType;
 import edu.uci.ics.asterix.om.base.ARecord;
 import edu.uci.ics.asterix.om.base.AString;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
 import edu.uci.ics.hyracks.dataflow.common.data.accessors.ITupleReference;
 
-public class AdapterTupleTranslator extends AbstractTupleTranslator<Adapter> {
+public class DatasourceAdapterTupleTranslator extends AbstractTupleTranslator<DatasourceAdapter> {
 
     // Field indexes of serialized Adapter in a tuple.
     // First key field.
@@ -45,14 +45,14 @@ public class AdapterTupleTranslator extends AbstractTupleTranslator<Adapter> {
 
     @SuppressWarnings("unchecked")
     private ISerializerDeserializer<ARecord> recordSerDes = AqlSerializerDeserializerProvider.INSTANCE
-            .getSerializerDeserializer(MetadataRecordTypes.ADAPTER_RECORDTYPE);
+            .getSerializerDeserializer(MetadataRecordTypes.DATASOURCE_ADAPTER_RECORDTYPE);
 
-    public AdapterTupleTranslator(boolean getTuple) {
-        super(getTuple, MetadataPrimaryIndexes.ADAPTER_DATASET.getFieldCount());
+    public DatasourceAdapterTupleTranslator(boolean getTuple) {
+        super(getTuple, MetadataPrimaryIndexes.DATASOURCE_ADAPTER_DATASET.getFieldCount());
     }
 
     @Override
-    public Adapter getMetadataEntytiFromTuple(ITupleReference tuple) throws MetadataException, IOException {
+    public DatasourceAdapter getMetadataEntytiFromTuple(ITupleReference tuple) throws MetadataException, IOException {
         byte[] serRecord = tuple.getFieldData(ADAPTER_PAYLOAD_TUPLE_FIELD_INDEX);
         int recordStartOffset = tuple.getFieldStart(ADAPTER_PAYLOAD_TUPLE_FIELD_INDEX);
         int recordLength = tuple.getFieldLength(ADAPTER_PAYLOAD_TUPLE_FIELD_INDEX);
@@ -62,21 +62,21 @@ public class AdapterTupleTranslator extends AbstractTupleTranslator<Adapter> {
         return createAdapterFromARecord(adapterRecord);
     }
 
-    private Adapter createAdapterFromARecord(ARecord adapterRecord) {
+    private DatasourceAdapter createAdapterFromARecord(ARecord adapterRecord) {
         String dataverseName = ((AString) adapterRecord
-                .getValueByPos(MetadataRecordTypes.ADAPTER_ARECORD_DATAVERSENAME_FIELD_INDEX)).getStringValue();
+                .getValueByPos(MetadataRecordTypes.DATASOURCE_ADAPTER_ARECORD_DATAVERSENAME_FIELD_INDEX)).getStringValue();
         String adapterName = ((AString) adapterRecord
-                .getValueByPos(MetadataRecordTypes.ADAPTER_ARECORD_ADAPTERNAME_FIELD_INDEX)).getStringValue();
+                .getValueByPos(MetadataRecordTypes.DATASOURCE_ADAPTER_ARECORD_NAME_FIELD_INDEX)).getStringValue();
         String classname = ((AString) adapterRecord
-                .getValueByPos(MetadataRecordTypes.ADAPTER_ARECORD_ADAPTERCLASSNAME_FIELD_INDEX)).getStringValue();
+                .getValueByPos(MetadataRecordTypes.DATASOURCE_ADAPTER_ARECORD_CLASSNAME_FIELD_INDEX)).getStringValue();
         AdapterType adapterType = AdapterType.valueOf(((AString) adapterRecord
-                .getValueByPos(MetadataRecordTypes.ADAPTER_ARECORD_ADAPTERTYPE_FIELD_INDEX)).getStringValue());
+                .getValueByPos(MetadataRecordTypes.DATASOURCE_ADAPTER_ARECORD_TYPE_FIELD_INDEX)).getStringValue());
 
-        return new Adapter(new AdapterIdentifier(dataverseName, adapterName), classname, adapterType);
+        return new DatasourceAdapter(new AdapterIdentifier(dataverseName, adapterName), classname, adapterType);
     }
 
     @Override
-    public ITupleReference getTupleFromMetadataEntity(Adapter adapter) throws IOException {
+    public ITupleReference getTupleFromMetadataEntity(DatasourceAdapter adapter) throws IOException {
         // write the key in the first 2 fields of the tuple
         tupleBuilder.reset();
         aString.setValue(adapter.getAdapterIdentifier().getNamespace());
@@ -88,37 +88,37 @@ public class AdapterTupleTranslator extends AbstractTupleTranslator<Adapter> {
 
         // write the pay-load in the third field of the tuple
 
-        recordBuilder.reset(MetadataRecordTypes.ADAPTER_RECORDTYPE);
+        recordBuilder.reset(MetadataRecordTypes.DATASOURCE_ADAPTER_RECORDTYPE);
 
         // write field 0
         fieldValue.reset();
         aString.setValue(adapter.getAdapterIdentifier().getNamespace());
         stringSerde.serialize(aString, fieldValue.getDataOutput());
-        recordBuilder.addField(MetadataRecordTypes.ADAPTER_ARECORD_DATAVERSENAME_FIELD_INDEX, fieldValue);
+        recordBuilder.addField(MetadataRecordTypes.DATASOURCE_ADAPTER_ARECORD_DATAVERSENAME_FIELD_INDEX, fieldValue);
 
         // write field 1
         fieldValue.reset();
         aString.setValue(adapter.getAdapterIdentifier().getAdapterName());
         stringSerde.serialize(aString, fieldValue.getDataOutput());
-        recordBuilder.addField(MetadataRecordTypes.ADAPTER_ARECORD_ADAPTERNAME_FIELD_INDEX, fieldValue);
+        recordBuilder.addField(MetadataRecordTypes.DATASOURCE_ADAPTER_ARECORD_NAME_FIELD_INDEX, fieldValue);
 
         // write field 2
         fieldValue.reset();
         aString.setValue(adapter.getClassname());
         stringSerde.serialize(aString, fieldValue.getDataOutput());
-        recordBuilder.addField(MetadataRecordTypes.ADAPTER_ARECORD_ADAPTERCLASSNAME_FIELD_INDEX, fieldValue);
+        recordBuilder.addField(MetadataRecordTypes.DATASOURCE_ADAPTER_ARECORD_CLASSNAME_FIELD_INDEX, fieldValue);
 
         // write field 3
         fieldValue.reset();
         aString.setValue(adapter.getType().name());
         stringSerde.serialize(aString, fieldValue.getDataOutput());
-        recordBuilder.addField(MetadataRecordTypes.ADAPTER_ARECORD_ADAPTERTYPE_FIELD_INDEX, fieldValue);
+        recordBuilder.addField(MetadataRecordTypes.DATASOURCE_ADAPTER_ARECORD_TYPE_FIELD_INDEX, fieldValue);
 
         // write field 4
         fieldValue.reset();
         aString.setValue(Calendar.getInstance().getTime().toString());
         stringSerde.serialize(aString, fieldValue.getDataOutput());
-        recordBuilder.addField(MetadataRecordTypes.ADAPTER_ARECORD_ADAPTER_TIMESTAMP_FIELD_INDEX, fieldValue);
+        recordBuilder.addField(MetadataRecordTypes.DATASOURCE_ADAPTER_ARECORD_TIMESTAMP_FIELD_INDEX, fieldValue);
 
         // write record
         recordBuilder.write(tupleBuilder.getDataOutput(), true);

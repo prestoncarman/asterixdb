@@ -34,7 +34,7 @@ public final class MetadataRecordTypes {
     public static ARecordType INTERNAL_DETAILS_RECORDTYPE;
     public static ARecordType EXTERNAL_DETAILS_RECORDTYPE;
     public static ARecordType FEED_DETAILS_RECORDTYPE;
-    public static ARecordType ADAPTER_PROPERTIES_RECORDTYPE;
+    public static ARecordType DATASOURCE_ADAPTER_PROPERTIES_RECORDTYPE;
     public static ARecordType FIELD_RECORDTYPE;
     public static ARecordType RECORD_RECORDTYPE;
     public static ARecordType DERIVEDTYPE_RECORDTYPE;
@@ -43,7 +43,7 @@ public final class MetadataRecordTypes {
     public static ARecordType NODE_RECORDTYPE;
     public static ARecordType NODEGROUP_RECORDTYPE;
     public static ARecordType FUNCTION_RECORDTYPE;
-    public static ARecordType ADAPTER_RECORDTYPE;
+    public static ARecordType DATASOURCE_ADAPTER_RECORDTYPE;
 
     /**
      * Create all metadata record types.
@@ -52,7 +52,7 @@ public final class MetadataRecordTypes {
         // Attention: The order of these calls is important because some types
         // depend on other types being created first.
         // These calls are one "dependency chain".
-        ADAPTER_PROPERTIES_RECORDTYPE = createAdapterPropertiesRecordType();
+        DATASOURCE_ADAPTER_PROPERTIES_RECORDTYPE = createDatasourceAdapterPropertiesRecordType();
         INTERNAL_DETAILS_RECORDTYPE = createInternalDetailsRecordType();
         EXTERNAL_DETAILS_RECORDTYPE = createExternalDetailsRecordType();
         FEED_DETAILS_RECORDTYPE = createFeedDetailsRecordType();
@@ -71,7 +71,7 @@ public final class MetadataRecordTypes {
         NODE_RECORDTYPE = createNodeRecordType();
         NODEGROUP_RECORDTYPE = createNodeGroupRecordType();
         FUNCTION_RECORDTYPE = createFunctionRecordType();
-        ADAPTER_RECORDTYPE = createAdapterRecordType();
+        DATASOURCE_ADAPTER_RECORDTYPE = createDatasourceAdapterRecordType();
 
     }
 
@@ -88,10 +88,10 @@ public final class MetadataRecordTypes {
 
     // Helper constants for accessing fields in an ARecord of anonymous type
     // external properties.
-    public static final int ADAPTER_PROPERTIES_ARECORD_NAME_FIELD_INDEX = 0;
-    public static final int ADAPTER_PROPERTIES_ARECORD_VALUE_FIELD_INDEX = 1;
+    public static final int DATASOURCE_ADAPTER_PROPERTIES_ARECORD_NAME_FIELD_INDEX = 0;
+    public static final int DATASOURCE_ADAPTER_PROPERTIES_ARECORD_VALUE_FIELD_INDEX = 1;
 
-    private static final ARecordType createAdapterPropertiesRecordType() {
+    private static final ARecordType createDatasourceAdapterPropertiesRecordType() {
         String[] fieldNames = { "Name", "Value" };
         IAType[] fieldTypes = { BuiltinType.ASTRING, BuiltinType.ASTRING };
         return new ARecordType(null, fieldNames, fieldTypes, true);
@@ -114,13 +114,13 @@ public final class MetadataRecordTypes {
 
     // Helper constants for accessing fields in an ARecord of anonymous type
     // external details.
-    public static final int EXTERNAL_DETAILS_ARECORD_ADAPTER_FIELD_INDEX = 0;
+    public static final int EXTERNAL_DETAILS_ARECORD_DATASOURCE_ADAPTER_FIELD_INDEX = 0;
     public static final int EXTERNAL_DETAILS_ARECORD_PROPERTIES_FIELD_INDEX = 1;
 
     private static final ARecordType createExternalDetailsRecordType() {
 
-        AOrderedListType orderedPropertyListType = new AOrderedListType(ADAPTER_PROPERTIES_RECORDTYPE, null);
-        String[] fieldNames = { "Adapter", "Properties" };
+        AOrderedListType orderedPropertyListType = new AOrderedListType(DATASOURCE_ADAPTER_PROPERTIES_RECORDTYPE, null);
+        String[] fieldNames = { "DatasourceAdapter", "Properties" };
         IAType[] fieldTypes = { BuiltinType.ASTRING, orderedPropertyListType };
         return new ARecordType(null, fieldNames, fieldTypes, true);
     }
@@ -130,16 +130,16 @@ public final class MetadataRecordTypes {
     public static final int FEED_DETAILS_ARECORD_PARTITIONKEY_FIELD_INDEX = 2;
     public static final int FEED_DETAILS_ARECORD_PRIMARYKEY_FIELD_INDEX = 3;
     public static final int FEED_DETAILS_ARECORD_GROUPNAME_FIELD_INDEX = 4;
-    public static final int FEED_DETAILS_ARECORD_ADAPTER_FIELD_INDEX = 5;
+    public static final int FEED_DETAILS_ARECORD_DATASOURCE_ADAPTER_FIELD_INDEX = 5;
     public static final int FEED_DETAILS_ARECORD_PROPERTIES_FIELD_INDEX = 6;
     public static final int FEED_DETAILS_ARECORD_FUNCTION_FIELD_INDEX = 7;
     public static final int FEED_DETAILS_ARECORD_STATE_FIELD_INDEX = 8;
 
     private static final ARecordType createFeedDetailsRecordType() {
         AOrderedListType orderedListType = new AOrderedListType(BuiltinType.ASTRING, null);
-        AOrderedListType orderedListOfPropertiesType = new AOrderedListType(ADAPTER_PROPERTIES_RECORDTYPE, null);
+        AOrderedListType orderedListOfPropertiesType = new AOrderedListType(DATASOURCE_ADAPTER_PROPERTIES_RECORDTYPE, null);
         String[] fieldNames = { "FileStructure", "PartitioningStrategy", "PartitioningKey", "PrimaryKey", "GroupName",
-                "Adapter", "Properties", "Function", "Status" };
+                "DatasourceAdapter", "Properties", "Function", "Status" };
 
         IAType[] fieldTypes = { BuiltinType.ASTRING, BuiltinType.ASTRING, orderedListType, orderedListType,
                 BuiltinType.ASTRING, BuiltinType.ASTRING, orderedListOfPropertiesType, BuiltinType.ASTRING,
@@ -324,17 +324,17 @@ public final class MetadataRecordTypes {
         return new ARecordType("FunctionRecordType", fieldNames, fieldTypes, true);
     }
 
-    public static final int ADAPTER_ARECORD_DATAVERSENAME_FIELD_INDEX = 0;
-    public static final int ADAPTER_ARECORD_ADAPTERNAME_FIELD_INDEX = 1;
-    public static final int ADAPTER_ARECORD_ADAPTERCLASSNAME_FIELD_INDEX = 2;
-    public static final int ADAPTER_ARECORD_ADAPTERTYPE_FIELD_INDEX = 3;
-    public static final int ADAPTER_ARECORD_ADAPTER_TIMESTAMP_FIELD_INDEX = 4;
+    public static final int DATASOURCE_ADAPTER_ARECORD_DATAVERSENAME_FIELD_INDEX = 0;
+    public static final int DATASOURCE_ADAPTER_ARECORD_NAME_FIELD_INDEX = 1;
+    public static final int DATASOURCE_ADAPTER_ARECORD_CLASSNAME_FIELD_INDEX = 2;
+    public static final int DATASOURCE_ADAPTER_ARECORD_TYPE_FIELD_INDEX = 3;
+    public static final int DATASOURCE_ADAPTER_ARECORD_TIMESTAMP_FIELD_INDEX = 4;
 
-    private static ARecordType createAdapterRecordType() {
+    private static ARecordType createDatasourceAdapterRecordType() {
         String[] fieldNames = { "DataverseName", "Name", "Classname", "Type", "Timestamp" };
         IAType[] fieldTypes = { BuiltinType.ASTRING, BuiltinType.ASTRING, BuiltinType.ASTRING, BuiltinType.ASTRING,
                 BuiltinType.ASTRING };
-        return new ARecordType("AdapterRecordType", fieldNames, fieldTypes, true);
+        return new ARecordType("DatasourceAdapterRecordType", fieldNames, fieldTypes, true);
     }
 
 }

@@ -33,7 +33,7 @@ import edu.uci.ics.asterix.metadata.IDatasetDetails;
 import edu.uci.ics.asterix.metadata.MetadataManager;
 import edu.uci.ics.asterix.metadata.MetadataTransactionContext;
 import edu.uci.ics.asterix.metadata.api.IMetadataIndex;
-import edu.uci.ics.asterix.metadata.entities.Adapter;
+import edu.uci.ics.asterix.metadata.entities.DatasourceAdapter;
 import edu.uci.ics.asterix.metadata.entities.AsterixBuiltinTypeMap;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
 import edu.uci.ics.asterix.metadata.entities.Datatype;
@@ -102,7 +102,7 @@ public class MetadataBootstrap {
                 MetadataPrimaryIndexes.DATASET_DATASET, MetadataPrimaryIndexes.DATATYPE_DATASET,
                 MetadataPrimaryIndexes.INDEX_DATASET, MetadataPrimaryIndexes.NODE_DATASET,
                 MetadataPrimaryIndexes.NODEGROUP_DATASET, MetadataPrimaryIndexes.FUNCTION_DATASET,
-                MetadataPrimaryIndexes.ADAPTER_DATASET };
+                MetadataPrimaryIndexes.DATASOURCE_ADAPTER_DATASET };
         secondaryIndexes = new IMetadataIndex[] { MetadataSecondaryIndexes.GROUPNAME_ON_DATASET_INDEX,
                 MetadataSecondaryIndexes.DATATYPENAME_ON_DATASET_INDEX,
                 MetadataSecondaryIndexes.DATATYPENAME_ON_DATATYPE_INDEX };
@@ -319,17 +319,17 @@ public class MetadataBootstrap {
                 "edu.uci.ics.asterix.external.adapter.factory.PullBasedTwitterAdapterFactory",
                 "edu.uci.ics.asterix.external.adapter.factory.RSSFeedAdapterFactory",
                 "edu.uci.ics.asterix.external.adapter.factory.CNNFeedAdapterFactory", };
-        Adapter adapter;
+        DatasourceAdapter adapter;
         for (String adapterClassName : builtInAdapterClassNames) {
             adapter = getAdapter(adapterClassName);
             MetadataManager.INSTANCE.addAdapter(mdTxnCtx, adapter);
         }
     }
 
-    private static Adapter getAdapter(String adapterFactoryClassName) throws Exception {
+    private static DatasourceAdapter getAdapter(String adapterFactoryClassName) throws Exception {
         String adapterName = ((IAdapterFactory) (Class.forName(adapterFactoryClassName).newInstance())).getName();
-        return new Adapter(new AdapterIdentifier(MetadataConstants.METADATA_DATAVERSE_NAME, adapterName), adapterFactoryClassName,
-                Adapter.AdapterType.INTERNAL);
+        return new DatasourceAdapter(new AdapterIdentifier(MetadataConstants.METADATA_DATAVERSE_NAME, adapterName), adapterFactoryClassName,
+                DatasourceAdapter.AdapterType.INTERNAL);
     }
 
     public static void createIndex(IMetadataIndex dataset) throws Exception {

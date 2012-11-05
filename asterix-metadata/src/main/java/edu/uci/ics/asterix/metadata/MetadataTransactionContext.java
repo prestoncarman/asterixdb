@@ -19,7 +19,7 @@ import java.util.ArrayList;
 
 import edu.uci.ics.asterix.common.functions.FunctionSignature;
 import edu.uci.ics.asterix.external.dataset.adapter.AdapterIdentifier;
-import edu.uci.ics.asterix.metadata.entities.Adapter;
+import edu.uci.ics.asterix.metadata.entities.DatasourceAdapter;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
 import edu.uci.ics.asterix.metadata.entities.Datatype;
 import edu.uci.ics.asterix.metadata.entities.Dataverse;
@@ -92,7 +92,7 @@ public class MetadataTransactionContext extends MetadataCache {
         logAndApply(new MetadataLogicalOperation(function, true));
     }
 
-    public void addAdapter(Adapter adapter) {
+    public void addAdapter(DatasourceAdapter adapter) {
         droppedCache.dropAdapter(adapter);
         logAndApply(new MetadataLogicalOperation(adapter, true));
     }
@@ -130,7 +130,7 @@ public class MetadataTransactionContext extends MetadataCache {
 
     public void dropAdapter(String dataverseName, String adapterName) {
         AdapterIdentifier adapterIdentifier = new AdapterIdentifier(dataverseName, adapterName);
-        Adapter adapter = new Adapter(adapterIdentifier, null, null);
+        DatasourceAdapter adapter = new DatasourceAdapter(adapterIdentifier, null, null);
         droppedCache.addAdapterIfNotExists(adapter);
         logAndApply(new MetadataLogicalOperation(adapter, false));
     }

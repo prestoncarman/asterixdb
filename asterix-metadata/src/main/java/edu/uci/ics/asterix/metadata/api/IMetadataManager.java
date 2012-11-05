@@ -21,7 +21,7 @@ import java.util.List;
 import edu.uci.ics.asterix.common.functions.FunctionSignature;
 import edu.uci.ics.asterix.metadata.MetadataException;
 import edu.uci.ics.asterix.metadata.MetadataTransactionContext;
-import edu.uci.ics.asterix.metadata.entities.Adapter;
+import edu.uci.ics.asterix.metadata.entities.DatasourceAdapter;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
 import edu.uci.ics.asterix.metadata.entities.Datatype;
 import edu.uci.ics.asterix.metadata.entities.Dataverse;
@@ -395,7 +395,7 @@ public interface IMetadataManager {
      *            added
      * @throws MetadataException
      */
-    public void addAdapter(MetadataTransactionContext mdTxnCtx, Adapter adapter) throws MetadataException;
+    public void addAdapter(MetadataTransactionContext mdTxnCtx, DatasourceAdapter adapter) throws MetadataException;
 
     /**
      * @param ctx
@@ -407,7 +407,7 @@ public interface IMetadataManager {
      * @return
      * @throws MetadataException
      */
-    public Adapter getAdapter(MetadataTransactionContext ctx, String dataverseName, String name)
+    public DatasourceAdapter getAdapter(MetadataTransactionContext ctx, String dataverseName, String name)
             throws MetadataException;
 
     /**

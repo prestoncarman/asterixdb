@@ -48,7 +48,7 @@ import edu.uci.ics.asterix.metadata.MetadataManager;
 import edu.uci.ics.asterix.metadata.MetadataTransactionContext;
 import edu.uci.ics.asterix.metadata.bootstrap.AsterixProperties;
 import edu.uci.ics.asterix.metadata.bootstrap.MetadataConstants;
-import edu.uci.ics.asterix.metadata.entities.Adapter;
+import edu.uci.ics.asterix.metadata.entities.DatasourceAdapter;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
 import edu.uci.ics.asterix.metadata.entities.Datatype;
 import edu.uci.ics.asterix.metadata.entities.Dataverse;
@@ -271,7 +271,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         IExternalDatasetAdapterFactory adapterFactory;
         IDatasourceAdapter adapter;
         String adapterName;
-        Adapter adapterEntity;
+        DatasourceAdapter adapterEntity;
         String adapterFactoryClassname;
         try {
             adapterName = datasetDetails.getAdapter();
@@ -340,7 +340,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
             Dataset dataset) throws AlgebricksException {
 
         FeedDatasetDetails datasetDetails = (FeedDatasetDetails) dataset.getDatasetDetails();
-        Adapter adapterEntity;
+        DatasourceAdapter adapterEntity;
         IDatasourceAdapter adapter;
         IFeedDatasetAdapterFactory adapterFactory;
         IAType adapterOutputType;
@@ -1005,9 +1005,9 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         return adapterFactoryMapping;
     }
 
-    public Adapter getAdapter(MetadataTransactionContext mdTxnCtx, String dataverseName, String adapterName)
+    public DatasourceAdapter getAdapter(MetadataTransactionContext mdTxnCtx, String dataverseName, String adapterName)
             throws MetadataException {
-        Adapter adapter = null;
+        DatasourceAdapter adapter = null;
         // search in default namespace (built-in adapter)
         adapter = MetadataManager.INSTANCE.getAdapter(mdTxnCtx, MetadataConstants.METADATA_DATAVERSE_NAME, adapterName);
 

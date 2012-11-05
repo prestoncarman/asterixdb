@@ -121,7 +121,7 @@ public class DatasetTupleTranslator extends AbstractTupleTranslator<Dataset> {
                             partitioningKey, groupName);
                 } else {
                     String adapter = ((AString) datasetDetailsRecord
-                            .getValueByPos(MetadataRecordTypes.FEED_DETAILS_ARECORD_ADAPTER_FIELD_INDEX))
+                            .getValueByPos(MetadataRecordTypes.FEED_DETAILS_ARECORD_DATASOURCE_ADAPTER_FIELD_INDEX))
                             .getStringValue();
                     cursor = ((AOrderedList) datasetDetailsRecord
                             .getValueByPos(MetadataRecordTypes.FEED_DETAILS_ARECORD_PROPERTIES_FIELD_INDEX))
@@ -132,10 +132,10 @@ public class DatasetTupleTranslator extends AbstractTupleTranslator<Dataset> {
                     while (cursor.next()) {
                         ARecord field = (ARecord) cursor.get();
                         key = ((AString) field
-                                .getValueByPos(MetadataRecordTypes.ADAPTER_PROPERTIES_ARECORD_NAME_FIELD_INDEX))
+                                .getValueByPos(MetadataRecordTypes.DATASOURCE_ADAPTER_PROPERTIES_ARECORD_NAME_FIELD_INDEX))
                                 .getStringValue();
                         value = ((AString) field
-                                .getValueByPos(MetadataRecordTypes.ADAPTER_PROPERTIES_ARECORD_VALUE_FIELD_INDEX))
+                                .getValueByPos(MetadataRecordTypes.DATASOURCE_ADAPTER_PROPERTIES_ARECORD_VALUE_FIELD_INDEX))
                                 .getStringValue();
                         properties.put(key, value);
                     }
@@ -165,7 +165,7 @@ public class DatasetTupleTranslator extends AbstractTupleTranslator<Dataset> {
                 ARecord datasetDetailsRecord = (ARecord) datasetRecord
                         .getValueByPos(MetadataRecordTypes.DATASET_ARECORD_EXTERNALDETAILS_FIELD_INDEX);
                 String adapter = ((AString) datasetDetailsRecord
-                        .getValueByPos(MetadataRecordTypes.EXTERNAL_DETAILS_ARECORD_ADAPTER_FIELD_INDEX))
+                        .getValueByPos(MetadataRecordTypes.EXTERNAL_DETAILS_ARECORD_DATASOURCE_ADAPTER_FIELD_INDEX))
                         .getStringValue();
                 IACursor cursor = ((AOrderedList) datasetDetailsRecord
                         .getValueByPos(MetadataRecordTypes.EXTERNAL_DETAILS_ARECORD_PROPERTIES_FIELD_INDEX))
@@ -176,10 +176,10 @@ public class DatasetTupleTranslator extends AbstractTupleTranslator<Dataset> {
                 while (cursor.next()) {
                     ARecord field = (ARecord) cursor.get();
                     key = ((AString) field
-                            .getValueByPos(MetadataRecordTypes.ADAPTER_PROPERTIES_ARECORD_NAME_FIELD_INDEX))
+                            .getValueByPos(MetadataRecordTypes.DATASOURCE_ADAPTER_PROPERTIES_ARECORD_NAME_FIELD_INDEX))
                             .getStringValue();
                     value = ((AString) field
-                            .getValueByPos(MetadataRecordTypes.ADAPTER_PROPERTIES_ARECORD_VALUE_FIELD_INDEX))
+                            .getValueByPos(MetadataRecordTypes.DATASOURCE_ADAPTER_PROPERTIES_ARECORD_VALUE_FIELD_INDEX))
                             .getStringValue();
                     properties.put(key, value);
                 }
@@ -266,19 +266,19 @@ public class DatasetTupleTranslator extends AbstractTupleTranslator<Dataset> {
     public void writePropertyTypeRecord(String name, String value, DataOutput out) throws IOException {
         IARecordBuilder propertyRecordBuilder = new RecordBuilder();
         ArrayBackedValueStorage fieldValue = new ArrayBackedValueStorage();
-        propertyRecordBuilder.reset(MetadataRecordTypes.ADAPTER_PROPERTIES_RECORDTYPE);
+        propertyRecordBuilder.reset(MetadataRecordTypes.DATASOURCE_ADAPTER_PROPERTIES_RECORDTYPE);
 
         // write field 0
         fieldValue.reset();
         aString.setValue(name);
         stringSerde.serialize(aString, fieldValue.getDataOutput());
-        propertyRecordBuilder.addField(MetadataRecordTypes.ADAPTER_PROPERTIES_ARECORD_NAME_FIELD_INDEX, fieldValue);
+        propertyRecordBuilder.addField(MetadataRecordTypes.DATASOURCE_ADAPTER_PROPERTIES_ARECORD_NAME_FIELD_INDEX, fieldValue);
 
         // write field 1
         fieldValue.reset();
         aString.setValue(value);
         stringSerde.serialize(aString, fieldValue.getDataOutput());
-        propertyRecordBuilder.addField(MetadataRecordTypes.ADAPTER_PROPERTIES_ARECORD_VALUE_FIELD_INDEX, fieldValue);
+        propertyRecordBuilder.addField(MetadataRecordTypes.DATASOURCE_ADAPTER_PROPERTIES_ARECORD_VALUE_FIELD_INDEX, fieldValue);
 
         propertyRecordBuilder.write(out, true);
     }

@@ -125,7 +125,7 @@ public class FeedDatasetDetails extends InternalDatasetDetails {
         fieldValue.reset();
         aString.setValue(getAdapterFactory());
         stringSerde.serialize(aString, fieldValue.getDataOutput());
-        feedRecordBuilder.addField(MetadataRecordTypes.FEED_DETAILS_ARECORD_ADAPTER_FIELD_INDEX, fieldValue);
+        feedRecordBuilder.addField(MetadataRecordTypes.FEED_DETAILS_ARECORD_DATASOURCE_ADAPTER_FIELD_INDEX, fieldValue);
 
         // write field 6
         listBuilder.reset((AOrderedListType) MetadataRecordTypes.FEED_DETAILS_RECORDTYPE.getFieldTypes()[6]);
@@ -165,7 +165,7 @@ public class FeedDatasetDetails extends InternalDatasetDetails {
     public void writePropertyTypeRecord(String name, String value, DataOutput out) throws HyracksDataException {
         IARecordBuilder propertyRecordBuilder = new RecordBuilder();
         ArrayBackedValueStorage fieldValue = new ArrayBackedValueStorage();
-        propertyRecordBuilder.reset(MetadataRecordTypes.ADAPTER_PROPERTIES_RECORDTYPE);
+        propertyRecordBuilder.reset(MetadataRecordTypes.DATASOURCE_ADAPTER_PROPERTIES_RECORDTYPE);
         AMutableString aString = new AMutableString("");
         ISerializerDeserializer<AString> stringSerde = AqlSerializerDeserializerProvider.INSTANCE
                 .getSerializerDeserializer(BuiltinType.ASTRING);

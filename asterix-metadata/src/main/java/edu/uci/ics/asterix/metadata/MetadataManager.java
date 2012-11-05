@@ -23,7 +23,7 @@ import edu.uci.ics.asterix.metadata.api.IAsterixStateProxy;
 import edu.uci.ics.asterix.metadata.api.IMetadataManager;
 import edu.uci.ics.asterix.metadata.api.IMetadataNode;
 import edu.uci.ics.asterix.metadata.bootstrap.MetadataConstants;
-import edu.uci.ics.asterix.metadata.entities.Adapter;
+import edu.uci.ics.asterix.metadata.entities.DatasourceAdapter;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
 import edu.uci.ics.asterix.metadata.entities.Datatype;
 import edu.uci.ics.asterix.metadata.entities.Dataverse;
@@ -349,7 +349,7 @@ public class MetadataManager implements IMetadataManager {
     }
 
     @Override
-    public void addAdapter(MetadataTransactionContext mdTxnCtx, Adapter adapter) throws MetadataException {
+    public void addAdapter(MetadataTransactionContext mdTxnCtx, DatasourceAdapter adapter) throws MetadataException {
         try {
             metadataNode.addAdapter(mdTxnCtx.getTxnId(), adapter);
         } catch (RemoteException e) {
@@ -528,9 +528,9 @@ public class MetadataManager implements IMetadataManager {
     }
 
     @Override
-    public Adapter getAdapter(MetadataTransactionContext ctx, String dataverseName, String name)
+    public DatasourceAdapter getAdapter(MetadataTransactionContext ctx, String dataverseName, String name)
             throws MetadataException {
-        Adapter adapter = null;
+        DatasourceAdapter adapter = null;
         try {
             adapter = metadataNode.getAdapter(ctx.getTxnId(), dataverseName, name);
         } catch (RemoteException e) {

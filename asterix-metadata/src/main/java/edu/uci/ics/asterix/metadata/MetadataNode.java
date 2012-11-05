@@ -30,7 +30,7 @@ import edu.uci.ics.asterix.metadata.api.IMetadataNode;
 import edu.uci.ics.asterix.metadata.api.IValueExtractor;
 import edu.uci.ics.asterix.metadata.bootstrap.MetadataPrimaryIndexes;
 import edu.uci.ics.asterix.metadata.bootstrap.MetadataSecondaryIndexes;
-import edu.uci.ics.asterix.metadata.entities.Adapter;
+import edu.uci.ics.asterix.metadata.entities.DatasourceAdapter;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
 import edu.uci.ics.asterix.metadata.entities.Datatype;
 import edu.uci.ics.asterix.metadata.entities.Dataverse;
@@ -39,7 +39,7 @@ import edu.uci.ics.asterix.metadata.entities.Index;
 import edu.uci.ics.asterix.metadata.entities.InternalDatasetDetails;
 import edu.uci.ics.asterix.metadata.entities.Node;
 import edu.uci.ics.asterix.metadata.entities.NodeGroup;
-import edu.uci.ics.asterix.metadata.entitytupletranslators.AdapterTupleTranslator;
+import edu.uci.ics.asterix.metadata.entitytupletranslators.DatasourceAdapterTupleTranslator;
 import edu.uci.ics.asterix.metadata.entitytupletranslators.DatasetTupleTranslator;
 import edu.uci.ics.asterix.metadata.entitytupletranslators.DatatypeTupleTranslator;
 import edu.uci.ics.asterix.metadata.entitytupletranslators.DataverseTupleTranslator;
@@ -300,10 +300,10 @@ public class MetadataNode implements IMetadataNode {
 
             // As a side effect, acquires an S lock on the 'Adapter' dataset
             // on behalf of txnId.
-            List<Adapter> dataverseAdapters = getDataverseAdapters(txnId, dataverseName);
+            List<DatasourceAdapter> dataverseAdapters = getDataverseAdapters(txnId, dataverseName);
             if (dataverseAdapters != null && dataverseAdapters.size() > 0) {
                 // Drop all functions in this dataverse.
-                for (Adapter adapter : dataverseAdapters) {
+                for (DatasourceAdapter adapter : dataverseAdapters) {
                     dropAdapter(txnId, dataverseName, adapter.getAdapterIdentifier().getAdapterName());
                 }
             }
@@ -844,12 +844,12 @@ public class MetadataNode implements IMetadataNode {
     }
 
     @Override
-    public void addAdapter(long txnId, Adapter adapter) throws MetadataException, RemoteException {
+    public void addAdapter(long txnId, DatasourceAdapter adapter) throws MetadataException, RemoteException {
         try {
             // Insert into the 'Adapter' dataset.
-            AdapterTupleTranslator tupleReaderWriter = new AdapterTupleTranslator(true);
+            DatasourceAdapterTupleTranslator tupleReaderWriter = new DatasourceAdapterTupleTranslator(true);
             ITupleReference adapterTuple = tupleReaderWriter.getTupleFromMetadataEntity(adapter);
-            insertTupleIntoIndex(txnId, MetadataPrimaryIndexes.ADAPTER_DATASET, adapterTuple);
+            insertTupleIntoIndex(txnId, MetadataPrimaryIndexes.DATASOURCE_ADAPTER_DATASET, adapterTuple);
 
         } catch (BTreeDuplicateKeyException e) {
             throw new MetadataException("A adapter with this name " + adapter.getAdapterIdentifier().getAdapterName()
@@ -863,7 +863,7 @@ public class MetadataNode implements IMetadataNode {
     @Override
     public void dropAdapter(long txnId, String dataverseName, String adapterName) throws MetadataException,
             RemoteException {
-        Adapter adapter;
+        DatasourceAdapter adapter;
         try {
             adapter = getAdapter(txnId, dataverseName, adapterName);
         } catch (Exception e) {
@@ -877,8 +877,8 @@ public class MetadataNode implements IMetadataNode {
             ITupleReference searchKey = createTuple(dataverseName, adapterName);
             // Searches the index for the tuple to be deleted. Acquires an S
             // lock on the 'Adapter' dataset.
-            ITupleReference datasetTuple = getTupleToBeDeleted(txnId, MetadataPrimaryIndexes.ADAPTER_DATASET, searchKey);
-            deleteTupleFromIndex(txnId, MetadataPrimaryIndexes.ADAPTER_DATASET, datasetTuple);
+            ITupleReference datasetTuple = getTupleToBeDeleted(txnId, MetadataPrimaryIndexes.DATASOURCE_ADAPTER_DATASET, searchKey);
+            deleteTupleFromIndex(txnId, MetadataPrimaryIndexes.DATASOURCE_ADAPTER_DATASET, datasetTuple);
 
             // TODO: Change this to be a BTree specific exception, e.g.,
             // BTreeKeyDoesNotExistException.
@@ -891,14 +891,14 @@ public class MetadataNode implements IMetadataNode {
     }
 
     @Override
-    public Adapter getAdapter(long txnId, String dataverseName, String adapterName) throws MetadataException,
+    public DatasourceAdapter getAdapter(long txnId, String dataverseName, String adapterName) throws MetadataException,
             RemoteException {
         try {
             ITupleReference searchKey = createTuple(dataverseName, adapterName);
-            AdapterTupleTranslator tupleReaderWriter = new AdapterTupleTranslator(false);
-            List<Adapter> results = new ArrayList<Adapter>();
-            IValueExtractor<Adapter> valueExtractor = new MetadataEntityValueExtractor<Adapter>(tupleReaderWriter);
-            searchIndex(txnId, MetadataPrimaryIndexes.ADAPTER_DATASET, searchKey, valueExtractor, results);
+            DatasourceAdapterTupleTranslator tupleReaderWriter = new DatasourceAdapterTupleTranslator(false);
+            List<DatasourceAdapter> results = new ArrayList<DatasourceAdapter>();
+            IValueExtractor<DatasourceAdapter> valueExtractor = new MetadataEntityValueExtractor<DatasourceAdapter>(tupleReaderWriter);
+            searchIndex(txnId, MetadataPrimaryIndexes.DATASOURCE_ADAPTER_DATASET, searchKey, valueExtractor, results);
             if (results.isEmpty()) {
                 return null;
             }
@@ -909,14 +909,14 @@ public class MetadataNode implements IMetadataNode {
     }
 
     @Override
-    public List<Adapter> getDataverseAdapters(long txnId, String dataverseName) throws MetadataException,
+    public List<DatasourceAdapter> getDataverseAdapters(long txnId, String dataverseName) throws MetadataException,
             RemoteException {
         try {
             ITupleReference searchKey = createTuple(dataverseName);
-            AdapterTupleTranslator tupleReaderWriter = new AdapterTupleTranslator(false);
-            IValueExtractor<Adapter> valueExtractor = new MetadataEntityValueExtractor<Adapter>(tupleReaderWriter);
-            List<Adapter> results = new ArrayList<Adapter>();
-            searchIndex(txnId, MetadataPrimaryIndexes.ADAPTER_DATASET, searchKey, valueExtractor, results);
+            DatasourceAdapterTupleTranslator tupleReaderWriter = new DatasourceAdapterTupleTranslator(false);
+            IValueExtractor<DatasourceAdapter> valueExtractor = new MetadataEntityValueExtractor<DatasourceAdapter>(tupleReaderWriter);
+            List<DatasourceAdapter> results = new ArrayList<DatasourceAdapter>();
+            searchIndex(txnId, MetadataPrimaryIndexes.DATASOURCE_ADAPTER_DATASET, searchKey, valueExtractor, results);
             return results;
         } catch (Exception e) {
             throw new MetadataException(e);
