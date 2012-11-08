@@ -44,4 +44,5 @@ insert into dataset teacher.prof({"id":152,"name":"John Meyer","age":42,"sex":"M
 insert into dataset teacher.pstdoc({"id":259,"name":"Sophia Reece","age":36,"sex":"F","dept":"Anthropology"});
 
 for $l in dataset('Metadata.Dataset')
+where $l.DataverseName='student' or $l.DataverseName='teacher'
 return $l

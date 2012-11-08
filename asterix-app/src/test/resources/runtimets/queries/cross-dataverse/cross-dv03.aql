@@ -42,5 +42,8 @@ drop dataset student.gdstd;
 drop dataset teacher.prof;
 drop dataset teacher.pstdoc;
 
+count(
 for $l in dataset('Metadata.Dataset')
+where $l.DataverseName='student' or $l.DataverseName='teacher'
 return $l
+)

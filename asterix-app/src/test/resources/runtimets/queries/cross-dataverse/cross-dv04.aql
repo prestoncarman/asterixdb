@@ -49,4 +49,5 @@ create dataset teacher.prof(tchrType) partitioned by key id;
 create dataset teacher.pstdoc(tchrType) partitioned by key id;
 
 for $l in dataset('Metadata.Dataset')
+where $l.DataverseName='student' or $l.DataverseName='teacher'
 return $l
