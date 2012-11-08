@@ -115,10 +115,10 @@ public class OptimizableOperatorSubTree {
     }
     
     public void reset() {
-        assignRefs.clear();
-        assigns.clear();
         root = null;
         rootRef = null;
+        assignRefs.clear();
+        assigns.clear();
         dataSourceScanRef = null;
         dataSourceScan = null;
         dataset = null;
