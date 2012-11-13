@@ -71,6 +71,7 @@ import edu.uci.ics.hyracks.algebricks.rewriter.rules.IntroduceGroupByCombinerRul
 import edu.uci.ics.hyracks.algebricks.rewriter.rules.IntroduceGroupByForSubplanRule;
 import edu.uci.ics.hyracks.algebricks.rewriter.rules.IsolateHyracksOperatorsRule;
 import edu.uci.ics.hyracks.algebricks.rewriter.rules.PullSelectOutOfEqJoin;
+import edu.uci.ics.hyracks.algebricks.rewriter.rules.PushAssignBelowUnionAllRule;
 import edu.uci.ics.hyracks.algebricks.rewriter.rules.PushAssignDownThroughProductRule;
 import edu.uci.ics.hyracks.algebricks.rewriter.rules.PushDieUpRule;
 import edu.uci.ics.hyracks.algebricks.rewriter.rules.PushLimitDownRule;
@@ -79,7 +80,6 @@ import edu.uci.ics.hyracks.algebricks.rewriter.rules.PushProjectDownRule;
 import edu.uci.ics.hyracks.algebricks.rewriter.rules.PushSelectDownRule;
 import edu.uci.ics.hyracks.algebricks.rewriter.rules.PushSelectIntoJoinRule;
 import edu.uci.ics.hyracks.algebricks.rewriter.rules.PushSubplanWithAggregateDownThroughProductRule;
-import edu.uci.ics.asterix.optimizer.rules.PushAggFuncIntoStandaloneAggregateRule;
 import edu.uci.ics.hyracks.algebricks.rewriter.rules.ReinferAllTypesRule;
 import edu.uci.ics.hyracks.algebricks.rewriter.rules.RemoveRedundantGroupByDecorVars;
 import edu.uci.ics.hyracks.algebricks.rewriter.rules.RemoveRedundantVariablesRule;
@@ -195,10 +195,12 @@ public final class RuleCollections {
     }
 
     public final static List<IAlgebraicRewriteRule> buildPlanCleanupRuleCollection() {
-        List<IAlgebraicRewriteRule> planCleanupRules = new LinkedList<IAlgebraicRewriteRule>();
+        List<IAlgebraicRewriteRule> planCleanupRules = new LinkedList<IAlgebraicRewriteRule>();        
+        planCleanupRules.add(new PushAssignBelowUnionAllRule());
         planCleanupRules.add(new ExtractCommonExpressionsRule());
         planCleanupRules.add(new PushProjectDownRule());
         planCleanupRules.add(new PushSelectDownRule());
+        planCleanupRules.add(new RemoveUnusedAssignAndAggregateRule());
         return planCleanupRules;
     }
 
