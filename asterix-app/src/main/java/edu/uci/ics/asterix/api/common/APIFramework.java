@@ -261,6 +261,7 @@ public class APIFramework {
 
         OptimizationConfUtil.getPhysicalOptimizationConfig().setFrameSize(frameSize);
         builder.setPhysicalOptimizationConfig(OptimizationConfUtil.getPhysicalOptimizationConfig());
+        
         ICompiler compiler = compilerFactory.createCompiler(plan, queryMetadataProvider, t.getVarCounter());
         if (pc.isOptimize()) {
             compiler.optimize();
@@ -320,7 +321,7 @@ public class APIFramework {
 
         JobSpecification spec = compiler.createJob(AsterixAppContextInfoImpl.INSTANCE);
         // set the job event listener
-        spec.setJobletEventListenerFactory(new JobEventListenerFactory(queryMetadataProvider.getTxnId(),
+        spec.setJobletEventListenerFactory(new JobEventListenerFactory(queryMetadataProvider.getJobTxnId(),
                 isWriteTransaction));
         if (pc.isPrintJob()) {
             switch (pdf) {

@@ -69,6 +69,7 @@ import edu.uci.ics.asterix.metadata.IDatasetDetails;
 import edu.uci.ics.asterix.metadata.MetadataException;
 import edu.uci.ics.asterix.metadata.MetadataManager;
 import edu.uci.ics.asterix.metadata.MetadataTransactionContext;
+import edu.uci.ics.asterix.metadata.bootstrap.MetadataPrimaryIndexes;
 import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
 import edu.uci.ics.asterix.metadata.entities.Datatype;
@@ -83,6 +84,7 @@ import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.asterix.om.types.TypeSignature;
 import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
+import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionIDFactory;
 import edu.uci.ics.asterix.translator.AbstractAqlTranslator;
 import edu.uci.ics.asterix.translator.CompiledStatements.CompiledBeginFeedStatement;
 import edu.uci.ics.asterix.translator.CompiledStatements.CompiledControlFeedStatement;
@@ -155,6 +157,7 @@ public class AqlTranslator extends AbstractAqlTranslator {
                         String pname = ss.getPropName();
                         String pvalue = ss.getPropValue();
                         config.put(pname, pvalue);
+                        MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
                         break;
                     }
                     case DATAVERSE_DECL: {
@@ -245,17 +248,11 @@ public class AqlTranslator extends AbstractAqlTranslator {
                     }
 
                     case WRITE: {
-                        WriteStatement ws = (WriteStatement) stmt;
-                        File f = new File(ws.getFileName());
-                        outputFile = new FileSplit(ws.getNcName().getValue(), new FileReference(f));
-                        if (ws.getWriterClassName() != null) {
-                            try {
-                                writerFactory = (IAWriterFactory) Class.forName(ws.getWriterClassName()).newInstance();
-                                MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
-                            } catch (Exception e) {
-                                throw new AsterixException(e);
-                            }
+                        Pair<IAWriterFactory, FileSplit> result = handleWriteStatement(metadataProvider, stmt);
+                        if (result.first != null) {
+                            writerFactory = result.first;
                         }
+                        outputFile = result.second;
                         break;
                     }
 
@@ -267,6 +264,19 @@ public class AqlTranslator extends AbstractAqlTranslator {
             }
         }
         return executionResult;
+    }
+
+    private Pair<IAWriterFactory, FileSplit> handleWriteStatement(AqlMetadataProvider metadataProvider, Statement stmt)
+            throws Exception {
+        WriteStatement ws = (WriteStatement) stmt;
+        File f = new File(ws.getFileName());
+        FileSplit outputFile = new FileSplit(ws.getNcName().getValue(), new FileReference(f));
+        IAWriterFactory writerFactory = null;
+        if (ws.getWriterClassName() != null) {
+            writerFactory = (IAWriterFactory) Class.forName(ws.getWriterClassName()).newInstance();
+        }
+        MetadataManager.INSTANCE.commitTransaction(metadataProvider.getMetadataTxnContext());
+        return new Pair<IAWriterFactory, FileSplit>(writerFactory, outputFile);
     }
 
     private Dataverse handleUseDataverseStatement(AqlMetadataProvider metadataProvider, Statement stmt)
@@ -640,6 +650,7 @@ public class AqlTranslator extends AbstractAqlTranslator {
 
     private void handleWriteFromQueryResultStatement(AqlMetadataProvider metadataProvider, Statement stmt,
             IHyracksClientConnection hcc) throws Exception {
+        metadataProvider.setWriteTransaction(true);
         WriteFromQueryResultStatement st1 = (WriteFromQueryResultStatement) stmt;
         String dataverseName = st1.getDataverseName() == null ? activeDefaultDataverse == null ? null
                 : activeDefaultDataverse.getDataverseName() : st1.getDataverseName().getValue();
@@ -686,22 +697,18 @@ public class AqlTranslator extends AbstractAqlTranslator {
         Pair<Query, Integer> reWrittenQuery = APIFramework.reWriteQuery(declaredFunctions, metadataProvider, query,
                 sessionConfig, out, pdf);
 
-        // Query Compilation (happens under a new transaction, which is committed/aborted by installing a JobEventListener)
-        MetadataTransactionContext mdTxnCtxQuery = MetadataManager.INSTANCE.beginTransaction();
-        AqlMetadataProvider metadataProviderQueryCompilation = new AqlMetadataProvider(mdTxnCtxQuery,
-                activeDefaultDataverse);
-        metadataProviderQueryCompilation.setWriterFactory(metadataProvider.getWriterFactory());
-        metadataProviderQueryCompilation.setOutputFile(metadataProvider.getOutputFile());
-        metadataProviderQueryCompilation.setConfig(metadataProvider.getConfig());
-        metadataProviderQueryCompilation.setWriteTransaction(metadataProvider.isWriteTransaction());
-
+        // Query Compilation (happens under the same ongoing metadata
+        // transaction)
         sessionConfig.setGenerateJobSpec(true);
-        JobSpecification spec = APIFramework.compileQuery(declaredFunctions, metadataProviderQueryCompilation, query,
+        if(metadataProvider.isWriteTransaction()){
+            metadataProvider.setJobTxnId(TransactionIDFactory.generateTransactionId());
+        }
+        JobSpecification spec = APIFramework.compileQuery(declaredFunctions, metadataProvider, query,
                 reWrittenQuery.second, stmt == null ? null : stmt.getDatasetName(), sessionConfig, out, pdf, stmt);
         sessionConfig.setGenerateJobSpec(false);
 
         Pair<JobSpecification, FileSplit> compiled = new Pair<JobSpecification, FileSplit>(spec,
-                metadataProviderQueryCompilation.getOutputFile());
+                metadataProvider.getOutputFile());
         return compiled;
 
     }
