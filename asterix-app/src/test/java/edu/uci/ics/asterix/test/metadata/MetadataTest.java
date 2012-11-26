@@ -24,13 +24,41 @@ import edu.uci.ics.asterix.testframework.xml.TestCase.CompilationUnit;
 @RunWith(Parameterized.class)
 public class MetadataTest {
 
+    private TestCaseContext tcCtx;
+
     private static final Logger LOGGER = Logger.getLogger(MetadataTest.class.getName());
-
-    private static final String PATH_ACTUAL = "rttest/";
+    private static final String PATH_ACTUAL = "mdtest/";
     private static final String PATH_BASE = "src/test/resources/metadata/";
-
     private static final String TEST_CONFIG_FILE_NAME = "test.properties";
     private static final String[] ASTERIX_DATA_DIRS = new String[] { "nc1data", "nc2data" };
+
+    public MetadataTest(TestCaseContext tcCtx) {
+        this.tcCtx = tcCtx;
+    }
+
+    @Test
+    public void test() throws Exception {
+        List<CompilationUnit> cUnits = tcCtx.getTestCase().getCompilationUnit();
+        for (CompilationUnit cUnit : cUnits) {
+            File testFile = tcCtx.getTestFile(cUnit);
+            File expectedResultFile = tcCtx.getExpectedResultFile(cUnit);
+            File actualFile = new File(PATH_ACTUAL + File.separator
+                    + tcCtx.getTestCase().getFilePath().replace(File.separator, "_") + "_" + cUnit.getName() + ".adm");
+
+            File actualResultFile = tcCtx.getActualResultFile(cUnit, new File(PATH_ACTUAL));
+            actualResultFile.getParentFile().mkdirs();
+            try {
+                TestsUtils.runScriptAndCompareWithResult(AsterixHyracksIntegrationUtil.getHyracksClientConnection(),
+                        testFile, new PrintWriter(System.err), expectedResultFile, actualFile);
+            } catch (Exception e) {
+                LOGGER.severe("Test \"" + testFile + "\" FAILED!");
+                e.printStackTrace();
+                if (cUnit.getExpectedError().isEmpty()) {
+                    throw new Exception("Test \"" + testFile + "\" FAILED!", e);
+                }
+            }
+        }
+    }
 
     @BeforeClass
     public static void setUp() throws Exception {
@@ -78,36 +106,6 @@ public class MetadataTest {
             testArgs.add(new Object[] { ctx });
         }
         return testArgs;
-    }
-
-    private TestCaseContext tcCtx;
-
-    public MetadataTest(TestCaseContext tcCtx) {
-        this.tcCtx = tcCtx;
-    }
-
-    @Test
-    public void test() throws Exception {
-        List<CompilationUnit> cUnits = tcCtx.getTestCase().getCompilationUnit();
-        for (CompilationUnit cUnit : cUnits) {
-            File testFile = tcCtx.getTestFile(cUnit);
-            File expectedResultFile = tcCtx.getExpectedResultFile(cUnit);
-            File actualFile = new File(PATH_ACTUAL + File.separator
-                    + tcCtx.getTestCase().getFilePath().replace(File.separator, "_") + "_" + cUnit.getName() + ".adm");
-
-            File actualResultFile = tcCtx.getActualResultFile(cUnit, new File(PATH_ACTUAL));
-            actualResultFile.getParentFile().mkdirs();
-            try {
-                TestsUtils.runScriptAndCompareWithResult(AsterixHyracksIntegrationUtil.getHyracksClientConnection(),
-                        testFile, new PrintWriter(System.err), expectedResultFile, actualFile);
-            } catch (Exception e) {
-                LOGGER.severe("Test \"" + testFile + "\" FAILED!");
-                e.printStackTrace();
-                if (cUnit.getExpectedError().isEmpty()) {
-                    throw new Exception("Test \"" + testFile + "\" FAILED!", e);
-                }
-            }
-        }
     }
 
 }

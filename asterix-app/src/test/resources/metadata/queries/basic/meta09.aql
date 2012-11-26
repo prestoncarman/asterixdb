@@ -7,7 +7,7 @@
 drop dataverse test if exists;
 create dataverse test;
 
-write output to nc1:"rttest/basic_meta09.adm";
+write output to nc1:"mdtest/basic_meta09.adm";
 
 create type test.testtype as open {
 id:int32

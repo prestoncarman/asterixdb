@@ -1,37 +1,5 @@
 <test-suite xmlns="urn:xml.testframework.asterix.ics.uci.edu" ResultOffsetPath="results" QueryOffsetPath="queries" QueryFileExtension=".aql">
   <test-group name="basic">
-    <!--
-    <test-case FilePath="basic">
-      <compilation-unit name="metadata_dataverse">
-        <output-file compare="Text">metadata_dataverse.adm</output-file>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="basic">
-      <compilation-unit name="metadata_dataset">
-        <output-file compare="Text">metadata_dataset.adm</output-file>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="basic">
-      <compilation-unit name="metadata_index">
-        <output-file compare="Text">metadata_index.adm</output-file>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="basic">
-      <compilation-unit name="metadata_datatype">
-        <output-file compare="Text">metadata_datatype.adm</output-file>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="basic">
-      <compilation-unit name="metadata_node">
-        <output-file compare="Text">metadata_node.adm</output-file>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="basic">
-      <compilation-unit name="metadata_nodegroup">
-        <output-file compare="Text">metadata_nodegroup.adm</output-file>
-      </compilation-unit>
-    </test-case>
-    -->
     <test-case FilePath="basic">
       <compilation-unit name="meta01">
         <output-file compare="Text">meta01.adm</output-file>
@@ -100,6 +68,41 @@
     <test-case FilePath="basic">
       <compilation-unit name="meta14">
         <output-file compare="Text">meta14.adm</output-file>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="basic">
+      <compilation-unit name="meta15">
+        <output-file compare="Text">meta15.adm</output-file>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="basic">
+      <compilation-unit name="meta16">
+        <output-file compare="Text">meta16.adm</output-file>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="basic">
+      <compilation-unit name="meta17">
+        <output-file compare="Text">meta17.adm</output-file>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="basic">
+      <compilation-unit name="meta18">
+        <output-file compare="Text">meta18.adm</output-file>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="basic">
+      <compilation-unit name="meta19">
+        <output-file compare="Text">meta19.adm</output-file>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="basic">
+      <compilation-unit name="meta20">
+        <output-file compare="Text">meta20.adm</output-file>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="basic">
+      <compilation-unit name="meta21">
+        <output-file compare="Text">meta21.adm</output-file>
       </compilation-unit>
     </test-case>
   </test-group>

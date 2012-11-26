@@ -7,7 +7,7 @@
 drop dataverse testdv if exists;
 create dataverse testdv;
 
-write output to nc1:"rttest/basic_meta06.adm";
+write output to nc1:"mdtest/basic_meta06.adm";
 
 create function testdv.fun01(){
 "This is an AQL Bodied UDF"
@@ -16,3 +16,4 @@ create function testdv.fun01(){
 for $l in dataset('Metadata.Function')
 return $l
 
+drop dataverse testdv;

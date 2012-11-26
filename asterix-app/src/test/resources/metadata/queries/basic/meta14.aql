@@ -16,10 +16,12 @@ create type FooType as closed {
 
 drop type FooType;
 
-write output to nc1:"rttest/basic_meta14.adm";
+write output to nc1:"mdtest/basic_meta14.adm";
 
 count(
 for $x in dataset('Metadata.Datatype')
 where $x.DataverseName='test'
 return $x
 )
+
+drop dataverse test;

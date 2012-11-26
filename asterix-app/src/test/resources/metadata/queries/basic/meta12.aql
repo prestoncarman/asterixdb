@@ -4,12 +4,10 @@
  * Date         : Sep 17 2012
  */
 
-// This drop index test is broken for now.
-
 drop dataverse test if exists;
 create dataverse test;
 
-write output to nc1:"rttest/basic_meta12.adm";
+write output to nc1:"mdtest/basic_meta12.adm";
 
 create type test.testtype as open {
 id : int32,
@@ -25,3 +23,5 @@ drop index test.dst01.idx1;
 for $l in dataset('Metadata.Index')
 where $l.DatasetName = 'dst01'
 return $l
+
+drop dataverse test;

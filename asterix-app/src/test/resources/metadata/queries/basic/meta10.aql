@@ -8,7 +8,7 @@ drop dataverse test if exists;
 create dataverse test;
 drop dataverse test if exists;
 
-write output to nc1:"rttest/basic_meta10.adm";
+write output to nc1:"mdtest/basic_meta10.adm";
 
 count(
 for $l in dataset('Metadata.Dataverse')

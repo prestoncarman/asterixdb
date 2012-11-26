@@ -6,7 +6,7 @@
 
 // Please note this query was run on two nodes, i.e; two NCs
 
-write output to nc1:"rttest/basic_meta07.adm";
+write output to nc1:"mdtest/basic_meta07.adm";
 
 for $l in dataset('Metadata.Node')
 return $l

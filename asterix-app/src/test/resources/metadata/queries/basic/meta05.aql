@@ -7,7 +7,7 @@
 drop dataverse testdv if exists;
 create dataverse testdv;
 
-write output to nc1:"rttest/basic_meta05.adm";
+write output to nc1:"mdtest/basic_meta05.adm";
 
 create type testdv.testtype as open {
 id : int32,
@@ -21,3 +21,5 @@ create index idx1 on testdv.t1(name);
 for $l in dataset('Metadata.Index')
 where $l.DataverseName='testdv' 
 return $l
+
+drop dataverse testdv;
