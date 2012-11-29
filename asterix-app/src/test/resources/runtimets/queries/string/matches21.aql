@@ -4,5 +4,5 @@ use dataverse test;
 
 write output to nc1:"rttest/string_matches21.adm";
 
-let $c1 := matches2("abracadabra","Bra","")
+let $c1 := matches("abracadabra","Bra","")
 return {"result1": $c1}

@@ -20,48 +20,54 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.functions.IFunctionInfo;
 
 public class AsterixFunctionInfo implements IFunctionInfo {
 
-    private final FunctionIdentifier functionIdentifier;
+	private final FunctionIdentifier functionIdentifier;
 
-    public AsterixFunctionInfo(String namespace, AsterixFunction asterixFunction) {
-        this.functionIdentifier = new FunctionIdentifier(namespace, asterixFunction.getName(),
-                asterixFunction.getArity());
-    }
+	public AsterixFunctionInfo(String namespace, AsterixFunction asterixFunction) {
+		this.functionIdentifier = new FunctionIdentifier(namespace,
+				asterixFunction.getName(), asterixFunction.getArity());
+	}
 
-    public AsterixFunctionInfo() {
-        functionIdentifier = null;
-    }
+	public AsterixFunctionInfo() {
+		functionIdentifier = null;
+	}
 
-    public AsterixFunctionInfo(FunctionIdentifier functionIdentifier) {
-        this.functionIdentifier = functionIdentifier;
-    }
+	public AsterixFunctionInfo(FunctionIdentifier functionIdentifier) {
+		this.functionIdentifier = functionIdentifier;
+	}
 
-    public AsterixFunctionInfo(FunctionSignature functionSignature) {
-        this.functionIdentifier = new FunctionIdentifier(functionSignature.getNamespace(), functionSignature.getName(),
-                functionSignature.getArity());
-    }
+	public AsterixFunctionInfo(FunctionSignature functionSignature) {
+		this.functionIdentifier = new FunctionIdentifier(
+				functionSignature.getNamespace(), functionSignature.getName(),
+				functionSignature.getArity());
+	}
 
-    @Override
-    public FunctionIdentifier getFunctionIdentifier() {
-        return functionIdentifier;
-    }
+	@Override
+	public FunctionIdentifier getFunctionIdentifier() {
+		return functionIdentifier;
+	}
 
-    @Override
-    public int hashCode() {
-        return toString().hashCode();
-    }
+	@Override
+	public int hashCode() {
+		return toString().hashCode();
+	}
 
-    @Override
-    public boolean equals(Object o) {
-        if (!(o instanceof AsterixFunctionInfo)) {
-            return false;
-        }
-        AsterixFunctionInfo info = (AsterixFunctionInfo) o;
-        return functionIdentifier.equals(info.getFunctionIdentifier());
-    }
+	@Override
+	public boolean equals(Object o) {
+		if (!(o instanceof AsterixFunctionInfo)) {
+			return false;
+		}
+		AsterixFunctionInfo info = (AsterixFunctionInfo) o;
+		FunctionIdentifier ofi = info.getFunctionIdentifier();
+		return functionIdentifier.getNamespace().equals(ofi.getNamespace())
+				&& functionIdentifier.getName().equals(ofi.getName())
+				&& functionIdentifier.getArity() == functionIdentifier
+						.getArity();
+	}
 
-    @Override
-    public String toString() {
-        return this.functionIdentifier.getNamespace() + ":" + this.functionIdentifier.getName();
-    }
+	@Override
+	public String toString() {
+		return functionIdentifier.getNamespace() + ":"
+				+ functionIdentifier.getName() + "@" + functionIdentifier.getArity();
+	}
 
 }

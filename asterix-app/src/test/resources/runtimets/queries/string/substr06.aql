@@ -29,4 +29,4 @@ write output to nc1:"rttest/string_substr06.adm";
 
 for $a in dataset('testdst')
 order by $a.name
-return substring2($a.name,4);
+return substring($a.name,4);

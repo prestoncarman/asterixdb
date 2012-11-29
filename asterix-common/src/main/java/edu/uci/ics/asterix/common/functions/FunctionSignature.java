@@ -17,6 +17,13 @@ public class FunctionSignature implements Serializable {
         rep = namespace + "." + name + "@" + arity;
     }
 
+    public FunctionSignature(FunctionIdentifier fid) {
+        namespace = fid.getNamespace();
+        name = fid.getName();
+        arity = fid.getArity();
+        rep = namespace + "." + name + "@" + arity;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (!(o instanceof FunctionSignature)) {

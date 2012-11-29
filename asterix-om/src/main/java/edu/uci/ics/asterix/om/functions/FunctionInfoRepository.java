@@ -9,7 +9,7 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.functions.IFunctionInfo;
 
 public class FunctionInfoRepository {
     private final Map<FunctionSignature, IFunctionInfo> functionMap;
-
+   
     public FunctionInfoRepository() {
         functionMap = new ConcurrentHashMap<FunctionSignature, IFunctionInfo>();
     }
@@ -29,7 +29,7 @@ public class FunctionInfoRepository {
     }
 
     public void put(FunctionIdentifier fid) {
-        FunctionSignature functionSignature = new FunctionSignature(fid.getNamespace(), fid.getName(), fid.getArity());
+        FunctionSignature functionSignature = new FunctionSignature(fid);
         functionMap.put(functionSignature, new AsterixFunctionInfo(fid));
     }
 }

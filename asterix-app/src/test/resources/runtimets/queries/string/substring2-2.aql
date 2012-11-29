@@ -4,5 +4,5 @@ use dataverse test;
 
 write output to nc1:"rttest/string_substring2-2.adm";
 
-let $c1 := substring2("HEllow",0)
+let $c1 := substring("HEllow",0)
 return {"result1": $c1}
