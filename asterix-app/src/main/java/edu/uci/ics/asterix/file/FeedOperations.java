@@ -102,8 +102,8 @@ public class FeedOperations {
 
         try {
             Pair<IOperatorDescriptor, AlgebricksPartitionConstraint> p = metadataProvider.buildFeedMessengerRuntime(
-                    metadataProvider, spec, (FeedDatasetDetails) dataset.getDatasetDetails(),
-                    metadataProvider.getDefaultDataverseName(), datasetName, feedMessages);
+                    metadataProvider, spec, (FeedDatasetDetails) dataset.getDatasetDetails(), dataverseName,
+                    datasetName, feedMessages);
             feedMessenger = p.first;
             messengerPc = p.second;
         } catch (AlgebricksException e) {
