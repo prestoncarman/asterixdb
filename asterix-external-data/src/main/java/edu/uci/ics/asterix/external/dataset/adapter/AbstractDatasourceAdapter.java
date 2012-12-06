@@ -65,7 +65,6 @@ public abstract class AbstractDatasourceAdapter implements IDatasourceAdapter {
 
 	public static final String FORMAT_DELIMITED_TEXT = "delimited-text";
 	public static final String FORMAT_ADM = "adm";
-	public static final String FORMAT_ADM_OLD = "admold";
 
 	static {
 		formatToParserFactoryMap
@@ -74,9 +73,7 @@ public abstract class AbstractDatasourceAdapter implements IDatasourceAdapter {
 		formatToParserFactoryMap
 				.put(FORMAT_ADM,
 						"edu.uci.ics.asterix.runtime.operators.file.AdmSchemafullRecordParserFactory");
-		formatToParserFactoryMap
-				.put(FORMAT_ADM_OLD,
-						"edu.uci.ics.asterix.runtime.operators.file.AdmOldSchemafullRecordParserFactory");
+
 	}
 
 	public AlgebricksPartitionConstraint getPartitionConstraint() {

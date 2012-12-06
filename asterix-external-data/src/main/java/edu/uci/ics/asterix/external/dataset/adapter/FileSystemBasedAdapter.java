@@ -75,10 +75,6 @@ public abstract class FileSystemBasedAdapter extends AbstractDatasourceAdapter {
 
             } else if (FORMAT_ADM.equalsIgnoreCase(configuration.get(KEY_FORMAT))) {
                 parser = getADMDataTupleParser((ARecordType) atype);
-                
-            } else if (FORMAT_ADM_OLD.equalsIgnoreCase(configuration.get(KEY_FORMAT))) {
-                parser = getADMDataTupleParser((ARecordType) atype);
-                
             } else {
                 throw new IllegalArgumentException(" format " + configuration.get(KEY_FORMAT) + " not supported");
             }
@@ -96,8 +92,6 @@ public abstract class FileSystemBasedAdapter extends AbstractDatasourceAdapter {
                 parserFactoryClassname = formatToParserFactoryMap.get(FORMAT_DELIMITED_TEXT);
             } else if (FORMAT_ADM.equalsIgnoreCase(configuration.get(KEY_FORMAT))) {
                 parserFactoryClassname = formatToParserFactoryMap.get(FORMAT_ADM);
-            } else if (FORMAT_ADM_OLD.equalsIgnoreCase(configuration.get(KEY_FORMAT))) {
-                parserFactoryClassname = formatToParserFactoryMap.get(FORMAT_ADM_OLD);                
             } else {
                 throw new IllegalArgumentException(" format " + configuration.get(KEY_FORMAT) + " not supported");
             }
@@ -139,5 +133,4 @@ public abstract class FileSystemBasedAdapter extends AbstractDatasourceAdapter {
         }
 
     }
-
 }
