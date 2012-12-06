@@ -7,8 +7,7 @@ It was created to address the performance issues of other (more advanced) lexer 
 
 Usage
 -----
-
-    java LexerGenerator <configuration file>
+    LexerGenerator\nusage: java LexerGenerator <configuration file>
 
 
 
