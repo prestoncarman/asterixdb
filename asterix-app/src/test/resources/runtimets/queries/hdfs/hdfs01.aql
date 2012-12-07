@@ -1,0 +1,16 @@
+drop dataverse test if exists;
+create dataverse test;
+use dataverse test;
+
+create type LineType as closed {
+ line: string
+};
+
+create external dataset TextDataset(LineType)
+using "hdfs"
+(("hdfs"="hdfs://127.0.0.1:31888"),("path"="/asterix/asterix_info.txt"),("input-format"="text-input-format"),("format"="delimited-text"),("delimiter"="."));
+
+write output to nc1:"rttest/hdfs_hdfs01.adm";
+
+for $x in dataset('TextDataset')
+return $x

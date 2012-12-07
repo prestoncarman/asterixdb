@@ -15,26 +15,23 @@
 package edu.uci.ics.asterix.runtime.util;
 
 import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 import edu.uci.ics.asterix.common.api.AsterixAppContextInfoImpl;
-import edu.uci.ics.asterix.common.exceptions.AsterixException;
 
 public class AsterixRuntimeUtil {
 
-    public static Set<String> getNodeControllersOnIP(String ipAddress) throws AsterixException {
-        Map<String, Set<String>> nodeControllerInfo = AsterixAppContextInfoImpl.getNodeControllerMap();
-        Set<String> nodeControllersAtLocation = nodeControllerInfo.get(ipAddress);
-        return nodeControllersAtLocation;
+    public static Set<String> getNodeControllersOnIP(String ipAddress) throws Exception {
+        return getNodeControllerMap().get(ipAddress);
     }
 
-    public static Set<String> getNodeControllersOnHostName(String hostName) throws UnknownHostException {
-        Map<String, Set<String>> nodeControllerInfo = AsterixAppContextInfoImpl.getNodeControllerMap();
+    public static Set<String> getNodeControllersOnHostName(String hostName) throws Exception {
+        Map<String, Set<String>> nodeControllerInfo = getNodeControllerMap();
         String address;
         address = InetAddress.getByName(hostName).getHostAddress();
         if (address.equals("127.0.1.1")) {
@@ -44,13 +41,20 @@ public class AsterixRuntimeUtil {
         return nodeControllersAtLocation;
     }
 
-    public static List<String> getAllNodeControllers() {
-
-        Collection<Set<String>> nodeControllersCollection = AsterixAppContextInfoImpl.getNodeControllerMap().values();
+    public static List<String> getAllNodeControllers() throws Exception {
+        Collection<Set<String>> nodeControllersCollection = getNodeControllerMap().values();
         List<String> nodeControllers = new ArrayList<String>();
         for (Set<String> ncCollection : nodeControllersCollection) {
             nodeControllers.addAll(ncCollection);
         }
         return nodeControllers;
+    }
+
+    private static Map<String, Set<String>> getNodeControllerMap() throws Exception {
+        Map<String, Set<String>> nodeControllerMap = new HashMap<String, Set<String>>();
+        AsterixAppContextInfoImpl.getInstance().getCCApplicationContext().getCCContext()
+                .getIPAddressNodeMap(nodeControllerMap);
+        return nodeControllerMap;
+
     }
 }

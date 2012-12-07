@@ -3789,4 +3789,11 @@
       </compilation-unit>
     </test-case>
   </test-group>
+  <test-group name="hdfs">
+    <test-case FilePath="hdfs">
+      <compilation-unit name="hdfs01">
+        <output-file compare="Text">hdfs01.adm</output-file>
+      </compilation-unit>
+    </test-case>
+  </test-group>
 </test-suite>

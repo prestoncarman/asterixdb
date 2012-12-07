@@ -1,22 +1,31 @@
 package edu.uci.ics.asterix.common.api;
 
-import java.util.Map;
-import java.util.Set;
-
 import edu.uci.ics.asterix.common.context.AsterixIndexRegistryProvider;
 import edu.uci.ics.asterix.common.context.AsterixStorageManagerInterface;
 import edu.uci.ics.asterix.common.dataflow.IAsterixApplicationContextInfo;
+import edu.uci.ics.hyracks.api.application.ICCApplicationContext;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.IIndex;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.IIndexRegistryProvider;
 import edu.uci.ics.hyracks.storage.common.IStorageManagerInterface;
 
 public class AsterixAppContextInfoImpl implements IAsterixApplicationContextInfo {
 
-    public static final AsterixAppContextInfoImpl INSTANCE = new AsterixAppContextInfoImpl();
+    private static AsterixAppContextInfoImpl INSTANCE;
 
-    private static Map<String, Set<String>> nodeControllerMap;
+    private final ICCApplicationContext appCtx;
 
-    private AsterixAppContextInfoImpl() {
+    public static void initialize(ICCApplicationContext ccAppCtx) {
+        if (INSTANCE == null) {
+            INSTANCE = new AsterixAppContextInfoImpl(ccAppCtx);
+        }
+    }
+
+    private AsterixAppContextInfoImpl(ICCApplicationContext ccAppCtx) {
+        this.appCtx = ccAppCtx;
+    }
+
+    public static IAsterixApplicationContextInfo getInstance() {
+        return INSTANCE;
     }
 
     @Override
@@ -29,12 +38,9 @@ public class AsterixAppContextInfoImpl implements IAsterixApplicationContextInfo
         return AsterixStorageManagerInterface.INSTANCE;
     }
 
-    public static void setNodeControllerInfo(Map<String, Set<String>> nodeControllerInfo) {
-        nodeControllerMap = nodeControllerInfo;
-    }
-
-    public static Map<String, Set<String>> getNodeControllerMap() {
-        return nodeControllerMap;
+    @Override
+    public ICCApplicationContext getCCApplicationContext() {
+        return appCtx;
     }
 
 }

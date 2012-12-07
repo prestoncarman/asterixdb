@@ -316,7 +316,7 @@ public class APIFramework {
         builder.setTypeTraitProvider(format.getTypeTraitProvider());
         builder.setNormalizedKeyComputerFactoryProvider(format.getNormalizedKeyComputerFactoryProvider());
 
-        JobSpecification spec = compiler.createJob(AsterixAppContextInfoImpl.INSTANCE);
+        JobSpecification spec = compiler.createJob(AsterixAppContextInfoImpl.getInstance());
         // set the job event listener
         spec.setJobletEventListenerFactory(new JobEventListenerFactory(queryMetadataProvider.getJobTxnId(),
                 isWriteTransaction));
