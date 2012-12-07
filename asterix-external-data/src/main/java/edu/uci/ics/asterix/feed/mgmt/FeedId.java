@@ -20,10 +20,12 @@ public class FeedId implements Serializable {
 
     private final String dataverse;
     private final String dataset;
+    private final int hashcode;
 
     public FeedId(String dataverse, String dataset) {
         this.dataset = dataset;
         this.dataverse = dataverse;
+        this.hashcode = (dataverse + "." + dataset).hashCode();
     }
 
     public String getDataverse() {
@@ -47,7 +49,7 @@ public class FeedId implements Serializable {
 
     @Override
     public int hashCode() {
-        return dataverse.hashCode() + dataset.hashCode();
+        return hashcode;
     }
 
 }

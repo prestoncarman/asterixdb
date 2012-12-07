@@ -57,7 +57,6 @@ public class HDFSAdapter extends FileSystemBasedAdapter {
     private static final Map<String, String> formatClassNames = new HashMap<String, String>();
 
     public static final String KEY_HDFS_URL = "hdfs";
-    public static final String KEY_HDFS_PATH = "path";
     public static final String KEY_INPUT_FORMAT = "input-format";
 
     public static final String INPUT_FORMAT_TEXT = "text-input-format";
@@ -146,7 +145,7 @@ public class HDFSAdapter extends FileSystemBasedAdapter {
         conf.set("fs.default.name", configuration.get(KEY_HDFS_URL));
         conf.set("fs.hdfs.impl", "org.apache.hadoop.hdfs.DistributedFileSystem");
         conf.setClassLoader(HDFSAdapter.class.getClassLoader());
-        conf.set("mapred.input.dir", configuration.get(KEY_HDFS_PATH));
+        conf.set("mapred.input.dir", configuration.get(KEY_PATH));
         conf.set("mapred.input.format.class", formatClassNames.get(configuration.get(KEY_INPUT_FORMAT)));
         return conf;
     }

@@ -37,14 +37,12 @@ public abstract class FileSystemBasedAdapter extends AbstractDatasourceAdapter {
     protected String parserFactoryClassname;
 
     public static final String KEY_DELIMITER = "delimiter";
+    public static final String KEY_PATH = "path";
 
     public abstract InputStream getInputStream(int partition) throws IOException;
 
     public FileSystemBasedAdapter(IAType atype) {
         this.atype = atype;
-    }
-
-    public FileSystemBasedAdapter() {
     }
 
     @Override

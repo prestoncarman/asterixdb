@@ -148,9 +148,9 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         this.defaultDataverse = defaultDataverse;
         this.stores = AsterixProperties.INSTANCE.getStores();
     }
-    
-    public void setJobTxnId(long txnId){
-    	this.jobTxnId = txnId;
+
+    public void setJobTxnId(long txnId) {
+        this.jobTxnId = txnId;
     }
 
     public Dataverse getDefaultDataverse() {
@@ -348,10 +348,26 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         IDatasourceAdapter adapter;
         IFeedDatasetAdapterFactory adapterFactory;
         IAType adapterOutputType;
+        String adapterName;
+        String adapterFactoryClassname;
 
         try {
-            adapterEntity = MetadataManager.INSTANCE.getAdapter(mdTxnCtx, null, datasetDetails.getAdapterFactory());
-            adapterFactory = (IFeedDatasetAdapterFactory) Class.forName(adapterEntity.getClassname()).newInstance();
+            adapterName = datasetDetails.getAdapterFactory();
+            adapterEntity = MetadataManager.INSTANCE.getAdapter(mdTxnCtx, MetadataConstants.METADATA_DATAVERSE_NAME,
+                    adapterName);
+            if (adapterEntity != null) {
+                adapterFactoryClassname = adapterEntity.getClassname();
+                adapterFactory = (IFeedDatasetAdapterFactory) Class.forName(adapterFactoryClassname).newInstance();
+            } else {
+                adapterFactoryClassname = adapterFactoryMapping.get(adapterName);
+                if (adapterFactoryClassname != null) {
+                } else {
+                    // adapterName has been provided as a fully qualified classname 
+                    adapterFactoryClassname = adapterName;
+                }
+                adapterFactory = (IFeedDatasetAdapterFactory) Class.forName(adapterFactoryClassname).newInstance();
+            }
+
             if (adapterFactory.getFeedAdapterType().equals(FeedAdapterType.TYPED)) {
                 adapter = ((ITypedFeedDatasetAdapterFactory) adapterFactory).createAdapter(datasetDetails
                         .getProperties());
@@ -359,12 +375,16 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
             } else {
                 String outputTypeName = datasetDetails.getProperties().get(
                         IGenericFeedDatasetAdapterFactory.KEY_TYPE_NAME);
-                adapterOutputType = MetadataManager.INSTANCE.getDatatype(mdTxnCtx, null, outputTypeName).getDatatype();
+                adapterOutputType = MetadataManager.INSTANCE.getDatatype(mdTxnCtx, dataset.getDataverseName(),
+                        outputTypeName).getDatatype();
                 adapter = ((IGenericFeedDatasetAdapterFactory) adapterFactory).createAdapter(
                         datasetDetails.getProperties(), adapterOutputType);
             }
+        } catch (AlgebricksException ae) {
+            throw ae;
         } catch (Exception e) {
-            throw new AlgebricksException(e);
+            e.printStackTrace();
+            throw new AlgebricksException("unable to create adapter  " + e);
         }
 
         ISerializerDeserializer payloadSerde = NonTaggedDataFormat.INSTANCE.getSerdeProvider()
@@ -372,7 +392,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         RecordDescriptor feedDesc = new RecordDescriptor(new ISerializerDeserializer[] { payloadSerde });
 
         FeedIntakeOperatorDescriptor feedIngestor = new FeedIntakeOperatorDescriptor(jobSpec, new FeedId(
-                dataset.getDataverseName(), dataset.getDatasetName()), adapterEntity.getClassname(),
+                dataset.getDataverseName(), dataset.getDatasetName()), adapterFactoryClassname,
                 datasetDetails.getProperties(), (ARecordType) adapterOutputType, feedDesc);
 
         return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(feedIngestor,
@@ -820,10 +840,8 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
             TreeIndexInsertUpdateDeleteOperatorDescriptor btreeInsert = new TreeIndexInsertUpdateDeleteOperatorDescriptor(
                     spec, recordDesc, appContext.getStorageManagerInterface(), appContext.getIndexRegistryProvider(),
                     splitsAndConstraint.first, typeTraits, comparatorFactories, fieldPermutation, indexOp,
-                    new BTreeDataflowHelperFactory(), filterFactory, NoOpOperationCallbackProvider.INSTANCE,
-                    jobTxnId);
-            return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(btreeInsert,
-                    splitsAndConstraint.second);
+                    new BTreeDataflowHelperFactory(), filterFactory, NoOpOperationCallbackProvider.INSTANCE, jobTxnId);
+            return new Pair<IOperatorDescriptor, AlgebricksPartitionConstraint>(btreeInsert, splitsAndConstraint.second);
         } catch (MetadataException e) {
             throw new AlgebricksException(e);
         }

@@ -43,6 +43,7 @@ public class FeedIntakeOperatorNodePushable extends AbstractUnaryInputUnaryOutpu
             adapter.start(partition, writer);
         } catch (Exception e) {
             e.printStackTrace();
+            throw new HyracksDataException(e);
             // we do not throw an exception, but allow the operator to close
             // gracefully
             // Throwing an exception here would result in a job abort and a

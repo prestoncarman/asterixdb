@@ -1,0 +1,23 @@
+drop dataverse demo if exists;
+create dataverse demo;
+use dataverse demo;
+
+create type TweetType as closed {
+  id: string,
+  username : string,
+  location : string,
+  text : string,
+  timestamp : string
+}      
+
+create feed dataset TweetFeed(TweetType)
+using "edu.uci.ics.asterix.tools.external.data.RateControlledFileSystemBasedAdapterFactory"
+(("fs"="localfs"),("path"="nc1://data/twitter/obamatweets.adm"),("format"="adm"),("output-type-name"="TweetType"),("tuple-interval"="10"))
+partitioned by key id;
+
+begin feed TweetFeed; 
+
+write output to nc1:"rttest/feeds_create_begin_feed.adm";
+
+for $x in dataset('TweetFeed')
+return $x

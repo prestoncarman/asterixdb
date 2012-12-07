@@ -56,7 +56,7 @@ public class HiveAdapter extends AbstractDatasourceAdapter {
             tablePath = configuration.get(HIVE_WAREHOUSE_DIR) + "/" + tablePath + ".db" + "/"
                     + configuration.get(HIVE_TABLE);
         }
-        configuration.put(HDFSAdapter.KEY_HDFS_PATH, tablePath);
+        configuration.put(HDFSAdapter.KEY_PATH, tablePath);
         if (!configuration.get(KEY_FORMAT).equals(FORMAT_DELIMITED_TEXT)) {
             throw new IllegalArgumentException("format" + configuration.get(KEY_FORMAT) + " is not supported");
         }

@@ -32,8 +32,6 @@ public class NCFileSystemAdapter extends FileSystemBasedAdapter {
 	private static final long serialVersionUID = -4154256369973615710L;
 	private FileSplit[] fileSplits;
 
-	public static final String KEY_SPLITS = "path";
-	
 	public NCFileSystemAdapter(IAType atype) {
 		super(atype);
 	}
@@ -41,7 +39,7 @@ public class NCFileSystemAdapter extends FileSystemBasedAdapter {
 	@Override
 	public void configure(Map<String, String> arguments) throws Exception {
 		this.configuration = arguments;
-		String[] splits = arguments.get(KEY_SPLITS).split(",");
+		String[] splits = arguments.get(KEY_PATH).split(",");
 		configureFileSplits(splits);
 		configurePartitionConstraint();
 		configureFormat();

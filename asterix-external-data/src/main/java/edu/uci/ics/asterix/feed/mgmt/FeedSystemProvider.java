@@ -14,15 +14,10 @@
  */
 package edu.uci.ics.asterix.feed.mgmt;
 
-
-/**
- * Provider for all the sub-systems (transaction/lock/log/recovery) managers.
- * Users of transaction sub-systems must obtain them from the provider.
- */
 public class FeedSystemProvider {
     private static final IFeedManager feedManager = new FeedManager();
-    
-    public static IFeedManager getFeedManager()  {
-      return feedManager;
+
+    public static IFeedManager getFeedManager() {
+        return feedManager;
     }
 }
