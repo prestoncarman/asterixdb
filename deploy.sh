@@ -1,0 +1,1 @@
+scp asterix-app/target/asterix-app-0.0.4-SNAPSHOT-binary-assembly.zip abehm@asterix-master.ics.uci.edu:/home/abehm/bin

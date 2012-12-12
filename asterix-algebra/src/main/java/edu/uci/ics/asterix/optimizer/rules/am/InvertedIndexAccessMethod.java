@@ -357,7 +357,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
                 chosenIndex, inputOp, jobGenParams, context, true, retainInput);
         // Generate the rest of the upstream plan which feeds the search results into the primary index.
         UnnestMapOperator primaryIndexUnnestOp = AccessMethodUtils.createPrimaryIndexUnnestMap(dataSourceScan, dataset,
-                recordType, secondaryIndexUnnestOp, context, true, retainInput, false);
+                recordType, secondaryIndexUnnestOp, context, false, retainInput, false);
         return primaryIndexUnnestOp;
     }
 

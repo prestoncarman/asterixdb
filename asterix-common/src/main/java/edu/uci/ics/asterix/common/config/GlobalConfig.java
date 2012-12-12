@@ -27,7 +27,8 @@ public class GlobalConfig {
 
     public static final String HYRACKS_APP_NAME = "asterix";
 
-    public static final int DEFAULT_FRAME_SIZE = 32768;
+    public static final int DEFAULT_FRAME_SIZE = 131072;
+    //public static final int DEFAULT_FRAME_SIZE = 32768;
 
     public static final String FRAME_SIZE_PROPERTY = "FrameSize";
 

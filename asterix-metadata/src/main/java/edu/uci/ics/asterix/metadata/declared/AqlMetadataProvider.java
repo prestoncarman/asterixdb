@@ -466,6 +466,9 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
                         ResourceType.LSM_BTREE);
             }
 
+            // HADK TO DISABLE LOCKING
+            searchCallbackFactory = NoOpOperationCallbackFactory.INSTANCE;
+            
             BTreeSearchOperatorDescriptor btreeSearchOp = new BTreeSearchOperatorDescriptor(jobSpec, outputRecDesc,
                     appContext.getStorageManagerInterface(), appContext.getIndexLifecycleManagerProvider(), spPc.first,
                     typeTraits, comparatorFactories, lowKeyFields, highKeyFields, lowKeyInclusive, highKeyInclusive,

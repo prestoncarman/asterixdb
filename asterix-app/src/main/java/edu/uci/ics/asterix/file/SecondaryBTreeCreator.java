@@ -1,5 +1,6 @@
 package edu.uci.ics.asterix.file;
 
+import edu.uci.ics.asterix.common.config.GlobalConfig;
 import edu.uci.ics.asterix.common.context.AsterixRuntimeComponentsProvider;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
 import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksPartitionConstraintHelper;
@@ -42,6 +43,7 @@ public class SecondaryBTreeCreator extends SecondaryIndexCreator {
                 secondaryPartitionConstraint);
         spec.addRoot(secondaryIndexCreateOp);
         spec.setConnectorPolicyAssignmentPolicy(new ConnectorPolicyAssignmentPolicy());
+	spec.setFrameSize(GlobalConfig.DEFAULT_FRAME_SIZE);
         return spec;
     }
 
@@ -86,6 +88,7 @@ public class SecondaryBTreeCreator extends SecondaryIndexCreator {
         spec.connect(new OneToOneConnectorDescriptor(spec), sortOp, 0, secondaryBulkLoadOp, 0);
         spec.addRoot(secondaryBulkLoadOp);
         spec.setConnectorPolicyAssignmentPolicy(new ConnectorPolicyAssignmentPolicy());
+	spec.setFrameSize(GlobalConfig.DEFAULT_FRAME_SIZE);
         return spec;
     }
 }

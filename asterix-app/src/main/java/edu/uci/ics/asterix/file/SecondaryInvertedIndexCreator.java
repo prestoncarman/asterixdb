@@ -3,6 +3,7 @@ package edu.uci.ics.asterix.file;
 import java.util.List;
 
 import edu.uci.ics.asterix.common.config.DatasetConfig.IndexType;
+import edu.uci.ics.asterix.common.config.GlobalConfig;
 import edu.uci.ics.asterix.common.context.AsterixRuntimeComponentsProvider;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
 import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
@@ -157,6 +158,7 @@ public class SecondaryInvertedIndexCreator extends SecondaryIndexCreator {
                 secondaryPartitionConstraint);
         spec.addRoot(invIndexCreateOp);
         spec.setConnectorPolicyAssignmentPolicy(new ConnectorPolicyAssignmentPolicy());
+	spec.setFrameSize(GlobalConfig.DEFAULT_FRAME_SIZE);
         return spec;
     }
 
@@ -202,6 +204,7 @@ public class SecondaryInvertedIndexCreator extends SecondaryIndexCreator {
         spec.connect(new OneToOneConnectorDescriptor(spec), sortOp, 0, invIndexBulkLoadOp, 0);
         spec.addRoot(invIndexBulkLoadOp);
         spec.setConnectorPolicyAssignmentPolicy(new ConnectorPolicyAssignmentPolicy());
+	spec.setFrameSize(GlobalConfig.DEFAULT_FRAME_SIZE);
         return spec;
     }
 

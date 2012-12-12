@@ -329,6 +329,8 @@ public class APIFramework {
                 isWriteTransaction);
         JobSpecification spec = compiler.createJob(AsterixAppContextInfoImpl.INSTANCE, jobEventListenerFactory);
 
+        spec.setFrameSize(GlobalConfig.DEFAULT_FRAME_SIZE);
+
         if (pc.isPrintJob()) {
             switch (pdf) {
                 case HTML: {

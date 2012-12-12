@@ -328,6 +328,8 @@ public class DatasetOperations {
         spec.setConnectorPolicyAssignmentPolicy(new ConnectorPolicyAssignmentPolicy());
         spec.setJobletEventListenerFactory(new JobEventListenerFactory(asterixJobId, false));
 
+        spec.setFrameSize(GlobalConfig.DEFAULT_FRAME_SIZE);
+
         return new Job(spec);
     }
 
