@@ -23,7 +23,9 @@ public class GlobalConfig {
 
     public static final String BUFFER_CACHE_NUM_PAGES_PROPERTY = "BufferCacheNumPages";
 
-    public static final int DEFAULT_BUFFER_CACHE_NUM_PAGES = 4096;
+    //public static final int DEFAULT_BUFFER_CACHE_NUM_PAGES = 4096;
+    // 32K * 128K = 4GB
+    public static final int DEFAULT_BUFFER_CACHE_NUM_PAGES = 32768;
 
     public static final String HYRACKS_APP_NAME = "asterix";
 
