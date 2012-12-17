@@ -21,7 +21,67 @@
 					<target>1.6</target>
 				</configuration>
 			</plugin>
-		</plugins>
+			<plugin> 
+				<groupid>org.eclipse.m2e</groupid> 
+				<artifactid>lifecycle-mapping</artifactid> 
+				<version>1.0.0</version> 
+				<configuration> 
+					<ifecyclemappingmetadata> 
+						<pluginexecutions> 
+							<pluginexecution> 
+								<pluginexecutionfilter> 
+									<groupid>edu.uci.ics.asterix<</groupid> 
+									<artifactid>lexer-generator-maven-plugin</artifactid> 
+									<versionrange>[0,)</versionrange> 
+									<goals> 
+										<goal>generate-lexer</goal> 
+									</goals> 
+								</pluginexecutionfilter> 
+								<action> 
+									<execute></execute> 
+								</action> 
+							</pluginexecution> 
+						</pluginexecutions> 
+					</lifecyclemappingmetadata> 
+				</configuration> 
+			</plugin> 
+	      	<plugin>
+	        	<groupId>edu.uci.ics.asterix</groupId>
+	        	<artifactId>lexer-generator-maven-plugin</artifactId>
+	        	<version>0.1-SNAPSHOT</version>
+	        	<configuration>
+	        	  	<grammarFile>src/main/resources/adm.grammar</grammarFile>
+	        	  	<outputDir>${project.build.directory}/generated-sources</outputDir>
+	        	</configuration>
+	        	<executions>
+		          	<execution>
+		          		<id>generate-lexer</id>
+            			<phase>generate-sources</phase>
+			            <goals>
+	              			<goal>generate-lexer</goal>
+	            		</goals>
+	          		</execution>
+	        	</executions>
+	      	</plugin>
+	      	 <plugin>
+			    <groupId>org.codehaus.mojo</groupId>
+			    <artifactId>build-helper-maven-plugin</artifactId>
+			    <executions>
+			        <execution>
+			            <id>add-source</id>
+			            <phase>generate-sources</phase>
+			            <goals>
+			                <goal>add-source</goal>
+			            </goals>
+			            <configuration>
+			                <sources>
+			                    <source>${project.build.directory}/generated-sources/</source>
+			                </sources>
+			            </configuration>
+			        </execution>
+			    </executions>
+ 			</plugin>
+	    </plugins>
 	</build>
 
 	<dependencies>
