@@ -21,34 +21,10 @@
 					<target>1.6</target>
 				</configuration>
 			</plugin>
-			<plugin> 
-				<groupid>org.eclipse.m2e</groupid> 
-				<artifactid>lifecycle-mapping</artifactid> 
-				<version>1.0.0</version> 
-				<configuration> 
-					<ifecyclemappingmetadata> 
-						<pluginexecutions> 
-							<pluginexecution> 
-								<pluginexecutionfilter> 
-									<groupid>edu.uci.ics.asterix<</groupid> 
-									<artifactid>lexer-generator-maven-plugin</artifactid> 
-									<versionrange>[0,)</versionrange> 
-									<goals> 
-										<goal>generate-lexer</goal> 
-									</goals> 
-								</pluginexecutionfilter> 
-								<action> 
-									<execute></execute> 
-								</action> 
-							</pluginexecution> 
-						</pluginexecutions> 
-					</lifecyclemappingmetadata> 
-				</configuration> 
-			</plugin> 
 	      	<plugin>
 	        	<groupId>edu.uci.ics.asterix</groupId>
 	        	<artifactId>lexer-generator-maven-plugin</artifactId>
-	        	<version>0.1-SNAPSHOT</version>
+	        	<version>0.1</version>
 	        	<configuration>
 	        	  	<grammarFile>src/main/resources/adm.grammar</grammarFile>
 	        	  	<outputDir>${project.build.directory}/generated-sources</outputDir>
@@ -82,6 +58,41 @@
 			    </executions>
  			</plugin>
 	    </plugins>
+		<pluginManagement>
+			<plugins>
+				<!--This plugin's configuration is used to store Eclipse m2e settings only. It has no influence on the Maven build itself.-->
+				<plugin>
+					<groupId>org.eclipse.m2e</groupId>
+					<artifactId>lifecycle-mapping</artifactId>
+					<version>1.0.0</version>
+					<configuration>
+						<lifecycleMappingMetadata>
+							<pluginExecutions>
+								<pluginExecution>
+									<pluginExecutionFilter>
+										<groupId>
+											edu.uci.ics.asterix
+										</groupId>
+										<artifactId>
+											lexer-generator-maven-plugin
+										</artifactId>
+										<versionRange>
+											[0.1,)
+										</versionRange>
+										<goals>
+											<goal>generate-lexer</goal>
+										</goals>
+									</pluginExecutionFilter>
+									<action>
+										<ignore></ignore>
+									</action>
+								</pluginExecution>
+							</pluginExecutions>
+						</lifecycleMappingMetadata>
+					</configuration>
+				</plugin>
+			</plugins>
+		</pluginManagement>
 	</build>
 
 	<dependencies>
