@@ -27,7 +27,7 @@
 	        	<version>0.1</version>
 	        	<configuration>
 	        	  	<grammarFile>src/main/resources/adm.grammar</grammarFile>
-	        	  	<outputDir>${project.build.directory}/generated-sources</outputDir>
+	        	  	<outputDir>${project.build.directory}/generated-sources/edu/uci/ics/asterix/runtime/operators/file/adm</outputDir>
 	        	</configuration>
 	        	<executions>
 		          	<execution>
@@ -84,7 +84,7 @@
 										</goals>
 									</pluginExecutionFilter>
 									<action>
-										<ignore></ignore>
+										<execute></execute>
 									</action>
 								</pluginExecution>
 							</pluginExecutions>
