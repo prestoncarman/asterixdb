@@ -21,10 +21,10 @@ import java.util.logging.Logger;
 
 import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
-import edu.uci.ics.asterix.feed.comm.AlterFeedMessage;
-import edu.uci.ics.asterix.feed.comm.FeedMessage;
-import edu.uci.ics.asterix.feed.comm.IFeedMessage;
-import edu.uci.ics.asterix.feed.comm.IFeedMessage.MessageType;
+import edu.uci.ics.asterix.external.feed.lifecycle.AlterFeedMessage;
+import edu.uci.ics.asterix.external.feed.lifecycle.FeedMessage;
+import edu.uci.ics.asterix.external.feed.lifecycle.IFeedMessage;
+import edu.uci.ics.asterix.external.feed.lifecycle.IFeedMessage.MessageType;
 import edu.uci.ics.asterix.metadata.declared.AqlMetadataProvider;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
 import edu.uci.ics.asterix.metadata.entities.FeedDatasetDetails;
