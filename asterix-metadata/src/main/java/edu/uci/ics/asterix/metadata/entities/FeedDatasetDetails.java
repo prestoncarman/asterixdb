@@ -141,8 +141,8 @@ public class FeedDatasetDetails extends InternalDatasetDetails {
 
         // write field 7
         fieldValue.reset();
-        if (getFunction() != null) {
-            aString.setValue(getFunction().toString());
+        if (signature != null) {
+            aString.setValue(signature.toString());
             stringSerde.serialize(aString, fieldValue.getDataOutput());
             feedRecordBuilder.addField(MetadataRecordTypes.FEED_DETAILS_ARECORD_FUNCTION_FIELD_INDEX, fieldValue);
         }

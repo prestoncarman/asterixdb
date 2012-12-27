@@ -12,37 +12,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package edu.uci.ics.asterix.feed.comm;
+package edu.uci.ics.asterix.external.feed.lifecycle;
 
-public  class FeedMessage implements IFeedMessage {
+public class FeedMessage implements IFeedMessage {
 
-    protected MessageResponseMode messageResponseMode = MessageResponseMode.SYNCHRONOUS;
     protected MessageType messageType;
-    
 
-    public FeedMessage(MessageType messageType){
+    public FeedMessage(MessageType messageType) {
         this.messageType = messageType;
     }
-
-
-    public MessageResponseMode getMessageResponseMode() {
-        return messageResponseMode;
-    }
-
-
-    public void setMessageResponseMode(MessageResponseMode messageResponseMode) {
-        this.messageResponseMode = messageResponseMode;
-    }
-
 
     public MessageType getMessageType() {
         return messageType;
     }
 
-
     public void setMessageType(MessageType messageType) {
         this.messageType = messageType;
     }
-    
-   
+
 }

@@ -12,16 +12,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package edu.uci.ics.asterix.feed.comm;
+package edu.uci.ics.asterix.external.feed.lifecycle;
 
 import java.io.Serializable;
 
 public interface IFeedMessage extends Serializable {
-
-    public enum MessageResponseMode {
-        SYNCHRONOUS,
-        ASYNCHRONOUS,
-    }
 
     public enum MessageType {
         STOP,
@@ -30,8 +25,6 @@ public interface IFeedMessage extends Serializable {
         ALTER,
     }
 
-    public MessageResponseMode getMessageResponseMode();
-
     public MessageType getMessageType();
-    
+
 }

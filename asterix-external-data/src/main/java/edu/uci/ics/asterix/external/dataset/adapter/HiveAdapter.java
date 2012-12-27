@@ -17,6 +17,7 @@ package edu.uci.ics.asterix.external.dataset.adapter;
 import java.util.Map;
 
 import edu.uci.ics.asterix.om.types.IAType;
+import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksPartitionConstraint;
 import edu.uci.ics.hyracks.api.comm.IFrameWriter;
 import edu.uci.ics.hyracks.api.context.IHyracksTaskContext;
 
@@ -79,6 +80,11 @@ public class HiveAdapter extends AbstractDatasourceAdapter {
     @Override
     public void start(int partition, IFrameWriter writer) throws Exception {
         hdfsAdapter.start(partition, writer);
+    }
+
+    @Override
+    public AlgebricksPartitionConstraint getPartitionConstraint() throws Exception {
+        return hdfsAdapter.getPartitionConstraint();
     }
 
 }

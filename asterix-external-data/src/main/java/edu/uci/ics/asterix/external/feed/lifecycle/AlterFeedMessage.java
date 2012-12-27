@@ -12,17 +12,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package edu.uci.ics.asterix.feed.mgmt;
+package edu.uci.ics.asterix.external.feed.lifecycle;
 
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.Map;
 
-import edu.uci.ics.asterix.feed.comm.IFeedMessage;
+public class AlterFeedMessage extends FeedMessage {
 
-public interface IFeedManager {
+    private final Map<String, String> alteredConfParams;
 
-    public void registerFeedOperatorMsgQueue(FeedId feedId, LinkedBlockingQueue<IFeedMessage> queue);
+    public AlterFeedMessage(Map<String, String> alteredConfParams) {
+        super(MessageType.ALTER);
+        this.alteredConfParams = alteredConfParams;
+    }
 
-    public void unregisterFeedOperatorMsgQueue(FeedId feedId, LinkedBlockingQueue<IFeedMessage> queue);
+    @Override
+    public MessageType getMessageType() {
+        return MessageType.ALTER;
+    }
 
-    public boolean deliverMessage(FeedId feedId, IFeedMessage feedMessage) throws Exception;
+    public Map<String, String> getAlteredConfParams() {
+        return alteredConfParams;
+    }
 }

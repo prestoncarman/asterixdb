@@ -709,7 +709,7 @@ public class AqlTranslator extends AbstractAqlTranslator {
             IHyracksClientConnection hcc, List<JobSpecification> jobsToExecute) throws Exception {
         BeginFeedStatement bfs = (BeginFeedStatement) stmt;
         String dataverseName = bfs.getDataverseName() == null ? activeDefaultDataverse == null ? null
-                : activeDefaultDataverse.getDataverseName() : bfs.getDatasetName().getValue();
+                : activeDefaultDataverse.getDataverseName() : bfs.getDataverseName().getValue();
 
         CompiledBeginFeedStatement cbfs = new CompiledBeginFeedStatement(dataverseName,
                 bfs.getDatasetName().getValue(), bfs.getQuery(), bfs.getVarCounter());
@@ -733,7 +733,7 @@ public class AqlTranslator extends AbstractAqlTranslator {
             IHyracksClientConnection hcc, List<JobSpecification> jobsToExecute) throws Exception {
         ControlFeedStatement cfs = (ControlFeedStatement) stmt;
         String dataverseName = cfs.getDataverseName() == null ? activeDefaultDataverse == null ? null
-                : activeDefaultDataverse.getDataverseName() : cfs.getDatasetName().getValue();
+                : activeDefaultDataverse.getDataverseName() : cfs.getDataverseName().getValue();
         CompiledControlFeedStatement clcfs = new CompiledControlFeedStatement(cfs.getOperationType(), dataverseName,
                 cfs.getDatasetName().getValue(), cfs.getAlterAdapterConfParams());
         jobsToExecute.add(FeedOperations.buildControlFeedJobSpec(clcfs, metadataProvider));

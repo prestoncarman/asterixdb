@@ -7,17 +7,15 @@ import java.util.Map;
 
 import edu.uci.ics.asterix.feed.managed.adapter.IMutableFeedAdapter;
 
+
 public class CNNFeedAdapter extends RSSFeedAdapter implements IDatasourceAdapter, IMutableFeedAdapter {
 
     private static final long serialVersionUID = 2523303758114582251L;
     private List<String> feedURLs = new ArrayList<String>();
-    private String id_prefix = "";
+    private static Map<String, String> topicFeeds = new HashMap<String, String>();
 
     public static final String KEY_RSS_URL = "topic";
     public static final String KEY_INTERVAL = "interval";
-
-    private static Map<String, String> topicFeeds = new HashMap<String, String>();
-
     public static final String TOP_STORIES = "topstories";
     public static final String WORLD = "world";
     public static final String US = "us";

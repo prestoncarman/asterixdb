@@ -16,31 +16,21 @@ package edu.uci.ics.asterix.tools.external.data;
 
 import java.util.Map;
 
-import edu.uci.ics.asterix.external.adapter.factory.IGenericFeedDatasetAdapterFactory;
+import edu.uci.ics.asterix.external.adapter.factory.IGenericDatasetAdapterFactory;
 import edu.uci.ics.asterix.external.dataset.adapter.IDatasourceAdapter;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.IAType;
 
-public class RateControlledFileSystemBasedAdapterFactory implements IGenericFeedDatasetAdapterFactory {
-
-    @Override
-    public AdapterType getAdapterType() {
-        return AdapterType.FEED;
-    }
+public class RateControlledFileSystemBasedAdapterFactory implements IGenericDatasetAdapterFactory {
 
     @Override
     public IDatasourceAdapter createAdapter(Map<String, String> configuration, IAType type) throws Exception {
         return new RateControlledFileSystemBasedAdapter((ARecordType) type, configuration);
     }
 
-	@Override
-	public FeedAdapterType getFeedAdapterType() {
-		return FeedAdapterType.GENERIC;
-	}
-
-	@Override
-	public String getName() {
-		return "file_feed";
-	}
+    @Override
+    public String getName() {
+        return "file_feed";
+    }
 
 }

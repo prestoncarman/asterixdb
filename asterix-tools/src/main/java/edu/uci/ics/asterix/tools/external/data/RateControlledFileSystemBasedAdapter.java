@@ -19,16 +19,18 @@ import java.io.InputStream;
 import java.util.Map;
 
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
-import edu.uci.ics.asterix.external.adapter.factory.IExternalDatasetAdapterFactory;
-import edu.uci.ics.asterix.external.adapter.factory.IGenericFeedDatasetAdapterFactory;
+import edu.uci.ics.asterix.external.adapter.factory.IGenericDatasetAdapterFactory;
 import edu.uci.ics.asterix.external.dataset.adapter.FileSystemBasedAdapter;
-import edu.uci.ics.asterix.external.dataset.adapter.IFeedDatasourceAdapter;
+import edu.uci.ics.asterix.external.dataset.adapter.ITypedDatasourceAdapter;
+import edu.uci.ics.asterix.feed.managed.adapter.IManagedFeedAdapter;
+import edu.uci.ics.asterix.feed.managed.adapter.IMutableFeedAdapter;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.asterix.runtime.operators.file.ADMDataParser;
 import edu.uci.ics.asterix.runtime.operators.file.AbstractTupleParser;
 import edu.uci.ics.asterix.runtime.operators.file.DelimitedDataParser;
 import edu.uci.ics.asterix.runtime.operators.file.IDataParser;
+import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksPartitionConstraint;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.NotImplementedException;
 import edu.uci.ics.hyracks.api.comm.IFrameWriter;
 import edu.uci.ics.hyracks.api.context.IHyracksTaskContext;
@@ -38,7 +40,8 @@ import edu.uci.ics.hyracks.dataflow.common.data.parsers.IValueParserFactory;
 import edu.uci.ics.hyracks.dataflow.std.file.ITupleParser;
 import edu.uci.ics.hyracks.dataflow.std.file.ITupleParserFactory;
 
-public class RateControlledFileSystemBasedAdapter extends FileSystemBasedAdapter implements IFeedDatasourceAdapter {
+public class RateControlledFileSystemBasedAdapter extends FileSystemBasedAdapter implements ITypedDatasourceAdapter,
+        IMutableFeedAdapter, IManagedFeedAdapter {
 
     public static final String KEY_FILE_SYSTEM = "fs";
     public static final String LOCAL_FS = "localfs";
@@ -62,7 +65,7 @@ public class RateControlledFileSystemBasedAdapter extends FileSystemBasedAdapter
             throw new AsterixException("Unsupported file system type " + fileSystem);
         }
         format = configuration.get(KEY_FORMAT);
-        IExternalDatasetAdapterFactory adapterFactory = (IExternalDatasetAdapterFactory) Class.forName(
+        IGenericDatasetAdapterFactory adapterFactory = (IGenericDatasetAdapterFactory) Class.forName(
                 adapterFactoryClass).newInstance();
         coreAdapter = (FileSystemBasedAdapter) adapterFactory.createAdapter(configuration, atype);
         this.configuration = configuration;
@@ -72,7 +75,7 @@ public class RateControlledFileSystemBasedAdapter extends FileSystemBasedAdapter
         if (configuration.get(KEY_FILE_SYSTEM) == null) {
             throw new Exception("File system type not specified. (fs=?) File system could be 'localfs' or 'hdfs'");
         }
-        if (configuration.get(IGenericFeedDatasetAdapterFactory.KEY_TYPE_NAME) == null) {
+        if (configuration.get(IGenericDatasetAdapterFactory.KEY_TYPE_NAME) == null) {
             throw new Exception("Record type not specified (output-type-name=?)");
         }
         if (configuration.get(KEY_PATH) == null) {
@@ -104,6 +107,7 @@ public class RateControlledFileSystemBasedAdapter extends FileSystemBasedAdapter
         return coreAdapter.getAdapterType();
     }
 
+    @Override
     protected ITupleParser getTupleParser() throws Exception {
         ITupleParser parser = null;
         if (format.equals(FORMAT_DELIMITED_TEXT)) {
@@ -145,7 +149,6 @@ public class RateControlledFileSystemBasedAdapter extends FileSystemBasedAdapter
         ITupleParser parser = null;
         try {
             parser = new RateControlledTupleParserFactory(recordType, configuration).createTupleParser(ctx);
-
             return parser;
         } catch (Exception e) {
             throw new AsterixException(e);
@@ -154,15 +157,25 @@ public class RateControlledFileSystemBasedAdapter extends FileSystemBasedAdapter
     }
 
     @Override
-    public AdapterDataFlowType getAdapterDataFlowType() {
-        return AdapterDataFlowType.PULL;
-    }
-
-    @Override
     public ARecordType getAdapterOutputType() {
         return (ARecordType) atype;
     }
 
+    @Override
+    public void alter(Map<String, String> properties) throws Exception {
+        ((RateControlledTupleParser) parser).setInterTupleInterval(Long.parseLong(properties
+                .get(RateControlledTupleParser.INTER_TUPLE_INTERVAL)));
+    }
+
+    @Override
+    public void stop() throws Exception {
+        ((RateControlledTupleParser) parser).stop();
+    }
+
+    @Override
+    public AlgebricksPartitionConstraint getPartitionConstraint() throws Exception {
+        return coreAdapter.getPartitionConstraint();
+    }
 }
 
 class RateControlledTupleParserFactory implements ITupleParserFactory {
@@ -194,8 +207,9 @@ class RateControlledTupleParserFactory implements ITupleParserFactory {
 class RateControlledTupleParser extends AbstractTupleParser {
 
     private final IDataParser dataParser;
-    private final long interTupleInterval;
-    private final boolean delayConfigured;
+    private long interTupleInterval;
+    private boolean delayConfigured;
+    private boolean continueIngestion = true;
 
     public static final String INTER_TUPLE_INTERVAL = "tuple-interval";
 
@@ -212,6 +226,15 @@ class RateControlledTupleParser extends AbstractTupleParser {
         delayConfigured = interTupleInterval != 0;
     }
 
+    public void setInterTupleInterval(long val) {
+        this.interTupleInterval = val;
+        this.delayConfigured = val > 0;
+    }
+
+    public void stop() {
+        continueIngestion = false;
+    }
+
     @Override
     public IDataParser getDataParser() {
         return dataParser;
@@ -224,7 +247,7 @@ class RateControlledTupleParser extends AbstractTupleParser {
         IDataParser parser = getDataParser();
         try {
             parser.initialize(in, recType, true);
-            while (true) {
+            while (continueIngestion) {
                 tb.reset();
                 if (!parser.parse(tb.getDataOutput())) {
                     break;

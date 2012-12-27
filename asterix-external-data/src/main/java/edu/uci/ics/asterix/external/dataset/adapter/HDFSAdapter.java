@@ -43,6 +43,7 @@ import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.asterix.om.util.AsterixRuntimeUtil;
 import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksAbsolutePartitionConstraint;
 import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksCountPartitionConstraint;
+import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksPartitionConstraint;
 import edu.uci.ics.hyracks.api.context.IHyracksTaskContext;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 import edu.uci.ics.hyracks.dataflow.hadoop.util.InputSplitsProxy;
@@ -76,7 +77,14 @@ public class HDFSAdapter extends FileSystemBasedAdapter {
         configuration = arguments;
         configureFormat();
         configureJobConf();
-        configurePartitionConstraint();
+        configureSplits();
+    }
+
+    private void configureSplits() throws IOException {
+        if (inputSplitsProxy == null) {
+            inputSplits = conf.getInputFormat().getSplits(conf, 0);
+        }
+        inputSplitsProxy = new InputSplitsProxy(conf, inputSplits);
     }
 
     private void configurePartitionConstraint() throws Exception {
@@ -84,69 +92,65 @@ public class HDFSAdapter extends FileSystemBasedAdapter {
         List<String> locations = new ArrayList<String>();
         Random random = new Random();
         boolean couldConfigureLocationConstraints = true;
-        if (inputSplitsProxy == null) {
-            InputSplit[] inputSplits = conf.getInputFormat().getSplits(conf, 0);
-            try {
-                for (InputSplit inputSplit : inputSplits) {
-                    String[] dataNodeLocations = inputSplit.getLocations();
-                    // loop over all replicas until a split location coincides
-                    // with an asterix datanode location
-                    for (String datanodeLocation : dataNodeLocations) {
-                        Set<String> nodeControllersAtLocation = AsterixRuntimeUtil
-                                .getNodeControllersOnHostName(datanodeLocation);
-                        if (nodeControllersAtLocation == null || nodeControllersAtLocation.size() == 0) {
-                            if (LOGGER.isLoggable(Level.INFO)) {
-                                LOGGER.log(Level.INFO, "No node controller found at " + datanodeLocation
-                                        + " will look at replica location");
-                            }
-                            couldConfigureLocationConstraints = false;
-                        } else {
-                            int locationIndex = random.nextInt(nodeControllersAtLocation.size());
-                            String chosenLocation = (String) nodeControllersAtLocation.toArray()[locationIndex];
-                            locations.add(chosenLocation);
-                            if (LOGGER.isLoggable(Level.INFO)) {
-                                LOGGER.log(Level.INFO, "split : " + inputSplit + " to be processed by :"
-                                        + chosenLocation);
-                            }
-                            couldConfigureLocationConstraints = true;
-                            break;
+        try {
+            for (Object inputSplit : inputSplits) {
+                String[] dataNodeLocations = ((InputSplit) inputSplit).getLocations();
+                // loop over all replicas until a split location coincides
+                // with an asterix datanode location
+                for (String datanodeLocation : dataNodeLocations) {
+                    Set<String> nodeControllersAtLocation = null;
+                    try {
+                        nodeControllersAtLocation = AsterixRuntimeUtil.getNodeControllersOnHostName(datanodeLocation);
+                    } catch (UnknownHostException uhe) {
+                        if (LOGGER.isLoggable(Level.INFO)) {
+                            LOGGER.log(Level.INFO, "Unknown host :" + datanodeLocation);
                         }
                     }
-
-                    // none of the replica locations coincides with an Asterix
-                    // node controller location.
-                    if (!couldConfigureLocationConstraints) {
-                        List<String> allNodeControllers = AsterixRuntimeUtil.getAllNodeControllers();
-                        int locationIndex = random.nextInt(allNodeControllers.size());
-                        String chosenLocation = allNodeControllers.get(locationIndex);
-                        locations.add(chosenLocation);
-
+                    if (nodeControllersAtLocation == null || nodeControllersAtLocation.size() == 0) {
                         if (LOGGER.isLoggable(Level.INFO)) {
-                            LOGGER.log(Level.INFO, "No local node controller found to process split : " + inputSplit
-                                    + " will be processed by a remote node controller:" + chosenLocation);
+                            LOGGER.log(Level.INFO, "No node controller found at " + datanodeLocation
+                                    + " will look at replica location");
                         }
+                        couldConfigureLocationConstraints = false;
+                    } else {
+                        int locationIndex = random.nextInt(nodeControllersAtLocation.size());
+                        String chosenLocation = (String) nodeControllersAtLocation.toArray()[locationIndex];
+                        locations.add(chosenLocation);
+                        if (LOGGER.isLoggable(Level.INFO)) {
+                            LOGGER.log(Level.INFO, "split : " + inputSplit + " to be processed by :" + chosenLocation);
+                        }
+                        couldConfigureLocationConstraints = true;
                         break;
                     }
                 }
-                if (couldConfigureLocationConstraints) {
-                    partitionConstraint = new AlgebricksAbsolutePartitionConstraint(locations.toArray(new String[] {}));
-                } else {
-                    partitionConstraint = new AlgebricksCountPartitionConstraint(inputSplits.length);
+
+                // none of the replica locations coincides with an Asterix
+                // node controller location.
+                if (!couldConfigureLocationConstraints) {
+                    List<String> allNodeControllers = AsterixRuntimeUtil.getAllNodeControllers();
+                    int locationIndex = random.nextInt(allNodeControllers.size());
+                    String chosenLocation = allNodeControllers.get(locationIndex);
+                    locations.add(chosenLocation);
+
+                    if (LOGGER.isLoggable(Level.INFO)) {
+                        LOGGER.log(Level.INFO, "No local node controller found to process split : " + inputSplit
+                                + " will be processed by a remote node controller:" + chosenLocation);
+                    }
                 }
-            } catch (UnknownHostException e) {
-                partitionConstraint = new AlgebricksCountPartitionConstraint(inputSplits.length);
             }
-            inputSplitsProxy = new InputSplitsProxy(conf, inputSplits);
+            partitionConstraint = new AlgebricksAbsolutePartitionConstraint(locations.toArray(new String[] {}));
+        } catch (Exception e) {
+            partitionConstraint = new AlgebricksCountPartitionConstraint(inputSplits.length);
         }
     }
 
     private JobConf configureJobConf() throws Exception {
         conf = new JobConf();
-        conf.set("fs.default.name", configuration.get(KEY_HDFS_URL));
+        conf.set("fs.default.name", configuration.get(KEY_HDFS_URL).trim());
         conf.set("fs.hdfs.impl", "org.apache.hadoop.hdfs.DistributedFileSystem");
         conf.setClassLoader(HDFSAdapter.class.getClassLoader());
-        conf.set("mapred.input.dir", configuration.get(KEY_PATH));
-        conf.set("mapred.input.format.class", formatClassNames.get(configuration.get(KEY_INPUT_FORMAT)));
+        conf.set("mapred.input.dir", configuration.get(KEY_PATH).trim());
+        conf.set("mapred.input.format.class", formatClassNames.get(configuration.get(KEY_INPUT_FORMAT).trim()));
         return conf;
     }
 
@@ -226,6 +230,14 @@ public class HDFSAdapter extends FileSystemBasedAdapter {
 
     }
 
+    @Override
+    public AlgebricksPartitionConstraint getPartitionConstraint() throws Exception {
+        if (partitionConstraint == null) {
+            configurePartitionConstraint();
+        }
+        return partitionConstraint;
+    }
+
 }
 
 class HDFSStream extends InputStream {
@@ -245,7 +257,7 @@ class HDFSStream extends InputStream {
         try {
             value = (Text) reader.createValue();
         } catch (ClassCastException cce) {
-            throw new Exception("context is not of type org.apache.hadoop.io.Text"
+            throw new Exception("value is not of type org.apache.hadoop.io.Text"
                     + " type not supported in sequence file format", cce);
         }
         initialize();
@@ -267,13 +279,13 @@ class HDFSStream extends InputStream {
     @Override
     public int read() throws IOException {
         if (!buffer.hasRemaining()) {
+            value.clear();
             boolean hasMore = reader.next(key, value);
             if (!hasMore) {
                 return -1;
             }
-            buffer.position(0);
-            buffer.limit(capacity);
-            buffer.put(value.getBytes());
+            buffer.clear();
+            buffer.put(value.getBytes(), 0, value.getLength());
             buffer.put("\n".getBytes());
             buffer.flip();
             return buffer.get();

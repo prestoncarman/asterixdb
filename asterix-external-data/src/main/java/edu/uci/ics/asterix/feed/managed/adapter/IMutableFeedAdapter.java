@@ -16,7 +16,7 @@ package edu.uci.ics.asterix.feed.managed.adapter;
 
 import java.util.Map;
 
-public interface IMutableFeedAdapter extends IManagedFeedAdapter {
+public interface IMutableFeedAdapter {
 
     public void alter(Map<String,String> properties) throws Exception;
     

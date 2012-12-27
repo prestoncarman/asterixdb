@@ -12,7 +12,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package edu.uci.ics.asterix.feed.mgmt;
+package edu.uci.ics.asterix.external.feed.lifecycle;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -20,13 +20,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.LinkedBlockingQueue;
 
-import edu.uci.ics.asterix.feed.comm.IFeedMessage;
-
 public class FeedManager implements IFeedManager {
 
     private Map<FeedId, Set<LinkedBlockingQueue<IFeedMessage>>> outGoingMsgQueueMap = new HashMap<FeedId, Set<LinkedBlockingQueue<IFeedMessage>>>();
-    private LinkedBlockingQueue<IFeedMessage> incomingMsgQueue = new LinkedBlockingQueue<IFeedMessage>();
-
+   
     @Override
     public boolean deliverMessage(FeedId feedId, IFeedMessage feedMessage) throws Exception {
         Set<LinkedBlockingQueue<IFeedMessage>> operatorQueues = outGoingMsgQueueMap.get(feedId);

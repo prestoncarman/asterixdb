@@ -17,17 +17,18 @@ package edu.uci.ics.asterix.external.dataset.adapter;
 import java.nio.ByteBuffer;
 
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
-import edu.uci.ics.asterix.feed.intake.IPullBasedFeedClient;
+import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.hyracks.api.comm.IFrameWriter;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 import edu.uci.ics.hyracks.dataflow.common.comm.io.ArrayTupleBuilder;
 import edu.uci.ics.hyracks.dataflow.common.comm.io.FrameTupleAppender;
 import edu.uci.ics.hyracks.dataflow.common.comm.util.FrameUtils;
 
-public abstract class PullBasedAdapter extends AbstractFeedDatasourceAdapter implements IDatasourceAdapter {
+public abstract class PullBasedAdapter extends AbstractDatasourceAdapter implements ITypedDatasourceAdapter {
 
     protected ArrayTupleBuilder tupleBuilder = new ArrayTupleBuilder(1);
     protected IPullBasedFeedClient pullBasedFeedClient;
+    protected ARecordType adapterOutputType;
     private FrameTupleAppender appender;
     private ByteBuffer frame;
 
@@ -43,7 +44,7 @@ public abstract class PullBasedAdapter extends AbstractFeedDatasourceAdapter imp
         while (true) {
             tupleBuilder.reset();
             try {
-                pullBasedFeedClient.nextTuple(tupleBuilder.getDataOutput()); // nextTuple is a blocking call.
+                pullBasedFeedClient.nextTuple(tupleBuilder.getDataOutput());
             } catch (Exception failureException) {
                 try {
                     pullBasedFeedClient.resetOnFailure(failureException);
@@ -55,7 +56,6 @@ public abstract class PullBasedAdapter extends AbstractFeedDatasourceAdapter imp
             }
             tupleBuilder.addFieldEndOffset();
             appendTupleToFrame(writer);
-
         }
     }
 
@@ -73,6 +73,11 @@ public abstract class PullBasedAdapter extends AbstractFeedDatasourceAdapter imp
                 throw new IllegalStateException();
             }
         }
+    }
+
+    @Override
+    public ARecordType getAdapterOutputType() {
+        return adapterOutputType;
     }
 
 }

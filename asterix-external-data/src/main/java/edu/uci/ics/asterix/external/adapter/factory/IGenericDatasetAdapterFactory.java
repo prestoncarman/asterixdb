@@ -5,10 +5,10 @@ import java.util.Map;
 import edu.uci.ics.asterix.external.dataset.adapter.IDatasourceAdapter;
 import edu.uci.ics.asterix.om.types.IAType;
 
-public interface IGenericFeedDatasetAdapterFactory extends IFeedDatasetAdapterFactory {
+public interface IGenericDatasetAdapterFactory extends IAdapterFactory {
 
-    public static final String KEY_TYPE_NAME="output-type-name";
-    
+    public static final String KEY_TYPE_NAME = "output-type-name";
+
     public IDatasourceAdapter createAdapter(Map<String, String> configuration, IAType atype) throws Exception;
 
 }

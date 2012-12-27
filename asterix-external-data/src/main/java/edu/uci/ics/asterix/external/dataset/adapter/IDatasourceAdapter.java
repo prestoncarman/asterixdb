@@ -29,7 +29,6 @@ import edu.uci.ics.hyracks.api.context.IHyracksTaskContext;
  */
 public interface IDatasourceAdapter extends Serializable {
 
-  
     /**
      * An adapter can be used to read from an external data source and may also
      * allow writing to the external data source. This enum type indicates the
@@ -45,7 +44,6 @@ public interface IDatasourceAdapter extends Serializable {
         WRITE,
         READ_WRITE
     }
-
 
     /**
      * Returns the type of adapter indicating if the adapter can be used for
@@ -131,9 +129,8 @@ public interface IDatasourceAdapter extends Serializable {
      * @Caller The wrapper operator configures its partition constraints from
      *         the constraints obtained from the adapter.
      */
-    public AlgebricksPartitionConstraint getPartitionConstraint();
+    public AlgebricksPartitionConstraint getPartitionConstraint() throws Exception;
 
-   
     /**
      * Allows the adapter to establish connection with the external data source
      * expressing intent for data and providing any configuration parameters

@@ -3819,15 +3819,35 @@
   </test-group>
   <test-group name="feeds">
     <test-case FilePath="feeds">
-      <compilation-unit name="create_begin_feed">
-        <output-file compare="Text">create_begin_feed.adm</output-file>
+      <compilation-unit name="feeds_01">
+        <output-file compare="Text">feeds_01.adm</output-file>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="feeds">
+      <compilation-unit name="feeds_02">
+        <output-file compare="Text">feeds_02.adm</output-file>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="feeds">
+      <compilation-unit name="feeds_03">
+        <output-file compare="Text">feeds_03.adm</output-file>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="feeds">
+      <compilation-unit name="feeds_04">
+        <output-file compare="Text">feeds_04.adm</output-file>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="feeds">
+      <compilation-unit name="feeds_05">
+        <output-file compare="Text">feeds_05.adm</output-file>
       </compilation-unit>
     </test-case>
   </test-group>
   <test-group name="hdfs">
     <test-case FilePath="hdfs">
-      <compilation-unit name="hdfs01">
-        <output-file compare="Text">hdfs01.adm</output-file>
+      <compilation-unit name="hdfs_01">
+        <output-file compare="Text">hdfs_01.adm</output-file>
       </compilation-unit>
     </test-case>
   </test-group>

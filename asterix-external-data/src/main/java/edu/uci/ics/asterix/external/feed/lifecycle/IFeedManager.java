@@ -12,23 +12,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package edu.uci.ics.asterix.feed.managed.adapter;
+package edu.uci.ics.asterix.external.feed.lifecycle;
 
-import java.util.Map;
+import java.util.concurrent.LinkedBlockingQueue;
 
-public interface IManagedFeedAdapter {
+public interface IFeedManager {
 
-    public enum OperationState {
-        // ACTIVE state signifies that the adapter is connected to an external
-        // data source.
-        ACTIVE,
-        // ACTIVE state signifies that the adapter is not connected to an external
-        // data source.
-        INACTIVE
-    }
+    public void registerFeedOperatorMsgQueue(FeedId feedId, LinkedBlockingQueue<IFeedMessage> queue);
 
-    public void stop() throws Exception;
+    public void unregisterFeedOperatorMsgQueue(FeedId feedId, LinkedBlockingQueue<IFeedMessage> queue);
 
-    public void alter(Map<String, String> properties) throws Exception;
-
+    public boolean deliverMessage(FeedId feedId, IFeedMessage feedMessage) throws Exception;
 }

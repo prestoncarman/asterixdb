@@ -12,12 +12,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
 */
-package edu.uci.ics.asterix.feed.mgmt;
+package edu.uci.ics.asterix.external.feed.lifecycle;
 
 import java.io.Serializable;
 
 public class FeedId implements Serializable {
 
+    private static final long serialVersionUID = -659645262801404778L;
     private final String dataverse;
     private final String dataset;
     private final int hashcode;

@@ -34,66 +34,49 @@ import edu.uci.ics.hyracks.dataflow.common.data.parsers.UTF8StringParserFactory;
  */
 public abstract class AbstractDatasourceAdapter implements IDatasourceAdapter {
 
-	private static final long serialVersionUID = -3510610289692452466L;
+    private static final long serialVersionUID = -3510610289692452466L;
 
-	protected Map<String, String> configuration;
-	protected transient AlgebricksPartitionConstraint partitionConstraint;
-	protected IAType atype;
-	protected IHyracksTaskContext ctx;
-	protected AdapterType adapterType;
-	protected boolean typeInfoRequired = false;
-	
-	
-	protected static final HashMap<ATypeTag, IValueParserFactory> typeToValueParserFactMap = new HashMap<ATypeTag, IValueParserFactory>();
-	static {
-		typeToValueParserFactMap.put(ATypeTag.INT32,
-				IntegerParserFactory.INSTANCE);
-		typeToValueParserFactMap.put(ATypeTag.FLOAT,
-				FloatParserFactory.INSTANCE);
-		typeToValueParserFactMap.put(ATypeTag.DOUBLE,
-				DoubleParserFactory.INSTANCE);
-		typeToValueParserFactMap
-				.put(ATypeTag.INT64, LongParserFactory.INSTANCE);
-		typeToValueParserFactMap.put(ATypeTag.STRING,
-				UTF8StringParserFactory.INSTANCE);
-	}
+    protected Map<String, String> configuration;
+    protected transient AlgebricksPartitionConstraint partitionConstraint;
+    protected IAType atype;
+    protected IHyracksTaskContext ctx;
+    protected AdapterType adapterType;
 
-	protected static final HashMap<String, String> formatToParserFactoryMap = new HashMap<String, String>();
+    protected static final HashMap<ATypeTag, IValueParserFactory> typeToValueParserFactMap = new HashMap<ATypeTag, IValueParserFactory>();
+    static {
+        typeToValueParserFactMap.put(ATypeTag.INT32, IntegerParserFactory.INSTANCE);
+        typeToValueParserFactMap.put(ATypeTag.FLOAT, FloatParserFactory.INSTANCE);
+        typeToValueParserFactMap.put(ATypeTag.DOUBLE, DoubleParserFactory.INSTANCE);
+        typeToValueParserFactMap.put(ATypeTag.INT64, LongParserFactory.INSTANCE);
+        typeToValueParserFactMap.put(ATypeTag.STRING, UTF8StringParserFactory.INSTANCE);
+    }
 
-	public static final String KEY_FORMAT = "format";
-	public static final String KEY_PARSER_FACTORY = "parser";
+    protected static final Map<String, String> formatToParserFactoryMap = initializeFormatParserFactoryMap();
 
-	public static final String FORMAT_DELIMITED_TEXT = "delimited-text";
-	public static final String FORMAT_ADM = "adm";
+    public static final String KEY_FORMAT = "format";
+    public static final String KEY_PARSER_FACTORY = "parser";
+    public static final String FORMAT_DELIMITED_TEXT = "delimited-text";
+    public static final String FORMAT_ADM = "adm";
 
-	static {
-		formatToParserFactoryMap
-				.put(FORMAT_DELIMITED_TEXT,
-						"edu.uci.ics.asterix.runtime.operators.file.NtDelimitedDataTupleParserFactory");
-		formatToParserFactoryMap
-				.put(FORMAT_ADM,
-						"edu.uci.ics.asterix.runtime.operators.file.AdmSchemafullRecordParserFactory");
+    private static Map<String, String> initializeFormatParserFactoryMap() {
+        Map<String, String> map = new HashMap<String, String>();
+        map.put(FORMAT_DELIMITED_TEXT, "edu.uci.ics.asterix.runtime.operators.file.NtDelimitedDataTupleParserFactory");
+        map.put(FORMAT_ADM, "edu.uci.ics.asterix.runtime.operators.file.AdmSchemafullRecordParserFactory");
+        return map;
+    }
 
-	}
+    public abstract AlgebricksPartitionConstraint getPartitionConstraint() throws Exception;
 
-	public AlgebricksPartitionConstraint getPartitionConstraint() {
-		return partitionConstraint;
-	}
+    public String getAdapterProperty(String attribute) {
+        return configuration.get(attribute);
+    }
 
-	public String getAdapterProperty(String attribute) {
-		return configuration.get(attribute);
-	}
+    public Map<String, String> getConfiguration() {
+        return configuration;
+    }
 
-	public Map<String, String> getConfiguration() {
-		return configuration;
-	}
-
-	public void setAdapterProperty(String property, String value) {
-		configuration.put(property, value);
-	}
-
-	public boolean isTypeInfoRequired() {
-        return typeInfoRequired;
+    public void setAdapterProperty(String property, String value) {
+        configuration.put(property, value);
     }
 
 }
