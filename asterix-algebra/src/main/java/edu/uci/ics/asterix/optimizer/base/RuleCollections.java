@@ -192,8 +192,8 @@ public final class RuleCollections {
     
     public final static List<IAlgebraicRewriteRule> buildAccessMethodRuleCollection() {
         List<IAlgebraicRewriteRule> accessMethod = new LinkedList<IAlgebraicRewriteRule>();
-        accessMethod.add(new IntroduceSelectAccessMethodRule());
         accessMethod.add(new IntroduceJoinAccessMethodRule());
+        accessMethod.add(new IntroduceSelectAccessMethodRule());        
         accessMethod.add(new IntroduceSecondaryIndexInsertDeleteRule());
         accessMethod.add(new RemoveUnusedOneToOneEquiJoinRule());
         accessMethod.add(new PushSimilarityFunctionsBelowJoin());

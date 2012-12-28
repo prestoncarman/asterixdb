@@ -94,11 +94,9 @@ public class ExecutionTest {
         for (CompilationUnit cUnit : cUnits) {
             File testFile = tcCtx.getTestFile(cUnit);
 
-            /*************** to avoid run failure cases ****************
-            if (!testFile.getAbsolutePath().contains("runtimets/queries/failure/")) {
+            if (!testFile.getAbsolutePath().contains("bugfix.aql")) {
                 continue;
             }
-            ************************************************************/
 
             File expectedResultFile = tcCtx.getExpectedResultFile(cUnit);
             File actualFile = new File(PATH_ACTUAL + File.separator

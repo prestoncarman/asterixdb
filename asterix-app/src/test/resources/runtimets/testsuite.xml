@@ -1,4 +1,18 @@
 <test-suite xmlns="urn:xml.testframework.asterix.ics.uci.edu" ResultOffsetPath="results" QueryOffsetPath="queries" QueryFileExtension=".aql">
+  
+  <test-group name="bla">
+    <test-case FilePath="">
+      <compilation-unit name="bench">
+        <output-file compare="Text">bench.adm</output-file>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="">
+      <compilation-unit name="bugfix">
+        <output-file compare="Text">bugfix.adm</output-file>
+      </compilation-unit>
+    </test-case>
+  </test-group>
+  
   <test-group name="aggregate">
     <test-case FilePath="aggregate">
       <compilation-unit name="avg_double">
