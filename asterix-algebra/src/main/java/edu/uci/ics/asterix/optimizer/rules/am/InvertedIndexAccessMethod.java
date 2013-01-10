@@ -392,8 +392,146 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         return true;
     }
 
+    
+    public boolean applyNonSurrogateJoinPlanTransformation(Mutable<ILogicalOperator> joinRef,
+            OptimizableOperatorSubTree leftSubTree, OptimizableOperatorSubTree rightSubTree, Index chosenIndex,
+            AccessMethodAnalysisContext analysisCtx, IOptimizationContext context) throws AlgebricksException {
+        // Figure out if the index is applicable on the left or right side (if both, we arbitrarily prefer the left side).
+        Dataset dataset = analysisCtx.indexDatasetMap.get(chosenIndex);
+        // Determine probe and index subtrees based on chosen index.
+        OptimizableOperatorSubTree indexSubTree = null;
+        OptimizableOperatorSubTree probeSubTree = null;
+        if (dataset.getDatasetName().equals(leftSubTree.dataset.getDatasetName())) {
+            indexSubTree = leftSubTree;
+            probeSubTree = rightSubTree;
+        } else if (dataset.getDatasetName().equals(rightSubTree.dataset.getDatasetName())) {
+            indexSubTree = rightSubTree;
+            probeSubTree = leftSubTree;
+        }
+        IOptimizableFuncExpr optFuncExpr = AccessMethodUtils.chooseFirstOptFuncExpr(chosenIndex, analysisCtx);
+
+        // Clone the original join condition because we may have to modify it (and we also need the original).
+        InnerJoinOperator join = (InnerJoinOperator) joinRef.getValue();
+        ILogicalExpression joinCond = join.getCondition().getValue().cloneExpression();
+
+        // Remember original live variables to make sure our new index-based plan returns exactly those vars as well.
+        List<LogicalVariable> originalLiveVars = new ArrayList<LogicalVariable>();
+        VariableUtilities.getLiveVariables(join, originalLiveVars);
+
+        // Create "panic" (non indexed) nested-loop join path if necessary.
+        Mutable<ILogicalOperator> panicJoinRef = null;
+        if (optFuncExpr.getFuncExpr().getFunctionIdentifier() == AsterixBuiltinFunctions.EDIT_DISTANCE_CHECK) {
+            panicJoinRef = new MutableObject<ILogicalOperator>(joinRef.getValue());
+            Mutable<ILogicalOperator> newProbeRootRef = createPanicNestedLoopJoinPlan(panicJoinRef, indexSubTree,
+                    probeSubTree, optFuncExpr, chosenIndex, context);
+            probeSubTree.rootRef.setValue(newProbeRootRef.getValue());
+            probeSubTree.root = newProbeRootRef.getValue();
+        }
+        // Create regular indexed-nested loop join path.
+        ILogicalOperator indexPlanRootOp = createSecondaryToPrimaryPlan(indexSubTree, probeSubTree, chosenIndex,
+                optFuncExpr, true, true, context);
+        indexSubTree.dataSourceScanRef.setValue(indexPlanRootOp);
+
+        // Change join into a select with the same condition.
+        SelectOperator topSelect = new SelectOperator(new MutableObject<ILogicalExpression>(joinCond));
+        topSelect.getInputs().add(indexSubTree.rootRef);
+        topSelect.setExecutionMode(ExecutionMode.LOCAL);
+        context.computeAndSetTypeEnvironmentForOperator(topSelect);
+        joinRef.setValue(topSelect);
+
+        // Hook up the indexed-nested loop join path with the "panic" (non indexed) nested-loop join path by putting a union all on top.
+        if (panicJoinRef != null) {
+            // Gather live variables from the index plan and the panic plan.
+            List<LogicalVariable> indexPlanLiveVars = originalLiveVars;
+            List<LogicalVariable> panicPlanLiveVars = new ArrayList<LogicalVariable>();
+            VariableUtilities.getLiveVariables(panicJoinRef.getValue(), panicPlanLiveVars);
+            if (indexPlanLiveVars.size() != panicPlanLiveVars.size()) {
+                throw new AlgebricksException("Unequal number of variables returned from index plan and panic plan.");
+            }
+            // Create variable mapping for union all operator.
+            List<Triple<LogicalVariable, LogicalVariable, LogicalVariable>> varMap = new ArrayList<Triple<LogicalVariable, LogicalVariable, LogicalVariable>>();
+            for (int i = 0; i < indexPlanLiveVars.size(); i++) {
+                varMap.add(new Triple<LogicalVariable, LogicalVariable, LogicalVariable>(indexPlanLiveVars.get(i),
+                        panicPlanLiveVars.get(i), indexPlanLiveVars.get(i)));
+            }
+            UnionAllOperator unionAllOp = new UnionAllOperator(varMap);
+            unionAllOp.getInputs().add(new MutableObject<ILogicalOperator>(joinRef.getValue()));
+            unionAllOp.getInputs().add(panicJoinRef);
+            unionAllOp.setExecutionMode(ExecutionMode.PARTITIONED);
+            context.computeAndSetTypeEnvironmentForOperator(unionAllOp);
+            joinRef.setValue(unionAllOp);
+        }
+        return true;
+    }
+    
+    private Mutable<ILogicalOperator> createPanicNestedLoopJoinPlan(Mutable<ILogicalOperator> joinRef,
+            OptimizableOperatorSubTree indexSubTree, OptimizableOperatorSubTree probeSubTree,
+            IOptimizableFuncExpr optFuncExpr, Index chosenIndex, IOptimizationContext context)
+            throws AlgebricksException {
+        LogicalVariable inputSearchVar = getInputSearchVar(optFuncExpr, indexSubTree);
+
+        // We split the plan into two "branches", and add selections on each side.
+        AbstractLogicalOperator replicateOp = new ReplicateOperator(2);
+        replicateOp.getInputs().add(new MutableObject<ILogicalOperator>(probeSubTree.root));
+        replicateOp.setExecutionMode(ExecutionMode.PARTITIONED);
+        context.computeAndSetTypeEnvironmentForOperator(replicateOp);
+
+        // Create select ops for removing tuples that are filterable and not filterable, respectively.
+        IVariableTypeEnvironment topTypeEnv = context.getOutputTypeEnvironment(joinRef.getValue());
+        IAType inputSearchVarType = (IAType) topTypeEnv.getVarType(inputSearchVar);
+        Mutable<ILogicalOperator> isFilterableSelectOpRef = new MutableObject<ILogicalOperator>();
+        Mutable<ILogicalOperator> isNotFilterableSelectOpRef = new MutableObject<ILogicalOperator>();
+        createIsFilterableSelectOps(replicateOp, inputSearchVar, inputSearchVarType, optFuncExpr, chosenIndex, context,
+                isFilterableSelectOpRef, isNotFilterableSelectOpRef);
+
+        List<LogicalVariable> originalLiveVars = new ArrayList<LogicalVariable>();
+        VariableUtilities.getLiveVariables(indexSubTree.root, originalLiveVars);
+
+        // Copy the scan subtree in indexSubTree.
+        Counter counter = new Counter(context.getVarCounter());
+        LogicalOperatorDeepCopyVisitor deepCopyVisitor = new LogicalOperatorDeepCopyVisitor(counter);
+        ILogicalOperator scanSubTree = deepCopyVisitor.deepCopy(indexSubTree.root, null);
+        context.setVarCounter(counter.get());
+
+        List<LogicalVariable> copyLiveVars = new ArrayList<LogicalVariable>();
+        VariableUtilities.getLiveVariables(scanSubTree, copyLiveVars);
+
+        // Replace the inputs of the given join op, and replace variables in its
+        // condition since we deep-copied one of the scanner subtrees which
+        // changed variables. 
+        InnerJoinOperator joinOp = (InnerJoinOperator) joinRef.getValue();
+        // Substitute vars in the join condition due to copying of the scanSubTree.
+        List<LogicalVariable> joinCondUsedVars = new ArrayList<LogicalVariable>();
+        VariableUtilities.getUsedVariables(joinOp, joinCondUsedVars);
+        for (int i = 0; i < joinCondUsedVars.size(); i++) {
+            int ix = originalLiveVars.indexOf(joinCondUsedVars.get(i));
+            if (ix >= 0) {
+                joinOp.getCondition().getValue().substituteVar(originalLiveVars.get(ix), copyLiveVars.get(ix));
+            }
+        }
+        joinOp.getInputs().clear();
+        joinOp.getInputs().add(new MutableObject<ILogicalOperator>(scanSubTree));
+        // Make sure that the build input (which may be materialized causing blocking) comes from 
+        // the split+select, otherwise the plan will have a deadlock.
+        joinOp.getInputs().add(isNotFilterableSelectOpRef);
+        context.computeAndSetTypeEnvironmentForOperator(joinOp);
+
+        // Return the new root of the probeSubTree.
+        return isFilterableSelectOpRef;
+    }
+    
     @Override
     public boolean applyJoinPlanTransformation(Mutable<ILogicalOperator> joinRef,
+            OptimizableOperatorSubTree leftSubTree, OptimizableOperatorSubTree rightSubTree, Index chosenIndex,
+            AccessMethodAnalysisContext analysisCtx, IOptimizationContext context) throws AlgebricksException {
+        if (useSurrogateJoin) {
+            return applySurrogateJoinPlanTransformation(joinRef, leftSubTree, rightSubTree, chosenIndex, analysisCtx, context);
+        } else {
+            return applyNonSurrogateJoinPlanTransformation(joinRef, leftSubTree, rightSubTree, chosenIndex, analysisCtx, context);
+        }
+    }
+    
+    public boolean applySurrogateJoinPlanTransformation(Mutable<ILogicalOperator> joinRef,
             OptimizableOperatorSubTree leftSubTree, OptimizableOperatorSubTree rightSubTree, Index chosenIndex,
             AccessMethodAnalysisContext analysisCtx, IOptimizationContext context) throws AlgebricksException {
         // Figure out if the index is applicable on the left or right side (if both, we arbitrarily prefer the left side).
