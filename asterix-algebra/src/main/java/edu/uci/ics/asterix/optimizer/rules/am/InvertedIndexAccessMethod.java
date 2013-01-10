@@ -71,6 +71,10 @@ import edu.uci.ics.hyracks.storage.am.lsm.invertedindex.tokenizers.IBinaryTokeni
  */
 public class InvertedIndexAccessMethod implements IAccessMethod {
 
+    // HACKs so that we can set these option at runtime via a "set" statement in AQL.
+    public static boolean sortPrimaryKeys = false;
+    public static boolean useSurrogateJoin = false;
+    
     // Enum describing the search modifier type. Used for passing info to jobgen.
     public static enum SearchModifierType {
         CONJUNCTIVE,
@@ -357,7 +361,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
                 chosenIndex, inputOp, jobGenParams, context, true, retainInput);
         // Generate the rest of the upstream plan which feeds the search results into the primary index.
         UnnestMapOperator primaryIndexUnnestOp = AccessMethodUtils.createPrimaryIndexUnnestMap(dataSourceScan, dataset,
-                recordType, secondaryIndexUnnestOp, context, false, retainInput, false);
+                recordType, secondaryIndexUnnestOp, context, sortPrimaryKeys, retainInput, false);
         return primaryIndexUnnestOp;
     }
 

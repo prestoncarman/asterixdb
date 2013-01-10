@@ -94,7 +94,7 @@ public class ExecutionTest {
         for (CompilationUnit cUnit : cUnits) {
             File testFile = tcCtx.getTestFile(cUnit);
 
-            if (!testFile.getAbsolutePath().contains("bugfix.aql")) {
+            if (!testFile.getAbsolutePath().contains("fuzzy-inverted-index-ngram-edit-distance.aql")) {
                 continue;
             }
 

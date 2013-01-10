@@ -81,6 +81,7 @@ import edu.uci.ics.asterix.metadata.entities.NodeGroup;
 import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.asterix.om.types.TypeSignature;
+import edu.uci.ics.asterix.optimizer.rules.am.InvertedIndexAccessMethod;
 import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
 import edu.uci.ics.asterix.transaction.management.service.transaction.DatasetIdFactory;
 import edu.uci.ics.asterix.translator.AbstractAqlTranslator;
@@ -135,6 +136,10 @@ public class AqlTranslator extends AbstractAqlTranslator {
     }
 
     public List<QueryResult> compileAndExecute(IHyracksClientConnection hcc) throws Exception {
+        // HACK to initialize inverted-index optimizer options.
+        InvertedIndexAccessMethod.sortPrimaryKeys = true;
+        InvertedIndexAccessMethod.useSurrogateJoin = true;
+        
         List<QueryResult> executionResult = new ArrayList<QueryResult>();
         FileSplit outputFile = null;
         IAWriterFactory writerFactory = PrinterBasedWriterFactory.INSTANCE;
@@ -272,6 +277,17 @@ public class AqlTranslator extends AbstractAqlTranslator {
         String pname = ss.getPropName();
         String pvalue = ss.getPropValue();
         config.put(pname, pvalue);
+        
+        // HACKS to set plan properties for inverted indexes.
+        if (pname.equals("sortpks")) {
+            if (pvalue.toLowerCase().equals("false")) {
+                InvertedIndexAccessMethod.sortPrimaryKeys = false;
+            }
+        } else if (pname.equals("surrogatejoin")) {
+            if (pvalue.toLowerCase().equals("false")) {
+                InvertedIndexAccessMethod.useSurrogateJoin = false;
+            }
+        }
     }
 
     private Pair<IAWriterFactory, FileSplit> handleWriteStatement(AqlMetadataProvider metadataProvider, Statement stmt,
