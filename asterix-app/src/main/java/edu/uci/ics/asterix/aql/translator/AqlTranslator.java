@@ -106,6 +106,10 @@ import edu.uci.ics.hyracks.api.job.JobId;
 import edu.uci.ics.hyracks.api.job.JobSpecification;
 import edu.uci.ics.hyracks.dataflow.std.file.FileSplit;
 
+/*
+ * Provides functionality for executing a batch of AQL statements (queries included)
+ * sequentially.
+ */
 public class AqlTranslator extends AbstractAqlTranslator {
 
     private final List<Statement> aqlStatements;
@@ -134,6 +138,12 @@ public class AqlTranslator extends AbstractAqlTranslator {
         return functionDecls;
     }
 
+    /**
+     * Compiles and submits for execution a list of AQL statements.
+     * @param hcc AHyracks client connection that is used to submit a jobspec to Hyracks.
+     * @return A List<QueryResult> containing a QueryResult instance corresponding to each submitted query.
+     * @throws Exception
+     */
     public List<QueryResult> compileAndExecute(IHyracksClientConnection hcc) throws Exception {
         List<QueryResult> executionResult = new ArrayList<QueryResult>();
         FileSplit outputFile = null;

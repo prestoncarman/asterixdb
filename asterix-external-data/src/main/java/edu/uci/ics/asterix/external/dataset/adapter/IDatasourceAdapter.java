@@ -73,19 +73,6 @@ public interface IDatasourceAdapter extends Serializable {
     public String getAdapterProperty(String propertyKey);
 
     /**
-     * Allows setting a configuration property of the adapter with a specified
-     * value.
-     * 
-     * @caller Used by the wrapper operator to modify the behavior of the
-     *         adapter, if required.
-     * @param property
-     *            the property to be set
-     * @param value
-     *            the value for the property
-     */
-    public void setAdapterProperty(String property, String value);
-
-    /**
      * Configures the IDatasourceAdapter instance.
      * 
      * @caller Scenario 1) Called during compilation of DDL statement that
@@ -145,5 +132,18 @@ public interface IDatasourceAdapter extends Serializable {
      */
     public void initialize(IHyracksTaskContext ctx) throws Exception;
 
+    /**
+     * Triggers the adapter to begin ingestion of data from the external source.
+     * 
+     * @param partition
+     *            The adapter could be running with a degree of parallelism.
+     *            partition corresponds to the i'th parallel instance.
+     * @param writer
+     *            The instance of frame writer that is used by the adapter to
+     *            write frame to. Adapter packs the fetched bytes (from external source),
+     *            packs them into frames and forwards the frames to an upstream receiving
+     *            operator using the instance of IFrameWriter.
+     * @throws Exception
+     */
     public void start(int partition, IFrameWriter writer) throws Exception;
 }

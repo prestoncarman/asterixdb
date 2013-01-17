@@ -38,10 +38,25 @@ import edu.uci.ics.hyracks.api.job.JobSpecification;
 import edu.uci.ics.hyracks.dataflow.std.connectors.OneToOneConnectorDescriptor;
 import edu.uci.ics.hyracks.dataflow.std.misc.NullSinkOperatorDescriptor;
 
+/**
+ * Provides helper method(s) for creating JobSpec for operations on a feed.
+ */
 public class FeedOperations {
 
     private static final Logger LOGGER = Logger.getLogger(IndexOperations.class.getName());
 
+    /**
+     * @param controlFeedStatement
+     *            The statement representing the action that describes the
+     *            action that needs to be taken on the feed. E.g. of actions are
+     *            stop feed or alter feed.
+     * @param metadataProvider
+     *            An instance of the MetadataProvider
+     * @return An instance of JobSpec for the job that would send an appropriate
+     *         control message to the running feed.
+     * @throws AsterixException
+     * @throws AlgebricksException
+     */
     public static JobSpecification buildControlFeedJobSpec(CompiledControlFeedStatement controlFeedStatement,
             AqlMetadataProvider metadataProvider) throws AsterixException, AlgebricksException {
         switch (controlFeedStatement.getOperationType()) {

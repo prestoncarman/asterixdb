@@ -10,7 +10,6 @@ import edu.uci.ics.asterix.external.feed.lifecycle.FeedSystemProvider;
 import edu.uci.ics.asterix.external.feed.lifecycle.IFeedManager;
 import edu.uci.ics.asterix.external.feed.lifecycle.IFeedMessage;
 import edu.uci.ics.asterix.feed.managed.adapter.IManagedFeedAdapter;
-import edu.uci.ics.asterix.feed.managed.adapter.IMutableFeedAdapter;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 import edu.uci.ics.hyracks.dataflow.std.base.AbstractUnaryInputUnaryOutputOperatorNodePushable;
 
@@ -94,7 +93,7 @@ class FeedInboxMonitor extends Thread {
                         adapter.stop();
                         break;
                     case ALTER:
-                        ((IMutableFeedAdapter) adapter).alter(((AlterFeedMessage) feedMessage).getAlteredConfParams());
+                        adapter.alter(((AlterFeedMessage) feedMessage).getAlteredConfParams());
                         break;
                 }
             } catch (InterruptedException ie) {

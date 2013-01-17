@@ -24,6 +24,12 @@ import edu.uci.ics.hyracks.dataflow.common.comm.io.ArrayTupleBuilder;
 import edu.uci.ics.hyracks.dataflow.common.comm.io.FrameTupleAppender;
 import edu.uci.ics.hyracks.dataflow.common.comm.util.FrameUtils;
 
+/*
+ * Acts as an abstract class for all pull-based external data adapters.
+ * Captures the common logic for obtaining bytes from an external source
+ * and packing them into frames as tuples.
+ */
+@SuppressWarnings("serial")
 public abstract class PullBasedAdapter extends AbstractDatasourceAdapter implements ITypedDatasourceAdapter {
 
     protected ArrayTupleBuilder tupleBuilder = new ArrayTupleBuilder(1);

@@ -15,6 +15,7 @@
 package edu.uci.ics.asterix.om.util;
 
 import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -32,14 +33,9 @@ public class AsterixRuntimeUtil {
         return nodeControllersAtLocation;
     }
 
-    public static Set<String> getNodeControllersOnHostName(String hostName) throws Exception {
+    public static Set<String> getNodeControllersOnHostName(String hostname) throws Exception {
         Map<String, Set<String>> nodeControllerInfo = getNodeControllerMap();
-        String address = InetAddress.getByName(hostName).getHostAddress();
-        if (address.equals("127.0.1.1")) {
-            address = "127.0.0.1";
-        }
-        Set<String> nodeControllersAtLocation = nodeControllerInfo.get(address);
-        return nodeControllersAtLocation;
+        return nodeControllerInfo.get(getIPAddress(hostname));
     }
 
     public static List<String> getAllNodeControllers() throws Exception {
@@ -51,9 +47,17 @@ public class AsterixRuntimeUtil {
         return nodeControllers;
     }
 
-    private static Map<String, Set<String>> getNodeControllerMap() throws Exception {
+    public static Map<String, Set<String>> getNodeControllerMap() throws Exception {
         Map<String, Set<String>> map = new HashMap<String, Set<String>>();
         AsterixAppContextInfoImpl.getInstance().getCCApplicationContext().getCCContext().getIPAddressNodeMap(map);
         return map;
+    }
+
+    public static String getIPAddress(String hostname) throws UnknownHostException {
+        String address = InetAddress.getByName(hostname).getHostAddress();
+        if (address.equals("127.0.1.1")) {
+            address = "127.0.0.1";
+        }
+        return address;
     }
 }

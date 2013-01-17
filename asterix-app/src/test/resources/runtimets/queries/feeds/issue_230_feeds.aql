@@ -23,7 +23,7 @@ partitioned by key id;
 
 begin feed feeds.TweetFeed; 
 
-write output to nc1:"rttest/feeds_feeds_05.adm";
+write output to nc1:"rttest/feeds_issue_230_feeds.adm";
 
 for $x in dataset('TweetFeed')
 return $x

@@ -2624,6 +2624,11 @@
       </compilation-unit>
     </test-case>
     <test-case FilePath="scan">
+      <compilation-unit name="issue238_query">
+        <output-file compare="Text">issue238_query.adm</output-file>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="scan">
       <compilation-unit name="30">
         <output-file compare="Text">30.adm</output-file>
       </compilation-unit>
@@ -3817,6 +3822,14 @@
       </compilation-unit>
     </test-case>
   </test-group>
+  <test-group name="load">
+    <test-case FilePath="load">
+      <compilation-unit name="issue14_query">
+        <output-file compare="Text">none.adm</output-file>
+        <expected-error>edu.uci.ics.asterix.common.exceptions.AsterixException</expected-error> 
+      </compilation-unit>
+    </test-case>
+  </test-group>
   <test-group name="feeds">
     <test-case FilePath="feeds">
       <compilation-unit name="feeds_01">
@@ -3839,15 +3852,20 @@
       </compilation-unit>
     </test-case>
     <test-case FilePath="feeds">
-      <compilation-unit name="feeds_05">
-        <output-file compare="Text">feeds_05.adm</output-file>
+      <compilation-unit name="issue_230_feeds">
+        <output-file compare="Text">issue_230_feeds.adm</output-file>
       </compilation-unit>
     </test-case>
   </test-group>
   <test-group name="hdfs">
     <test-case FilePath="hdfs">
-      <compilation-unit name="hdfs_01">
-        <output-file compare="Text">hdfs_01.adm</output-file>
+      <compilation-unit name="issue_245_hdfs">
+        <output-file compare="Text">issue_245_hdfs.adm</output-file>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="hdfs">
+      <compilation-unit name="hdfs_02">
+        <output-file compare="Text">hdfs_02.adm</output-file>
       </compilation-unit>
     </test-case>
   </test-group>

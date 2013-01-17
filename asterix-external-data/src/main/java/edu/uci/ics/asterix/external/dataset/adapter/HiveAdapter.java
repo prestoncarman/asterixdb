@@ -21,6 +21,9 @@ import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksPartitionCons
 import edu.uci.ics.hyracks.api.comm.IFrameWriter;
 import edu.uci.ics.hyracks.api.context.IHyracksTaskContext;
 
+/**
+ * Provides the functionality of fetching data in form of ADM records from a Hive dataset.
+ */
 public class HiveAdapter extends AbstractDatasourceAdapter {
 
     public static final String HIVE_DATABASE = "database";

@@ -1,5 +1,5 @@
 /*
- * Copyright 2009-2011 by The Regents of the University of California
+ * Copyright 2009-2012 by The Regents of the University of California
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
@@ -20,15 +20,15 @@ import java.util.List;
 import java.util.Map;
 
 import edu.uci.ics.asterix.feed.managed.adapter.IManagedFeedAdapter;
-import edu.uci.ics.asterix.feed.managed.adapter.IMutableFeedAdapter;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.BuiltinType;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksCountPartitionConstraint;
 import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksPartitionConstraint;
 import edu.uci.ics.hyracks.api.context.IHyracksTaskContext;
+import edu.uci.ics.asterix.feed.managed.adapter.IManagedFeedAdapter;
 
-public class RSSFeedAdapter extends PullBasedAdapter implements IManagedFeedAdapter, IMutableFeedAdapter {
+public class RSSFeedAdapter extends PullBasedAdapter implements IManagedFeedAdapter {
 
     private List<String> feedURLs = new ArrayList<String>();
     private boolean isStopRequested = false;

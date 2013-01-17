@@ -18,7 +18,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 import edu.uci.ics.asterix.feed.managed.adapter.IManagedFeedAdapter;
-import edu.uci.ics.asterix.feed.managed.adapter.IMutableFeedAdapter;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.BuiltinType;
 import edu.uci.ics.asterix.om.types.IAType;
@@ -26,22 +25,23 @@ import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksCountPartitio
 import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksPartitionConstraint;
 import edu.uci.ics.hyracks.api.context.IHyracksTaskContext;
 
-public class PullBasedTwitterAdapter extends PullBasedAdapter implements IManagedFeedAdapter, IMutableFeedAdapter {
+/**
+ * An adapter that provides the functionality of receiving tweets from the
+ * Twitter service in the form of ADM formatted records.
+ */
+@SuppressWarnings("serial")
+public class PullBasedTwitterAdapter extends PullBasedAdapter implements IManagedFeedAdapter {
 
-    private int interval = 10;
+    public static final String QUERY = "query";
+    public static final String INTERVAL = "interval";
+
+    private int interval = 10; // 10 seconds
     private boolean stopRequested = false;
     private boolean alterRequested = false;
     private Map<String, String> alteredParams = new HashMap<String, String>();
     private ARecordType recordType;
 
-    private String[] fieldNames = { "id", "username", "location", "text", "timestamp" };
-    private IAType[] fieldTypes = { BuiltinType.ASTRING, BuiltinType.ASTRING, BuiltinType.ASTRING, BuiltinType.ASTRING,
-            BuiltinType.ASTRING };
-
     private PullBasedTwitterFeedClient tweetClient;
-
-    public static final String QUERY = "query";
-    public static final String INTERVAL = "interval";
 
     @Override
     public IPullBasedFeedClient getFeedClient(int partition) {
@@ -52,6 +52,9 @@ public class PullBasedTwitterAdapter extends PullBasedAdapter implements IManage
     public void configure(Map<String, String> arguments) throws Exception {
         configuration = arguments;
         interval = Integer.parseInt(arguments.get(INTERVAL));
+        String[] fieldNames = { "id", "username", "location", "text", "timestamp" };
+        IAType[] fieldTypes = { BuiltinType.ASTRING, BuiltinType.ASTRING, BuiltinType.ASTRING, BuiltinType.ASTRING,
+                BuiltinType.ASTRING };
         recordType = new ARecordType("FeedRecordType", fieldNames, fieldTypes, false);
     }
 
@@ -101,7 +104,7 @@ public class PullBasedTwitterAdapter extends PullBasedAdapter implements IManage
 
     @Override
     public AlgebricksPartitionConstraint getPartitionConstraint() throws Exception {
-        if(partitionConstraint == null){
+        if (partitionConstraint == null) {
             partitionConstraint = new AlgebricksCountPartitionConstraint(1);
         }
         return partitionConstraint;

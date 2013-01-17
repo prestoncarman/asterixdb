@@ -65,18 +65,29 @@ public abstract class AbstractDatasourceAdapter implements IDatasourceAdapter {
         return map;
     }
 
+    /**
+     * Get the partition constraint chosen by the adapter.
+     * An adapter may have preferences as to where it needs to be instantiated and used.
+     */
     public abstract AlgebricksPartitionConstraint getPartitionConstraint() throws Exception;
 
+    /**
+     * Get the configured value from the adapter configuration parameters, corresponding to the an attribute.
+     * 
+     * @param attribute
+     *            The attribute whose value needs to be obtained.
+     */
     public String getAdapterProperty(String attribute) {
         return configuration.get(attribute);
     }
 
+    /**
+     * Get the adapter configuration parameters.
+     * 
+     * @return A Map<String,String> instance representing the adapter configuration.
+     */
     public Map<String, String> getConfiguration() {
         return configuration;
-    }
-
-    public void setAdapterProperty(String property, String value) {
-        configuration.put(property, value);
     }
 
 }

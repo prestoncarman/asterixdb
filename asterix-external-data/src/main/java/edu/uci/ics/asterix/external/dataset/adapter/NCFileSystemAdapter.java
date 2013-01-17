@@ -28,6 +28,11 @@ import edu.uci.ics.hyracks.api.context.IHyracksTaskContext;
 import edu.uci.ics.hyracks.api.io.FileReference;
 import edu.uci.ics.hyracks.dataflow.std.file.FileSplit;
 
+/**
+ * Factory class for creating an instance of NCFileSystemAdapter. An
+ * NCFileSystemAdapter reads external data residing on the local file system of
+ * an NC.
+ */
 public class NCFileSystemAdapter extends FileSystemBasedAdapter {
 
     private static final long serialVersionUID = -4154256369973615710L;

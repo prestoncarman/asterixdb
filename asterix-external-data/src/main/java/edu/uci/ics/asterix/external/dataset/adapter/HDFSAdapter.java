@@ -48,24 +48,32 @@ import edu.uci.ics.hyracks.api.context.IHyracksTaskContext;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 import edu.uci.ics.hyracks.dataflow.hadoop.util.InputSplitsProxy;
 
+/*
+ * Provides functionality for fetching external data stored in an HDFS instance.
+ */
+@SuppressWarnings({ "deprecation", "rawtypes", "serial" })
 public class HDFSAdapter extends FileSystemBasedAdapter {
+
+    public static final String KEY_HDFS_URL = "hdfs";
+    public static final String KEY_INPUT_FORMAT = "input-format";
+    public static final String INPUT_FORMAT_TEXT = "text-input-format";
+    public static final String INPUT_FORMAT_SEQUENCE = "sequence-input-format";
 
     private static final Logger LOGGER = Logger.getLogger(HDFSAdapter.class.getName());
 
     private Object[] inputSplits;
     private transient JobConf conf;
     private InputSplitsProxy inputSplitsProxy;
-    private static final Map<String, String> formatClassNames = new HashMap<String, String>();
+    private static final Map<String, String> formatClassNames = initInputFormatMap();
 
-    public static final String KEY_HDFS_URL = "hdfs";
-    public static final String KEY_INPUT_FORMAT = "input-format";
-
-    public static final String INPUT_FORMAT_TEXT = "text-input-format";
-    public static final String INPUT_FORMAT_SEQUENCE = "sequence-input-format";
-
-    static {
+    private static Map<String, String> initInputFormatMap() {
+        Map formatClassNames = new HashMap<String, String>();
         formatClassNames.put(INPUT_FORMAT_TEXT, "org.apache.hadoop.mapred.TextInputFormat");
         formatClassNames.put(INPUT_FORMAT_SEQUENCE, "org.apache.hadoop.mapred.SequenceFileInputFormat");
+        return formatClassNames;
+    }
+
+    static {
     }
 
     public HDFSAdapter(IAType atype) {
@@ -88,26 +96,31 @@ public class HDFSAdapter extends FileSystemBasedAdapter {
     }
 
     private void configurePartitionConstraint() throws Exception {
-        AlgebricksAbsolutePartitionConstraint absPartitionConstraint;
         List<String> locations = new ArrayList<String>();
         Random random = new Random();
         boolean couldConfigureLocationConstraints = true;
         try {
+            Map<String, Set<String>> nodeControllers = AsterixRuntimeUtil.getNodeControllerMap();
             for (Object inputSplit : inputSplits) {
                 String[] dataNodeLocations = ((InputSplit) inputSplit).getLocations();
+                if (dataNodeLocations == null || dataNodeLocations.length == 0) {
+                    throw new IllegalArgumentException("No datanode locations found: check hdfs path");
+                }
+
                 // loop over all replicas until a split location coincides
                 // with an asterix datanode location
                 for (String datanodeLocation : dataNodeLocations) {
                     Set<String> nodeControllersAtLocation = null;
                     try {
-                        nodeControllersAtLocation = AsterixRuntimeUtil.getNodeControllersOnHostName(datanodeLocation);
+                        nodeControllersAtLocation = nodeControllers.get(AsterixRuntimeUtil
+                                .getIPAddress(datanodeLocation));
                     } catch (UnknownHostException uhe) {
                         if (LOGGER.isLoggable(Level.INFO)) {
                             LOGGER.log(Level.INFO, "Unknown host :" + datanodeLocation);
                         }
                     }
                     if (nodeControllersAtLocation == null || nodeControllersAtLocation.size() == 0) {
-                        if (LOGGER.isLoggable(Level.INFO)) {
+                        if (LOGGER.isLoggable(Level.WARNING)) {
                             LOGGER.log(Level.INFO, "No node controller found at " + datanodeLocation
                                     + " will look at replica location");
                         }
@@ -124,15 +137,16 @@ public class HDFSAdapter extends FileSystemBasedAdapter {
                     }
                 }
 
-                // none of the replica locations coincides with an Asterix
-                // node controller location.
+                /* none of the replica locations coincides with an Asterix
+                   node controller location.
+                */
                 if (!couldConfigureLocationConstraints) {
                     List<String> allNodeControllers = AsterixRuntimeUtil.getAllNodeControllers();
                     int locationIndex = random.nextInt(allNodeControllers.size());
                     String chosenLocation = allNodeControllers.get(locationIndex);
                     locations.add(chosenLocation);
 
-                    if (LOGGER.isLoggable(Level.INFO)) {
+                    if (LOGGER.isLoggable(Level.SEVERE)) {
                         LOGGER.log(Level.INFO, "No local node controller found to process split : " + inputSplit
                                 + " will be processed by a remote node controller:" + chosenLocation);
                     }
