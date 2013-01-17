@@ -47,10 +47,18 @@ public abstract class PullBasedAdapter extends AbstractDatasourceAdapter impleme
         appender.reset(frame, true);
 
         pullBasedFeedClient = getFeedClient(partition);
+        boolean moreData = false;
         while (true) {
             tupleBuilder.reset();
             try {
-                pullBasedFeedClient.nextTuple(tupleBuilder.getDataOutput());
+                moreData = pullBasedFeedClient.nextTuple(tupleBuilder.getDataOutput());
+                if (moreData) {
+                    tupleBuilder.addFieldEndOffset();
+                    appendTupleToFrame(writer);
+                } else {
+                    FrameUtils.flushFrame(frame, writer);
+                    break;
+                }
             } catch (Exception failureException) {
                 try {
                     pullBasedFeedClient.resetOnFailure(failureException);
@@ -58,10 +66,7 @@ public abstract class PullBasedAdapter extends AbstractDatasourceAdapter impleme
                 } catch (Exception recoveryException) {
                     throw new Exception(recoveryException);
                 }
-
             }
-            tupleBuilder.addFieldEndOffset();
-            appendTupleToFrame(writer);
         }
     }
 

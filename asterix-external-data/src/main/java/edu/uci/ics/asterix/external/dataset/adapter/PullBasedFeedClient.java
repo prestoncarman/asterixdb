@@ -29,7 +29,7 @@ public abstract class PullBasedFeedClient implements IPullBasedFeedClient {
     protected ARecordSerializerDeserializer recordSerDe;
     protected AMutableRecord mutableRecord;
     protected boolean messageReceived;
-    protected boolean continueIngestion;
+    protected boolean continueIngestion=true;
 
     public abstract boolean setNextRecord() throws Exception;
 

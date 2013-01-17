@@ -724,9 +724,11 @@ public class AqlTranslator extends AbstractAqlTranslator {
         CompiledBeginFeedStatement cbfs = new CompiledBeginFeedStatement(dataverseName,
                 bfs.getDatasetName().getValue(), bfs.getQuery(), bfs.getVarCounter());
 
-        Dataset dataset;
-        dataset = MetadataManager.INSTANCE.getDataset(metadataProvider.getMetadataTxnContext(), dataverseName, bfs
+        Dataset dataset = MetadataManager.INSTANCE.getDataset(metadataProvider.getMetadataTxnContext(), dataverseName, bfs
                 .getDatasetName().getValue());
+        if(dataset == null) {
+            throw new AsterixException("Unknown dataset :" + bfs.getDatasetName().getValue());
+        }
         IDatasetDetails datasetDetails = dataset.getDatasetDetails();
         if (datasetDetails.getDatasetType() != DatasetType.FEED) {
             throw new IllegalArgumentException("Dataset " + bfs.getDatasetName().getValue() + " is not a feed dataset");

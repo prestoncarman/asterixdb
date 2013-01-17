@@ -36,7 +36,6 @@ public class PullBasedTwitterAdapter extends PullBasedAdapter implements IManage
     public static final String INTERVAL = "interval";
 
     private int interval = 10; // 10 seconds
-    private boolean stopRequested = false;
     private boolean alterRequested = false;
     private Map<String, String> alteredParams = new HashMap<String, String>();
     private ARecordType recordType;
@@ -71,11 +70,7 @@ public class PullBasedTwitterAdapter extends PullBasedAdapter implements IManage
 
     @Override
     public void stop() throws Exception {
-        stopRequested = true;
-    }
-
-    public boolean isStopRequested() {
-        return stopRequested;
+        tweetClient.stop();
     }
 
     @Override
