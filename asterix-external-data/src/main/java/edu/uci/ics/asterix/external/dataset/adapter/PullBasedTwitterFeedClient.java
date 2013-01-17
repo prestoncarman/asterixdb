@@ -86,10 +86,6 @@ public class PullBasedTwitterFeedClient extends PullBasedFeedClient {
             ((AMutableString) mutableFields[i]).setValue(tupleFieldValues[i]);
             mutableRecord.setValueAtPos(i, mutableFields[i]);
         }
-        for (int i = 0; i < tupleFieldValues.length; i++) {
-            System.out.print(tupleFieldValues[i] + " ");
-        }
-        System.out.println();
         id++;
         return true;
     }
