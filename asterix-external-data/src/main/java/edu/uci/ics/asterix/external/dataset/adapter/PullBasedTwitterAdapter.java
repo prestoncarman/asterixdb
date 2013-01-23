@@ -1,5 +1,5 @@
 /*
- * Copyright 2009-2011 by The Regents of the University of California
+ * Copyright 2009-2012 by The Regents of the University of California
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
@@ -29,13 +29,14 @@ import edu.uci.ics.hyracks.api.context.IHyracksTaskContext;
  * An adapter that provides the functionality of receiving tweets from the
  * Twitter service in the form of ADM formatted records.
  */
-@SuppressWarnings("serial")
 public class PullBasedTwitterAdapter extends PullBasedAdapter implements IManagedFeedAdapter {
 
+   
+    private static final long serialVersionUID = -1270830630851717873L;
+    
     public static final String QUERY = "query";
     public static final String INTERVAL = "interval";
 
-    private int interval = 10; // 10 seconds
     private boolean alterRequested = false;
     private Map<String, String> alteredParams = new HashMap<String, String>();
     private ARecordType recordType;
@@ -50,7 +51,6 @@ public class PullBasedTwitterAdapter extends PullBasedAdapter implements IManage
     @Override
     public void configure(Map<String, String> arguments) throws Exception {
         configuration = arguments;
-        interval = Integer.parseInt(arguments.get(INTERVAL));
         String[] fieldNames = { "id", "username", "location", "text", "timestamp" };
         IAType[] fieldTypes = { BuiltinType.ASTRING, BuiltinType.ASTRING, BuiltinType.ASTRING, BuiltinType.ASTRING,
                 BuiltinType.ASTRING };
@@ -65,16 +65,16 @@ public class PullBasedTwitterAdapter extends PullBasedAdapter implements IManage
 
     @Override
     public AdapterType getAdapterType() {
-        return adapterType.READ;
+        return AdapterType.READ;
     }
 
     @Override
-    public void stop() throws Exception {
+    public void stop()  {
         tweetClient.stop();
     }
 
     @Override
-    public void alter(Map<String, String> properties) throws Exception {
+    public void alter(Map<String, String> properties)  {
         alterRequested = true;
         this.alteredParams = properties;
     }

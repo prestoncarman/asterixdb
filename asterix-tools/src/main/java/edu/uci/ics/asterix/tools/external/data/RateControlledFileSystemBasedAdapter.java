@@ -39,8 +39,14 @@ import edu.uci.ics.hyracks.dataflow.common.data.parsers.IValueParserFactory;
 import edu.uci.ics.hyracks.dataflow.std.file.ITupleParser;
 import edu.uci.ics.hyracks.dataflow.std.file.ITupleParserFactory;
 
+/**
+ * An adapter that simulates a feed from the contents of a source file. The file can be on the local file
+ * system or on HDFS. The feed ends when the content of the source file has been ingested.
+ */
 public class RateControlledFileSystemBasedAdapter extends FileSystemBasedAdapter implements ITypedDatasourceAdapter,
         IManagedFeedAdapter {
+
+    private static final long serialVersionUID = 1L;
 
     public static final String KEY_FILE_SYSTEM = "fs";
     public static final String LOCAL_FS = "localfs";
@@ -161,13 +167,13 @@ public class RateControlledFileSystemBasedAdapter extends FileSystemBasedAdapter
     }
 
     @Override
-    public void alter(Map<String, String> properties) throws Exception {
+    public void alter(Map<String, String> properties) {
         ((RateControlledTupleParser) parser).setInterTupleInterval(Long.parseLong(properties
                 .get(RateControlledTupleParser.INTER_TUPLE_INTERVAL)));
     }
 
     @Override
-    public void stop() throws Exception {
+    public void stop() {
         ((RateControlledTupleParser) parser).stop();
     }
 
@@ -178,6 +184,8 @@ public class RateControlledFileSystemBasedAdapter extends FileSystemBasedAdapter
 }
 
 class RateControlledTupleParserFactory implements ITupleParserFactory {
+
+    private static final long serialVersionUID = 1L;
 
     private final ARecordType recordType;
     private final IDataParser dataParser;

@@ -92,6 +92,7 @@ public class RSSFeedClient extends PullBasedFeedClient {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private void fetchFeed() {
         try {
             System.err.println("Retrieving feed " + feedURL);

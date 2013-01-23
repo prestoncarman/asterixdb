@@ -26,16 +26,16 @@ import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksCountPartitionConstraint;
 import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksPartitionConstraint;
 import edu.uci.ics.hyracks.api.context.IHyracksTaskContext;
-import edu.uci.ics.asterix.feed.managed.adapter.IManagedFeedAdapter;
 
 public class RSSFeedAdapter extends PullBasedAdapter implements IManagedFeedAdapter {
+
+    private static final long serialVersionUID = 1L;
 
     private List<String> feedURLs = new ArrayList<String>();
     private boolean isStopRequested = false;
     private boolean isAlterRequested = false;
     private Map<String, String> alteredParams = new HashMap<String, String>();
     private String id_prefix = "";
-    private int interval = 10;
     private ARecordType recordType;
 
     private IPullBasedFeedClient rssFeedClient;
@@ -52,19 +52,14 @@ public class RSSFeedAdapter extends PullBasedAdapter implements IManagedFeedAdap
     }
 
     @Override
-    public void alter(Map<String, String> properties) throws Exception {
+    public void alter(Map<String, String> properties) {
         isAlterRequested = true;
         this.alteredParams = properties;
         reconfigure(properties);
     }
 
-    public void postAlteration() {
-        alteredParams = null;
-        isAlterRequested = false;
-    }
-
     @Override
-    public void stop() throws Exception {
+    public void stop() {
         isStopRequested = true;
     }
 

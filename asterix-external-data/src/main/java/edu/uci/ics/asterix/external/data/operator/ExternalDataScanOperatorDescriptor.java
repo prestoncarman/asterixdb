@@ -1,5 +1,5 @@
 /*
- * Copyright 2009-2011 by The Regents of the University of California
+ * Copyright 2009-2012 by The Regents of the University of California
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
@@ -35,7 +35,8 @@ import edu.uci.ics.hyracks.dataflow.std.base.AbstractUnaryOutputSourceOperatorNo
  * instance of the configured adapter.
  */
 public class ExternalDataScanOperatorDescriptor extends AbstractSingleActivityOperatorDescriptor {
-    private static final long serialVersionUID = 1L;
+
+    private static final long serialVersionUID = -5183159680764326005L;
 
     private final String adapterFactory;
     private final Map<String, String> adapterConfiguration;
@@ -83,6 +84,7 @@ public class ExternalDataScanOperatorDescriptor extends AbstractSingleActivityOp
 
     }
 
+    @Override
     public IOperatorNodePushable createPushRuntime(final IHyracksTaskContext ctx,
             IRecordDescriptorProvider recordDescProvider, final int partition, int nPartitions)
             throws HyracksDataException {

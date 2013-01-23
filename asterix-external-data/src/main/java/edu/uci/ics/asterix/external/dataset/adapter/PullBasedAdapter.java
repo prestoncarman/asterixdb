@@ -29,8 +29,9 @@ import edu.uci.ics.hyracks.dataflow.common.comm.util.FrameUtils;
  * Captures the common logic for obtaining bytes from an external source
  * and packing them into frames as tuples.
  */
-@SuppressWarnings("serial")
 public abstract class PullBasedAdapter extends AbstractDatasourceAdapter implements ITypedDatasourceAdapter {
+
+    private static final long serialVersionUID = 1L;
 
     protected ArrayTupleBuilder tupleBuilder = new ArrayTupleBuilder(1);
     protected IPullBasedFeedClient pullBasedFeedClient;

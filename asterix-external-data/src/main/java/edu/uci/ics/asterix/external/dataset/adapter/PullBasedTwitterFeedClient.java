@@ -53,7 +53,7 @@ public class PullBasedTwitterFeedClient extends PullBasedFeedClient {
     private Tweet getNextTweet() throws TwitterException, InterruptedException {
         if (tweetBuffer.isEmpty()) {
             QueryResult result;
-            Thread.currentThread().sleep(1000 * requestInterval);
+            Thread.sleep(1000 * requestInterval);
             result = twitter.search(query);
             tweetBuffer.addAll(result.getTweets());
         }

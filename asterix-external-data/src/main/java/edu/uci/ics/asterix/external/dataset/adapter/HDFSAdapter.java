@@ -1,5 +1,5 @@
 /*
- * Copyright 2009-2011 by The Regents of the University of California
+ * Copyright 2009-2012 by The Regents of the University of California
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
@@ -28,8 +28,6 @@ import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapred.Counters.Counter;
 import org.apache.hadoop.mapred.InputSplit;
@@ -51,9 +49,11 @@ import edu.uci.ics.hyracks.dataflow.hadoop.util.InputSplitsProxy;
 /*
  * Provides functionality for fetching external data stored in an HDFS instance.
  */
-@SuppressWarnings({ "deprecation", "rawtypes", "serial" })
+@SuppressWarnings({ "deprecation", "rawtypes"})
 public class HDFSAdapter extends FileSystemBasedAdapter {
 
+    private static final long serialVersionUID = 1L;
+  
     public static final String KEY_HDFS_URL = "hdfs";
     public static final String KEY_INPUT_FORMAT = "input-format";
     public static final String INPUT_FORMAT_TEXT = "text-input-format";
@@ -67,7 +67,7 @@ public class HDFSAdapter extends FileSystemBasedAdapter {
     private static final Map<String, String> formatClassNames = initInputFormatMap();
 
     private static Map<String, String> initInputFormatMap() {
-        Map formatClassNames = new HashMap<String, String>();
+        Map<String,String> formatClassNames = new HashMap<String, String>();
         formatClassNames.put(INPUT_FORMAT_TEXT, "org.apache.hadoop.mapred.TextInputFormat");
         formatClassNames.put(INPUT_FORMAT_SEQUENCE, "org.apache.hadoop.mapred.SequenceFileInputFormat");
         return formatClassNames;
@@ -216,11 +216,10 @@ public class HDFSAdapter extends FileSystemBasedAdapter {
         return reporter;
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public InputStream getInputStream(int partition) throws IOException {
-        Path path = new Path(inputSplits[partition].toString());
         try {
-            FileSystem fs = FileSystem.get(conf);
             InputStream inputStream;
             if (conf.getInputFormat() instanceof SequenceFileInputFormat) {
                 SequenceFileInputFormat format = (SequenceFileInputFormat) conf.getInputFormat();
@@ -258,12 +257,11 @@ class HDFSStream extends InputStream {
 
     private ByteBuffer buffer;
     private int capacity;
-    private RecordReader reader;
-    private boolean readNext = true;
+    private RecordReader<Object, Text> reader;
     private final Object key;
     private final Text value;
 
-    public HDFSStream(RecordReader reader, IHyracksTaskContext ctx) throws Exception {
+    public HDFSStream(RecordReader<Object, Text> reader, IHyracksTaskContext ctx) throws Exception {
         capacity = ctx.getFrameSize();
         buffer = ByteBuffer.allocate(capacity);
         this.reader = reader;

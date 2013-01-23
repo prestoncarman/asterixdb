@@ -24,7 +24,7 @@ public interface IAdapterFactory {
     /**
      * Returns the display name corresponding to the Adapter type that is created by the factory.
      * 
-     * @return
+     * @return the display name
      */
     public String getName();
 }

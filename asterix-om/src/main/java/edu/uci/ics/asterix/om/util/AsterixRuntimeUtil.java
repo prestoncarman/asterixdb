@@ -33,11 +33,6 @@ public class AsterixRuntimeUtil {
         return nodeControllersAtLocation;
     }
 
-    public static Set<String> getNodeControllersOnHostName(String hostname) throws Exception {
-        Map<String, Set<String>> nodeControllerInfo = getNodeControllerMap();
-        return nodeControllerInfo.get(getIPAddress(hostname));
-    }
-
     public static List<String> getAllNodeControllers() throws Exception {
         Collection<Set<String>> nodeControllersCollection = getNodeControllerMap().values();
         List<String> nodeControllers = new ArrayList<String>();

@@ -1,5 +1,5 @@
 /*
- * Copyright 2009-2011 by The Regents of the University of California
+ * Copyright 2009-2012 by The Regents of the University of California
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
@@ -11,46 +11,48 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
-*/
+ */
 package edu.uci.ics.asterix.external.feed.lifecycle;
 
 import java.io.Serializable;
 
 public class FeedId implements Serializable {
 
-    private static final long serialVersionUID = -659645262801404778L;
-    private final String dataverse;
-    private final String dataset;
-    private final int hashcode;
+	private static final long serialVersionUID = -659645262801404778L;
 
-    public FeedId(String dataverse, String dataset) {
-        this.dataset = dataset;
-        this.dataverse = dataverse;
-        this.hashcode = (dataverse + "." + dataset).hashCode();
-    }
+	private final String dataverse;
+	private final String dataset;
+	private final int hashcode;
 
-    public String getDataverse() {
-        return dataverse;
-    }
+	public FeedId(String dataverse, String dataset) {
+		this.dataset = dataset;
+		this.dataverse = dataverse;
+		this.hashcode = (dataverse + "." + dataset).hashCode();
+	}
 
-    public String getDataset() {
-        return dataset;
-    }
+	public String getDataverse() {
+		return dataverse;
+	}
 
-    @Override
-    public boolean equals(Object o) {
-        if (o == null || !(o instanceof FeedId)) {
-            return false;
-        }
-        if (((FeedId) o).getDataset().equals(dataset) && ((FeedId) o).getDataverse().equals(dataverse)) {
-            return true;
-        }
-        return false;
-    }
+	public String getDataset() {
+		return dataset;
+	}
 
-    @Override
-    public int hashCode() {
-        return hashcode;
-    }
+	@Override
+	public boolean equals(Object o) {
+		if (o == null || !(o instanceof FeedId)) {
+			return false;
+		}
+		if (((FeedId) o).getDataset().equals(dataset)
+				&& ((FeedId) o).getDataverse().equals(dataverse)) {
+			return true;
+		}
+		return false;
+	}
+
+	@Override
+	public int hashCode() {
+		return hashcode;
+	}
 
 }
