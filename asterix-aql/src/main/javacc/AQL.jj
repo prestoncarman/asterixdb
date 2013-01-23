@@ -2398,7 +2398,7 @@ TOKEN :
 <DEFAULT>
 TOKEN :
 {
-	<SPECIALCHARS : ["$", "_", "-"]  >
+	<SPECIALCHARS : ["_", "-"]  >
 }
 
 <DEFAULT>
@@ -2414,7 +2414,10 @@ TOKEN :
 <DEFAULT>
 TOKEN :
 {
-	<IDENTIFIER : (<LETTER>)+ (<LETTER> | <DIGIT> | <SPECIALCHARS>)*>
+	<IDENTIFIER : (<LETTER>)+ (<LETTER> | <DIGIT>)* 
+	| 
+	(<LETTER>)+ (<LETTER> | <DIGIT> | <SPECIALCHARS> )* (<SPECIALCHARS>)+ (<LETTER> | <DIGIT>)+
+	>
 }
 
 
