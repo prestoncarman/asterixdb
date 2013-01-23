@@ -71,6 +71,7 @@ public class HDFSCluster {
 
     private void loadData() throws IOException {
         Path destDir = new Path(HDFS_PATH);
+        dfs.mkdirs(destDir);
         File srcDir = new File(DATA_PATH);
         File[] listOfFiles = srcDir.listFiles();
         for (File srcFile : listOfFiles) {

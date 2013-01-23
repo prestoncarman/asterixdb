@@ -16,4 +16,5 @@ for $line in dataset('TextDataset')
 let $tokens := word-tokens($line.content)
 for $token in $tokens
 group by $tok := $token with $token
+order by $tok
 return { "word": $tok, "count": count($token) }
