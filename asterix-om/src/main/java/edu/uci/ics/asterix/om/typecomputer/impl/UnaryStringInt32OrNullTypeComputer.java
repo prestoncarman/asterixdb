@@ -23,6 +23,8 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.metadata.IMetadataProvider;
 public class UnaryStringInt32OrNullTypeComputer implements IResultTypeComputer  {   
     
     public static final UnaryStringInt32OrNullTypeComputer INSTANCE = new UnaryStringInt32OrNullTypeComputer();
+    private static final String errWrongTypeMsg = "Expects String Type.";
+    private static final String errWrongArgN = "Wrong Argument Number.";
     private UnaryStringInt32OrNullTypeComputer() {}
     
     @Override
@@ -30,7 +32,7 @@ public class UnaryStringInt32OrNullTypeComputer implements IResultTypeComputer  
             IMetadataProvider<?, ?> metadataProvider) throws AlgebricksException {
         AbstractFunctionCallExpression fce = (AbstractFunctionCallExpression) expression;
         if(fce.getArguments().isEmpty())
-            throw new AlgebricksException("Wrong Argument Number.");        
+            throw new AlgebricksException(errWrongArgN);        
         ILogicalExpression arg0 = fce.getArguments().get(0).getValue();
         IAType t0;
         try {
@@ -38,7 +40,17 @@ public class UnaryStringInt32OrNullTypeComputer implements IResultTypeComputer  
         } catch (AlgebricksException e) {
             throw new AlgebricksException(e);
         }
-        if (t0.getTypeTag() != ATypeTag.NULL &&
+        if(t0 instanceof AUnionType) {
+        	AUnionType union = (AUnionType)t0;
+          	if(!(
+             	   (union.getUnionList().get(0).equals(BuiltinType.ASTRING) && 
+             	    union.getUnionList().get(1).equals(BuiltinType.ANULL)) ||
+             	   (union.getUnionList().get(1).equals(BuiltinType.ASTRING) && 
+                     union.getUnionList().get(0).equals(BuiltinType.ANULL))
+               ))
+             	throw new AlgebricksException(errWrongTypeMsg);
+        }
+        else if (t0.getTypeTag() != ATypeTag.NULL &&
             t0.getTypeTag() != ATypeTag.STRING ) {
             throw new NotImplementedException("Expects String Type.");
         }     
