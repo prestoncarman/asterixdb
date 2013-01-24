@@ -18,7 +18,7 @@ import java.io.Serializable;
 
 public class FeedId implements Serializable {
 
-	private static final long serialVersionUID = -659645262801404778L;
+	private static final long serialVersionUID = 1L;
 
 	private final String dataverse;
 	private final String dataset;

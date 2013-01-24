@@ -16,7 +16,7 @@ package edu.uci.ics.asterix.external.feed.lifecycle;
 
 public class FeedMessage implements IFeedMessage {
 
-    private static final long serialVersionUID = -8492237803635452242L;
+    private static final long serialVersionUID = 1L;
 
     protected MessageType messageType;
 

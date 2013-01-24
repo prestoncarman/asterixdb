@@ -33,7 +33,7 @@ import edu.uci.ics.hyracks.dataflow.std.base.AbstractSingleActivityOperatorDescr
 
 public class FeedIntakeOperatorDescriptor extends AbstractSingleActivityOperatorDescriptor {
 
-    private static final long serialVersionUID = 3859119687540928870L;
+    private static final long serialVersionUID = 1L;
 
     private final String adapterFactoryClassName;
     private final Map<String, String> adapterConfiguration;

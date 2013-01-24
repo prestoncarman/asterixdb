@@ -26,7 +26,7 @@ import edu.uci.ics.hyracks.api.context.IHyracksTaskContext;
  */
 public class HiveAdapter extends AbstractDatasourceAdapter {
 
-    private static final long serialVersionUID = 5393260423525659012L;
+    private static final long serialVersionUID = 1L;
 
     public static final String HIVE_DATABASE = "database";
     public static final String HIVE_TABLE = "table";

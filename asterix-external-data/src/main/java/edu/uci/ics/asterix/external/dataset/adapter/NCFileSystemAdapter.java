@@ -35,7 +35,7 @@ import edu.uci.ics.hyracks.dataflow.std.file.FileSplit;
  */
 public class NCFileSystemAdapter extends FileSystemBasedAdapter {
 
-    private static final long serialVersionUID = -4154256369973615710L;
+    private static final long serialVersionUID = 1L;
     private FileSplit[] fileSplits;
 
     public NCFileSystemAdapter(IAType atype) {

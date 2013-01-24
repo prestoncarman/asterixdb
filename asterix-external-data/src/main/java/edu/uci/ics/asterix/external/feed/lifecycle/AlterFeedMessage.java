@@ -18,7 +18,7 @@ import java.util.Map;
 
 public class AlterFeedMessage extends FeedMessage {
 
-    private static final long serialVersionUID = 2264552511954616010L;
+    private static final long serialVersionUID = 1L;
 
     private final Map<String, String> alteredConfParams;
 

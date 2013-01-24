@@ -36,7 +36,7 @@ import edu.uci.ics.hyracks.dataflow.std.base.AbstractUnaryOutputSourceOperatorNo
  */
 public class ExternalDataScanOperatorDescriptor extends AbstractSingleActivityOperatorDescriptor {
 
-    private static final long serialVersionUID = -5183159680764326005L;
+    private static final long serialVersionUID = 1L;
 
     private final String adapterFactory;
     private final Map<String, String> adapterConfiguration;

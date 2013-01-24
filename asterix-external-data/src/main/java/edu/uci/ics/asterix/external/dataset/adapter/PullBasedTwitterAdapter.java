@@ -32,7 +32,7 @@ import edu.uci.ics.hyracks.api.context.IHyracksTaskContext;
 public class PullBasedTwitterAdapter extends PullBasedAdapter implements IManagedFeedAdapter {
 
    
-    private static final long serialVersionUID = -1270830630851717873L;
+    private static final long serialVersionUID = 1L;
     
     public static final String QUERY = "query";
     public static final String INTERVAL = "interval";

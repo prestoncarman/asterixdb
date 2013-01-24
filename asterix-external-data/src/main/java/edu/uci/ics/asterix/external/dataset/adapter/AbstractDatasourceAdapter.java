@@ -34,7 +34,7 @@ import edu.uci.ics.hyracks.dataflow.common.data.parsers.UTF8StringParserFactory;
  */
 public abstract class AbstractDatasourceAdapter implements IDatasourceAdapter {
 
-    private static final long serialVersionUID = -3510610289692452466L;
+    private static final long serialVersionUID = 1L;
 
     protected Map<String, String> configuration;
     protected transient AlgebricksPartitionConstraint partitionConstraint;

@@ -34,7 +34,7 @@ import edu.uci.ics.hyracks.dataflow.std.file.ITupleParserFactory;
 
 public abstract class FileSystemBasedAdapter extends AbstractDatasourceAdapter {
 
-    private static final long serialVersionUID = 8243822582106465285L;
+    private static final long serialVersionUID = 1L;
 
     protected ITupleParserFactory parserFactory;
     protected ITupleParser parser;
