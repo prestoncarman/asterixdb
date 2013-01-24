@@ -1,0 +1,12 @@
+/*
+ * Description      :  Test for clause of the FLWOR expression
+ * Expected Result  :  Success
+ * Date             :  24 Jan 2013
+ */
+
+write output to nc1:"rttest/flwor_for20.adm";
+
+for $a in [1,2,3,4,5,6,7,8,9,10]
+for $b in [11,12,13,14,15,16,17,18,19,20]
+where ($b-$a)>$a
+return $a
