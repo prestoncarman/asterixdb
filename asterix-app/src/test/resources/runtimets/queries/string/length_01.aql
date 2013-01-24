@@ -7,4 +7,5 @@ write output to nc1:"rttest/string_length_01.adm";
 let $c1 := string-length("hellow")
 let $c2 := string-length("")
 let $c3 := string-length(null)
-return {"result1": $c1, "result2": $c2, "result3": $c3}
+let $c4 := string-length(string-concat(["this is a ","test string"]))
+return {"result1": $c1, "result2": $c2, "result3": $c3, "result4": $c4}
