@@ -17,27 +17,22 @@ package edu.uci.ics.asterix.external.adapter.factory;
 import java.util.Map;
 
 import edu.uci.ics.asterix.external.dataset.adapter.IDatasourceAdapter;
-import edu.uci.ics.asterix.external.dataset.adapter.RSSFeedAdapter;
 
 /**
- * Factory class for creating an instance of PullBasedTwitterAdapter.
- * This adapter provides the functionality of fetching tweets from Twitter service
- * via pull-based Twitter API.
+ * A base interface for an adapter factory that creates instance of an adapter kind that
+ * is 'typed' in nature. A 'typed' adapter returns records with a pre-defined datatype.
  */
-public class RSSFeedAdapterFactory implements ITypedDatasetAdapterFactory {
+public interface ITypedDatasetAdapterFactory extends IAdapterFactory {
 
-    public static final String RSS_FEED_ADAPTER_NAME = "rss_feed";
-
-    @Override
-    public IDatasourceAdapter createAdapter(Map<String, String> configuration) throws Exception {
-        RSSFeedAdapter rssFeedAdapter = new RSSFeedAdapter();
-        rssFeedAdapter.configure(configuration);
-        return rssFeedAdapter;
-    }
-
-    @Override
-    public String getName() {
-        return "rss_feed";
-    }
+    /**
+     * Creates an instance of IDatasourceAdapter.
+     * 
+     * @param configuration
+     *            The configuration parameters for the adapter that is instantiated.
+     *            The passed-in configuration is used to configure the created instance of the adapter.
+     * @return An instance of IDatasourceAdapter.
+     * @throws Exception
+     */
+    public IDatasourceAdapter createAdapter(Map<String, String> configuration) throws Exception;
 
 }
