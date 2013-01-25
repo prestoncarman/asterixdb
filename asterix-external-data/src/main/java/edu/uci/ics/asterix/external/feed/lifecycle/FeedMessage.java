@@ -14,6 +14,10 @@
  */
 package edu.uci.ics.asterix.external.feed.lifecycle;
 
+/**
+ * A control message that can be sent to the runtime instance of a 
+ * feed's adapter. 
+ */
 public class FeedMessage implements IFeedMessage {
 
     private static final long serialVersionUID = 1L;

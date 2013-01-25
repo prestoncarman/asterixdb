@@ -16,6 +16,11 @@ package edu.uci.ics.asterix.external.feed.lifecycle;
 
 import java.util.Map;
 
+/**
+ * A feed control message containing the altered values for
+ * adapter configuration parameters. This message is dispatched
+ * to all runtime instances of the feed's adapter.
+ */
 public class AlterFeedMessage extends FeedMessage {
 
     private static final long serialVersionUID = 1L;

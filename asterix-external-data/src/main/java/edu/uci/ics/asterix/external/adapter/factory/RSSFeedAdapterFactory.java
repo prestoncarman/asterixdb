@@ -20,9 +20,8 @@ import edu.uci.ics.asterix.external.dataset.adapter.IDatasourceAdapter;
 import edu.uci.ics.asterix.external.dataset.adapter.RSSFeedAdapter;
 
 /**
- * Factory class for creating an instance of PullBasedTwitterAdapter.
- * This adapter provides the functionality of fetching tweets from Twitter service
- * via pull-based Twitter API.
+ * Factory class for creating an instance of @see {RSSFeedAdapter}.
+ * RSSFeedAdapter provides the functionality of fetching an RSS based feed.
  */
 public class RSSFeedAdapterFactory implements ITypedDatasetAdapterFactory {
 

@@ -25,9 +25,12 @@ import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 import edu.uci.ics.hyracks.api.job.JobSpecification;
 import edu.uci.ics.hyracks.dataflow.std.base.AbstractSingleActivityOperatorDescriptor;
 
+/**
+ * Sends a control message to the registered message queue for feed specified by its feedId.
+ */
 public class FeedMessageOperatorDescriptor extends AbstractSingleActivityOperatorDescriptor {
 
-    private static final long serialVersionUID = 7097399445374169321L;
+    private static final long serialVersionUID = 1L;
 
     private final FeedId feedId;
     private final List<IFeedMessage> feedMessages;

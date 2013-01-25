@@ -16,6 +16,9 @@ package edu.uci.ics.asterix.external.dataset.adapter;
 
 import java.io.Serializable;
 
+/**
+ * A unique identifier for a datasource adapter.
+ */
 public class AdapterIdentifier implements Serializable {
 
     private static final long serialVersionUID = 1L;

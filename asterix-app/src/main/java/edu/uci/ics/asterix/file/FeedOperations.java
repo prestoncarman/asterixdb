@@ -99,14 +99,8 @@ public class FeedOperations {
 
         List<IFeedMessage> feedMessages = new ArrayList<IFeedMessage>();
         switch (controlFeedStatement.getOperationType()) {
-            case SUSPEND:
-                feedMessages.add(new FeedMessage(MessageType.SUSPEND));
-                break;
             case END:
                 feedMessages.add(new FeedMessage(MessageType.STOP));
-                break;
-            case RESUME:
-                feedMessages.add(new FeedMessage(MessageType.RESUME));
                 break;
             case ALTER:
                 feedMessages.add(new AlterFeedMessage(controlFeedStatement.getProperties()));

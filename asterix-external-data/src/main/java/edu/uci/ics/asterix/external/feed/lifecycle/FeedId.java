@@ -18,41 +18,45 @@ import java.io.Serializable;
 
 public class FeedId implements Serializable {
 
-	private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 1L;
 
-	private final String dataverse;
-	private final String dataset;
-	private final int hashcode;
+    private final String dataverse;
+    private final String dataset;
+    private final int hashcode;
 
-	public FeedId(String dataverse, String dataset) {
-		this.dataset = dataset;
-		this.dataverse = dataverse;
-		this.hashcode = (dataverse + "." + dataset).hashCode();
-	}
+    public FeedId(String dataverse, String dataset) {
+        this.dataset = dataset;
+        this.dataverse = dataverse;
+        this.hashcode = (dataverse + "." + dataset).hashCode();
+    }
 
-	public String getDataverse() {
-		return dataverse;
-	}
+    public String getDataverse() {
+        return dataverse;
+    }
 
-	public String getDataset() {
-		return dataset;
-	}
+    public String getDataset() {
+        return dataset;
+    }
 
-	@Override
-	public boolean equals(Object o) {
-		if (o == null || !(o instanceof FeedId)) {
-			return false;
-		}
-		if (((FeedId) o).getDataset().equals(dataset)
-				&& ((FeedId) o).getDataverse().equals(dataverse)) {
-			return true;
-		}
-		return false;
-	}
+    @Override
+    public boolean equals(Object o) {
+        if (o == null || !(o instanceof FeedId)) {
+            return false;
+        }
+        if (((FeedId) o).getDataset().equals(dataset) && ((FeedId) o).getDataverse().equals(dataverse)) {
+            return true;
+        }
+        return false;
+    }
 
-	@Override
-	public int hashCode() {
-		return hashcode;
-	}
+    @Override
+    public int hashCode() {
+        return hashcode;
+    }
+
+    @Override
+    public String toString() {
+        return dataverse + "." + dataset;
+    }
 
 }

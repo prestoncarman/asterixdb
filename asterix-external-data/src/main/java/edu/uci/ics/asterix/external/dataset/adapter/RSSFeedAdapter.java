@@ -27,6 +27,9 @@ import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksCountPartitio
 import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksPartitionConstraint;
 import edu.uci.ics.hyracks.api.context.IHyracksTaskContext;
 
+/**
+ * RSSFeedAdapter provides the functionality of fetching an RSS based feed.
+ */
 public class RSSFeedAdapter extends PullBasedAdapter implements IManagedFeedAdapter {
 
     private static final long serialVersionUID = 1L;

@@ -1,5 +1,5 @@
 /*
- * Copyright 2009-2011 by The Regents of the University of California
+ * Copyright 2009-2012 by The Regents of the University of California
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
@@ -34,6 +34,10 @@ import edu.uci.ics.asterix.om.base.AString;
 import edu.uci.ics.asterix.om.types.BuiltinType;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
 
+/**
+ * Base class for data parsers. Includes the common set of definitions for
+ * serializers/deserializers for built-in ADM types.
+ */
 public abstract class AbstractDataParser implements IDataParser {
 
 	protected AMutableInt8 aInt8 = new AMutableInt8((byte) 0);

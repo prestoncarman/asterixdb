@@ -20,37 +20,52 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.LinkedBlockingQueue;
 
+import edu.uci.ics.asterix.common.exceptions.AsterixException;
+
+/**
+ * Handle (de-)registration of feeds for delivery of control messages.
+ */
 public class FeedManager implements IFeedManager {
 
+    public static FeedManager INSTANCE = new FeedManager();
+
+    private FeedManager() {
+
+    }
+
     private Map<FeedId, Set<LinkedBlockingQueue<IFeedMessage>>> outGoingMsgQueueMap = new HashMap<FeedId, Set<LinkedBlockingQueue<IFeedMessage>>>();
-   
+
     @Override
-    public boolean deliverMessage(FeedId feedId, IFeedMessage feedMessage) throws Exception {
+    public void deliverMessage(FeedId feedId, IFeedMessage feedMessage) throws AsterixException {
         Set<LinkedBlockingQueue<IFeedMessage>> operatorQueues = outGoingMsgQueueMap.get(feedId);
-        if (operatorQueues != null) {
-            for (LinkedBlockingQueue<IFeedMessage> queue : operatorQueues) {
-                queue.put(feedMessage);
+        try {
+            if (operatorQueues != null) {
+                for (LinkedBlockingQueue<IFeedMessage> queue : operatorQueues) {
+                    queue.put(feedMessage);
+                }
+            } else {
+                throw new AsterixException("Unable to deliver message. Unknown feed :" + feedId);
             }
+        } catch (Exception e) {
+            throw new AsterixException(e);
         }
-        return true;
     }
 
     @Override
-    public void registerFeedOperatorMsgQueue(FeedId feedId, LinkedBlockingQueue<IFeedMessage> queue) {
+    public void registerFeedMsgQueue(FeedId feedId, LinkedBlockingQueue<IFeedMessage> queue) {
         Set<LinkedBlockingQueue<IFeedMessage>> feedQueues = outGoingMsgQueueMap.get(feedId);
         if (feedQueues == null) {
             feedQueues = new HashSet<LinkedBlockingQueue<IFeedMessage>>();
         }
         feedQueues.add(queue);
         outGoingMsgQueueMap.put(feedId, feedQueues);
-
     }
 
     @Override
-    public void unregisterFeedOperatorMsgQueue(FeedId feedId, LinkedBlockingQueue<IFeedMessage> queue) {
+    public void unregisterFeedMsgQueue(FeedId feedId, LinkedBlockingQueue<IFeedMessage> queue) {
         Set<LinkedBlockingQueue<IFeedMessage>> feedQueues = outGoingMsgQueueMap.get(feedId);
         if (feedQueues == null || !feedQueues.contains(queue)) {
-            throw new IllegalArgumentException(" unable to de-register feed message queue");
+            throw new IllegalArgumentException(" Unable to de-register feed message queue. Unknown feedId " + feedId);
         }
         feedQueues.remove(queue);
     }

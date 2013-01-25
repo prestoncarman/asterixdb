@@ -18,7 +18,6 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.UnknownHostException;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -46,20 +45,19 @@ import edu.uci.ics.hyracks.api.context.IHyracksTaskContext;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 import edu.uci.ics.hyracks.dataflow.hadoop.util.InputSplitsProxy;
 
-/*
+/**
  * Provides functionality for fetching external data stored in an HDFS instance.
  */
-@SuppressWarnings({ "deprecation", "rawtypes"})
+@SuppressWarnings({ "deprecation", "rawtypes" })
 public class HDFSAdapter extends FileSystemBasedAdapter {
 
     private static final long serialVersionUID = 1L;
-  
+    private static final Logger LOGGER = Logger.getLogger(HDFSAdapter.class.getName());
+
     public static final String KEY_HDFS_URL = "hdfs";
     public static final String KEY_INPUT_FORMAT = "input-format";
     public static final String INPUT_FORMAT_TEXT = "text-input-format";
     public static final String INPUT_FORMAT_SEQUENCE = "sequence-input-format";
-
-    private static final Logger LOGGER = Logger.getLogger(HDFSAdapter.class.getName());
 
     private Object[] inputSplits;
     private transient JobConf conf;
@@ -67,13 +65,10 @@ public class HDFSAdapter extends FileSystemBasedAdapter {
     private static final Map<String, String> formatClassNames = initInputFormatMap();
 
     private static Map<String, String> initInputFormatMap() {
-        Map<String,String> formatClassNames = new HashMap<String, String>();
+        Map<String, String> formatClassNames = new HashMap<String, String>();
         formatClassNames.put(INPUT_FORMAT_TEXT, "org.apache.hadoop.mapred.TextInputFormat");
         formatClassNames.put(INPUT_FORMAT_SEQUENCE, "org.apache.hadoop.mapred.SequenceFileInputFormat");
         return formatClassNames;
-    }
-
-    static {
     }
 
     public HDFSAdapter(IAType atype) {
@@ -98,7 +93,7 @@ public class HDFSAdapter extends FileSystemBasedAdapter {
     private void configurePartitionConstraint() throws Exception {
         List<String> locations = new ArrayList<String>();
         Random random = new Random();
-        boolean couldConfigureLocationConstraints = true;
+        boolean couldConfigureLocationConstraints = false;
         try {
             Map<String, Set<String>> nodeControllers = AsterixRuntimeUtil.getNodeControllerMap();
             for (Object inputSplit : inputSplits) {
@@ -115,13 +110,14 @@ public class HDFSAdapter extends FileSystemBasedAdapter {
                         nodeControllersAtLocation = nodeControllers.get(AsterixRuntimeUtil
                                 .getIPAddress(datanodeLocation));
                     } catch (UnknownHostException uhe) {
-                        if (LOGGER.isLoggable(Level.INFO)) {
-                            LOGGER.log(Level.INFO, "Unknown host :" + datanodeLocation);
+                        if (LOGGER.isLoggable(Level.WARNING)) {
+                            LOGGER.log(Level.WARNING, "Unknown host :" + datanodeLocation);
                         }
+                        continue;
                     }
                     if (nodeControllersAtLocation == null || nodeControllersAtLocation.size() == 0) {
                         if (LOGGER.isLoggable(Level.WARNING)) {
-                            LOGGER.log(Level.INFO, "No node controller found at " + datanodeLocation
+                            LOGGER.log(Level.WARNING, "No node controller found at " + datanodeLocation
                                     + " will look at replica location");
                         }
                         couldConfigureLocationConstraints = false;
@@ -145,7 +141,6 @@ public class HDFSAdapter extends FileSystemBasedAdapter {
                     int locationIndex = random.nextInt(allNodeControllers.size());
                     String chosenLocation = allNodeControllers.get(locationIndex);
                     locations.add(chosenLocation);
-
                     if (LOGGER.isLoggable(Level.SEVERE)) {
                         LOGGER.log(Level.INFO, "No local node controller found to process split : " + inputSplit
                                 + " will be processed by a remote node controller:" + chosenLocation);
@@ -255,15 +250,15 @@ public class HDFSAdapter extends FileSystemBasedAdapter {
 
 class HDFSStream extends InputStream {
 
-    private ByteBuffer buffer;
-    private int capacity;
     private RecordReader<Object, Text> reader;
     private final Object key;
     private final Text value;
+    private boolean hasMore = false;
+    private int position = 0;
+    private int length = 0;
+    private static final int EOL = "\n".getBytes()[0];
 
     public HDFSStream(RecordReader<Object, Text> reader, IHyracksTaskContext ctx) throws Exception {
-        capacity = ctx.getFrameSize();
-        buffer = ByteBuffer.allocate(capacity);
         this.reader = reader;
         key = reader.createKey();
         try {
@@ -276,35 +271,26 @@ class HDFSStream extends InputStream {
     }
 
     private void initialize() throws Exception {
-        boolean hasMore = reader.next(key, value);
-        if (!hasMore) {
-            buffer.limit(0);
-        } else {
-            buffer.position(0);
-            buffer.limit(capacity);
-            buffer.put(value.getBytes());
-            buffer.put("\n".getBytes());
-            buffer.flip();
+        hasMore = reader.next(key, value);
+        if (hasMore) {
+            length = value.getLength();
         }
     }
 
     @Override
     public int read() throws IOException {
-        if (!buffer.hasRemaining()) {
-            value.clear();
-            boolean hasMore = reader.next(key, value);
-            if (!hasMore) {
-                return -1;
-            }
-            buffer.clear();
-            buffer.put(value.getBytes(), 0, value.getLength());
-            buffer.put("\n".getBytes());
-            buffer.flip();
-            return buffer.get();
+        if (!hasMore) {
+            return -1;
         } else {
-            return buffer.get();
+            if (position > length - 1) {
+                hasMore = reader.next(key, value);
+                length = value.getLength();
+                position = 0;
+                return EOL;
+            } else {
+                return value.getBytes()[position++];
+            }
         }
-
     }
 
 }

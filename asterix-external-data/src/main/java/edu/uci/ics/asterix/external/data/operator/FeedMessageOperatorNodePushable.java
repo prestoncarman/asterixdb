@@ -18,45 +18,46 @@ import java.util.ArrayList;
 import java.util.List;
 
 import edu.uci.ics.asterix.external.feed.lifecycle.FeedId;
-import edu.uci.ics.asterix.external.feed.lifecycle.FeedSystemProvider;
+import edu.uci.ics.asterix.external.feed.lifecycle.FeedManager;
 import edu.uci.ics.asterix.external.feed.lifecycle.IFeedManager;
 import edu.uci.ics.asterix.external.feed.lifecycle.IFeedMessage;
 import edu.uci.ics.hyracks.api.context.IHyracksTaskContext;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 import edu.uci.ics.hyracks.dataflow.std.base.AbstractUnaryOutputSourceOperatorNodePushable;
 
-public class FeedMessageOperatorNodePushable extends
-		AbstractUnaryOutputSourceOperatorNodePushable {
+/**
+ * Runtime for the @see{FeedMessageOperatorDescriptor}
+ */
+public class FeedMessageOperatorNodePushable extends AbstractUnaryOutputSourceOperatorNodePushable {
 
-	private final FeedId feedId;
-	private final List<IFeedMessage> feedMessages;
-	private IFeedManager feedManager;
+    private final FeedId feedId;
+    private final List<IFeedMessage> feedMessages;
+    private IFeedManager feedManager;
 
-	public FeedMessageOperatorNodePushable(IHyracksTaskContext ctx,
-			FeedId feedId, List<IFeedMessage> feedMessages, boolean applyToAll,
-			int partition, int nPartitions) {
-		this.feedId = feedId;
-		if (applyToAll) {
-			this.feedMessages = feedMessages;
-		} else {
-			this.feedMessages = new ArrayList<IFeedMessage>();
-			feedMessages.add(feedMessages.get(partition));
-		}
-		feedManager = (IFeedManager) FeedSystemProvider.getFeedManager();
-	}
+    public FeedMessageOperatorNodePushable(IHyracksTaskContext ctx, FeedId feedId, List<IFeedMessage> feedMessages,
+            boolean applyToAll, int partition, int nPartitions) {
+        this.feedId = feedId;
+        if (applyToAll) {
+            this.feedMessages = feedMessages;
+        } else {
+            this.feedMessages = new ArrayList<IFeedMessage>();
+            feedMessages.add(feedMessages.get(partition));
+        }
+        feedManager = (IFeedManager) FeedManager.INSTANCE;
+    }
 
-	@Override
-	public void initialize() throws HyracksDataException {
-		try {
-			writer.open();
-			for (IFeedMessage feedMessage : feedMessages) {
-				feedManager.deliverMessage(feedId, feedMessage);
-			}
-		} catch (Exception e) {
-			throw new HyracksDataException(e);
-		} finally {
-			writer.close();
-		}
-	}
+    @Override
+    public void initialize() throws HyracksDataException {
+        try {
+            writer.open();
+            for (IFeedMessage feedMessage : feedMessages) {
+                feedManager.deliverMessage(feedId, feedMessage);
+            }
+        } catch (Exception e) {
+            throw new HyracksDataException(e);
+        } finally {
+            writer.close();
+        }
+    }
 
 }

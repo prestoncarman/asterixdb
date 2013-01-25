@@ -1,3 +1,17 @@
+/*
+ * Copyright 2009-2012 by The Regents of the University of California
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * you may obtain a copy of the License from
+ * 
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package edu.uci.ics.asterix.external.data.operator;
 
 import java.nio.ByteBuffer;
@@ -6,13 +20,16 @@ import java.util.concurrent.LinkedBlockingQueue;
 import edu.uci.ics.asterix.external.dataset.adapter.IDatasourceAdapter;
 import edu.uci.ics.asterix.external.feed.lifecycle.AlterFeedMessage;
 import edu.uci.ics.asterix.external.feed.lifecycle.FeedId;
-import edu.uci.ics.asterix.external.feed.lifecycle.FeedSystemProvider;
+import edu.uci.ics.asterix.external.feed.lifecycle.FeedManager;
 import edu.uci.ics.asterix.external.feed.lifecycle.IFeedManager;
 import edu.uci.ics.asterix.external.feed.lifecycle.IFeedMessage;
 import edu.uci.ics.asterix.feed.managed.adapter.IManagedFeedAdapter;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 import edu.uci.ics.hyracks.dataflow.std.base.AbstractUnaryInputUnaryOutputOperatorNodePushable;
 
+/**
+ * The runtime for @see{FeedIntakeOperationDescriptor}
+ */
 public class FeedIntakeOperatorNodePushable extends AbstractUnaryInputUnaryOutputOperatorNodePushable {
 
     private final IDatasourceAdapter adapter;
@@ -25,7 +42,7 @@ public class FeedIntakeOperatorNodePushable extends AbstractUnaryInputUnaryOutpu
     public FeedIntakeOperatorNodePushable(FeedId feedId, IDatasourceAdapter adapter, int partition) {
         this.adapter = adapter;
         this.partition = partition;
-        this.feedManager = (IFeedManager) FeedSystemProvider.getFeedManager();
+        this.feedManager = (IFeedManager) FeedManager.INSTANCE;
         this.feedId = feedId;
         inbox = new LinkedBlockingQueue<IFeedMessage>();
     }
@@ -35,7 +52,7 @@ public class FeedIntakeOperatorNodePushable extends AbstractUnaryInputUnaryOutpu
         if (adapter instanceof IManagedFeedAdapter) {
             feedInboxMonitor = new FeedInboxMonitor((IManagedFeedAdapter) adapter, inbox, partition);
             feedInboxMonitor.start();
-            feedManager.registerFeedOperatorMsgQueue(feedId, inbox);
+            feedManager.registerFeedMsgQueue(feedId, inbox);
         }
         writer.open();
         try {
@@ -43,16 +60,16 @@ public class FeedIntakeOperatorNodePushable extends AbstractUnaryInputUnaryOutpu
         } catch (Exception e) {
             e.printStackTrace();
             throw new HyracksDataException(e);
-            // we do not throw an exception, but allow the operator to close
-            // gracefully
-            // Throwing an exception here would result in a job abort and a
-            // transaction roll back
-            // that undoes all the work done so far.
+            /* 
+             we do not throw an exception, but allow the operator to close
+             gracefully throwing an exception here would result in a job abort and a
+             transaction roll back that undoes all the work done so far.
+             */
 
         } finally {
             writer.close();
             if (adapter instanceof IManagedFeedAdapter) {
-                feedManager.unregisterFeedOperatorMsgQueue(feedId, inbox);
+                feedManager.unregisterFeedMsgQueue(feedId, inbox);
             }
         }
     }

@@ -21,6 +21,9 @@ import edu.uci.ics.asterix.test.aql.TestsUtils;
 import edu.uci.ics.asterix.testframework.context.TestCaseContext;
 import edu.uci.ics.asterix.testframework.xml.TestCase.CompilationUnit;
 
+/**
+ * Runs the runtime test cases under 'src/test/resources/runtimets'.
+ */
 @RunWith(Parameterized.class)
 public class ExecutionTest {
     private static final String PATH_ACTUAL = "rttest/";

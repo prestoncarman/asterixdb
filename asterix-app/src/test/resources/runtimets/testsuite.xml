@@ -2624,8 +2624,13 @@
       </compilation-unit>
     </test-case>
     <test-case FilePath="scan">
-      <compilation-unit name="issue238_query">
-        <output-file compare="Text">issue238_query.adm</output-file>
+      <compilation-unit name="issue238_query_1">
+        <output-file compare="Text">issue238_query_1.adm</output-file>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="scan">
+      <compilation-unit name="issue238_query_2">
+        <output-file compare="Text">issue238_query_2.adm</output-file>
       </compilation-unit>
     </test-case>
     <test-case FilePath="scan">

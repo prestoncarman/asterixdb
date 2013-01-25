@@ -20,8 +20,6 @@ public interface IFeedMessage extends Serializable {
 
     public enum MessageType {
         STOP,
-        SUSPEND,
-        RESUME,
         ALTER,
     }
 

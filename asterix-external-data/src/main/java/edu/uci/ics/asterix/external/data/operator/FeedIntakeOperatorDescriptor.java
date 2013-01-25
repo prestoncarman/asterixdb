@@ -31,46 +31,56 @@ import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 import edu.uci.ics.hyracks.api.job.JobSpecification;
 import edu.uci.ics.hyracks.dataflow.std.base.AbstractSingleActivityOperatorDescriptor;
 
-public class FeedIntakeOperatorDescriptor extends AbstractSingleActivityOperatorDescriptor {
+/**
+ * Operator responsible for ingesting data from an external source. This
+ * operator uses a (configurable) adapter associated with the feed dataset.
+ */
+public class FeedIntakeOperatorDescriptor extends
+		AbstractSingleActivityOperatorDescriptor {
 
-    private static final long serialVersionUID = 1L;
+	private static final long serialVersionUID = 1L;
 
-    private final String adapterFactoryClassName;
-    private final Map<String, String> adapterConfiguration;
-    private final IAType atype;
-    private final FeedId feedId;
+	private final String adapterFactoryClassName;
+	private final Map<String, String> adapterConfiguration;
+	private final IAType atype;
+	private final FeedId feedId;
 
-    private transient IAdapterFactory datasourceAdapterFactory;
+	private transient IAdapterFactory datasourceAdapterFactory;
 
-    public FeedIntakeOperatorDescriptor(JobSpecification spec, FeedId feedId, String adapter,
-            Map<String, String> arguments, ARecordType atype, RecordDescriptor rDesc) {
-        super(spec, 1, 1);
-        recordDescriptors[0] = rDesc;
-        this.adapterFactoryClassName = adapter;
-        this.adapterConfiguration = arguments;
-        this.atype = atype;
-        this.feedId = feedId;
-    }
+	public FeedIntakeOperatorDescriptor(JobSpecification spec, FeedId feedId,
+			String adapter, Map<String, String> arguments, ARecordType atype,
+			RecordDescriptor rDesc) {
+		super(spec, 1, 1);
+		recordDescriptors[0] = rDesc;
+		this.adapterFactoryClassName = adapter;
+		this.adapterConfiguration = arguments;
+		this.atype = atype;
+		this.feedId = feedId;
+	}
 
-    public IOperatorNodePushable createPushRuntime(IHyracksTaskContext ctx,
-            IRecordDescriptorProvider recordDescProvider, final int partition, int nPartitions)
-            throws HyracksDataException {
-        ITypedDatasourceAdapter adapter;
-        try {
-            datasourceAdapterFactory = (IAdapterFactory) Class.forName(adapterFactoryClassName).newInstance();
-            if (datasourceAdapterFactory instanceof IGenericDatasetAdapterFactory) {
-                adapter = (ITypedDatasourceAdapter) ((IGenericDatasetAdapterFactory) datasourceAdapterFactory)
-                        .createAdapter(adapterConfiguration, atype);
-            } else if (datasourceAdapterFactory instanceof ITypedDatasetAdapterFactory) {
-                adapter = (ITypedDatasourceAdapter) ((ITypedDatasetAdapterFactory) datasourceAdapterFactory)
-                        .createAdapter(adapterConfiguration);
-            } else {
-                throw new IllegalStateException(" Unknown adapter factory type for " + adapterFactoryClassName);
-            }
-            adapter.initialize(ctx);
-        } catch (Exception e) {
-            throw new HyracksDataException("initialization of adapter failed", e);
-        }
-        return new FeedIntakeOperatorNodePushable(feedId, adapter, partition);
-    }
+	public IOperatorNodePushable createPushRuntime(IHyracksTaskContext ctx,
+			IRecordDescriptorProvider recordDescProvider, final int partition,
+			int nPartitions) throws HyracksDataException {
+		ITypedDatasourceAdapter adapter;
+		try {
+			datasourceAdapterFactory = (IAdapterFactory) Class.forName(
+					adapterFactoryClassName).newInstance();
+			if (datasourceAdapterFactory instanceof IGenericDatasetAdapterFactory) {
+				adapter = (ITypedDatasourceAdapter) ((IGenericDatasetAdapterFactory) datasourceAdapterFactory)
+						.createAdapter(adapterConfiguration, atype);
+			} else if (datasourceAdapterFactory instanceof ITypedDatasetAdapterFactory) {
+				adapter = (ITypedDatasourceAdapter) ((ITypedDatasetAdapterFactory) datasourceAdapterFactory)
+						.createAdapter(adapterConfiguration);
+			} else {
+				throw new IllegalStateException(
+						" Unknown adapter factory type for "
+								+ adapterFactoryClassName);
+			}
+			adapter.initialize(ctx);
+		} catch (Exception e) {
+			throw new HyracksDataException("initialization of adapter failed",
+					e);
+		}
+		return new FeedIntakeOperatorNodePushable(feedId, adapter, partition);
+	}
 }

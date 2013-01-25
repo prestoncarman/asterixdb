@@ -261,7 +261,7 @@ class RateControlledTupleParser extends AbstractTupleParser {
                 }
                 tb.addFieldEndOffset();
                 if (delayConfigured) {
-                    Thread.currentThread().sleep(interTupleInterval);
+                    Thread.sleep(interTupleInterval);
                 }
                 addTupleToFrame(writer);
             }
