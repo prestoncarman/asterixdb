@@ -31,7 +31,10 @@ public class NonTaggedCollectionMemberResultType implements IResultTypeComputer 
         if (type.getTypeTag() == ATypeTag.ANY) {
             return BuiltinType.ANY;
         }
-        return ((AbstractCollectionType) type).getItemType();
+        if (type instanceof AbstractCollectionType)
+            return ((AbstractCollectionType) type).getItemType();
+        else
+            throw new AlgebricksException(type.getTypeName() + " cannot be casted to Collection.");
     }
 
 }
