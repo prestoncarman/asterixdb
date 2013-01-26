@@ -272,6 +272,7 @@ class HDFSStream extends InputStream {
         }
     }
 
+    @Override
     public int read(byte[] buffer, int offset, int len) throws IOException {
         int numBytes = 0;
         if (pendingValue != null) {
