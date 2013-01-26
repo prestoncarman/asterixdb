@@ -3873,5 +3873,10 @@
         <output-file compare="Text">hdfs_02.adm</output-file>
       </compilation-unit>
     </test-case>
+    <test-case FilePath="hdfs">
+      <compilation-unit name="hdfs_03">
+        <output-file compare="Text">hdfs_03.adm</output-file>
+      </compilation-unit>
+    </test-case>
   </test-group>
 </test-suite>

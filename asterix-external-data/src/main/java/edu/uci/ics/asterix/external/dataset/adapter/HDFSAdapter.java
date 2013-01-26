@@ -41,6 +41,7 @@ import edu.uci.ics.asterix.om.util.AsterixRuntimeUtil;
 import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksAbsolutePartitionConstraint;
 import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksCountPartitionConstraint;
 import edu.uci.ics.hyracks.algebricks.common.constraints.AlgebricksPartitionConstraint;
+import edu.uci.ics.hyracks.algebricks.common.exceptions.NotImplementedException;
 import edu.uci.ics.hyracks.api.context.IHyracksTaskContext;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 import edu.uci.ics.hyracks.dataflow.hadoop.util.InputSplitsProxy;
@@ -254,9 +255,8 @@ class HDFSStream extends InputStream {
     private final Object key;
     private final Text value;
     private boolean hasMore = false;
-    private int position = 0;
-    private int length = 0;
     private static final int EOL = "\n".getBytes()[0];
+    private Text pendingValue = null;
 
     public HDFSStream(RecordReader<Object, Text> reader, IHyracksTaskContext ctx) throws Exception {
         this.reader = reader;
@@ -267,30 +267,42 @@ class HDFSStream extends InputStream {
             throw new Exception("value is not of type org.apache.hadoop.io.Text"
                     + " type not supported in sequence file format", cce);
         }
-        initialize();
     }
 
-    private void initialize() throws Exception {
-        hasMore = reader.next(key, value);
-        if (hasMore) {
-            length = value.getLength();
+    public int read(byte[] buffer, int offset, int len) throws IOException {
+        int numBytes = 0;
+        if (pendingValue != null) {
+            System.arraycopy(pendingValue.getBytes(), 0, buffer, offset + numBytes, pendingValue.getLength());
+            buffer[offset + numBytes + pendingValue.getLength()] = (byte) EOL;
+            numBytes += pendingValue.getLength() + 1;
+            pendingValue = null;
         }
+
+        while (numBytes < len) {
+            hasMore = reader.next(key, value);
+            if (!hasMore) {
+                return (numBytes == 0) ? -1 : numBytes;
+            }
+            int sizeOfNextTuple = value.getLength() + 1;
+            if (numBytes + sizeOfNextTuple > len) {
+                // cannot add tuple to current buffer
+                // but the reader has moved pass the fetched tuple
+                // we need to store this for a subsequent read call.
+                // and return this then.
+                pendingValue = value;
+                break;
+            } else {
+                System.arraycopy(value.getBytes(), 0, buffer, offset + numBytes, value.getLength());
+                buffer[offset + numBytes + value.getLength()] = (byte) EOL;
+                numBytes += sizeOfNextTuple;
+            }
+        }
+        return numBytes;
     }
 
     @Override
     public int read() throws IOException {
-        if (!hasMore) {
-            return -1;
-        } else {
-            if (position > length - 1) {
-                hasMore = reader.next(key, value);
-                length = value.getLength();
-                position = 0;
-                return EOL;
-            } else {
-                return value.getBytes()[position++];
-            }
-        }
+        throw new NotImplementedException("Use read(byte[], int, int");
     }
 
 }

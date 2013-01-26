@@ -16,6 +16,9 @@ package edu.uci.ics.asterix.external.feed.lifecycle;
 
 import java.io.Serializable;
 
+/**
+ * A unique identifier for a feed (dataset).
+ */
 public class FeedId implements Serializable {
 
     private static final long serialVersionUID = 1L;
