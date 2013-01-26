@@ -143,13 +143,16 @@ public class HDFSAdapter extends FileSystemBasedAdapter {
                     String chosenLocation = allNodeControllers.get(locationIndex);
                     locations.add(chosenLocation);
                     if (LOGGER.isLoggable(Level.SEVERE)) {
-                        LOGGER.log(Level.INFO, "No local node controller found to process split : " + inputSplit
+                        LOGGER.log(Level.SEVERE, "No local node controller found to process split : " + inputSplit
                                 + " will be processed by a remote node controller:" + chosenLocation);
                     }
                 }
             }
             partitionConstraint = new AlgebricksAbsolutePartitionConstraint(locations.toArray(new String[] {}));
         } catch (Exception e) {
+            if (LOGGER.isLoggable(Level.SEVERE)) {
+                LOGGER.log(Level.SEVERE, "Encountered exception :" + e + " using count constraints");
+            }
             partitionConstraint = new AlgebricksCountPartitionConstraint(inputSplits.length);
         }
     }
