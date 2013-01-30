@@ -73,7 +73,7 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
 
     // HACKs so that we can set these option at runtime via a "set" statement in AQL.
     public static boolean sortPrimaryKeys = false;
-    public static boolean useSurrogateJoin = false;
+    public static boolean useSurrogateJoin = true;
     
     // Enum describing the search modifier type. Used for passing info to jobgen.
     public static enum SearchModifierType {

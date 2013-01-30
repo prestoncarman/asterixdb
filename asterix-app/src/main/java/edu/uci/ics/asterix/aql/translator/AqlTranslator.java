@@ -137,7 +137,7 @@ public class AqlTranslator extends AbstractAqlTranslator {
 
     public List<QueryResult> compileAndExecute(IHyracksClientConnection hcc) throws Exception {
         // HACK to initialize inverted-index optimizer options.
-        InvertedIndexAccessMethod.sortPrimaryKeys = true;
+        InvertedIndexAccessMethod.sortPrimaryKeys = false;
         InvertedIndexAccessMethod.useSurrogateJoin = true;
         
         List<QueryResult> executionResult = new ArrayList<QueryResult>();
