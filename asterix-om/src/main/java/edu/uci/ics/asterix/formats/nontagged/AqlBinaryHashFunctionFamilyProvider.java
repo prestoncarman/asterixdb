@@ -17,13 +17,14 @@ package edu.uci.ics.asterix.formats.nontagged;
 
 import java.io.Serializable;
 
+import edu.uci.ics.asterix.dataflow.data.nontagged.hash.MurmurHash3BinaryHashFunctionFamily;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.data.IBinaryHashFunctionFamilyProvider;
 import edu.uci.ics.hyracks.api.dataflow.value.IBinaryHashFunctionFamily;
-import edu.uci.ics.hyracks.data.std.accessors.MurmurHash3BinaryHashFunctionFamily;
 
 /**
- * We use a type-independent binary hash function family from the hyracks codebase
+ * We use a type-independent binary hash function family from the hyracks
+ * codebase
  */
 public class AqlBinaryHashFunctionFamilyProvider implements IBinaryHashFunctionFamilyProvider, Serializable {
 
@@ -36,7 +37,7 @@ public class AqlBinaryHashFunctionFamilyProvider implements IBinaryHashFunctionF
 
     @Override
     public IBinaryHashFunctionFamily getBinaryHashFunctionFamily(Object type) throws AlgebricksException {
-        return new MurmurHash3BinaryHashFunctionFamily();
+        return MurmurHash3BinaryHashFunctionFamily.INSTANCE;
     }
 
 }
