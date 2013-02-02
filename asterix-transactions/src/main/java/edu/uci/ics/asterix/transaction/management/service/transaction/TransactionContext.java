@@ -30,6 +30,7 @@ import edu.uci.ics.asterix.transaction.management.service.transaction.ITransacti
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 import edu.uci.ics.hyracks.storage.am.common.api.IModificationOperationCallback;
 import edu.uci.ics.hyracks.storage.am.lsm.common.api.ILSMIndex;
+import edu.uci.ics.hyracks.storage.am.lsm.common.impls.LSMOperationType;
 
 /**
  * Represents a holder object that contains all information related to a
@@ -54,7 +55,7 @@ public class TransactionContext implements Serializable {
     private TransactionSubsystem transactionSubsystem;
     private LogicalLogLocator firstLogLocator;//firstLSN of the Job
     private LogicalLogLocator lastLogLocator;//lastLSN of the Job
-    private TransactionState txnState; 
+    private TransactionState txnState;
     private long startWaitTime;
     private int status;
     private Set<ICloseable> resources = new HashSet<ICloseable>();
@@ -89,10 +90,10 @@ public class TransactionContext implements Serializable {
         }
     }
 
-    public void setLastLSNToIndexes(long lastLSN) {
+    public void updateLastLSNForIndexes(long lastLSN) {
         synchronized (indexes) {
             for (ILSMIndex index : indexes) {
-                ((IndexOperationTracker) index.getOperationTracker()).setLastLSN(lastLSN);
+                ((IndexOperationTracker) index.getOperationTracker()).updateLastLSN(lastLSN);
             }
         }
     }
@@ -102,7 +103,8 @@ public class TransactionContext implements Serializable {
             for (int i = 0; i < indexes.size(); i++) {
                 ILSMIndex index = indexes.get(i);
                 IModificationOperationCallback modificationCallback = (IModificationOperationCallback) callbacks.get(i);
-                ((IndexOperationTracker) index.getOperationTracker()).completeOperation(null, modificationCallback);
+                ((IndexOperationTracker) index.getOperationTracker()).completeOperation(LSMOperationType.MODIFICATION,
+                        null, modificationCallback);
             }
         }
     }
@@ -122,7 +124,7 @@ public class TransactionContext implements Serializable {
     public LogicalLogLocator getFirstLogLocator() {
         return firstLogLocator;
     }
-    
+
     public LogicalLogLocator getLastLogLocator() {
         return lastLogLocator;
     }

@@ -5,19 +5,22 @@ import java.util.logging.Level;
 
 import edu.uci.ics.asterix.common.config.GlobalConfig;
 import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
+import edu.uci.ics.asterix.transaction.management.ioopcallbacks.LSMBTreeIOOperationCallbackFactory;
+import edu.uci.ics.asterix.transaction.management.ioopcallbacks.LSMInvertedIndexIOOperationCallbackFactory;
+import edu.uci.ics.asterix.transaction.management.ioopcallbacks.LSMRTreeIOOperationCallbackFactory;
+import edu.uci.ics.asterix.transaction.management.opcallbacks.IndexOperationTrackerFactory;
+import edu.uci.ics.asterix.transaction.management.service.recovery.IAsterixAppRuntimeContextProvider;
 import edu.uci.ics.asterix.transaction.management.service.transaction.TransactionSubsystem;
 import edu.uci.ics.hyracks.api.application.INCApplicationContext;
 import edu.uci.ics.hyracks.api.io.IIOManager;
 import edu.uci.ics.hyracks.storage.am.common.api.IIndexLifecycleManager;
 import edu.uci.ics.hyracks.storage.am.common.dataflow.IndexLifecycleManager;
-import edu.uci.ics.hyracks.storage.am.lsm.common.api.ILSMFlushController;
+import edu.uci.ics.hyracks.storage.am.lsm.common.api.ILSMIOOperationCallbackProvider;
 import edu.uci.ics.hyracks.storage.am.lsm.common.api.ILSMIOOperationScheduler;
 import edu.uci.ics.hyracks.storage.am.lsm.common.api.ILSMMergePolicy;
 import edu.uci.ics.hyracks.storage.am.lsm.common.api.ILSMOperationTrackerFactory;
 import edu.uci.ics.hyracks.storage.am.lsm.common.impls.ConstantMergePolicy;
-import edu.uci.ics.hyracks.storage.am.lsm.common.impls.FlushController;
-import edu.uci.ics.hyracks.storage.am.lsm.common.impls.ImmediateScheduler;
-import edu.uci.ics.hyracks.storage.am.lsm.common.impls.RefCountingOperationTrackerFactory;
+import edu.uci.ics.hyracks.storage.am.lsm.common.impls.SynchronousScheduler;
 import edu.uci.ics.hyracks.storage.common.buffercache.BufferCache;
 import edu.uci.ics.hyracks.storage.common.buffercache.ClockPageReplacementStrategy;
 import edu.uci.ics.hyracks.storage.common.buffercache.HeapBufferAllocator;
@@ -45,12 +48,14 @@ public class AsterixAppRuntimeContext {
     private IBufferCache bufferCache;
     private TransactionSubsystem txnSubsystem;
 
-    private ILSMFlushController flushController;
     private ILSMMergePolicy mergePolicy;
-    private ILSMOperationTrackerFactory opTrackerFactory;
+    private ILSMOperationTrackerFactory lsmBTreeOpTrackerFactory;
+    private ILSMOperationTrackerFactory lsmRTreeOpTrackerFactory;
+    private ILSMOperationTrackerFactory lsmInvertedIndexOpTrackerFactory;
     private ILSMIOOperationScheduler lsmIOScheduler;
     private ILocalResourceRepository localResourceRepository;
     private ResourceIdFactory resourceIdFactory;
+    private IIOManager ioManager;
 
     public AsterixAppRuntimeContext(INCApplicationContext ncApplicationContext) {
         this.ncApplicationContext = ncApplicationContext;
@@ -63,18 +68,23 @@ public class AsterixAppRuntimeContext {
         fileMapManager = new AsterixFileMapManager();
         ICacheMemoryAllocator allocator = new HeapBufferAllocator();
         IPageReplacementStrategy prs = new ClockPageReplacementStrategy();
-        IIOManager ioMgr = ncApplicationContext.getRootContext().getIOManager();
-        bufferCache = new BufferCache(ioMgr, allocator, prs, fileMapManager, pageSize, numPages, DEFAULT_MAX_OPEN_FILES);
+        ioManager = ncApplicationContext.getRootContext().getIOManager();
+        bufferCache = new BufferCache(ioManager, allocator, prs, fileMapManager, pageSize, numPages,
+                DEFAULT_MAX_OPEN_FILES);
         indexLifecycleManager = new IndexLifecycleManager(DEFAULT_LIFECYCLEMANAGER_MEMORY_BUDGET);
-        txnSubsystem = new TransactionSubsystem(ncApplicationContext.getNodeId());
+        IAsterixAppRuntimeContextProvider asterixAppRuntimeContextProvider = new AsterixAppRuntimeContextProviderForRecovery(
+                this);
+        txnSubsystem = new TransactionSubsystem(ncApplicationContext.getNodeId(), asterixAppRuntimeContextProvider);
 
-        flushController = new FlushController();
-        lsmIOScheduler = ImmediateScheduler.INSTANCE;
-        mergePolicy = new ConstantMergePolicy(lsmIOScheduler, 3);
-        opTrackerFactory = RefCountingOperationTrackerFactory.INSTANCE;
+        lsmIOScheduler = SynchronousScheduler.INSTANCE;
+        mergePolicy = new ConstantMergePolicy(3);
+        lsmBTreeOpTrackerFactory = new IndexOperationTrackerFactory(LSMBTreeIOOperationCallbackFactory.INSTANCE);
+        lsmRTreeOpTrackerFactory = new IndexOperationTrackerFactory(LSMRTreeIOOperationCallbackFactory.INSTANCE);
+        lsmInvertedIndexOpTrackerFactory = new IndexOperationTrackerFactory(
+                LSMInvertedIndexIOOperationCallbackFactory.INSTANCE);
 
         ILocalResourceRepositoryFactory persistentLocalResourceRepositoryFactory = new PersistentLocalResourceRepositoryFactory(
-                ioMgr);
+                ioManager);
         localResourceRepository = persistentLocalResourceRepositoryFactory.createRepository();
         resourceIdFactory = (new ResourceIdFactoryProvider(localResourceRepository)).createResourceIdFactory();
     }
@@ -142,16 +152,36 @@ public class AsterixAppRuntimeContext {
         return indexLifecycleManager;
     }
 
-    public ILSMFlushController getFlushController() {
-        return flushController;
-    }
-
     public ILSMMergePolicy getLSMMergePolicy() {
         return mergePolicy;
     }
 
-    public ILSMOperationTrackerFactory getLSMOperationTrackerFactory() {
-        return opTrackerFactory;
+    public ILSMOperationTrackerFactory getLSMBTreeOperationTrackerFactory() {
+        return lsmBTreeOpTrackerFactory;
+    }
+
+    public ILSMOperationTrackerFactory getLSMRTreeOperationTrackerFactory() {
+        return lsmRTreeOpTrackerFactory;
+    }
+
+    public ILSMOperationTrackerFactory getLSMInvertedIndexOperationTrackerFactory() {
+        return lsmInvertedIndexOpTrackerFactory;
+    }
+
+    public ILSMIOOperationCallbackProvider getLSMBTreeIOOperationCallbackProvider() {
+        return AsterixRuntimeComponentsProvider.LSMBTREE_PROVIDER;
+    }
+
+    public ILSMIOOperationCallbackProvider getLSMRTreeIOOperationCallbackProvider() {
+        return AsterixRuntimeComponentsProvider.LSMRTREE_PROVIDER;
+    }
+
+    public ILSMIOOperationCallbackProvider getLSMInvertedIndexIOOperationCallbackProvider() {
+        return AsterixRuntimeComponentsProvider.LSMINVERTEDINDEX_PROVIDER;
+    }
+
+    public ILSMIOOperationCallbackProvider getNoOpIOOperationCallbackProvider() {
+        return AsterixRuntimeComponentsProvider.NOINDEX_PROVIDER;
     }
 
     public ILSMIOOperationScheduler getLSMIOScheduler() {
@@ -164,5 +194,9 @@ public class AsterixAppRuntimeContext {
 
     public ResourceIdFactory getResourceIdFactory() {
         return resourceIdFactory;
+    }
+
+    public IIOManager getIOManager() {
+        return ioManager;
     }
 }

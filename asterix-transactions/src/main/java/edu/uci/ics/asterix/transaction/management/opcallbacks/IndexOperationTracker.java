@@ -24,13 +24,15 @@ import edu.uci.ics.hyracks.storage.am.lsm.common.api.ILSMIOOperationCallbackFact
 import edu.uci.ics.hyracks.storage.am.lsm.common.api.ILSMIndex;
 import edu.uci.ics.hyracks.storage.am.lsm.common.api.ILSMIndexAccessor;
 import edu.uci.ics.hyracks.storage.am.lsm.common.api.ILSMOperationTracker;
+import edu.uci.ics.hyracks.storage.am.lsm.common.impls.LSMOperationType;
+import edu.uci.ics.hyracks.storage.am.lsm.common.impls.NoOpIOOperationCallback;
 
 public class IndexOperationTracker implements ILSMOperationTracker {
 
     // Number of active operations on a ILSMIndex instance.
     private int numActiveOperations = 0;
-    private long lastLsn;
-    private final ILSMIndex index;    
+    private long lastLSN;
+    private final ILSMIndex index;
     private final ILSMIOOperationCallback ioOpCallback;
     private ILSMIndexAccessor accessor;
 
@@ -42,26 +44,13 @@ public class IndexOperationTracker implements ILSMOperationTracker {
         if (ioOpCallbackFactory != null) {
             ioOpCallback = ioOpCallbackFactory.createIOOperationCallback(this);
         } else {
-            ioOpCallback = null;
+            ioOpCallback = NoOpIOOperationCallback.INSTANCE;
         }
     }
 
     @Override
-    public synchronized boolean beforeOperation(ISearchOperationCallback searchCallback,
-            IModificationOperationCallback modificationCallback, boolean tryOperation) throws HyracksDataException {
-        // Wait for pending flushes to complete.
-        // If flushFlag is set, then the flush is queued to occur by the last completing operation.
-        // This operation should wait for that flush to occur before proceeding.
-        if (index.getFlushController().getFlushStatus(index)) {
-            if (tryOperation) {
-                return false;
-            }
-            try {
-                this.wait();
-            } catch (InterruptedException e) {
-                throw new HyracksDataException(e);
-            }
-        }
+    public void beforeOperation(LSMOperationType opType, ISearchOperationCallback searchCallback,
+            IModificationOperationCallback modificationCallback) throws HyracksDataException {
         numActiveOperations++;
 
         // Increment transactor-local active operations count.
@@ -69,20 +58,19 @@ public class IndexOperationTracker implements ILSMOperationTracker {
         if (opCallback != null) {
             opCallback.incrementLocalNumActiveOperations();
         }
-        return true;
     }
 
     @Override
-    public void afterOperation(ISearchOperationCallback searchCallback,
+    public void afterOperation(LSMOperationType opType, ISearchOperationCallback searchCallback,
             IModificationOperationCallback modificationCallback) throws HyracksDataException {
         // Searches are immediately considered complete, because they should not prevent the execution of flushes.
         if (searchCallback != null) {
-            completeOperation(searchCallback, modificationCallback);
+            completeOperation(opType, searchCallback, modificationCallback);
         }
     }
 
     @Override
-    public synchronized void completeOperation(ISearchOperationCallback searchCallback,
+    public void completeOperation(LSMOperationType opType, ISearchOperationCallback searchCallback,
             IModificationOperationCallback modificationCallback) throws HyracksDataException {
         numActiveOperations--;
 
@@ -93,12 +81,12 @@ public class IndexOperationTracker implements ILSMOperationTracker {
         }
         // If we need a flush, and this is the last completing operation, then schedule the flush.
         // Once the flush has completed notify all waiting operations.
-        if (index.getFlushController().getFlushStatus(index) && numActiveOperations == 0) {
+        if (index.getFlushStatus(index) && numActiveOperations == 0 && opType != LSMOperationType.FLUSH) {
             if (accessor == null) {
                 accessor = (ILSMIndexAccessor) index.createAccessor(NoOpOperationCallback.INSTANCE,
                         NoOpOperationCallback.INSTANCE);
             }
-            index.getIOScheduler().scheduleOperation(accessor.createFlushOperation(ioOpCallback));
+            accessor.scheduleFlush(ioOpCallback);
         }
     }
 
@@ -115,11 +103,15 @@ public class IndexOperationTracker implements ILSMOperationTracker {
         }
     }
 
-    public long getLastLSN() {
-        return lastLsn;
+    public ILSMIOOperationCallback getIOOperationCallback() {
+        return ioOpCallback;
     }
 
-    public void setLastLSN(long lastLsn) {
-        this.lastLsn = lastLsn;
+    public long getLastLSN() {
+        return lastLSN;
+    }
+
+    public void updateLastLSN(long lastLSN) {
+        this.lastLSN = Math.max(this.lastLSN, lastLSN);
     }
 }

@@ -25,12 +25,15 @@ import java.util.logging.Logger;
 
 import edu.uci.ics.asterix.common.config.DatasetConfig.DatasetType;
 import edu.uci.ics.asterix.common.config.DatasetConfig.IndexType;
+import edu.uci.ics.asterix.common.config.GlobalConfig;
 import edu.uci.ics.asterix.common.context.AsterixAppRuntimeContext;
+import edu.uci.ics.asterix.common.context.AsterixRuntimeComponentsProvider;
 import edu.uci.ics.asterix.external.adapter.factory.IAdapterFactory;
 import edu.uci.ics.asterix.external.dataset.adapter.AdapterIdentifier;
 import edu.uci.ics.asterix.metadata.IDatasetDetails;
 import edu.uci.ics.asterix.metadata.MetadataManager;
 import edu.uci.ics.asterix.metadata.MetadataTransactionContext;
+import edu.uci.ics.asterix.metadata.api.IMetadataEntity;
 import edu.uci.ics.asterix.metadata.api.IMetadataIndex;
 import edu.uci.ics.asterix.metadata.entities.AsterixBuiltinTypeMap;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
@@ -47,6 +50,9 @@ import edu.uci.ics.asterix.om.types.BuiltinType;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.asterix.runtime.formats.NonTaggedDataFormat;
 import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
+import edu.uci.ics.asterix.transaction.management.resource.ILocalResourceMetadata;
+import edu.uci.ics.asterix.transaction.management.resource.LSMBTreeLocalResourceMetadata;
+import edu.uci.ics.asterix.transaction.management.resource.PersistentLocalResourceFactoryProvider;
 import edu.uci.ics.asterix.transaction.management.resource.TransactionalResourceRepository;
 import edu.uci.ics.asterix.transaction.management.service.logging.IndexResourceManager;
 import edu.uci.ics.asterix.transaction.management.service.transaction.IResourceManager.ResourceType;
@@ -73,8 +79,8 @@ import edu.uci.ics.hyracks.storage.common.file.IFileMapProvider;
 import edu.uci.ics.hyracks.storage.common.file.ILocalResourceFactory;
 import edu.uci.ics.hyracks.storage.common.file.ILocalResourceFactoryProvider;
 import edu.uci.ics.hyracks.storage.common.file.ILocalResourceRepository;
+import edu.uci.ics.hyracks.storage.common.file.LocalResource;
 import edu.uci.ics.hyracks.storage.common.file.TransientFileMapManager;
-import edu.uci.ics.hyracks.storage.common.file.TransientLocalResourceFactoryProvider;
 
 /**
  * Initializes the remote metadata storage facilities ("universe") using a
@@ -157,13 +163,15 @@ public class MetadataBootstrap {
         fileMapProvider = runtimeContext.getFileMapManager();
         ioManager = ncApplicationContext.getRootContext().getIOManager();
 
-        // Begin a transaction against the metadata.
-        // Lock the metadata in X mode.
-        MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
-        MetadataManager.INSTANCE.lock(mdTxnCtx, LockMode.X);
-
-        try {
-            if (isNewUniverse) {
+        if (isNewUniverse) {
+            //Do checkpoint only if it is new universe
+            runtimeContext.getTransactionSubsystem().getRecoveryManager().checkpoint();
+            MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
+            try {
+                // Begin a transaction against the metadata.
+                // Lock the metadata in X mode.
+                MetadataManager.INSTANCE.lock(mdTxnCtx, LockMode.X);
+                
                 for (int i = 0; i < primaryIndexes.length; i++) {
                     enlistMetadataDataset(primaryIndexes[i], true);
                     registerTransactionalResource(primaryIndexes[i], resourceRepository);
@@ -179,24 +187,26 @@ public class MetadataBootstrap {
                 insertNodes(mdTxnCtx);
                 insertInitialGroups(mdTxnCtx);
                 insertInitialAdapters(mdTxnCtx);
-                LOGGER.info("FINISHED CREATING METADATA B-TREES.");
-            } else {
-                for (int i = 0; i < primaryIndexes.length; i++) {
-                    enlistMetadataDataset(primaryIndexes[i], false);
-                    registerTransactionalResource(primaryIndexes[i], resourceRepository);
-                }
-                for (int i = 0; i < secondaryIndexes.length; i++) {
-                    enlistMetadataDataset(secondaryIndexes[i], false);
-                    registerTransactionalResource(secondaryIndexes[i], resourceRepository);
-                }
-                LOGGER.info("FINISHED ENLISTMENT OF METADATA B-TREES.");
+                
+                MetadataManager.INSTANCE.initializeDatasetIdFactory(mdTxnCtx);
+                MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
+            } catch (Exception e) {
+                MetadataManager.INSTANCE.abortTransaction(mdTxnCtx);
+                throw e;
             }
-            MetadataManager.INSTANCE.initializeDatasetIdFactory(mdTxnCtx);
-            MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
-        } catch (Exception e) {
-            MetadataManager.INSTANCE.abortTransaction(mdTxnCtx);
-            throw e;
+            LOGGER.info("FINISHED CREATING METADATA B-TREES.");
+        } else {
+            for (int i = 0; i < primaryIndexes.length; i++) {
+                enlistMetadataDataset(primaryIndexes[i], false);
+                registerTransactionalResource(primaryIndexes[i], resourceRepository);
+            }
+            for (int i = 0; i < secondaryIndexes.length; i++) {
+                enlistMetadataDataset(secondaryIndexes[i], false);
+                registerTransactionalResource(secondaryIndexes[i], resourceRepository);
+            }
+            LOGGER.info("FINISHED ENLISTMENT OF METADATA B-TREES.");
         }
+
     }
 
     public static void stopUniverse() throws HyracksDataException {
@@ -226,7 +236,8 @@ public class MetadataBootstrap {
     public static void insertInitialDataverses(MetadataTransactionContext mdTxnCtx) throws Exception {
         String dataverseName = MetadataPrimaryIndexes.DATAVERSE_DATASET.getDataverseName();
         String dataFormat = NonTaggedDataFormat.NON_TAGGED_DATA_FORMAT;
-        MetadataManager.INSTANCE.addDataverse(mdTxnCtx, new Dataverse(dataverseName, dataFormat));
+        MetadataManager.INSTANCE.addDataverse(mdTxnCtx, new Dataverse(dataverseName, dataFormat,
+                IMetadataEntity.PENDING_NO_OP));
     }
 
     public static void insertInitialDatasets(MetadataTransactionContext mdTxnCtx) throws Exception {
@@ -236,7 +247,7 @@ public class MetadataBootstrap {
                     primaryIndexes[i].getNodeGroupName());
             MetadataManager.INSTANCE.addDataset(mdTxnCtx, new Dataset(primaryIndexes[i].getDataverseName(),
                     primaryIndexes[i].getIndexedDatasetName(), primaryIndexes[i].getPayloadRecordType().getTypeName(),
-                    id, DatasetType.INTERNAL, primaryIndexes[i].getDatasetId().getId()));
+                    id, DatasetType.INTERNAL, primaryIndexes[i].getDatasetId().getId(), IMetadataEntity.PENDING_NO_OP));
         }
     }
 
@@ -267,7 +278,7 @@ public class MetadataBootstrap {
         for (int i = 0; i < secondaryIndexes.length; i++) {
             MetadataManager.INSTANCE.addIndex(mdTxnCtx, new Index(secondaryIndexes[i].getDataverseName(),
                     secondaryIndexes[i].getIndexedDatasetName(), secondaryIndexes[i].getIndexName(), IndexType.BTREE,
-                    secondaryIndexes[i].getPartitioningExpr(), false));
+                    secondaryIndexes[i].getPartitioningExpr(), false, IMetadataEntity.PENDING_NO_OP));
         }
     }
 
@@ -331,20 +342,22 @@ public class MetadataBootstrap {
         IInMemoryFreePageManager memFreePageManager = new InMemoryFreePageManager(DEFAULT_MEM_NUM_PAGES,
                 metaDataFrameFactory);
         LSMBTree lsmBtree = LSMBTreeUtils.createLSMTree(memBufferCache, memFreePageManager, ioManager, file,
-                bufferCache, fileMapProvider, typeTraits, comparatorFactories, runtimeContext.getFlushController(),
-                runtimeContext.getLSMMergePolicy(), runtimeContext.getLSMOperationTrackerFactory(),
-                runtimeContext.getLSMIOScheduler());
+                bufferCache, fileMapProvider, typeTraits, comparatorFactories, runtimeContext.getLSMMergePolicy(),
+                runtimeContext.getLSMBTreeOperationTrackerFactory(), runtimeContext.getLSMIOScheduler(),
+                AsterixRuntimeComponentsProvider.LSMBTREE_PROVIDER);
         long resourceID = -1;
         if (create) {
             lsmBtree.create();
             resourceID = runtimeContext.getResourceIdFactory().createId();
-            //resourceID = indexArtifactMap.create(file.getFile().getPath(), ioManager.getIODevices());
-            //TODO
-            //replace the transient resource factory provider with the persistent one.
-            ILocalResourceFactoryProvider localResourceFactoryProvider = new TransientLocalResourceFactoryProvider();
+
+            ILocalResourceMetadata localResourceMetadata = new LSMBTreeLocalResourceMetadata(typeTraits,
+                    comparatorFactories, index.isPrimaryIndex(), GlobalConfig.DEFAULT_INDEX_MEM_PAGE_SIZE,
+                    GlobalConfig.DEFAULT_INDEX_MEM_NUM_PAGES);
+            ILocalResourceFactoryProvider localResourceFactoryProvider = new PersistentLocalResourceFactoryProvider(
+                    localResourceMetadata, LocalResource.LSMBTreeResource);
             ILocalResourceFactory localResourceFactory = localResourceFactoryProvider.getLocalResourceFactory();
             localResourceRepository.insert(localResourceFactory.createLocalResource(resourceID, file.getFile()
-                    .getPath()));
+                    .getPath(), 0));
         } else {
             resourceID = localResourceRepository.getResourceByName(file.getFile().getPath()).getResourceId();
         }

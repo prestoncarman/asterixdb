@@ -17,6 +17,8 @@ package edu.uci.ics.asterix.metadata;
 
 import java.rmi.RemoteException;
 import java.util.List;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import edu.uci.ics.asterix.common.functions.FunctionSignature;
 import edu.uci.ics.asterix.metadata.api.IAsterixStateProxy;
@@ -79,10 +81,10 @@ import edu.uci.ics.asterix.transaction.management.service.transaction.JobIdFacto
 public class MetadataManager implements IMetadataManager {
     // Set in init().
     public static MetadataManager INSTANCE;
-
     private final MetadataCache cache = new MetadataCache();
     private IAsterixStateProxy proxy;
     private IMetadataNode metadataNode;
+    private final ReadWriteLock metadataLatch;
 
     public MetadataManager(IAsterixStateProxy proxy) {
         if (proxy == null) {
@@ -90,6 +92,7 @@ public class MetadataManager implements IMetadataManager {
         }
         this.proxy = proxy;
         this.metadataNode = null;
+        this.metadataLatch = new ReentrantReadWriteLock(true);
     }
 
     @Override
@@ -206,11 +209,14 @@ public class MetadataManager implements IMetadataManager {
 
     @Override
     public void addDataset(MetadataTransactionContext ctx, Dataset dataset) throws MetadataException {
+        // add dataset into metadataNode 
         try {
             metadataNode.addDataset(ctx.getJobId(), dataset);
         } catch (RemoteException e) {
             throw new MetadataException(e);
         }
+
+        // reflect the dataset into the cache
         ctx.addDataset(dataset);
     }
 
@@ -347,6 +353,7 @@ public class MetadataManager implements IMetadataManager {
         } catch (RemoteException e) {
             throw new MetadataException(e);
         }
+        ctx.addIndex(index);
     }
 
     @Override
@@ -368,16 +375,52 @@ public class MetadataManager implements IMetadataManager {
         } catch (RemoteException e) {
             throw new MetadataException(e);
         }
+        ctx.dropIndex(dataverseName, datasetName, indexName);
     }
 
     @Override
     public Index getIndex(MetadataTransactionContext ctx, String dataverseName, String datasetName, String indexName)
             throws MetadataException {
+
+        // First look in the context to see if this transaction created the
+        // requested index itself (but the index is still uncommitted).
+        Index index = ctx.getIndex(dataverseName, datasetName, indexName);
+        if (index != null) {
+            // Don't add this index to the cache, since it is still
+            // uncommitted.
+            return index;
+        }
+
+        if (ctx.indexIsDropped(dataverseName, datasetName, indexName)) {
+            // Index has been dropped by this transaction but could still be
+            // in the cache.
+            return null;
+        }
+
+        //TODO 
+        //check what this is for?
+        if (!MetadataConstants.METADATA_DATAVERSE_NAME.equals(dataverseName) && ctx.getDataverse(dataverseName) != null) {
+            // This transaction has dropped and subsequently created the same
+            // dataverse.
+            return null;
+        }
+
+        index = cache.getIndex(dataverseName, datasetName, indexName);
+        if (index != null) {
+            // Index is already in the cache, don't add it again.
+            return index;
+        }
         try {
-            return metadataNode.getIndex(ctx.getJobId(), dataverseName, datasetName, indexName);
+            index = metadataNode.getIndex(ctx.getJobId(), dataverseName, datasetName, indexName);
         } catch (RemoteException e) {
             throw new MetadataException(e);
         }
+        // We fetched the index from the MetadataNode. Add it to the cache
+        // when this transaction commits.
+        if (index != null) {
+            ctx.addIndex(index);
+        }
+        return index;
     }
 
     @Override
@@ -548,4 +591,25 @@ public class MetadataManager implements IMetadataManager {
         }
         return adapter;
     }
+
+    @Override
+    public void acquireWriteLatch() {
+        metadataLatch.writeLock().lock();
+    }
+
+    @Override
+    public void releaseWriteLatch() {
+        metadataLatch.writeLock().unlock();
+    }
+
+    @Override
+    public void acquireReadLatch() {
+        metadataLatch.readLock().lock();
+    }
+
+    @Override
+    public void releaseReadLatch() {
+        metadataLatch.readLock().unlock();
+    }
+
 }
