@@ -420,23 +420,29 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
             RecordDescriptor outputRecDesc = JobGenHelper.mkRecordDescriptor(typeEnv, opSchema, context);
             int numKeys = numPrimaryKeys;
             int keysStartIndex = outputRecDesc.getFieldCount() - numKeys - 1;
+            ITypeTraits[] typeTraits = null;
+            int[] bloomFilterKeyFields;
             if (isSecondary) {
                 Index secondaryIndex = MetadataManager.INSTANCE.getIndex(mdTxnCtx, dataset.getDataverseName(),
                         dataset.getDatasetName(), indexName);
                 int numSecondaryKeys = secondaryIndex.getKeyFieldNames().size();
                 numKeys += numSecondaryKeys;
                 keysStartIndex = outputVars.size() - numKeys;
-            }
-            IBinaryComparatorFactory[] comparatorFactories = JobGenHelper.variablesToAscBinaryComparatorFactories(
-                    outputVars, keysStartIndex, numKeys, typeEnv, context);
-            ITypeTraits[] typeTraits = null;
-
-            if (isSecondary) {
                 typeTraits = JobGenHelper.variablesToTypeTraits(outputVars, keysStartIndex, numKeys, typeEnv, context);
+                bloomFilterKeyFields = new int[numSecondaryKeys];
+                for (int i = 0; i < numSecondaryKeys; i++) {
+                    bloomFilterKeyFields[i] = i;
+                }
             } else {
                 typeTraits = JobGenHelper.variablesToTypeTraits(outputVars, keysStartIndex, numKeys + 1, typeEnv,
                         context);
+                bloomFilterKeyFields = new int[numPrimaryKeys];
+                for (int i = 0; i < numPrimaryKeys; i++) {
+                    bloomFilterKeyFields[i] = i;
+                }
             }
+            IBinaryComparatorFactory[] comparatorFactories = JobGenHelper.variablesToAscBinaryComparatorFactories(
+                    outputVars, keysStartIndex, numKeys, typeEnv, context);
 
             IAsterixApplicationContextInfo appContext = (IAsterixApplicationContextInfo) context.getAppContext();
             Pair<IFileSplitProvider, AlgebricksPartitionConstraint> spPc;
@@ -474,8 +480,9 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
             
             BTreeSearchOperatorDescriptor btreeSearchOp = new BTreeSearchOperatorDescriptor(jobSpec, outputRecDesc,
                     appContext.getStorageManagerInterface(), appContext.getIndexLifecycleManagerProvider(), spPc.first,
-                    typeTraits, comparatorFactories, lowKeyFields, highKeyFields, lowKeyInclusive, highKeyInclusive,
-                    new LSMBTreeDataflowHelperFactory(AsterixRuntimeComponentsProvider.LSMBTREE_PROVIDER,
+                    typeTraits, comparatorFactories, bloomFilterKeyFields, lowKeyFields, highKeyFields,
+                    lowKeyInclusive, highKeyInclusive, new LSMBTreeDataflowHelperFactory(
+                            AsterixRuntimeComponentsProvider.LSMBTREE_PROVIDER,
                             AsterixRuntimeComponentsProvider.LSMBTREE_PROVIDER,
                             AsterixRuntimeComponentsProvider.LSMBTREE_PROVIDER,
                             AsterixRuntimeComponentsProvider.LSMBTREE_PROVIDER,
@@ -637,11 +644,13 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         int numKeys = keys.size();
         // move key fields to front
         int[] fieldPermutation = new int[numKeys + 1];
+        int[] bloomFilterKeyFields = new int[numKeys];
         // System.arraycopy(keys, 0, fieldPermutation, 0, numKeys);
         int i = 0;
         for (LogicalVariable varKey : keys) {
             int idx = propagatedSchema.findVariable(varKey);
             fieldPermutation[i] = idx;
+            bloomFilterKeyFields[i] = i;
             i++;
         }
         fieldPermutation[numKeys] = propagatedSchema.findVariable(payload);
@@ -667,13 +676,15 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
                     dataSource.getId().getDataverseName(), datasetName, indexName);
             IAsterixApplicationContextInfo appContext = (IAsterixApplicationContextInfo) context.getAppContext();
 
+            //TODO: change number of elements hint to the correct value.
+            long numElementsHint = 1000000L;
             //TODO
             //figure out the right behavior of the bulkload and then give the right callback
             //(ex. what's the expected behavior when there is an error during bulkload?)
             TreeIndexBulkLoadOperatorDescriptor btreeBulkLoad = new TreeIndexBulkLoadOperatorDescriptor(spec,
                     appContext.getStorageManagerInterface(), appContext.getIndexLifecycleManagerProvider(),
-                    splitsAndConstraint.first, typeTraits, comparatorFactories, fieldPermutation,
-                    GlobalConfig.DEFAULT_BTREE_FILL_FACTOR, false, new LSMBTreeDataflowHelperFactory(
+                    splitsAndConstraint.first, typeTraits, comparatorFactories, bloomFilterKeyFields, fieldPermutation,
+                    GlobalConfig.DEFAULT_BTREE_FILL_FACTOR, false, numElementsHint, new LSMBTreeDataflowHelperFactory(
                             AsterixRuntimeComponentsProvider.LSMBTREE_PROVIDER,
                             AsterixRuntimeComponentsProvider.LSMBTREE_PROVIDER,
                             AsterixRuntimeComponentsProvider.LSMBTREE_PROVIDER,
@@ -695,10 +706,12 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         int numKeys = keys.size();
         // Move key fields to front.
         int[] fieldPermutation = new int[numKeys + 1];
+        int[] bloomFilterKeyFields = new int[numKeys];
         int i = 0;
         for (LogicalVariable varKey : keys) {
             int idx = propagatedSchema.findVariable(varKey);
             fieldPermutation[i] = idx;
+            bloomFilterKeyFields[i] = i;
             i++;
         }
         fieldPermutation[numKeys] = propagatedSchema.findVariable(payload);
@@ -742,8 +755,8 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
             LSMTreeIndexInsertUpdateDeleteOperatorDescriptor btreeBulkLoad = new LSMTreeIndexInsertUpdateDeleteOperatorDescriptor(
                     spec, recordDesc, appContext.getStorageManagerInterface(),
                     appContext.getIndexLifecycleManagerProvider(), splitsAndConstraint.first, typeTraits,
-                    comparatorFactories, fieldPermutation, indexOp, new LSMBTreeDataflowHelperFactory(
-                            AsterixRuntimeComponentsProvider.LSMBTREE_PROVIDER,
+                    comparatorFactories, bloomFilterKeyFields, fieldPermutation, indexOp,
+                    new LSMBTreeDataflowHelperFactory(AsterixRuntimeComponentsProvider.LSMBTREE_PROVIDER,
                             AsterixRuntimeComponentsProvider.LSMBTREE_PROVIDER,
                             AsterixRuntimeComponentsProvider.LSMBTREE_PROVIDER,
                             AsterixRuntimeComponentsProvider.LSMBTREE_PROVIDER,
@@ -855,10 +868,12 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
         int numKeys = primaryKeys.size() + secondaryKeys.size();
         // generate field permutations
         int[] fieldPermutation = new int[numKeys];
+        int[] bloomFilterKeyFields = new int[secondaryKeys.size()];
         int i = 0;
         for (LogicalVariable varKey : secondaryKeys) {
             int idx = propagatedSchema.findVariable(varKey);
             fieldPermutation[i] = idx;
+            bloomFilterKeyFields[i] = i;
             i++;
         }
         for (LogicalVariable varKey : primaryKeys) {
@@ -931,8 +946,8 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
             LSMTreeIndexInsertUpdateDeleteOperatorDescriptor btreeBulkLoad = new LSMTreeIndexInsertUpdateDeleteOperatorDescriptor(
                     spec, recordDesc, appContext.getStorageManagerInterface(),
                     appContext.getIndexLifecycleManagerProvider(), splitsAndConstraint.first, typeTraits,
-                    comparatorFactories, fieldPermutation, indexOp, new LSMBTreeDataflowHelperFactory(
-                            AsterixRuntimeComponentsProvider.LSMBTREE_PROVIDER,
+                    comparatorFactories, bloomFilterKeyFields, fieldPermutation, indexOp,
+                    new LSMBTreeDataflowHelperFactory(AsterixRuntimeComponentsProvider.LSMBTREE_PROVIDER,
                             AsterixRuntimeComponentsProvider.LSMBTREE_PROVIDER,
                             AsterixRuntimeComponentsProvider.LSMBTREE_PROVIDER,
                             AsterixRuntimeComponentsProvider.LSMBTREE_PROVIDER,
@@ -1025,7 +1040,7 @@ public class AqlMetadataProvider implements IMetadataProvider<AqlSourceId, Strin
             LSMTreeIndexInsertUpdateDeleteOperatorDescriptor rtreeUpdate = new LSMTreeIndexInsertUpdateDeleteOperatorDescriptor(
                     spec, recordDesc, appContext.getStorageManagerInterface(),
                     appContext.getIndexLifecycleManagerProvider(), splitsAndConstraint.first, typeTraits,
-                    comparatorFactories, fieldPermutation, indexOp, new LSMRTreeDataflowHelperFactory(
+                    comparatorFactories, null, fieldPermutation, indexOp, new LSMRTreeDataflowHelperFactory(
                             valueProviderFactories, RTreePolicyType.RTREE, primaryComparatorFactories,
                             AsterixRuntimeComponentsProvider.LSMRTREE_PROVIDER,
                             AsterixRuntimeComponentsProvider.LSMRTREE_PROVIDER,

@@ -48,6 +48,8 @@ public interface IMetadataIndex {
 
     public ITypeTraits[] getTypeTraits();
 
+    public int[] getBloomFilterKeyFields();
+
     public RecordDescriptor getRecordDescriptor();
 
     public IBinaryComparatorFactory[] getKeyBinaryComparatorFactory();
@@ -66,15 +68,11 @@ public interface IMetadataIndex {
 
     public void setFileId(int fileId);
 
-    public void initIndexLogger(IIndex index) throws ACIDException;
-
     public int getFileId();
 
     public void setResourceID(long resourceID);
 
     public long getResourceID();
-
-    public IndexLogger getIndexLogger();
 
     public DatasetId getDatasetId();
 
