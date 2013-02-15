@@ -16,6 +16,7 @@ import edu.uci.ics.asterix.dataflow.data.nontagged.serde.AInt16SerializerDeseria
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.AInt32SerializerDeserializer;
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.AInt64SerializerDeserializer;
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.AInt8SerializerDeserializer;
+import edu.uci.ics.asterix.dataflow.data.nontagged.serde.AIntervalSerializerDeserializer;
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.ALineSerializerDeserializer;
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.ANullSerializerDeserializer;
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.AObjectSerializerDeserializer;
@@ -48,7 +49,7 @@ public class AqlSerializerDeserializerProvider implements ISerializerDeserialize
     private AqlSerializerDeserializerProvider() {
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings("rawtypes")
     @Override
     public ISerializerDeserializer getSerializerDeserializer(Object typeInfo) {
         IAType aqlType = (IAType) typeInfo;
@@ -63,7 +64,7 @@ public class AqlSerializerDeserializerProvider implements ISerializerDeserialize
         }
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings("rawtypes")
     public ISerializerDeserializer getNonTaggedSerializerDeserializer(IAType aqlType) {
         switch (aqlType.getTypeTag()) {
             case CIRCLE: {
@@ -111,6 +112,9 @@ public class AqlSerializerDeserializerProvider implements ISerializerDeserialize
             case DURATION: {
                 return ADurationSerializerDeserializer.INSTANCE;
             }
+            case INTERVAL: {
+                return AIntervalSerializerDeserializer.INSTANCE;
+            }
             case ORDEREDLIST: {
                 return new AOrderedListSerializerDeserializer((AOrderedListType) aqlType);
             }
@@ -139,7 +143,7 @@ public class AqlSerializerDeserializerProvider implements ISerializerDeserialize
         }
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings("rawtypes")
     private ISerializerDeserializer addTag(final ISerializerDeserializer nonTaggedSerde, final ATypeTag typeTag) {
         return new ISerializerDeserializer<IAObject>() {
 
@@ -148,13 +152,15 @@ public class AqlSerializerDeserializerProvider implements ISerializerDeserialize
             @Override
             public IAObject deserialize(DataInput in) throws HyracksDataException {
                 try {
-                    ATypeTag typeTag = SerializerDeserializerUtil.deserializeTag(in);
+                    //deserialize the tag to move the  input cursor forward 
+                    SerializerDeserializerUtil.deserializeTag(in);
                 } catch (IOException e) {
                     throw new HyracksDataException(e);
                 }
                 return (IAObject) nonTaggedSerde.deserialize(in);
             }
 
+            @SuppressWarnings("unchecked")
             @Override
             public void serialize(IAObject instance, DataOutput out) throws HyracksDataException {
                 SerializerDeserializerUtil.serializeTag(instance, out);

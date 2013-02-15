@@ -10,7 +10,6 @@ import edu.uci.ics.hyracks.algebricks.data.IPrinter;
 
 public class AObjectPrinter implements IPrinter {
 
-    private static final long serialVersionUID = 1L;
     public static final AObjectPrinter INSTANCE = new AObjectPrinter();
 
     private IPrinter recordPrinter = new ARecordPrinterFactory(null).createPrinter();
@@ -72,6 +71,10 @@ public class AObjectPrinter implements IPrinter {
             }
             case DURATION: {
                 ADurationPrinter.INSTANCE.print(b, s, l, ps);
+                break;
+            }
+            case INTERVAL: {
+                AIntervalPrinter.INSTANCE.print(b, s, l, ps);
                 break;
             }
             case POINT: {
