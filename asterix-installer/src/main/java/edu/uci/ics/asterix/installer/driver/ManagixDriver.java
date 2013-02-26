@@ -151,6 +151,7 @@ public class ManagixDriver {
         buffer.append("restore  " + ":" + " Restores an asterix instance" + "\n");
         buffer.append("alter    " + ":" + " Alters the configuration for an existing asterix instance" + "\n");
         buffer.append("describe " + ":" + " Describes an existing asterix instance" + "\n");
+        buffer.append("install " + ":" + " Installs a library to existing asterix instance" + "\n");
         LOGGER.log(Level.INFO, buffer.toString());
     }
 }

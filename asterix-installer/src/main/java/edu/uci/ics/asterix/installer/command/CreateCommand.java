@@ -69,8 +69,8 @@ public class CreateCommand extends AbstractCommand {
         VerificationUtil.updateInstanceWithRuntimeDescription(asterixInstance, runtimeState, true);
         ServiceProvider.INSTANCE.getLookupService().writeAsterixInstance(asterixInstance);
         System.out.println(asterixInstance.getDescription(false));
-        ManagixUtil.deleteDirectory(ManagixDriver.getManagixHome() + File.separator + ManagixDriver.ASTERIX_DIR
-                + File.separator + asterixInstanceName);
+     //   ManagixUtil.deleteDirectory(ManagixDriver.getManagixHome() + File.separator + ManagixDriver.ASTERIX_DIR
+       //         + File.separator + asterixInstanceName);
 
     }
 

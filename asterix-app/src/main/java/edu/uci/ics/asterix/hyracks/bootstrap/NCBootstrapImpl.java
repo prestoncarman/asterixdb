@@ -59,6 +59,7 @@ public class NCBootstrapImpl implements INCBootstrap {
             MetadataManager.INSTANCE.init();
             MetadataBootstrap.startUniverse(proxy.getAsterixProperties(), ncApplicationContext);
         }
+        ExternalLibraryBootstrap.setUpExternaLibraries(ncApplicationContext.getNodeId(), isMetadataNode);
 
     }
 

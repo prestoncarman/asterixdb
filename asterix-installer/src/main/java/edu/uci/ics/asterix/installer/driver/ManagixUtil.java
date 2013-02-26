@@ -71,7 +71,9 @@ public class ManagixUtil {
     public static void createAsterixZip(AsterixInstance asterixInstance, boolean newDeployment) throws IOException {
         writeAsterixConfigurationFile(asterixInstance, newDeployment);
         String asterixInstanceDir = ManagixDriver.getAsterixDir() + File.separator + asterixInstance.getName();
-        unzip(ManagixDriver.getAsterixZip(), asterixInstanceDir);
+        if (newDeployment) {
+            unzip(ManagixDriver.getAsterixZip(), asterixInstanceDir);
+        }
         File sourceJar = new File(asterixInstanceDir + File.separator + "lib" + File.separator + "asterix-app-"
                 + asterixInstance.getAsterixVersion() + ".jar");
         String origFile = "test.properties";
@@ -82,6 +84,28 @@ public class ManagixUtil {
                 ManagixDriver.getAsterixZip().lastIndexOf(File.separator) + 1);
         zipDir(new File(asterixInstanceDir), new File(asterixInstanceDir + File.separator + asterixZipName));
 
+    }
+
+    public static void addLibraryToAsterixZip(AsterixInstance asterixInstance, String dataverseName,
+            String libraryName, String libraryPath) throws IOException {
+        File instanceDir = new File(ManagixDriver.getAsterixDir() + File.separator + asterixInstance.getName());
+        if (!instanceDir.exists()) {
+            instanceDir.mkdirs();
+        }
+        String asterixZipName = ManagixDriver.getAsterixZip().substring(
+                ManagixDriver.getAsterixZip().lastIndexOf(File.separator) + 1);
+
+        String sourceZip = instanceDir.getAbsolutePath() + File.separator + asterixZipName;
+        unzip(sourceZip, instanceDir.getAbsolutePath());
+        File libraryPathInZip = new File(instanceDir.getAbsolutePath() + File.separator + "external" + File.separator
+                + "library" + dataverseName + File.separator + "to-add" + File.separator + libraryName);
+        libraryPathInZip.mkdirs();
+        Runtime.getRuntime().exec("cp" + " " + libraryPath + " " + libraryPathInZip.getAbsolutePath());
+        Runtime.getRuntime().exec("rm " + sourceZip);
+        String destZip = ManagixDriver.getAsterixDir() + File.separator + asterixInstance.getName() + File.separator
+                + asterixZipName;
+        zipDir(instanceDir, new File(destZip));
+        Runtime.getRuntime().exec("mv" + " " + destZip + " " + sourceZip);
     }
 
     private static Node getMetadataNode(Cluster cluster) {
@@ -157,13 +181,13 @@ public class ManagixUtil {
             int count;
             byte data[] = new byte[BUFFER_SIZE];
 
-            //write the file to the disk
+            // write the file to the disk
             FileOutputStream fos = new FileOutputStream(dst);
             dest = new BufferedOutputStream(fos, BUFFER_SIZE);
             while ((count = zis.read(data, 0, BUFFER_SIZE)) != -1) {
                 dest.write(data, 0, count);
             }
-            //close the output streams
+            // close the output streams
             dest.flush();
             dest.close();
         }
@@ -174,11 +198,12 @@ public class ManagixUtil {
     public static void zipDir(File sourceDir, File destFile) throws IOException {
         FileOutputStream fos = new FileOutputStream(destFile);
         ZipOutputStream zos = new ZipOutputStream(fos);
-        zipDir(sourceDir, destFile, zos);
+        zipDir(sourceDir, destFile, zos, sourceDir.getAbsolutePath());
         zos.close();
     }
 
-    private static void zipDir(File sourceDir, final File destFile, ZipOutputStream zos) throws IOException {
+    private static void zipDir(File sourceDir, final File destFile, ZipOutputStream zos, String basePath)
+            throws IOException {
         File[] dirList = sourceDir.listFiles(new FileFilter() {
             public boolean accept(File f) {
                 return !f.getName().endsWith(destFile.getName());
@@ -187,16 +212,22 @@ public class ManagixUtil {
         for (int i = 0; i < dirList.length; i++) {
             File f = dirList[i];
             if (f.isDirectory()) {
-                zipDir(f, destFile, zos);
+                String entryName = f.getAbsolutePath().substring(basePath.length() + 1);
+                ZipEntry entry = new ZipEntry(entryName + File.separator);
+                zos.putNextEntry(entry);
+                zos.closeEntry();
+                zipDir(f, destFile, zos, basePath);
             } else {
                 int bytesIn = 0;
                 byte[] readBuffer = new byte[2156];
                 FileInputStream fis = new FileInputStream(f);
-                ZipEntry entry = new ZipEntry(sourceDir.getName() + File.separator + f.getName());
+                String entryName = sourceDir.getAbsolutePath().substring(basePath.length() + 1);
+                ZipEntry entry = new ZipEntry(entryName + File.separator + f.getName());
                 zos.putNextEntry(entry);
                 while ((bytesIn = fis.read(readBuffer)) != -1) {
                     zos.write(readBuffer, 0, bytesIn);
                 }
+                zos.closeEntry();
                 fis.close();
             }
         }

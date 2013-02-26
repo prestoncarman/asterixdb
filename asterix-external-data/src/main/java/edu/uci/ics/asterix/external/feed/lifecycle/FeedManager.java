@@ -43,7 +43,7 @@ public class FeedManager implements IFeedManager {
                 for (LinkedBlockingQueue<IFeedMessage> queue : operatorQueues) {
                     queue.put(feedMessage);
                 }
-            } 
+            }
         } catch (Exception e) {
             throw new AsterixException(e);
         }
