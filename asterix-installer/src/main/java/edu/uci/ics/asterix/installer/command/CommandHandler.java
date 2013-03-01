@@ -49,6 +49,10 @@ public class CommandHandler {
             case INSTALL:
                 cmd = new InstallCommand();
                 break;
+            case UNINSTALL:
+                cmd = new UninstallCommand();
+                break;
+        }
         }
         cmd.execute(args);
     }
