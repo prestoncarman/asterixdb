@@ -46,6 +46,9 @@ public class CommandHandler {
             case STOP:
                 cmd = new StopCommand();
                 break;
+            case INSTALL:
+                cmd = new InstallCommand();
+                break;
         }
         cmd.execute(args);
     }

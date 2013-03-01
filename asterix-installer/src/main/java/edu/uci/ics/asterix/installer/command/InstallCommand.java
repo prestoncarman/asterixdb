@@ -21,24 +21,28 @@ import edu.uci.ics.asterix.installer.driver.InstallerUtil;
 import edu.uci.ics.asterix.installer.events.PatternCreator;
 import edu.uci.ics.asterix.installer.model.AsterixInstance;
 import edu.uci.ics.asterix.installer.model.AsterixInstance.State;
+import edu.uci.ics.asterix.installer.service.ILookupService;
 import edu.uci.ics.asterix.installer.service.ServiceProvider;
 
-public class DeleteCommand extends AbstractCommand {
+public class InstallCommand extends AbstractCommand {
 
     @Override
     protected void execCommand() throws Exception {
-        String asterixInstanceName = ((DeleteConfig) config).name;
-        AsterixInstance instance = InstallerUtil.validateAsterixInstanceExists(asterixInstanceName, State.INACTIVE);
+        InstallConfig installConfig = ((InstallConfig) config);
+        String instanceName = installConfig.name;
+        InstallerUtil.validateAsterixInstanceExists(instanceName, State.INACTIVE);
+        ILookupService lookupService = ServiceProvider.INSTANCE.getLookupService();
+        AsterixInstance instance = lookupService.getAsterixInstance(instanceName);
         PatternCreator pc = new PatternCreator();
-        Patterns patterns = pc.createDeleteInstancePattern(instance);
+        Patterns patterns = pc.getLibraryInstallPattern(instance.getCluster(), installConfig.dataverseName,
+                installConfig.libraryName, installConfig.libraryPath);
         InstallerUtil.getEventrixClient(instance.getCluster()).submit(patterns);
-        ServiceProvider.INSTANCE.getLookupService().removeAsterixInstance(asterixInstanceName);
-        LOGGER.info("Deleted Asterix instance: " + asterixInstanceName);
+        LOGGER.info("Installed library " + installConfig.libraryName);
     }
 
     @Override
     protected CommandConfig getCommandConfig() {
-        return new DeleteConfig();
+        return new InstallConfig();
     }
 
     @Override
@@ -49,12 +53,21 @@ public class DeleteCommand extends AbstractCommand {
 
 }
 
-class DeleteConfig implements CommandConfig {
+class InstallConfig implements CommandConfig {
 
     @Option(name = "-h", required = false, usage = "Help")
     public boolean help = false;
 
-    @Option(name = "-n", required = false, usage = "Name of Asterix Instance")
+    @Option(name = "-n", required = true, usage = "Name of Asterix Instance")
     public String name;
+
+    @Option(name = "-d", required = true, usage = "Name of the dataverse under which the library will be installed")
+    public String dataverseName;
+
+    @Option(name = "-name", required = true, usage = "Name of the library")
+    public String libraryName;
+
+    @Option(name = "-p", required = true, usage = "Path to library zip bundle")
+    public String libraryPath;
 
 }

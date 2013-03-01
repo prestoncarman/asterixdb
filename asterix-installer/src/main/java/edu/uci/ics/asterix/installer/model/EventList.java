@@ -21,7 +21,6 @@ public class EventList {
         NODE_FAILURE,
         CC_START,
         CC_FAILURE,
-        ASTERIX_DEPLOY,
         BACKUP,
         RESTORE,
         FILE_DELETE,

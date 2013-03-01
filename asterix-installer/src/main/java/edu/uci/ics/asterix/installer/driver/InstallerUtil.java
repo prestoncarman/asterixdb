@@ -80,6 +80,28 @@ public class InstallerUtil {
 
     }
 
+    public static void addLibraryToAsterixZip(AsterixInstance asterixInstance, String dataverseName,
+            String libraryName, String libraryPath) throws IOException {
+        File instanceDir = new File(InstallerDriver.getAsterixDir() + File.separator + asterixInstance.getName());
+        if (!instanceDir.exists()) {
+            instanceDir.mkdirs();
+        }
+        String asterixZipName = InstallerDriver.getAsterixZip().substring(
+                InstallerDriver.getAsterixZip().lastIndexOf(File.separator) + 1);
+
+        String sourceZip = instanceDir.getAbsolutePath() + File.separator + asterixZipName;
+        unzip(sourceZip, instanceDir.getAbsolutePath());
+        File libraryPathInZip = new File(instanceDir.getAbsolutePath() + File.separator + "external" + File.separator
+                + "library" + dataverseName + File.separator + "to-add" + File.separator + libraryName);
+        libraryPathInZip.mkdirs();
+        Runtime.getRuntime().exec("cp" + " " + libraryPath + " " + libraryPathInZip.getAbsolutePath());
+        Runtime.getRuntime().exec("rm " + sourceZip);
+		String destZip = InstallerDriver.getAsterixDir() + File.separator + asterixInstance.getName() + File.separator
+                + asterixZipName;
+        zipDir(instanceDir, new File(destZip));
+        Runtime.getRuntime().exec("mv" + " " + destZip + " " + sourceZip);
+    }
+    
     private static Node getMetadataNode(Cluster cluster) {
         Random random = new Random();
         int nNodes = cluster.getNode().size();
@@ -250,7 +272,7 @@ public class InstallerUtil {
             throws Exception {
         AsterixInstance instance = ServiceProvider.INSTANCE.getLookupService().getAsterixInstance(name);
         if (instance == null) {
-            throw new InstallerException(" Asterix instance by name " + name + " does not exist.");
+            throw new InstallerException("Asterix instance by name " + name + " does not exist.");
         }
         boolean valid = false;
         for (State state : permissibleStates) {
@@ -260,7 +282,7 @@ public class InstallerUtil {
             }
         }
         if (!valid) {
-            throw new InstallerException(" Asterix instance by the name " + name + " is in " + instance.getState()
+            throw new InstallerException("Asterix instance by the name " + name + " is in " + instance.getState()
                     + " state ");
         }
         return instance;
@@ -269,7 +291,7 @@ public class InstallerUtil {
     public static void validateAsterixInstanceNotExists(String name) throws Exception {
         AsterixInstance instance = ServiceProvider.INSTANCE.getLookupService().getAsterixInstance(name);
         if (instance != null) {
-            throw new InstallerException(" Asterix instance by name " + name + " already exists.");
+            throw new InstallerException("Asterix instance by name " + name + " already exists.");
         }
     }
 

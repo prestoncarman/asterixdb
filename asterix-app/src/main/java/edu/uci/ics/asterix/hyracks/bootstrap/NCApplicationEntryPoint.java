@@ -62,6 +62,7 @@ public class NCApplicationEntryPoint implements INCApplicationEntryPoint {
             MetadataManager.INSTANCE.init();
             MetadataBootstrap.startUniverse(proxy.getAsterixProperties(), ncApplicationContext);
         }
+        ExternalLibraryBootstrap.setUpExternaLibraries(isMetadataNode);
     }
 
     public void registerRemoteMetadataNode(IAsterixStateProxy proxy) throws RemoteException {

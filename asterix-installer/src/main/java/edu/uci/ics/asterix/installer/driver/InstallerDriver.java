@@ -125,6 +125,8 @@ public class InstallerDriver {
         buffer.append("restore  " + ":" + " Restores an asterix instance" + "\n");
         buffer.append("alter    " + ":" + " Alters the configuration for an existing asterix instance" + "\n");
         buffer.append("describe " + ":" + " Describes an existing asterix instance" + "\n");
+        buffer.append("install  " + ":" + " Installs a library on asterix instance" + "\n");
+        
         LOGGER.info(buffer.toString());
     }
 }

@@ -6,7 +6,7 @@
   </workingDir>
   <logdir>/tmp/asterix/logs</logdir>
   <store>/tmp/asterix/storage</store>
-  <java_home></java_home>
+  <java_home>/Library/Java/JavaVirtualMachines/jdk1.7.0_13.jdk/Contents/Home</java_home>
   <ram>1024m</ram>
   <master-node>
      <id>master</id>

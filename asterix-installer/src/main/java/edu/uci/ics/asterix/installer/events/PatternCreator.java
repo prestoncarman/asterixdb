@@ -16,6 +16,7 @@ package edu.uci.ics.asterix.installer.events;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.logging.Logger;
 
@@ -140,6 +141,36 @@ public class PatternCreator {
         return new Patterns(patternList);
     }
 
+    public Patterns getLibraryInstallPattern(Cluster cluster, String dataverse, String libraryName, String libraryPath)
+            throws Exception {
+        List<Pattern> patternList = new ArrayList<Pattern>();
+        Nodeid nodeid = new Nodeid(new Value(null, EventDriver.CLIENT_NODE.getId()));
+        String username = cluster.getUsername() != null ? cluster.getUsername() : System.getProperty("user.name");
+        String workingDir = cluster.getWorkingDir().getDir();
+
+        Iterator<Node> installTargets = cluster.getNode().iterator();
+        Node installNode = installTargets.next();
+        String destinationIp = installNode.getIp();
+        String destDir = workingDir + File.separator + "install" + File.separator + dataverse + File.separator
+                + libraryName;
+        String fileToTransfer = new File(libraryPath).getAbsolutePath();
+        String pargs = username + " " + fileToTransfer + " " + destinationIp + " " + destDir + " " + "unpack";
+        Event event = new Event("file_transfer", nodeid, pargs);
+        Pattern p = new Pattern(null, 1, null, event);
+        patternList.add(p);
+
+        if (!cluster.getWorkingDir().isNFS()) {
+            while (installTargets.hasNext()) {
+                Node node = installTargets.next();
+                pargs = username + " " + fileToTransfer + " " + node.getIp() + " " + destDir + " " + "unpack";
+                event = new Event("file_transfer", nodeid, pargs);
+                p = new Pattern(null, 1, null, event);
+                patternList.add(p);
+            }
+        }
+        return new Patterns(patternList);
+    }
+
     public Patterns createHadoopLibraryTransferPattern(Cluster cluster) throws Exception {
         List<Pattern> patternList = new ArrayList<Pattern>();
         String workingDir = cluster.getWorkingDir().getDir();
@@ -181,6 +212,7 @@ public class PatternCreator {
         if (instance.getBackupInfo() != null && instance.getBackupInfo().size() > 0) {
             patternList.addAll(createRemoveHDFSBackupPattern(instance).getPattern());
         }
+      //  patternList.addAll(createRemoveAsterixWorkingDirPattern(instance).getPattern());
         Patterns patterns = new Patterns(patternList);
         return patterns;
     }
@@ -198,6 +230,27 @@ public class PatternCreator {
         String pargs = workingDir + " " + hadoopVersion + " " + hdfsUrl + " " + pathToDelete;
         Event event = new Event("hdfs_delete", nodeid, pargs);
         patternList.add(new Pattern(null, 1, null, event));
+        Patterns patterns = new Patterns(patternList);
+        return patterns;
+    }
+
+    private Patterns createRemoveAsterixWorkingDirPattern(AsterixInstance instance) throws Exception {
+        List<Pattern> patternList = new ArrayList<Pattern>();
+        Cluster cluster = instance.getCluster();
+        String workingDir = cluster.getWorkingDir().getDir();
+        String pargs = workingDir + File.separator + "*";
+        Nodeid nodeid = new Nodeid(new Value(null, cluster.getMasterNode().getId()));
+        Event event = new Event("file_delete", nodeid, pargs);
+        patternList.add(new Pattern(null, 1, null, event));
+
+        if (!cluster.getWorkingDir().isNFS()) {
+            for (Node node : cluster.getNode()) {
+                nodeid = new Nodeid(new Value(null, node.getId()));
+                pargs = workingDir + File.separator + "*";
+                event = new Event("file_delete", nodeid, pargs);
+                patternList.add(new Pattern(null, 1, null, event));
+            }
+        }
         Patterns patterns = new Patterns(patternList);
         return patterns;
     }
@@ -233,8 +286,8 @@ public class PatternCreator {
         String username = cluster.getUsername() != null ? cluster.getUsername() : System.getProperty("user.name");
         String asterixZipName = InstallerDriver.getAsterixZip().substring(
                 InstallerDriver.getAsterixZip().lastIndexOf(File.separator) + 1);
-        String fileToTransfer = InstallerDriver.getAsterixDir() + File.separator + instanceName + File.separator
-                + asterixZipName;
+        String fileToTransfer = new File(InstallerDriver.getAsterixDir() + File.separator + instanceName
+                + File.separator + asterixZipName).getAbsolutePath();
         String pargs = username + " " + fileToTransfer + " " + destinationIp + " " + destDir + " " + "unpack";
         Event event = new Event("file_transfer", nodeid, pargs);
         return new Pattern(null, 1, null, event);

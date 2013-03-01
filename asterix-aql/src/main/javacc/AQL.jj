@@ -1302,7 +1302,7 @@ Triple<Identifier,Identifier,Identifier> getDotSeparatedTriple() throws ParseExc
   {
     first = new Identifier(token.image);
   } 
-  "." <IDENTIFIER>
+  ("." <IDENTIFIER>
   {
     second = new Identifier(token.image);
   }
@@ -1312,14 +1312,17 @@ Triple<Identifier,Identifier,Identifier> getDotSeparatedTriple() throws ParseExc
     third = new Identifier(token.image);
   }
   )?
+  )?
   
   {
-   if(third == null){
-   	third  = second;
-   	second = first;
-   	first = null;
+   if(second == null){
+     third = first;
+     first = null;
+   } else if(third == null){
+     third  = second;
+   	 second = first;
+   	 first = null;
    } 
-   
    return new Triple<Identifier,Identifier,Identifier>(first,second,third);
   }  
 }  
@@ -2039,17 +2042,33 @@ Expression FunctionCallExpr() throws ParseException:
   List<Expression> argList = new ArrayList<Expression>();
   Expression tmp;
   int arity = 0;
-  String funcName;
   String dataverse;
+  String funcName;
+  String libraryName;
   String hint=null;
-  String id1=null;
-  String id2=null;
+  Triple<String,String,String> functionCallComponents = null;
 }
 {  
-    ( <IDENTIFIER> { dataverse = defaultDataverse; funcName = token.image;} ("." <IDENTIFIER> { dataverse = funcName; funcName = token.image;})? | <DATASET> {dataverse = MetadataConstants.METADATA_DATAVERSE_NAME; funcName = getToken(0).toString();})
+    (
+      ( functionCallComponents = getFunctionCallComponents() )
+       {
+         dataverse = functionCallComponents.first == null ? defaultDataverse : functionCallComponents.first;
+         libraryName = functionCallComponents.second;
+         funcName = functionCallComponents.third;
+         if(libraryName != null){
+      	  funcName = libraryName + ":" + funcName;
+         } 
+       } | (<DATASET>) 
+       {
+         dataverse = MetadataConstants.METADATA_DATAVERSE_NAME; funcName = getToken(0).toString();
+       }
+    )
+     
+    
     {
        hint = getHint(token);
     }
+ 
      <LEFTPAREN> (tmp = Expression()
      {
        argList.add(tmp);
@@ -2070,7 +2089,37 @@ Expression FunctionCallExpr() throws ParseException:
      }
 }
 
+Triple<String,String,String> getFunctionCallComponents() throws ParseException:
+{
+   String first = null;
+   String second = null;
+   String third = null;
+}
+{
+   <IDENTIFIER>{
+     first = token.image;
+   }
+   ("." <IDENTIFIER> {
+      second = token.image;
+    } 
+    ( ":" <IDENTIFIER> {
+  	    third = token.image; 
+      }
+    )?
+   )? 
+   
+   {
+     if(second == null) {
+       third = first;
+       first = null; 
+     } else if (third == null) {
+       third = second;
+       second = null;
+     }
+     return new Triple<String,String,String>(first,second,third);
+   }
 
+}
 
 Expression ParenthesizedExpression() throws ParseException:
 {

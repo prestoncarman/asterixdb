@@ -60,6 +60,7 @@ public class CreateCommand extends AbstractCommand {
         clusterProperties.add(new Property("CLIENT_NET_IP", cluster.getMasterNode().getIp()));
         clusterProperties.add(new Property("LOG_DIR", cluster.getLogdir()));
         clusterProperties.add(new Property("JAVA_HOME", cluster.getJavaHome()));
+        clusterProperties.add(new Property("WORKING_DIR", cluster.getWorkingDir().getDir()));
         cluster.setEnv(new Env(clusterProperties));
 
         PatternCreator pc = new PatternCreator();
@@ -72,7 +73,6 @@ public class CreateCommand extends AbstractCommand {
         InstallerUtil.deleteDirectory(InstallerDriver.getManagixHome() + File.separator + InstallerDriver.ASTERIX_DIR
                 + File.separator + asterixInstanceName);
         LOGGER.info(asterixInstance.getDescription(false));
-
     }
 
     @Override
