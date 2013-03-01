@@ -171,6 +171,10 @@ public class PatternCreator {
         return new Patterns(patternList);
     }
 
+    public Patterns getLibraryUninstallPattern(Cluster cluster, String dataverse, String libraryName) throws Exception {
+        return null;
+    }
+
     public Patterns createHadoopLibraryTransferPattern(Cluster cluster) throws Exception {
         List<Pattern> patternList = new ArrayList<Pattern>();
         String workingDir = cluster.getWorkingDir().getDir();
@@ -212,7 +216,7 @@ public class PatternCreator {
         if (instance.getBackupInfo() != null && instance.getBackupInfo().size() > 0) {
             patternList.addAll(createRemoveHDFSBackupPattern(instance).getPattern());
         }
-      //  patternList.addAll(createRemoveAsterixWorkingDirPattern(instance).getPattern());
+        //  patternList.addAll(createRemoveAsterixWorkingDirPattern(instance).getPattern());
         Patterns patterns = new Patterns(patternList);
         return patterns;
     }
