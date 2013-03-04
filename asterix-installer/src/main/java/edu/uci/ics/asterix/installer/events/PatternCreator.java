@@ -172,7 +172,26 @@ public class PatternCreator {
     }
 
     public Patterns getLibraryUninstallPattern(Cluster cluster, String dataverse, String libraryName) throws Exception {
-        return null;
+        List<Pattern> patternList = new ArrayList<Pattern>();
+        String workingDir = cluster.getWorkingDir().getDir();
+        Iterator<Node> uninstallTargets = cluster.getNode().iterator();
+        Node uninstallNode = uninstallTargets.next();
+        String destFile = dataverse + "." + libraryName;
+        String pargs = workingDir + File.separator + "uninstall" + " " + destFile;
+        Nodeid nodeid = new Nodeid(new Value(null, uninstallNode.getId()));
+        Event event = new Event("file_create", nodeid, pargs);
+        Pattern p = new Pattern(null, 1, null, event);
+        patternList.add(p);
+        if (!cluster.getWorkingDir().isNFS()) {
+            while (uninstallTargets.hasNext()) {
+                uninstallNode = uninstallTargets.next();
+                nodeid = new Nodeid(new Value(null, uninstallNode.getId()));
+                event = new Event("file_create", nodeid, pargs);
+                p = new Pattern(null, 1, null, event);
+                patternList.add(p);
+            }
+        }
+        return new Patterns(patternList);
     }
 
     public Patterns createHadoopLibraryTransferPattern(Cluster cluster) throws Exception {

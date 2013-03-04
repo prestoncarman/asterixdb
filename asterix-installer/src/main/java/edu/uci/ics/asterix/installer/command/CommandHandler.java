@@ -53,7 +53,6 @@ public class CommandHandler {
                 cmd = new UninstallCommand();
                 break;
         }
-        }
         cmd.execute(args);
     }
 }

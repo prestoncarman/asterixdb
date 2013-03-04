@@ -31,13 +31,20 @@ public class ExternalLibraryManager {
         }
     }
 
+    public static void deregisterLibraryClassLoader(String dataverseName, String libraryName) {
+        String key = dataverseName + "." + libraryName;
+        synchronized (libraryClassLoaders) {
+            if (libraryClassLoaders.get(dataverseName) != null) {
+                libraryClassLoaders.remove(key);
+            }
+        }
+    }
+
     public static ClassLoader getLibraryClassLoader(String dataverseName, String libraryName) {
         String key = dataverseName + "." + libraryName;
         synchronized (libraryClassLoaders) {
             return libraryClassLoaders.get(key);
         }
     }
-
- 
 
 }

@@ -45,7 +45,7 @@ public class ExternalLibraryBootstrap {
                 File dataverseDir = new File(installedLibDir, dataverse);
                 String[] libraries = dataverseDir.list();
                 for (String library : libraries) {
-                    setupEnvironmentForLibrary(dataverse, library);
+                    registerLibrary(dataverse, library);
                 }
             }
         }
@@ -61,17 +61,16 @@ public class ExternalLibraryBootstrap {
     }
 
     private static void uninstallLibraries() throws Exception {
-        File uninstallDir = getLibraryUninstallDir();
-        if (!uninstallDir.exists()) {
-            return;
-        }
-
-        for (File file : uninstallDir.listFiles()) {
-            if (!file.isDirectory()) {
-                String[] entryComponents = file.getName().split(":");
-                String dataverse = entryComponents[0];
-                String libraryName = entryComponents[1];
-                uninstallLibrary(dataverse, libraryName);
+        File uninstallLibDir = getLibraryUninstallDir();
+        String[] uninstallLibNames;
+        if (uninstallLibDir.exists()) {
+            uninstallLibNames = uninstallLibDir.list();
+            for (String uninstallLibName : uninstallLibNames) {
+                String[] components = uninstallLibName.split("\\.");
+                String dataverse = components[0];
+                String libName = components[1];
+                uninstallLibrary(dataverse, libName);
+                new File(uninstallLibDir + File.separator + uninstallLibName).delete();
             }
         }
     }
@@ -111,7 +110,7 @@ public class ExternalLibraryBootstrap {
                 File libraryDir = new File(dataverseDir, library);
                 try {
                     installLibrary(dataverse, libraryDir);
-                    setupEnvironmentForLibrary(dataverse, library);
+                    registerLibrary(dataverse, library);
                 } catch (Exception e) {
                     e.printStackTrace();
                     throw new Exception("Exception in installing library:" + library
@@ -169,9 +168,13 @@ public class ExternalLibraryBootstrap {
         }
     }
 
-    private static void setupEnvironmentForLibrary(String dataverse, String libraryName) throws Exception {
+    private static void registerLibrary(String dataverse, String libraryName) throws Exception {
         ClassLoader classLoader = getLibraryClassLoader(dataverse, libraryName);
         ExternalLibraryManager.registerLibraryClassLoader(dataverse, libraryName, classLoader);
+    }
+
+    private static void deregisterLibrary(String dataverse, String libraryName) throws Exception {
+        ExternalLibraryManager.deregisterLibraryClassLoader(dataverse, libraryName);
     }
 
     private static Library getLibrary(File libraryXMLPath) throws Exception {

@@ -78,7 +78,7 @@
   </event>
   <event>
     <type>file_create</type>
-    <script>file/create.sh</script>
+    <script>file/create_file.sh</script>
     <description>Creates a file on the local file system to a remote node</description>
     <args>destination_node destination_path</args>
     <daemon>false</daemon>
