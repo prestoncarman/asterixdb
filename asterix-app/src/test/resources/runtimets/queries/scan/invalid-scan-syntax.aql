@@ -1,7 +1,7 @@
 /*
  * Description    : Tests syntax error for the changed dataset access syntax
  * Expected Result: Syntax Error from parser
- * Author: pouria.pirzadeh
+ * Date: 			March 6th 2013
  */
 drop dataverse test if exists;
 create dataverse test;

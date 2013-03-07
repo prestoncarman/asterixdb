@@ -2,6 +2,7 @@
  * Test case Name  : insert-syntax-change.aql
  * Description     : verify various AQL syntax for insert
  * Expected Result : Success
+ * Date         : 6th March 2013
  */
 
 drop dataverse testdv2 if exists;

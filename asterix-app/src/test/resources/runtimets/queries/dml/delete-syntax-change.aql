@@ -1,3 +1,10 @@
+/*
+ * Description  : Test variant syntax for delete
+ *              : Ending semi-colon is optional for delete
+ * Expected Res : Success
+ * Date         : 6th March 2013
+ */
+
 drop dataverse test if exists;
 create dataverse test;
 use dataverse test;
