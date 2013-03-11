@@ -45,6 +45,7 @@ public class ExternalLibraryBootstrap {
                 File dataverseDir = new File(installedLibDir, dataverse);
                 String[] libraries = dataverseDir.list();
                 for (String library : libraries) {
+                    System.out.println(" registering library " + dataverse + ":" + library);
                     registerLibrary(dataverse, library);
                 }
             }
@@ -71,6 +72,10 @@ public class ExternalLibraryBootstrap {
                 String libName = components[1];
                 uninstallLibrary(dataverse, libName);
                 new File(uninstallLibDir + File.separator + uninstallLibName).delete();
+                File f = new File(getInstalledLibraryDir() + File.separator + dataverse + File.separator + libName);
+                if (f.exists()) {
+                    f.delete();
+                }
             }
         }
     }
@@ -193,6 +198,8 @@ public class ExternalLibraryBootstrap {
             }
         };
 
+        System.out.println(" looking for jar in " + libDir.getAbsolutePath());
+
         String[] jarsInLibDir = libDir.list(jarFileFilter);
         if (jarsInLibDir.length > 1) {
             throw new Exception("Incorrect library structure: found multiple library jars");
@@ -203,14 +210,19 @@ public class ExternalLibraryBootstrap {
 
         File libJar = new File(libDir, jarsInLibDir[0]);
         File libDependencyDir = new File(libDir.getAbsolutePath() + File.separator + "lib");
-        String[] libraryDependencies = libDependencyDir.list(jarFileFilter);
-        ClassLoader parentClassLoader = ExternalLibraryBootstrap.class.getClassLoader();
-        URL[] urls = new URL[libraryDependencies.length + 1];
+        int numDependencies = 1;
+        String[] libraryDependencies = null;
+        if (libDependencyDir.exists()) {
+            libraryDependencies = libDependencyDir.list(jarFileFilter);
+            numDependencies += libraryDependencies.length;
+        }
 
+        ClassLoader parentClassLoader = ExternalLibraryBootstrap.class.getClassLoader();
+        URL[] urls = new URL[numDependencies];
         int count = 0;
         urls[count++] = libJar.toURL();
 
-        if (libraryDependencies.length > 0) {
+        if (libraryDependencies != null && libraryDependencies.length > 0) {
             for (String dependency : libraryDependencies) {
                 File file = new File(libDependencyDir + File.separator + dependency);
                 urls[count++] = file.toURL();

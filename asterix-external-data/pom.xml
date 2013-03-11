@@ -115,6 +115,10 @@
 			<type>jar</type>
 			<scope>compile</scope>
 		</dependency>
+                <dependency>
+                        <groupId>edu.uci.ics.hyracks</groupId>
+                        <artifactId>algebricks-compiler</artifactId>
+                </dependency>
 		<dependency>
 			<groupId>com.kenai.nbpwr</groupId>
 			<artifactId>org-apache-commons-io</artifactId>

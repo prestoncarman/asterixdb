@@ -2099,21 +2099,26 @@ Triple<String,String,String> getFunctionCallComponents() throws ParseException:
    <IDENTIFIER>{
      first = token.image;
    }
-   ("." <IDENTIFIER> {
+   (
+    ("." <IDENTIFIER> {
       second = token.image;
-    } 
+    }
+    )?  
     ( ":" <IDENTIFIER> {
   	    third = token.image; 
       }
     )?
-   )? 
-   
+   )
    {
      if(second == null) {
-       third = first;
+       if(third!=null){
+       	 second="" + first;
+       } else {
+       third = "" + first;
+       }
        first = null; 
      } else if (third == null) {
-       third = second;
+       third = "" + second;
        second = null;
      }
      return new Triple<String,String,String>(first,second,third);

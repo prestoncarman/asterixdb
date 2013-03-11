@@ -73,8 +73,8 @@ public class MetadataPrimaryIndexes {
                 BuiltinType.ASTRING, BuiltinType.ASTRING }, new String[] { "DataverseName", "Name", "Arity" },
                 MetadataRecordTypes.FUNCTION_RECORDTYPE);
 
-        DATASOURCE_ADAPTER_DATASET = new MetadataIndex("DatasourceAdapter", null, 3,
-                new IAType[] { BuiltinType.ASTRING, BuiltinType.ASTRING }, new String[] { "DataverseName", "Name" },
+        DATASOURCE_ADAPTER_DATASET = new MetadataIndex("DatasourceAdapter", null, 3, new IAType[] {
+                BuiltinType.ASTRING, BuiltinType.ASTRING }, new String[] { "DataverseName", "Name" },
                 MetadataRecordTypes.DATASOURCE_ADAPTER_RECORDTYPE);
 
     }

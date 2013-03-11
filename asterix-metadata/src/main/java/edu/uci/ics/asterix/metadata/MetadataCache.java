@@ -311,7 +311,8 @@ public class MetadataCache {
             DatasourceAdapter adapterObject = adapters.get(adapter.getAdapterIdentifier().getNamespace()).get(
                     adapter.getAdapterIdentifier().getAdapterName());
             if (adapterObject != null) {
-                Map<String, DatasourceAdapter> adaptersInDataverse = adapters.get(adapter.getAdapterIdentifier().getNamespace());
+                Map<String, DatasourceAdapter> adaptersInDataverse = adapters.get(adapter.getAdapterIdentifier()
+                        .getNamespace());
                 if (adaptersInDataverse == null) {
                     adaptersInDataverse = new HashMap<String, DatasourceAdapter>();
                     adapters.put(adapter.getAdapterIdentifier().getNamespace(), adaptersInDataverse);
@@ -324,7 +325,8 @@ public class MetadataCache {
 
     public Object dropAdapter(DatasourceAdapter adapter) {
         synchronized (adapters) {
-            Map<String, DatasourceAdapter> adaptersInDataverse = adapters.get(adapter.getAdapterIdentifier().getNamespace());
+            Map<String, DatasourceAdapter> adaptersInDataverse = adapters.get(adapter.getAdapterIdentifier()
+                    .getNamespace());
             if (adaptersInDataverse != null) {
                 return adaptersInDataverse.remove(adapter.getAdapterIdentifier().getAdapterName());
             }

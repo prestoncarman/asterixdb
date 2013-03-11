@@ -127,7 +127,7 @@ public class AsterixProperties implements Serializable {
         return nodeNames;
     }
 
-    public  String getOutputDir() {
+    public String getOutputDir() {
         return outputDir;
     }
 }
