@@ -53,10 +53,7 @@ public class InstallCommand extends AbstractCommand {
 
 }
 
-class InstallConfig implements CommandConfig {
-
-    @Option(name = "-h", required = false, usage = "Help")
-    public boolean help = false;
+class InstallConfig extends AbstractCommandConfig {
 
     @Option(name = "-n", required = true, usage = "Name of Asterix Instance")
     public String name;

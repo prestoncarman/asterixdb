@@ -26,7 +26,8 @@ public class EventList {
         FILE_DELETE,
         HDFS_DELETE,
         FILE_TRANSFER,
+        FILE_CREATE,
         DIRECTORY_TRANSFER,
-        FILE_CREATE
+        NODE_INFO
     }
 }

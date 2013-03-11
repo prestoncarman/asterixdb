@@ -53,10 +53,7 @@ public class UninstallCommand extends AbstractCommand {
 
 }
 
-class UninstallConfig implements CommandConfig {
-
-    @Option(name = "-h", required = false, usage = "Help")
-    public boolean help = false;
+class UninstallConfig extends AbstractCommandConfig {
 
     @Option(name = "-n", required = true, usage = "Name of Asterix Instance")
     public String name;

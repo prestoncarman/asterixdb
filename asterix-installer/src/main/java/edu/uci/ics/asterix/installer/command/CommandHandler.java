@@ -52,6 +52,15 @@ public class CommandHandler {
             case UNINSTALL:
                 cmd = new UninstallCommand();
                 break;
+            case VALIDATE:
+                cmd = new ValidateCommand();
+                break;
+            case CONFIGURE:
+                cmd = new ConfigureCommand();
+                break;
+            case SHUTDOWN:
+                cmd = new ShutdownCommand();
+                break;
         }
         cmd.execute(args);
     }

@@ -14,6 +14,10 @@
  */
 package edu.uci.ics.asterix.installer.error;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.util.Properties;
+
 import edu.uci.ics.asterix.event.management.IOutputHandler;
 import edu.uci.ics.asterix.event.management.OutputAnalysis;
 import edu.uci.ics.asterix.event.schema.pattern.Event;
@@ -47,14 +51,31 @@ public class OutputHandler implements IOutputHandler {
             case RESTORE:
                 if (trimmedOutput.length() > 0) {
                     if (trimmedOutput.contains("AccessControlException")) {
-                        errorMessage.append("Insufficient permissions on HDFS back up directory");
+                        errorMessage.append("Insufficient permissions on back up directory");
                         ignore = false;
                     }
-                    if (output.contains("does not exist") || output.contains("File exist")) {
+                    if (output.contains("does not exist") || output.contains("File exist")
+                            || output.contains("No such file or directory")) {
                         ignore = true;
                     } else {
                         ignore = false;
                     }
+                }
+                break;
+            case NODE_INFO:
+                Properties p = new Properties();
+                try {
+                    p.load(new ByteArrayInputStream(trimmedOutput.getBytes()));
+                } catch (IOException e) {
+                }
+                String javaVersion = (String) p.get("JAVA_VERSION");
+                if (p.get("JAVA_VERSION") == null) {
+                    errorMessage.append("Java not installed on " + event.getNodeid().getValue().getAbsvalue());
+                    ignore = false;
+                } else if (!javaVersion.contains("1.8")) {
+                    errorMessage.append("Asterix requires Java 1.7.x. Incompatible version found on  "
+                            + event.getNodeid().getValue().getAbsvalue());
+                    ignore = false;
                 }
                 break;
         }
@@ -64,5 +85,4 @@ public class OutputHandler implements IOutputHandler {
             return new OutputAnalysis(false, errorMessage.toString());
         }
     }
-
 }
