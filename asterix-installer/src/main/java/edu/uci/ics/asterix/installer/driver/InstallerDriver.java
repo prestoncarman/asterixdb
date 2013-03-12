@@ -110,7 +110,7 @@ public class InstallerDriver {
             LOGGER.error("Unknown command");
             printUsage();
         } catch (Exception e) {
-            LOGGER.error(e);
+            LOGGER.error(e.getMessage());
         }
     }
 

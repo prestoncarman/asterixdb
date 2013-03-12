@@ -20,7 +20,7 @@ public abstract class ExternalFunction implements IExternalFunction {
     protected final IDataOutputProvider out;
     protected final ArrayBackedValueStorage inputVal = new ArrayBackedValueStorage();
     protected final ICopyEvaluator[] argumentEvaluators;
-    protected final AdvancedAsterixFunctionArgumentProvider functionHelper;
+    protected final JavaFunctionHelper functionHelper;
 
     public ExternalFunction(IExternalFunctionInfo finfo, ICopyEvaluatorFactory args[],
             IDataOutputProvider outputProvider) throws AlgebricksException {
@@ -31,7 +31,7 @@ public abstract class ExternalFunction implements IExternalFunction {
         for (int i = 0; i < args.length; i++) {
             argumentEvaluators[i] = args[i].createEvaluator(inputVal);
         }
-        functionHelper = new AdvancedAsterixFunctionArgumentProvider(finfo, outputProvider);
+        functionHelper = new JavaFunctionHelper(finfo, outputProvider);
 
         String[] fnameComponents = finfo.getFunctionIdentifier().getName().split(":");
         String functionLibary = fnameComponents[0];

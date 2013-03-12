@@ -17,18 +17,13 @@ package edu.uci.ics.asterix.external.library;
 import java.io.IOException;
 
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
-import edu.uci.ics.asterix.external.library.java.IJType;
-import edu.uci.ics.asterix.om.types.IAType;
+import edu.uci.ics.asterix.external.library.java.IJObject;
 
 public interface IFunctionHelper {
 
-    public IAType getReturnType();
-    
-    public IJType getArgument(int index);
+    public IJObject getArgument(int index);
 
-    public int getNumberOfArguments();
-    
-    public IJType getResultHolder();
+    public IJObject getResultObject();
 
-    public void setResult(IJType result) throws IOException, AsterixException;
+    public void setResult(IJObject result) throws IOException, AsterixException;
 }

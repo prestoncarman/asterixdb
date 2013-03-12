@@ -17,6 +17,7 @@ package edu.uci.ics.asterix.installer.command;
 import org.kohsuke.args4j.Option;
 
 import edu.uci.ics.asterix.event.schema.pattern.Patterns;
+import edu.uci.ics.asterix.installer.driver.InstallerDriver;
 import edu.uci.ics.asterix.installer.driver.InstallerUtil;
 import edu.uci.ics.asterix.installer.events.PatternCreator;
 import edu.uci.ics.asterix.installer.model.AsterixInstance;
@@ -28,6 +29,7 @@ public class UninstallCommand extends AbstractCommand {
 
     @Override
     protected void execCommand() throws Exception {
+        InstallerDriver.initConfig();
         UninstallConfig uninstallConfig = ((UninstallConfig) config);
         String instanceName = uninstallConfig.name;
         InstallerUtil.validateAsterixInstanceExists(instanceName, State.INACTIVE);

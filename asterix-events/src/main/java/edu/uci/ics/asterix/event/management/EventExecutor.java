@@ -52,7 +52,7 @@ public class EventExecutor {
                     envBuffer.append(p.getKey() + "=" + val + " ");
                 } else if (p.getKey().equals("JAVA_OPTS")) {
                     String val = "\"" + "-Xmx" + (node.getRam() == null ? cluster.getRam() : node.getRam());
-                    if (node.getDebug() != null) {
+                    if (cluster.isDebugEnabled() && node.getDebug() != null) {
                         val = val + " " + "-Xdebug -Xrunjdwp:transport=dt_socket,address=" + node.getDebug().intValue()
                                 + "," + "server=y,suspend=n";
                     }

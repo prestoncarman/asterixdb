@@ -26,6 +26,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringWriter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.Properties;
@@ -97,12 +98,12 @@ public class InstallerUtil {
         libraryPathInZip.mkdirs();
         Runtime.getRuntime().exec("cp" + " " + libraryPath + " " + libraryPathInZip.getAbsolutePath());
         Runtime.getRuntime().exec("rm " + sourceZip);
-		String destZip = InstallerDriver.getAsterixDir() + File.separator + asterixInstance.getName() + File.separator
+        String destZip = InstallerDriver.getAsterixDir() + File.separator + asterixInstance.getName() + File.separator
                 + asterixZipName;
         zipDir(instanceDir, new File(destZip));
         Runtime.getRuntime().exec("mv" + " " + destZip + " " + sourceZip);
     }
-    
+
     private static Node getMetadataNode(Cluster cluster) {
         Random random = new Random();
         int nNodes = cluster.getNode().size();
@@ -119,31 +120,29 @@ public class InstallerUtil {
         conf.append("MetadataNode=" + asterixInstanceName + "_" + metadataNodeId + "\n");
         conf.append("NewUniverse=" + newData + "\n");
 
+        String storeDataSubDir = asterixInstanceName + File.separator + "data" + File.separator;
+        String[] storeDirs = null;
         for (Node node : cluster.getNode()) {
             StringBuffer nodeDataStore = new StringBuffer();
-            if (node.getStore() != null) {
-                String[] nodeStores = node.getStore().split(",");
-                for (String ns : nodeStores) {
-                    nodeDataStore.append(ns + File.separator + asterixInstanceName + File.separator);
-                    nodeDataStore.append(",");
+            String storeDirValue = node.getStore();
+            if (storeDirValue == null) {
+                storeDirValue = cluster.getStore();
+                if (storeDirValue == null) {
+                    throw new IllegalStateException(" Store not defined for node " + node.getId());
                 }
-                nodeDataStore.deleteCharAt(nodeDataStore.length() - 1);
-            } else {
-                if (cluster.getStore() != null) {
-                    String[] nodeStores = cluster.getStore().split(",");
-                    for (String ns : nodeStores) {
-                        nodeDataStore.append(ns + File.separator + node.getId() + File.separator + asterixInstanceName
-                                + File.separator);
-                        nodeDataStore.append(",");
-                    }
-                    nodeDataStore.deleteCharAt(nodeDataStore.length() - 1);
-                }
+                storeDataSubDir = node.getId() + storeDataSubDir;
             }
-            if (nodeDataStore.length() == 0) {
-                throw new IllegalStateException(" Store not defined for node " + node.getId());
-            }
-            conf.append(asterixInstanceName + "_" + node.getId() + ".stores" + "=" + nodeDataStore + "\n");
 
+            storeDirs = storeDirValue.split(",");
+            for (String ns : storeDirs) {
+                nodeDataStore.append(ns + File.separator + storeDataSubDir);
+                nodeDataStore.append(",");
+            }
+            nodeDataStore.deleteCharAt(nodeDataStore.length() - 1);
+
+            conf.append(asterixInstanceName + "_" + node.getId() + ".stores" + "=" + nodeDataStore + "\n");
+            Arrays.sort(storeDirs);
+            conf.append(asterixInstanceName + "_" + node.getId() + ".lib" + "=" + storeDirs[0] + "\n");
         }
         Properties asterixConfProp = asterixInstance.getConfiguration();
         String outputDir = asterixConfProp.getProperty("output_dir");

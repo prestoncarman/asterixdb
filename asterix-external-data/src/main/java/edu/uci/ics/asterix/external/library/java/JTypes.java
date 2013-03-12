@@ -7,14 +7,15 @@ import java.io.IOException;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.ARecordSerializerDeserializer;
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.AStringSerializerDeserializer;
-import edu.uci.ics.asterix.formats.nontagged.AqlSerializerDeserializerProvider;
 import edu.uci.ics.asterix.om.base.AInt32;
 import edu.uci.ics.asterix.om.base.AMutableInt32;
+import edu.uci.ics.asterix.om.base.AMutableOrderedList;
 import edu.uci.ics.asterix.om.base.AMutableRecord;
 import edu.uci.ics.asterix.om.base.AMutableString;
 import edu.uci.ics.asterix.om.base.ARecord;
 import edu.uci.ics.asterix.om.base.AString;
 import edu.uci.ics.asterix.om.base.IAObject;
+import edu.uci.ics.asterix.om.types.AOrderedListType;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.asterix.om.types.AUnionType;
@@ -27,7 +28,7 @@ import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 
 public class JTypes {
 
-    public static final class JInt32 implements IJType {
+    public static final class JInt implements IJObject {
 
         private AMutableInt32 value = new AMutableInt32(0);
 
@@ -50,7 +51,7 @@ public class JTypes {
         }
     }
 
-    public static final class JString implements IJType {
+    public static final class JString implements IJObject {
 
         private AMutableString value = new AMutableString("");
 
@@ -73,12 +74,37 @@ public class JTypes {
         }
     }
 
-    public static final class JRecord implements IJType {
+    public static final class JList implements IJObject {
+
+        private AOrderedListType listType;
+        private AMutableOrderedList value;
+
+        public JList(AOrderedListType listType) {
+            this.listType = listType;
+            this.value = new AMutableOrderedList(listType);
+        }
+
+        public void add(IJObject element) {
+            value.add(element.getIAObject());
+        }
+
+        @Override
+        public ATypeTag getTypeTag() {
+            return value.getType().getTypeTag();
+        }
+
+        @Override
+        public IAObject getIAObject() {
+            return value;
+        }
+    }
+
+    public static final class JRecord implements IJObject {
 
         private AMutableRecord value;
         private byte[] recordBytes;
         private ARecordType recordType;
-        private IJType[] fields;
+        private IJObject[] fields;
         private ISerializerDeserializer serde;
 
         private final static byte SER_NULL_TYPE_TAG = ATypeTag.NULL.serialize();
@@ -86,22 +112,19 @@ public class JTypes {
 
         public JRecord(ARecordType recordType) {
             this.recordType = recordType;
-            this.fields = new IJType[recordType.getFieldTypes().length];
+            this.fields = new IJObject[recordType.getFieldTypes().length];
         }
 
-        public JRecord(ARecordType recordType, IJType[] fields) {
+        public JRecord(ARecordType recordType, IJObject[] fields) {
             this.recordType = recordType;
             this.fields = fields;
         }
 
-        public IJType getValueByName(String fieldName) throws AsterixException, IOException {
+        public IJObject getValueByName(String fieldName) throws AsterixException, IOException {
             int fieldPos = getFieldPosByName(fieldName);
-            if (fields[fieldPos] != null) {
-                return fields[fieldPos];
-            }
-
+            
             if (recordBytes == null) {
-                IJType jtype = getJType(value.getValueByPos(fieldPos));
+                IJObject jtype = getJObject(value.getValueByPos(fieldPos));
                 fields[fieldPos] = jtype;
                 return fields[fieldPos];
             }
@@ -151,7 +174,7 @@ public class JTypes {
             this.recordBytes = recordBytes;
         }
 
-        public void setValueAtPos(int pos, IJType jtype) {
+        public void setValueAtPos(int pos, IJObject jtype) {
             fields[pos] = jtype;
         }
 
@@ -175,45 +198,45 @@ public class JTypes {
             return -1;
         }
 
-        private IJType getJType(ATypeTag typeTag, byte[] argument, int offset, int len, int fieldIndex)
+        private IJObject getJType(ATypeTag typeTag, byte[] argument, int offset, int len, int fieldIndex)
                 throws HyracksDataException {
-            IJType jtype;
+            IJObject jObject;
             switch (typeTag) {
                 case INT32: {
                     int v = valueFromBytes(argument, offset, len);
-                    jtype = new JInt32();
-                    ((JInt32) jtype).setValue(v);
+                    jObject = new JInt();
+                    ((JInt) jObject).setValue(v);
                     break;
 
                 }
                 case STRING: {
                     String v = AStringSerializerDeserializer.INSTANCE.deserialize(
                             new DataInputStream(new ByteArrayInputStream(argument, offset, len))).getStringValue();
-                    jtype = new JString();
-                    ((JString) jtype).setValue(v);
+                    jObject = new JString();
+                    ((JString) jObject).setValue(v);
                     break;
                 }
                 case RECORD:
                     ARecordType fieldRecordType = (ARecordType) recordType.getFieldTypes()[fieldIndex];
-                    jtype = new JRecord(fieldRecordType);
+                    jObject = new JRecord(fieldRecordType);
                     byte[] recBytes = new byte[len];
                     System.arraycopy(argument, offset, recBytes, 0, len);
-                    ((JRecord) jtype).setValue(argument);
+                    ((JRecord) jObject).setValue(argument);
                     break;
                 default:
                     throw new IllegalStateException("Argument type: " + typeTag);
             }
-            return jtype;
+            return jObject;
         }
 
-        private IJType getJType(IAObject iaobject) throws HyracksDataException {
+        private IJObject getJObject(IAObject iaobject) throws HyracksDataException {
             ATypeTag typeTag = iaobject.getType().getTypeTag();
-            IJType jtype;
+            IJObject jtype;
             switch (typeTag) {
                 case INT32: {
                     int v = ((AInt32) iaobject).getIntegerValue().intValue();
-                    jtype = new JInt32();
-                    ((JInt32) jtype).setValue(v);
+                    jtype = new JInt();
+                    ((JInt) jtype).setValue(v);
 
                 }
                 case STRING: {
@@ -240,7 +263,7 @@ public class JTypes {
             return recordType;
         }
 
-        public IJType[] getFields() {
+        public IJObject[] getFields() {
             return fields;
         }
 

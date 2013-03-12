@@ -2,12 +2,14 @@ package edu.uci.ics.asterix.installer.command;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.math.BigInteger;
 
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.Marshaller;
 import javax.xml.bind.Unmarshaller;
 
 import edu.uci.ics.asterix.event.schema.cluster.Cluster;
+import edu.uci.ics.asterix.event.schema.cluster.Node;
 import edu.uci.ics.asterix.event.schema.cluster.WorkingDir;
 import edu.uci.ics.asterix.installer.driver.InstallerDriver;
 import edu.uci.ics.asterix.installer.schema.conf.Configuration;
@@ -29,6 +31,14 @@ public class ConfigureCommand extends AbstractCommand {
         cluster.setStore(workingDir + File.separator + "storage");
         cluster.setLogdir(workingDir + File.separator + "logs");
         cluster.setJavaHome(System.getenv("JAVA_HOME"));
+        cluster.setDebugEnabled(false);
+
+        cluster.getMasterNode().setDebug(new BigInteger(8800 + ""));
+        int nodeIndex = 0;
+        for (Node node : cluster.getNode()) {
+            node.setDebug(new BigInteger(8701 + nodeIndex + ""));
+            nodeIndex++;
+        }
 
         Marshaller marshaller = ctx.createMarshaller();
         marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);

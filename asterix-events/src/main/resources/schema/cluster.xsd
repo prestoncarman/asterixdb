@@ -16,6 +16,7 @@
 <xs:element name="java_home" type="xs:string"/>
 <xs:element name="username" type="xs:string"/>
 <xs:element name="debug" type="xs:integer"/>
+<xs:element name="debugEnabled" type="xs:boolean"/>
 
 <!-- definition of complex elements -->
 <xs:element name="workingDir">
@@ -83,6 +84,7 @@
       <xs:element ref="cl:logdir" minOccurs="0"/>
       <xs:element ref="cl:store" minOccurs="0"/>
       <xs:element ref="cl:workingDir"/>
+      <xs:element ref="cl:debugEnabled"/>
       <xs:element ref="cl:master-node"/>
       <xs:element ref="cl:node" maxOccurs="unbounded"/>
     </xs:sequence>
