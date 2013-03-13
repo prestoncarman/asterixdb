@@ -26,7 +26,6 @@ public class CCApplicationEntryPoint implements ICCApplicationEntryPoint {
     private static IAsterixStateProxy proxy;
     private ICCApplicationContext appCtx;
 
-    @Override
     public void start(ICCApplicationContext ccAppCtx, String[] args) throws Exception {
         this.appCtx = ccAppCtx;
         if (LOGGER.isLoggable(Level.INFO)) {
@@ -46,7 +45,6 @@ public class CCApplicationEntryPoint implements ICCApplicationEntryPoint {
         ExternalLibraryBootstrap.setUpExternaLibraries(false);
     }
 
-    @Override
     public void stop() throws Exception {
         if (LOGGER.isLoggable(Level.INFO)) {
             LOGGER.info("Stopping Asterix cluster controller");

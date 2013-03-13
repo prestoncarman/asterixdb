@@ -19,13 +19,13 @@ import java.util.ArrayList;
 
 import edu.uci.ics.asterix.common.functions.FunctionSignature;
 import edu.uci.ics.asterix.external.dataset.adapter.AdapterIdentifier;
-import edu.uci.ics.asterix.metadata.entities.DatasourceAdapter;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
+import edu.uci.ics.asterix.metadata.entities.DatasourceAdapter;
 import edu.uci.ics.asterix.metadata.entities.Datatype;
 import edu.uci.ics.asterix.metadata.entities.Dataverse;
 import edu.uci.ics.asterix.metadata.entities.Function;
+import edu.uci.ics.asterix.metadata.entities.Library;
 import edu.uci.ics.asterix.metadata.entities.NodeGroup;
-import edu.uci.ics.asterix.om.functions.AsterixFunction;
 
 /**
  * Used to implement serializable transactions against the MetadataCache.
@@ -103,6 +103,11 @@ public class MetadataTransactionContext extends MetadataCache {
         logAndApply(new MetadataLogicalOperation(dataverse, false));
     }
 
+    public void addLibrary(Library library) {
+        droppedCache.dropLibrary(library);
+        logAndApply(new MetadataLogicalOperation(library, true));
+    }
+
     public void dropDataset(String dataverseName, String datasetName) {
         Dataset dataset = new Dataset(dataverseName, datasetName, null, null, null, null);
         droppedCache.addDatasetIfNotExists(dataset);
@@ -133,6 +138,12 @@ public class MetadataTransactionContext extends MetadataCache {
         DatasourceAdapter adapter = new DatasourceAdapter(adapterIdentifier, null, null);
         droppedCache.addAdapterIfNotExists(adapter);
         logAndApply(new MetadataLogicalOperation(adapter, false));
+    }
+
+    public void dropLibrary(String dataverseName, String libraryName) {
+        Library library = new Library(dataverseName, libraryName);
+        droppedCache.addLibraryIfNotExists(library);
+        logAndApply(new MetadataLogicalOperation(library, false));
     }
 
     public void logAndApply(MetadataLogicalOperation op) {

@@ -2,7 +2,6 @@ package edu.uci.ics.asterix.hyracks.bootstrap;
 
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 

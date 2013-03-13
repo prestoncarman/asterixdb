@@ -49,6 +49,7 @@ import edu.uci.ics.asterix.installer.error.OutputHandler;
 import edu.uci.ics.asterix.installer.model.AsterixInstance;
 import edu.uci.ics.asterix.installer.model.AsterixInstance.State;
 import edu.uci.ics.asterix.installer.service.ServiceProvider;
+import edu.uci.ics.hyracks.algebricks.common.utils.Pair;
 
 public class InstallerUtil {
 
@@ -110,6 +111,33 @@ public class InstallerUtil {
         return cluster.getNode().get(random.nextInt(nNodes));
     }
 
+    public static Pair<String, String> getNodeDirectories(String asterixInstanceName, Node node, Cluster cluster) {
+        String storeDataSubDir = asterixInstanceName + File.separator + "data" + File.separator;
+        String storeLibrarySubDir = asterixInstanceName + File.separator + "library" + File.separator;
+        String[] storeDirs = null;
+        StringBuffer nodeDataStore = new StringBuffer();
+        String storeDirValue = node.getStore();
+        if (storeDirValue == null) {
+            storeDirValue = cluster.getStore();
+            if (storeDirValue == null) {
+                throw new IllegalStateException(" Store not defined for node " + node.getId());
+            }
+            storeDataSubDir = node.getId() + File.separator + storeDataSubDir;
+            storeLibrarySubDir = node.getId() + File.separator + storeLibrarySubDir;
+        }
+
+        storeDirs = storeDirValue.split(",");
+        for (String ns : storeDirs) {
+            nodeDataStore.append(ns + File.separator + storeDataSubDir.trim());
+            nodeDataStore.append(",");
+        }
+        nodeDataStore.deleteCharAt(nodeDataStore.length() - 1);
+        String nodeDataDir = nodeDataStore.toString();
+        Arrays.sort(storeDirs);
+        String nodeLibraryDir = storeDirs[0].trim() + File.separator + storeLibrarySubDir;
+        return new Pair<String, String>(nodeDataDir, nodeLibraryDir);
+    }
+
     private static void writeAsterixConfigurationFile(AsterixInstance asterixInstance, boolean newData)
             throws IOException {
         String asterixInstanceName = asterixInstance.getName();
@@ -120,29 +148,10 @@ public class InstallerUtil {
         conf.append("MetadataNode=" + asterixInstanceName + "_" + metadataNodeId + "\n");
         conf.append("NewUniverse=" + newData + "\n");
 
-        String storeDataSubDir = asterixInstanceName + File.separator + "data" + File.separator;
-        String[] storeDirs = null;
         for (Node node : cluster.getNode()) {
-            StringBuffer nodeDataStore = new StringBuffer();
-            String storeDirValue = node.getStore();
-            if (storeDirValue == null) {
-                storeDirValue = cluster.getStore();
-                if (storeDirValue == null) {
-                    throw new IllegalStateException(" Store not defined for node " + node.getId());
-                }
-                storeDataSubDir = node.getId() + storeDataSubDir;
-            }
-
-            storeDirs = storeDirValue.split(",");
-            for (String ns : storeDirs) {
-                nodeDataStore.append(ns + File.separator + storeDataSubDir);
-                nodeDataStore.append(",");
-            }
-            nodeDataStore.deleteCharAt(nodeDataStore.length() - 1);
-
-            conf.append(asterixInstanceName + "_" + node.getId() + ".stores" + "=" + nodeDataStore + "\n");
-            Arrays.sort(storeDirs);
-            conf.append(asterixInstanceName + "_" + node.getId() + ".lib" + "=" + storeDirs[0] + "\n");
+            Pair<String, String> nodeDirs = getNodeDirectories(asterixInstance.getName(), node, cluster);
+            conf.append(asterixInstanceName + "_" + node.getId() + ".stores" + "=" + nodeDirs.first + "\n");
+            conf.append(asterixInstanceName + "_" + node.getId() + ".lib" + "=" + nodeDirs.second + "\n");
         }
         Properties asterixConfProp = asterixInstance.getConfiguration();
         String outputDir = asterixConfProp.getProperty("output_dir");

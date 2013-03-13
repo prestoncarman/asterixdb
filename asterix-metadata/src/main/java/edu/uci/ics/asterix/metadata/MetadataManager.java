@@ -23,12 +23,13 @@ import edu.uci.ics.asterix.metadata.api.IAsterixStateProxy;
 import edu.uci.ics.asterix.metadata.api.IMetadataManager;
 import edu.uci.ics.asterix.metadata.api.IMetadataNode;
 import edu.uci.ics.asterix.metadata.bootstrap.MetadataConstants;
-import edu.uci.ics.asterix.metadata.entities.DatasourceAdapter;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
+import edu.uci.ics.asterix.metadata.entities.DatasourceAdapter;
 import edu.uci.ics.asterix.metadata.entities.Datatype;
 import edu.uci.ics.asterix.metadata.entities.Dataverse;
 import edu.uci.ics.asterix.metadata.entities.Function;
 import edu.uci.ics.asterix.metadata.entities.Index;
+import edu.uci.ics.asterix.metadata.entities.Library;
 import edu.uci.ics.asterix.metadata.entities.Node;
 import edu.uci.ics.asterix.metadata.entities.NodeGroup;
 import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
@@ -537,6 +538,55 @@ public class MetadataManager implements IMetadataManager {
             throw new MetadataException(e);
         }
         return adapter;
+    }
+
+    @Override
+    public void dropLibrary(MetadataTransactionContext ctx, String dataverseName, String libraryName)
+            throws MetadataException {
+        try {
+            metadataNode.dropLibrary(ctx.getTxnId(), dataverseName, libraryName);
+        } catch (RemoteException e) {
+            throw new MetadataException(e);
+        }
+        ctx.dropLibrary(dataverseName, libraryName);
+    }
+
+    @Override
+    public List<Library> getDataverseLibraries(MetadataTransactionContext ctx, String dataverseName)
+            throws MetadataException {
+        List<Library> dataverseLibaries = null;
+        try {
+            // Assuming that the transaction can read its own writes on the
+            // metadata node.
+            dataverseLibaries = metadataNode.getDataverseLibraries(ctx.getTxnId(), dataverseName);
+        } catch (RemoteException e) {
+            throw new MetadataException(e);
+        }
+        // Don't update the cache to avoid checking against the transaction's
+        // uncommitted functions.
+        return dataverseLibaries;
+    }
+
+    @Override
+    public void addLibrary(MetadataTransactionContext ctx, Library library) throws MetadataException {
+        try {
+            metadataNode.addLibrary(ctx.getTxnId(), library);
+        } catch (RemoteException e) {
+            throw new MetadataException(e);
+        }
+        ctx.addLibrary(library);
+    }
+
+    @Override
+    public Library getLibrary(MetadataTransactionContext ctx, String dataverseName, String libraryName)
+            throws MetadataException, RemoteException {
+        Library library = null;
+        try {
+            library = metadataNode.getLibrary(ctx.getTxnId(), dataverseName, libraryName);
+        } catch (RemoteException e) {
+            throw new MetadataException(e);
+        }
+        return library;
     }
 
 }

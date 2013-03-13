@@ -21,6 +21,7 @@ import java.util.List;
 
 import edu.uci.ics.asterix.event.driver.EventDriver;
 import edu.uci.ics.asterix.event.schema.cluster.Cluster;
+import edu.uci.ics.asterix.event.schema.cluster.MasterNode;
 import edu.uci.ics.asterix.event.schema.cluster.Node;
 import edu.uci.ics.asterix.event.schema.pattern.Delay;
 import edu.uci.ics.asterix.event.schema.pattern.Event;
@@ -30,6 +31,7 @@ import edu.uci.ics.asterix.event.schema.pattern.Patterns;
 import edu.uci.ics.asterix.event.schema.pattern.Value;
 import edu.uci.ics.asterix.installer.command.StopCommand;
 import edu.uci.ics.asterix.installer.driver.InstallerDriver;
+import edu.uci.ics.asterix.installer.driver.InstallerUtil;
 import edu.uci.ics.asterix.installer.error.VerificationUtil;
 import edu.uci.ics.asterix.installer.model.AsterixInstance;
 import edu.uci.ics.asterix.installer.model.BackupInfo;
@@ -37,6 +39,7 @@ import edu.uci.ics.asterix.installer.model.BackupInfo.BackupType;
 import edu.uci.ics.asterix.installer.schema.conf.Backup;
 import edu.uci.ics.asterix.installer.service.ILookupService;
 import edu.uci.ics.asterix.installer.service.ServiceProvider;
+import edu.uci.ics.hyracks.algebricks.common.utils.Pair;
 
 public class PatternCreator {
 
@@ -218,7 +221,7 @@ public class PatternCreator {
         Iterator<Node> installTargets = cluster.getNode().iterator();
         Node installNode = installTargets.next();
         String destinationIp = installNode.getIp();
-        String destDir = workingDir + File.separator + "install" + File.separator + dataverse + File.separator
+        String destDir = workingDir + File.separator + "library" + File.separator + dataverse + File.separator
                 + libraryName;
         String fileToTransfer = new File(libraryPath).getAbsolutePath();
         String pargs = username + " " + fileToTransfer + " " + destinationIp + " " + destDir + " " + "unpack";
@@ -234,6 +237,78 @@ public class PatternCreator {
                 p = new Pattern(null, 1, null, event);
                 patternList.add(p);
             }
+            MasterNode master = cluster.getMasterNode();
+            destinationIp = master.getIp();
+            destDir = workingDir + File.separator + "install" + File.separator + dataverse + File.separator
+                    + libraryName;
+            pargs = username + " " + fileToTransfer + " " + destinationIp + " " + destDir + " " + "unpack";
+            event = new Event("file_transfer", nodeid, pargs);
+            p = new Pattern(null, 1, null, event);
+            patternList.add(p);
+        }
+        return new Patterns(patternList);
+    }
+
+    public Patterns getLibraryInstallPatternNew(String asterixInstanceName, Cluster cluster, String dataverse,
+            String libraryName, String libraryPath) throws Exception {
+        List<Pattern> patternList = new ArrayList<Pattern>();
+        Nodeid nodeid = new Nodeid(new Value(null, EventDriver.CLIENT_NODE.getId()));
+        String username = cluster.getUsername() != null ? cluster.getUsername() : System.getProperty("user.name");
+        String workingDir = cluster.getWorkingDir().getDir();
+
+        MasterNode master = cluster.getMasterNode();
+        List<Node> installTargets = cluster.getNode();
+
+        String fileToTransfer = new File(libraryPath).getAbsolutePath();
+        for (Node node : installTargets) {
+            String destinationIp = node.getIp();
+            Pair<String, String> nodeDirs = InstallerUtil.getNodeDirectories(asterixInstanceName, node, cluster);
+            String destDir = nodeDirs.second + File.separator + "install" + File.separator + dataverse + File.separator
+                    + libraryName;
+            String pargs = username + " " + fileToTransfer + " " + destinationIp + " " + destDir + " " + "unpack";
+            Event event = new Event("file_transfer", nodeid, pargs);
+            patternList.add(new Pattern(null, 1, null, event));
+        }
+
+        String destinationIp = master.getIp();
+        String destDir = workingDir + asterixInstanceName + File.separator + "install" + File.separator + dataverse
+                + File.separator + libraryName;
+        String pargs = username + " " + fileToTransfer + " " + destinationIp + " " + destDir + " " + "unpack";
+        Event event = new Event("file_transfer", nodeid, pargs);
+        Pattern p = new Pattern(null, 1, null, event);
+        patternList.add(p);
+
+        return new Patterns(patternList);
+    }
+
+    public Patterns getLibraryUninstallPatternNew(Cluster cluster, String dataverse, String libraryName)
+            throws Exception {
+        List<Pattern> patternList = new ArrayList<Pattern>();
+        String workingDir = cluster.getWorkingDir().getDir();
+        Iterator<Node> uninstallTargets = cluster.getNode().iterator();
+        Node uninstallNode = uninstallTargets.next();
+        String destFile = dataverse + "." + libraryName;
+        String pargs = workingDir + File.separator + "uninstall" + " " + destFile;
+        Nodeid nodeid = new Nodeid(new Value(null, uninstallNode.getId()));
+        Event event = new Event("file_create", nodeid, pargs);
+        Pattern p = new Pattern(null, 1, null, event);
+        patternList.add(p);
+        if (!cluster.getWorkingDir().isNFS()) {
+            while (uninstallTargets.hasNext()) {
+                uninstallNode = uninstallTargets.next();
+                nodeid = new Nodeid(new Value(null, uninstallNode.getId()));
+                event = new Event("file_create", nodeid, pargs);
+                p = new Pattern(null, 1, null, event);
+                patternList.add(p);
+            }
+            MasterNode master = cluster.getMasterNode();
+            Node masterNode = new Node(master.getId(), master.getIp(), master.getRam(), master.getJavaHome(),
+                    master.getLogdir(), null, null);
+            nodeid = new Nodeid(new Value(null, masterNode.getId()));
+            event = new Event("file_create", nodeid, pargs);
+            p = new Pattern(null, 1, null, event);
+            patternList.add(p);
+
         }
         return new Patterns(patternList);
     }
@@ -257,6 +332,13 @@ public class PatternCreator {
                 p = new Pattern(null, 1, null, event);
                 patternList.add(p);
             }
+            MasterNode master = cluster.getMasterNode();
+            Node masterNode = new Node(master.getId(), master.getIp(), master.getRam(), master.getJavaHome(),
+                    master.getLogdir(), null, null);
+            nodeid = new Nodeid(new Value(null, masterNode.getId()));
+            event = new Event("file_create", nodeid, pargs);
+            p = new Pattern(null, 1, null, event);
+            patternList.add(p);
         }
         return new Patterns(patternList);
     }

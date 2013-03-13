@@ -22,11 +22,12 @@ import java.util.Map;
 
 import edu.uci.ics.asterix.common.functions.FunctionSignature;
 import edu.uci.ics.asterix.metadata.api.IMetadataEntity;
-import edu.uci.ics.asterix.metadata.entities.DatasourceAdapter;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
+import edu.uci.ics.asterix.metadata.entities.DatasourceAdapter;
 import edu.uci.ics.asterix.metadata.entities.Datatype;
 import edu.uci.ics.asterix.metadata.entities.Dataverse;
 import edu.uci.ics.asterix.metadata.entities.Function;
+import edu.uci.ics.asterix.metadata.entities.Library;
 import edu.uci.ics.asterix.metadata.entities.NodeGroup;
 
 /**
@@ -48,6 +49,8 @@ public class MetadataCache {
     protected final Map<FunctionSignature, Function> functions = new HashMap<FunctionSignature, Function>();
     // Key is adapter dataverse. Key of value map is the adapter name  
     protected final Map<String, Map<String, DatasourceAdapter>> adapters = new HashMap<String, Map<String, DatasourceAdapter>>();
+    // Key is library dataverse. Key of value map is the library name  
+    protected final Map<String, Map<String, Library>> libraries = new HashMap<String, Map<String, Library>>();
 
     // Atomically executes all metadata operations in ctx's log.
     public void commit(MetadataTransactionContext ctx) {
@@ -329,6 +332,31 @@ public class MetadataCache {
                     .getNamespace());
             if (adaptersInDataverse != null) {
                 return adaptersInDataverse.remove(adapter.getAdapterIdentifier().getAdapterName());
+            }
+            return null;
+        }
+    }
+
+    public Object addLibraryIfNotExists(Library library) {
+        synchronized (libraries) {
+            Library libraryObject = libraries.get(library.getDataverseName()).get(library.getName());
+            if (libraryObject != null) {
+                Map<String, Library> librariesInDataverse = libraries.get(library.getDataverseName());
+                if (librariesInDataverse == null) {
+                    librariesInDataverse = new HashMap<String, Library>();
+                    libraries.put(library.getDataverseName(), librariesInDataverse);
+                }
+                return librariesInDataverse.put(library.getDataverseName(), library);
+            }
+            return null;
+        }
+    }
+
+    public Object dropLibrary(Library library) {
+        synchronized (libraries) {
+            Map<String, Library> librariesInDataverse = libraries.get(library.getDataverseName());
+            if (librariesInDataverse != null) {
+                return librariesInDataverse.remove(library.getName());
             }
             return null;
         }

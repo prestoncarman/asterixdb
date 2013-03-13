@@ -18,50 +18,50 @@ import edu.uci.ics.asterix.installer.command.ICommand.CommandType;
 
 public class CommandHandler {
 
-    public void processCommand(String args[]) throws Exception {
-        CommandType cmdType = CommandType.valueOf(args[0].toUpperCase());
-        ICommand cmd = null;
-        switch (cmdType) {
-            case CREATE:
-                cmd = new CreateCommand();
-                break;
-            case ALTER:
-                cmd = new AlterCommand();
-                break;
-            case DELETE:
-                cmd = new DeleteCommand();
-                break;
-            case DESCRIBE:
-                cmd = new DescribeCommand();
-                break;
-            case BACKUP:
-                cmd = new BackupCommand();
-                break;
-            case RESTORE:
-                cmd = new RestoreCommand();
-                break;
-            case START:
-                cmd = new StartCommand();
-                break;
-            case STOP:
-                cmd = new StopCommand();
-                break;
-            case INSTALL:
-                cmd = new InstallCommand();
-                break;
-            case UNINSTALL:
-                cmd = new UninstallCommand();
-                break;
-            case VALIDATE:
-                cmd = new ValidateCommand();
-                break;
-            case CONFIGURE:
-                cmd = new ConfigureCommand();
-                break;
-            case SHUTDOWN:
-                cmd = new ShutdownCommand();
-                break;
-        }
-        cmd.execute(args);
-    }
+	public void processCommand(String args[]) throws Exception {
+		CommandType cmdType = CommandType.valueOf(args[0].toUpperCase());
+		ICommand cmd = null;
+		switch (cmdType) {
+		case CREATE:
+			cmd = new CreateCommand();
+			break;
+		case ALTER:
+			cmd = new AlterCommand();
+			break;
+		case DELETE:
+			cmd = new DeleteCommand();
+			break;
+		case DESCRIBE:
+			cmd = new DescribeCommand();
+			break;
+		case BACKUP:
+			cmd = new BackupCommand();
+			break;
+		case RESTORE:
+			cmd = new RestoreCommand();
+			break;
+		case START:
+			cmd = new StartCommand();
+			break;
+		case STOP:
+			cmd = new StopCommand();
+			break;
+		case INSTALL:
+			cmd = new InstallCommand();
+			break;
+		case UNINSTALL:
+			cmd = new UninstallCommand();
+			break;
+		case VALIDATE:
+			cmd = new ValidateCommand();
+			break;
+		case CONFIGURE:
+			cmd = new ConfigureCommand();
+			break;
+		case SHUTDOWN:
+			cmd = new ShutdownCommand();
+			break;
+		}
+		cmd.execute(args);
+	}
 }

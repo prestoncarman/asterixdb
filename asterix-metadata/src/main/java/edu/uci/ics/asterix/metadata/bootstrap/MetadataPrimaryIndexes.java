@@ -33,6 +33,7 @@ public class MetadataPrimaryIndexes {
     public static IMetadataIndex NODEGROUP_DATASET;
     public static IMetadataIndex FUNCTION_DATASET;
     public static IMetadataIndex DATASOURCE_ADAPTER_DATASET;
+    public static IMetadataIndex LIBRARY_DATASET;
 
     /**
      * Create all metadata primary index descriptors. MetadataRecordTypes must
@@ -76,6 +77,10 @@ public class MetadataPrimaryIndexes {
         DATASOURCE_ADAPTER_DATASET = new MetadataIndex("DatasourceAdapter", null, 3, new IAType[] {
                 BuiltinType.ASTRING, BuiltinType.ASTRING }, new String[] { "DataverseName", "Name" },
                 MetadataRecordTypes.DATASOURCE_ADAPTER_RECORDTYPE);
+
+        LIBRARY_DATASET = new MetadataIndex("Library", null, 3,
+                new IAType[] { BuiltinType.ASTRING, BuiltinType.ASTRING }, new String[] { "DataverseName", "Name" },
+                MetadataRecordTypes.LIBRARY_RECORDTYPE);
 
     }
 }

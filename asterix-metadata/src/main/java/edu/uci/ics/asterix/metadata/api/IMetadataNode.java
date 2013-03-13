@@ -22,12 +22,13 @@ import java.util.List;
 
 import edu.uci.ics.asterix.common.functions.FunctionSignature;
 import edu.uci.ics.asterix.metadata.MetadataException;
-import edu.uci.ics.asterix.metadata.entities.DatasourceAdapter;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
+import edu.uci.ics.asterix.metadata.entities.DatasourceAdapter;
 import edu.uci.ics.asterix.metadata.entities.Datatype;
 import edu.uci.ics.asterix.metadata.entities.Dataverse;
 import edu.uci.ics.asterix.metadata.entities.Function;
 import edu.uci.ics.asterix.metadata.entities.Index;
+import edu.uci.ics.asterix.metadata.entities.Library;
 import edu.uci.ics.asterix.metadata.entities.Node;
 import edu.uci.ics.asterix.metadata.entities.NodeGroup;
 import edu.uci.ics.asterix.transaction.management.exception.ACIDException;
@@ -456,5 +457,63 @@ public interface IMetadataNode extends Remote, Serializable {
      * @throws RemoteException
      */
     public void addAdapter(long txnId, DatasourceAdapter adapter) throws MetadataException, RemoteException;
+
+    /**
+     * Removes a library , acquiring local locks on behalf of the given
+     * transaction id.
+     * 
+     * @param txnId
+     *            A globally unique id for an active metadata transaction.
+     * @param dataverseName
+     *            dataverse asociated with the adapter that is to be deleted.
+     * @param libraryName
+     *            Name of library to be deleted. MetadataException for example,
+     *            if the library does not exists.
+     * @throws RemoteException
+     */
+    public void dropLibrary(long txnId, String dataverseName, String libraryName) throws MetadataException,
+            RemoteException;
+
+    /**
+     * Adds a library, acquiring local locks on behalf of the given
+     * transaction id.
+     * 
+     * @param txnId
+     *            A globally unique id for an active metadata transaction.
+     * @param library
+     *            Library to be added
+     * @throws MetadataException
+     *             for example, if the library is already added.
+     * @throws RemoteException
+     */
+    public void addLibrary(long txnId, Library library) throws MetadataException, RemoteException;
+
+    /**
+     * @param txnId
+     *            A globally unique id for an active metadata transaction.
+     * @param dataverseName
+     *            dataverse asociated with the library that is to be retrieved.
+     * @param libraryName
+     *            name of the library that is to be retrieved
+     * @return Library
+     * @throws MetadataException
+     * @throws RemoteException
+     */
+    public Library getLibrary(long txnId, String dataverseName, String libraryName) throws MetadataException,
+            RemoteException;
+
+    /**
+     * Retireve libraries installed in a given dataverse.
+     * 
+     * @param txnId
+     *            A globally unique id for an active metadata transaction.
+     * @param dataverseName
+     *            dataverse asociated with the library that is to be retrieved.
+     * @return Library
+     * @throws MetadataException
+     * @throws RemoteException
+     */
+    public List<Library> getDataverseLibraries(long txnId, String dataverseName) throws MetadataException,
+            RemoteException;
 
 }

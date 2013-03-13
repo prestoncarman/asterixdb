@@ -37,6 +37,7 @@ import edu.uci.ics.asterix.metadata.entities.Dataverse;
 import edu.uci.ics.asterix.metadata.entities.Function;
 import edu.uci.ics.asterix.metadata.entities.Index;
 import edu.uci.ics.asterix.metadata.entities.InternalDatasetDetails;
+import edu.uci.ics.asterix.metadata.entities.Library;
 import edu.uci.ics.asterix.metadata.entities.Node;
 import edu.uci.ics.asterix.metadata.entities.NodeGroup;
 import edu.uci.ics.asterix.metadata.entitytupletranslators.DatasourceAdapterTupleTranslator;
@@ -45,6 +46,7 @@ import edu.uci.ics.asterix.metadata.entitytupletranslators.DatatypeTupleTranslat
 import edu.uci.ics.asterix.metadata.entitytupletranslators.DataverseTupleTranslator;
 import edu.uci.ics.asterix.metadata.entitytupletranslators.FunctionTupleTranslator;
 import edu.uci.ics.asterix.metadata.entitytupletranslators.IndexTupleTranslator;
+import edu.uci.ics.asterix.metadata.entitytupletranslators.LibraryTupleTranslator;
 import edu.uci.ics.asterix.metadata.entitytupletranslators.NodeGroupTupleTranslator;
 import edu.uci.ics.asterix.metadata.entitytupletranslators.NodeTupleTranslator;
 import edu.uci.ics.asterix.metadata.valueextractors.DatasetNameValueExtractor;
@@ -569,6 +571,20 @@ public class MetadataNode implements IMetadataNode {
         }
     }
 
+    public List<Library> getDataverseLibraries(long txnId, String dataverseName) throws MetadataException,
+            RemoteException {
+        try {
+            ITupleReference searchKey = createTuple(dataverseName);
+            LibraryTupleTranslator tupleReaderWriter = new LibraryTupleTranslator(false);
+            IValueExtractor<Library> valueExtractor = new MetadataEntityValueExtractor<Library>(tupleReaderWriter);
+            List<Library> results = new ArrayList<Library>();
+            searchIndex(txnId, MetadataPrimaryIndexes.LIBRARY_DATASET, searchKey, valueExtractor, results);
+            return results;
+        } catch (Exception e) {
+            throw new MetadataException(e);
+        }
+    }
+
     private List<Datatype> getDataverseDatatypes(long txnId, String dataverseName) throws MetadataException,
             RemoteException {
         try {
@@ -921,6 +937,71 @@ public class MetadataNode implements IMetadataNode {
             List<DatasourceAdapter> results = new ArrayList<DatasourceAdapter>();
             searchIndex(txnId, MetadataPrimaryIndexes.DATASOURCE_ADAPTER_DATASET, searchKey, valueExtractor, results);
             return results;
+        } catch (Exception e) {
+            throw new MetadataException(e);
+        }
+    }
+
+    @Override
+    public void addLibrary(long txnId, Library library) throws MetadataException, RemoteException {
+        try {
+            // Insert into the 'Library' dataset.
+            LibraryTupleTranslator tupleReaderWriter = new LibraryTupleTranslator(true);
+            ITupleReference libraryTuple = tupleReaderWriter.getTupleFromMetadataEntity(library);
+            insertTupleIntoIndex(txnId, MetadataPrimaryIndexes.LIBRARY_DATASET, libraryTuple);
+
+        } catch (BTreeDuplicateKeyException e) {
+            throw new MetadataException("A library with this name " + library.getDataverseName()
+                    + " already exists in dataverse '" + library.getDataverseName() + "'.", e);
+        } catch (Exception e) {
+            throw new MetadataException(e);
+        }
+
+    }
+
+    @Override
+    public void dropLibrary(long txnId, String dataverseName, String libraryName) throws MetadataException,
+            RemoteException {
+        Library library;
+        try {
+            library = getLibrary(txnId, dataverseName, libraryName);
+        } catch (Exception e) {
+            throw new MetadataException(e);
+        }
+        if (library == null) {
+            throw new MetadataException("Cannot drop library '" + library + "' because it doesn't exist.");
+        }
+        try {
+            // Delete entry from the 'Library' dataset.
+            ITupleReference searchKey = createTuple(dataverseName, libraryName);
+            // Searches the index for the tuple to be deleted. Acquires an S
+            // lock on the 'Adapter' dataset.
+            ITupleReference datasetTuple = getTupleToBeDeleted(txnId, MetadataPrimaryIndexes.LIBRARY_DATASET, searchKey);
+            deleteTupleFromIndex(txnId, MetadataPrimaryIndexes.LIBRARY_DATASET, datasetTuple);
+
+            // TODO: Change this to be a BTree specific exception, e.g.,
+            // BTreeKeyDoesNotExistException.
+        } catch (TreeIndexException e) {
+            throw new MetadataException("Cannot drop library '" + libraryName, e);
+        } catch (Exception e) {
+            throw new MetadataException(e);
+        }
+
+    }
+
+    @Override
+    public Library getLibrary(long txnId, String dataverseName, String libraryName) throws MetadataException,
+            RemoteException {
+        try {
+            ITupleReference searchKey = createTuple(dataverseName, libraryName);
+            LibraryTupleTranslator tupleReaderWriter = new LibraryTupleTranslator(false);
+            List<Library> results = new ArrayList<Library>();
+            IValueExtractor<Library> valueExtractor = new MetadataEntityValueExtractor<Library>(tupleReaderWriter);
+            searchIndex(txnId, MetadataPrimaryIndexes.LIBRARY_DATASET, searchKey, valueExtractor, results);
+            if (results.isEmpty()) {
+                return null;
+            }
+            return results.get(0);
         } catch (Exception e) {
             throw new MetadataException(e);
         }
