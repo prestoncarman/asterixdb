@@ -36,7 +36,7 @@ public class UninstallCommand extends AbstractCommand {
         ILookupService lookupService = ServiceProvider.INSTANCE.getLookupService();
         AsterixInstance instance = lookupService.getAsterixInstance(instanceName);
         PatternCreator pc = new PatternCreator();
-        Patterns patterns = pc.getLibraryUninstallPattern(instance.getCluster(), uninstallConfig.dataverseName,
+        Patterns patterns = pc.getLibraryUninstallPattern(instance, uninstallConfig.dataverseName,
                 uninstallConfig.libraryName);
         InstallerUtil.getEventrixClient(instance.getCluster()).submit(patterns);
         LOGGER.info("Uninstalled library " + uninstallConfig.libraryName);
@@ -63,7 +63,7 @@ class UninstallConfig extends AbstractCommandConfig {
     @Option(name = "-d", required = true, usage = "Name of the dataverse under which the library will be installed")
     public String dataverseName;
 
-    @Option(name = "-name", required = true, usage = "Name of the library")
+    @Option(name = "-l", required = true, usage = "Name of the library")
     public String libraryName;
 
 }

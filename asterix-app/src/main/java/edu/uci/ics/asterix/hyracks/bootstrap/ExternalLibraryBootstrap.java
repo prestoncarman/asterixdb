@@ -43,23 +43,29 @@ public class ExternalLibraryBootstrap {
 
     public static void setUpExternaLibraries(boolean isMetadataNode) throws Exception {
 
-        Map<String, List<String>> uninstalledLibs = uninstallLibraries(isMetadataNode);
+        Map<String, List<String>> uninstalledLibs = null;
+        if (isMetadataNode) {
+            uninstalledLibs = uninstallLibraries();
+        }
+
         File installLibDir = getLibraryInstallDir();
         if (installLibDir.exists()) {
             for (String dataverse : installLibDir.list()) {
                 File dataverseDir = new File(installLibDir, dataverse);
                 String[] libraries = dataverseDir.list();
                 for (String library : libraries) {
-                    List<String> uninstalledLibsInDv = uninstalledLibs.get(dataverse);
-                    if (uninstalledLibsInDv == null || !uninstalledLibs.containsKey(library)) {
-                        registerLibrary(dataverse, library, isMetadataNode, installLibDir);
+                    registerLibrary(dataverse, library, isMetadataNode, installLibDir);
+                    if (isMetadataNode) {
+                        File libraryDir = new File(installLibDir.getAbsolutePath() + File.separator + dataverse
+                                + File.separator + library);
+                        installLibraryIfNeeded(dataverse, libraryDir, uninstalledLibs);
                     }
                 }
             }
         }
     }
 
-    private static Map<String, List<String>> uninstallLibraries(boolean isMetadataNode) throws Exception {
+    private static Map<String, List<String>> uninstallLibraries() throws Exception {
         Map<String, List<String>> uninstalledLibs = new HashMap<String, List<String>>();
         File uninstallLibDir = getLibraryUninstallDir();
         String[] uninstallLibNames;
@@ -69,9 +75,7 @@ public class ExternalLibraryBootstrap {
                 String[] components = uninstallLibName.split("\\.");
                 String dataverse = components[0];
                 String libName = components[1];
-                if (isMetadataNode) {
-                    uninstallLibrary(dataverse, libName);
-                }
+                uninstallLibrary(dataverse, libName);
                 new File(uninstallLibDir, uninstallLibName).delete();
                 List<String> uinstalledLibsInDv = uninstalledLibs.get(dataverse);
                 if (uinstalledLibsInDv == null) {
@@ -121,16 +125,19 @@ public class ExternalLibraryBootstrap {
     // Each element of a library is installed as part of a transaction. Any
     // failure in installing an element does not effect installation of other
     // libraries
-    private static void installLibraryIfNeeded(String dataverse, final File libraryDir) throws Exception {
+    private static void installLibraryIfNeeded(String dataverse, final File libraryDir,
+            Map<String, List<String>> uninstalledLibs) throws Exception {
+
+        String libraryName = libraryDir.getName();
+        List<String> uninstalledLibsInDv = uninstalledLibs.get(dataverse);
+        boolean wasUninstalled = uninstalledLibsInDv != null && uninstalledLibsInDv.contains(libraryName);
 
         MetadataTransactionContext mdTxnCtx = null;
         try {
             mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
-            String libraryName = libraryDir.getName();
-
             edu.uci.ics.asterix.metadata.entities.Library libraryInMetadata = MetadataManager.INSTANCE.getLibrary(
                     mdTxnCtx, dataverse, libraryName);
-            if (libraryInMetadata != null) {
+            if (libraryInMetadata != null && !wasUninstalled) {
                 return;
             }
 
@@ -166,8 +173,11 @@ public class ExternalLibraryBootstrap {
                 MetadataManager.INSTANCE.addFunction(mdTxnCtx, f);
             }
 
+            MetadataManager.INSTANCE.addLibrary(mdTxnCtx, new edu.uci.ics.asterix.metadata.entities.Library(dataverse,
+                    libraryName));
             MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
         } catch (Exception e) {
+            e.printStackTrace();
             MetadataManager.INSTANCE.abortTransaction(mdTxnCtx);
         }
     }
@@ -176,15 +186,6 @@ public class ExternalLibraryBootstrap {
             throws Exception {
         ClassLoader classLoader = getLibraryClassLoader(dataverse, libraryName);
         ExternalLibraryManager.registerLibraryClassLoader(dataverse, libraryName, classLoader);
-        if (isMetadataNode) {
-            File libraryDir = new File(installLibDir.getAbsolutePath() + File.separator + dataverse + File.separator
-                    + libraryName);
-            installLibraryIfNeeded(dataverse, libraryDir);
-        }
-    }
-
-    private static void deregisterLibrary(String dataverse, String libraryName) throws Exception {
-        ExternalLibraryManager.deregisterLibraryClassLoader(dataverse, libraryName);
     }
 
     private static Library getLibrary(File libraryXMLPath) throws Exception {
@@ -195,15 +196,13 @@ public class ExternalLibraryBootstrap {
     }
 
     private static ClassLoader getLibraryClassLoader(String dataverse, String libraryName) throws Exception {
-        File installDir = getInstalledLibraryDir();
+        File installDir = getLibraryInstallDir();
         File libDir = new File(installDir.getAbsolutePath() + File.separator + dataverse + File.separator + libraryName);
         FilenameFilter jarFileFilter = new FilenameFilter() {
             public boolean accept(File dir, String name) {
                 return name.endsWith(".jar");
             }
         };
-
-        System.out.println(" looking for jar in " + libDir.getAbsolutePath());
 
         String[] jarsInLibDir = libDir.list(jarFileFilter);
         if (jarsInLibDir.length > 1) {

@@ -22,8 +22,6 @@ import edu.uci.ics.asterix.installer.driver.InstallerUtil;
 import edu.uci.ics.asterix.installer.events.PatternCreator;
 import edu.uci.ics.asterix.installer.model.AsterixInstance;
 import edu.uci.ics.asterix.installer.model.AsterixInstance.State;
-import edu.uci.ics.asterix.installer.service.ILookupService;
-import edu.uci.ics.asterix.installer.service.ServiceProvider;
 
 public class InstallCommand extends AbstractCommand {
 
@@ -32,11 +30,9 @@ public class InstallCommand extends AbstractCommand {
         InstallerDriver.initConfig();
         InstallConfig installConfig = ((InstallConfig) config);
         String instanceName = installConfig.name;
-        InstallerUtil.validateAsterixInstanceExists(instanceName, State.INACTIVE);
-        ILookupService lookupService = ServiceProvider.INSTANCE.getLookupService();
-        AsterixInstance instance = lookupService.getAsterixInstance(instanceName);
+        AsterixInstance instance = InstallerUtil.validateAsterixInstanceExists(instanceName, State.INACTIVE);
         PatternCreator pc = new PatternCreator();
-        Patterns patterns = pc.getLibraryInstallPattern(instance.getCluster(), installConfig.dataverseName,
+        Patterns patterns = pc.getLibraryInstallPattern(instance, installConfig.dataverseName,
                 installConfig.libraryName, installConfig.libraryPath);
         InstallerUtil.getEventrixClient(instance.getCluster()).submit(patterns);
         LOGGER.info("Installed library " + installConfig.libraryName);
@@ -63,7 +59,7 @@ class InstallConfig extends AbstractCommandConfig {
     @Option(name = "-d", required = true, usage = "Name of the dataverse under which the library will be installed")
     public String dataverseName;
 
-    @Option(name = "-name", required = true, usage = "Name of the library")
+    @Option(name = "-l", required = true, usage = "Name of the library")
     public String libraryName;
 
     @Option(name = "-p", required = true, usage = "Path to library zip bundle")

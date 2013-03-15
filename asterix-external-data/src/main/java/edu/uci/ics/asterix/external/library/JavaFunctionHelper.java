@@ -19,18 +19,23 @@ import java.io.DataInputStream;
 import java.io.IOException;
 import java.util.List;
 
+import edu.uci.ics.asterix.builders.RecordBuilder;
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.AStringSerializerDeserializer;
 import edu.uci.ics.asterix.external.library.java.IJObject;
+import edu.uci.ics.asterix.external.library.java.JTypeTag;
 import edu.uci.ics.asterix.external.library.java.JTypes.JInt;
 import edu.uci.ics.asterix.external.library.java.JTypes.JRecord;
 import edu.uci.ics.asterix.external.library.java.JTypes.JString;
 import edu.uci.ics.asterix.formats.nontagged.AqlSerializerDeserializerProvider;
+import edu.uci.ics.asterix.om.base.AMutableRecord;
 import edu.uci.ics.asterix.om.base.ARecord;
+import edu.uci.ics.asterix.om.base.AString;
 import edu.uci.ics.asterix.om.base.IAObject;
 import edu.uci.ics.asterix.om.functions.IExternalFunctionInfo;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.ATypeTag;
+import edu.uci.ics.asterix.om.types.BuiltinType;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.asterix.om.util.container.IObjectPool;
 import edu.uci.ics.asterix.om.util.container.ListObjectPool;
@@ -38,6 +43,7 @@ import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 import edu.uci.ics.hyracks.data.std.api.IDataOutputProvider;
+import edu.uci.ics.hyracks.data.std.util.ArrayBackedValueStorage;
 
 public class JavaFunctionHelper implements IFunctionHelper {
 
@@ -73,12 +79,93 @@ public class JavaFunctionHelper implements IFunctionHelper {
 
     @Override
     public void setResult(IJObject result) throws IOException, AsterixException {
+        IAObject obj = result.getIAObject();
         try {
-            outputProvider.getDataOutput().writeByte(innerResult.getType().getTypeTag().serialize());
+            //    outputProvider.getDataOutput().writeByte(innerResult.getType().getTypeTag().serialize());
+            outputProvider.getDataOutput().writeByte(obj.getType().getTypeTag().serialize());
         } catch (IOException e) {
             throw new HyracksDataException(e);
         }
-        resultSerde.serialize(innerResult, outputProvider.getDataOutput());
+
+        if (obj.getType().getTypeTag().equals(ATypeTag.RECORD)) {
+            ARecordType recType = (ARecordType) obj.getType();
+            if (recType.isOpen()) {
+                writeOpenRecord((JRecord) result);
+            } else {
+                resultSerde = AqlSerializerDeserializerProvider.INSTANCE.getNonTaggedSerializerDeserializer(recType);
+                resultSerde.serialize(obj, outputProvider.getDataOutput());
+            }
+        } else {
+            resultSerde.serialize(obj, outputProvider.getDataOutput());
+        }
+        reset();
+    }
+
+    private void writeOpenRecord(JRecord jRecord) throws AsterixException, IOException {
+        ARecord aRecord = (ARecord) jRecord.getIAObject();
+        RecordBuilder recordBuilder = new RecordBuilder();
+        ARecordType recordType = aRecord.getType();
+        recordBuilder.reset(recordType);
+        ArrayBackedValueStorage fieldName = new ArrayBackedValueStorage();
+        ArrayBackedValueStorage fieldValue = new ArrayBackedValueStorage();
+        List<Boolean> openField = jRecord.getOpenField();
+
+        int fieldIndex = 0;
+        int closedFieldId = 0;
+        for (IJObject field : jRecord.getFields()) {
+            fieldValue.reset();
+            switch (field.getTypeTag()) {
+                case INT32:
+                    AqlSerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.AINT32)
+                            .serialize(field.getIAObject(), fieldValue.getDataOutput());
+                    break;
+                case STRING:
+                    AqlSerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.ASTRING).serialize(
+                            field.getIAObject(), fieldValue.getDataOutput());
+                    break;
+            }
+            if (openField.get(fieldIndex)) {
+                String fName = jRecord.getFieldNames().get(fieldIndex);
+                fieldName.reset();
+                AqlSerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.ASTRING).serialize(
+                        new AString(fName), fieldName.getDataOutput());
+                recordBuilder.addField(fieldName, fieldValue);
+            } else {
+                recordBuilder.addField(closedFieldId, fieldValue);
+                closedFieldId++;
+            }
+            fieldIndex++;
+        }
+
+        recordBuilder.write(outputProvider.getDataOutput(), false);
+
+    }
+
+    private void reset() {
+        for (IJObject jObject : arguments) {
+            switch (jObject.getTypeTag()) {
+                case RECORD:
+                    reset((JRecord) jObject);
+                    break;
+            }
+        }
+        switch (resultHolder.getTypeTag()) {
+            case RECORD:
+                reset((JRecord) resultHolder);
+                break;
+        }
+    }
+
+    private void reset(JRecord jRecord) {
+        List<IJObject> fields = ((JRecord) jRecord).getFields();
+        for (IJObject field : fields) {
+            switch (field.getTypeTag()) {
+                case RECORD:
+                    reset((JRecord) field);
+                    break;
+            }
+        }
+        jRecord.close();
     }
 
     public void setArgument(int index, byte[] argument) throws HyracksDataException {
@@ -96,7 +183,8 @@ public class JavaFunctionHelper implements IFunctionHelper {
                 ((JRecord) arguments[index]).setValue(argument);
                 break;
             default:
-                throw new IllegalStateException("Argument type: " + finfo.getParamList().get(index).getTypeTag());
+                throw new IllegalStateException("Invalid argument type: "
+                        + finfo.getParamList().get(index).getTypeTag());
         }
     }
 
@@ -116,14 +204,14 @@ public class JavaFunctionHelper implements IFunctionHelper {
                 retValue = ((JString) jtypeObject).getIAObject();
                 break;
             case RECORD:
-                IJObject[] fields = ((JRecord) jtypeObject).getFields();
+                List<IJObject> fields = ((JRecord) jtypeObject).getFields();
                 int index = 0;
-                IAObject[] obj = new IAObject[fields.length];
+                IAObject[] obj = new IAObject[fields.size()];
                 for (IJObject field : fields) {
                     obj[index] = convertIJTypeToIAObject(field);
                     index++;
                 }
-                retValue = new ARecord((ARecordType) finfo.getReturnType(), obj);
+                retValue = new AMutableRecord((ARecordType) finfo.getReturnType(), obj);
                 break;
             default:
                 throw new AlgebricksException("Unsupported type:" + resultType);
@@ -134,6 +222,20 @@ public class JavaFunctionHelper implements IFunctionHelper {
     @Override
     public IJObject getResultObject() {
         return resultHolder;
+    }
+
+    @Override
+    public IJObject getObject(JTypeTag jtypeTag) {
+        IJObject retValue = null;
+        switch (jtypeTag) {
+            case INT:
+                retValue = objectPool.allocate(BuiltinType.AINT32);
+                break;
+            case STRING:
+                retValue = objectPool.allocate(BuiltinType.ASTRING);
+                break;
+        }
+        return retValue;
     }
 
 }

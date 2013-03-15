@@ -26,7 +26,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringWriter;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.Properties;
@@ -49,7 +48,6 @@ import edu.uci.ics.asterix.installer.error.OutputHandler;
 import edu.uci.ics.asterix.installer.model.AsterixInstance;
 import edu.uci.ics.asterix.installer.model.AsterixInstance.State;
 import edu.uci.ics.asterix.installer.service.ServiceProvider;
-import edu.uci.ics.hyracks.algebricks.common.utils.Pair;
 
 public class InstallerUtil {
 
@@ -111,7 +109,7 @@ public class InstallerUtil {
         return cluster.getNode().get(random.nextInt(nNodes));
     }
 
-    public static Pair<String, String> getNodeDirectories(String asterixInstanceName, Node node, Cluster cluster) {
+    public static String getNodeDirectories(String asterixInstanceName, Node node, Cluster cluster) {
         String storeDataSubDir = asterixInstanceName + File.separator + "data" + File.separator;
         String storeLibrarySubDir = asterixInstanceName + File.separator + "library" + File.separator;
         String[] storeDirs = null;
@@ -132,10 +130,7 @@ public class InstallerUtil {
             nodeDataStore.append(",");
         }
         nodeDataStore.deleteCharAt(nodeDataStore.length() - 1);
-        String nodeDataDir = nodeDataStore.toString();
-        Arrays.sort(storeDirs);
-        String nodeLibraryDir = storeDirs[0].trim() + File.separator + storeLibrarySubDir;
-        return new Pair<String, String>(nodeDataDir, nodeLibraryDir);
+        return nodeDataStore.toString();
     }
 
     private static void writeAsterixConfigurationFile(AsterixInstance asterixInstance, boolean newData)
@@ -149,9 +144,8 @@ public class InstallerUtil {
         conf.append("NewUniverse=" + newData + "\n");
 
         for (Node node : cluster.getNode()) {
-            Pair<String, String> nodeDirs = getNodeDirectories(asterixInstance.getName(), node, cluster);
-            conf.append(asterixInstanceName + "_" + node.getId() + ".stores" + "=" + nodeDirs.first + "\n");
-            conf.append(asterixInstanceName + "_" + node.getId() + ".lib" + "=" + nodeDirs.second + "\n");
+            String nodeDir = getNodeDirectories(asterixInstance.getName(), node, cluster);
+            conf.append(asterixInstanceName + "_" + node.getId() + ".stores" + "=" + nodeDir + "\n");
         }
         Properties asterixConfProp = asterixInstance.getConfiguration();
         String outputDir = asterixConfProp.getProperty("output_dir");

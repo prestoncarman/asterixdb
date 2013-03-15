@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 
 import edu.uci.ics.asterix.common.functions.FunctionSignature;
+import edu.uci.ics.asterix.external.dataset.adapter.AdapterIdentifier;
 import edu.uci.ics.asterix.metadata.api.IMetadataEntity;
 import edu.uci.ics.asterix.metadata.entities.Dataset;
 import edu.uci.ics.asterix.metadata.entities.DatasourceAdapter;
@@ -48,7 +49,7 @@ public class MetadataCache {
     // Key is function Identifier . Key of value map is function name.
     protected final Map<FunctionSignature, Function> functions = new HashMap<FunctionSignature, Function>();
     // Key is adapter dataverse. Key of value map is the adapter name  
-    protected final Map<String, Map<String, DatasourceAdapter>> adapters = new HashMap<String, Map<String, DatasourceAdapter>>();
+    protected final Map<AdapterIdentifier, DatasourceAdapter> adapters = new HashMap<AdapterIdentifier, DatasourceAdapter>();
     // Key is library dataverse. Key of value map is the library name  
     protected final Map<String, Map<String, Library>> libraries = new HashMap<String, Map<String, Library>>();
 
@@ -85,12 +86,15 @@ public class MetadataCache {
                     synchronized (datatypes) {
                         synchronized (functions) {
                             synchronized (adapters) {
-                                dataverses.clear();
-                                nodeGroups.clear();
-                                datasets.clear();
-                                datatypes.clear();
-                                functions.clear();
-                                adapters.clear();
+                                synchronized (libraries) {
+                                    dataverses.clear();
+                                    nodeGroups.clear();
+                                    datasets.clear();
+                                    datatypes.clear();
+                                    functions.clear();
+                                    adapters.clear();
+                                    libraries.clear();
+                                }
                             }
                         }
                     }
@@ -106,7 +110,6 @@ public class MetadataCache {
                     if (!dataverses.containsKey(dataverse)) {
                         datasets.put(dataverse.getDataverseName(), new HashMap<String, Dataset>());
                         datatypes.put(dataverse.getDataverseName(), new HashMap<String, Datatype>());
-                        adapters.put(dataverse.getDataverseName(), new HashMap<String, DatasourceAdapter>());
                         return dataverses.put(dataverse.getDataverseName(), dataverse);
                     }
                     return null;
@@ -311,16 +314,9 @@ public class MetadataCache {
 
     public Object addAdapterIfNotExists(DatasourceAdapter adapter) {
         synchronized (adapters) {
-            DatasourceAdapter adapterObject = adapters.get(adapter.getAdapterIdentifier().getNamespace()).get(
-                    adapter.getAdapterIdentifier().getAdapterName());
-            if (adapterObject != null) {
-                Map<String, DatasourceAdapter> adaptersInDataverse = adapters.get(adapter.getAdapterIdentifier()
-                        .getNamespace());
-                if (adaptersInDataverse == null) {
-                    adaptersInDataverse = new HashMap<String, DatasourceAdapter>();
-                    adapters.put(adapter.getAdapterIdentifier().getNamespace(), adaptersInDataverse);
-                }
-                return adaptersInDataverse.put(adapter.getAdapterIdentifier().getAdapterName(), adapter);
+            boolean needToAddd = adapters.get(adapter.getAdapterIdentifier()) == null;
+            if (needToAddd) {
+                return adapters.put(adapter.getAdapterIdentifier(), adapter);
             }
             return null;
         }
@@ -328,10 +324,8 @@ public class MetadataCache {
 
     public Object dropAdapter(DatasourceAdapter adapter) {
         synchronized (adapters) {
-            Map<String, DatasourceAdapter> adaptersInDataverse = adapters.get(adapter.getAdapterIdentifier()
-                    .getNamespace());
-            if (adaptersInDataverse != null) {
-                return adaptersInDataverse.remove(adapter.getAdapterIdentifier().getAdapterName());
+            if (adapters.get(adapter.getAdapterIdentifier()) != null) {
+                return adapters.remove(adapter.getAdapterIdentifier());
             }
             return null;
         }
@@ -339,14 +333,14 @@ public class MetadataCache {
 
     public Object addLibraryIfNotExists(Library library) {
         synchronized (libraries) {
-            Library libraryObject = libraries.get(library.getDataverseName()).get(library.getName());
-            if (libraryObject != null) {
-                Map<String, Library> librariesInDataverse = libraries.get(library.getDataverseName());
-                if (librariesInDataverse == null) {
-                    librariesInDataverse = new HashMap<String, Library>();
-                    libraries.put(library.getDataverseName(), librariesInDataverse);
+            Map<String, Library> libsInDataverse = libraries.get(library.getDataverseName());
+            boolean needToAddd = (libsInDataverse == null || libsInDataverse.get(library.getName()) != null);
+            if (needToAddd) {
+                if (libsInDataverse == null) {
+                    libsInDataverse = new HashMap<String, Library>();
+                    libraries.put(library.getDataverseName(), libsInDataverse);
                 }
-                return librariesInDataverse.put(library.getDataverseName(), library);
+                return libsInDataverse.put(library.getDataverseName(), library);
             }
             return null;
         }

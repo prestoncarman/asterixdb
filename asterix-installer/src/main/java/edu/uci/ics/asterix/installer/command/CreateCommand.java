@@ -26,6 +26,7 @@ import org.kohsuke.args4j.Option;
 import edu.uci.ics.asterix.event.schema.cluster.Cluster;
 import edu.uci.ics.asterix.event.schema.cluster.Env;
 import edu.uci.ics.asterix.event.schema.cluster.Property;
+import edu.uci.ics.asterix.event.schema.cluster.WorkingDir;
 import edu.uci.ics.asterix.event.schema.pattern.Patterns;
 import edu.uci.ics.asterix.installer.driver.InstallerDriver;
 import edu.uci.ics.asterix.installer.driver.InstallerUtil;
@@ -54,6 +55,9 @@ public class CreateCommand extends AbstractCommand {
         JAXBContext ctx = JAXBContext.newInstance(Cluster.class);
         Unmarshaller unmarshaller = ctx.createUnmarshaller();
         cluster = (Cluster) unmarshaller.unmarshal(new File(createConfig.clusterPath));
+        cluster.setWorkingDir(new WorkingDir(cluster.getWorkingDir().getDir() + File.separator + asterixInstanceName,
+                cluster.getWorkingDir().isNFS()));
+        cluster.setLogdir(cluster.getLogdir() + File.separator + asterixInstanceName);
         AsterixInstance asterixInstance = InstallerUtil.createAsterixInstance(asterixInstanceName, cluster);
         InstallerUtil.evaluateConflictWithOtherInstances(asterixInstance);
         InstallerUtil.createAsterixZip(asterixInstance, true);
@@ -101,10 +105,10 @@ public class CreateCommand extends AbstractCommand {
                 + "\n-n Name of the ASTERIX instance." + "\n-c Path to the cluster configuration file"
                 + "\n-a Path to the ASTERIX configuration file";
     }
-    
+
     private void resolveCluster() {
-        cluster.setLogdir( new File(cluster.getLogdir()).getAbsolutePath());
-        if(cluster.getStore() != null){
+        cluster.setLogdir(new File(cluster.getLogdir()).getAbsolutePath());
+        if (cluster.getStore() != null) {
             cluster.setStore(new File(cluster.getStore()).getAbsolutePath());
         }
     }

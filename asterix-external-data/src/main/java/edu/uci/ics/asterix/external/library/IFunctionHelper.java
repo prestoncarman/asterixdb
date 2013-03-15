@@ -18,6 +18,7 @@ import java.io.IOException;
 
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
 import edu.uci.ics.asterix.external.library.java.IJObject;
+import edu.uci.ics.asterix.external.library.java.JTypeTag;
 
 public interface IFunctionHelper {
 
@@ -26,4 +27,6 @@ public interface IFunctionHelper {
     public IJObject getResultObject();
 
     public void setResult(IJObject result) throws IOException, AsterixException;
+    
+    public IJObject getObject(JTypeTag jtypeTag);
 }

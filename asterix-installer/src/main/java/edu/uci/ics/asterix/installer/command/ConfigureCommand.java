@@ -31,7 +31,7 @@ public class ConfigureCommand extends AbstractCommand {
         cluster.setStore(workingDir + File.separator + "storage");
         cluster.setLogdir(workingDir + File.separator + "logs");
         cluster.setJavaHome(System.getenv("JAVA_HOME"));
-        cluster.setDebugEnabled(false);
+        cluster.setDebugEnabled(true);
 
         cluster.getMasterNode().setDebug(new BigInteger(8800 + ""));
         int nodeIndex = 0;

@@ -3,10 +3,13 @@ package edu.uci.ics.asterix.external.library.java;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 import edu.uci.ics.asterix.common.exceptions.AsterixException;
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.ARecordSerializerDeserializer;
 import edu.uci.ics.asterix.dataflow.data.nontagged.serde.AStringSerializerDeserializer;
+import edu.uci.ics.asterix.external.library.JTypeObjectFactory;
 import edu.uci.ics.asterix.om.base.AInt32;
 import edu.uci.ics.asterix.om.base.AMutableInt32;
 import edu.uci.ics.asterix.om.base.AMutableOrderedList;
@@ -19,9 +22,12 @@ import edu.uci.ics.asterix.om.types.AOrderedListType;
 import edu.uci.ics.asterix.om.types.ARecordType;
 import edu.uci.ics.asterix.om.types.ATypeTag;
 import edu.uci.ics.asterix.om.types.AUnionType;
+import edu.uci.ics.asterix.om.types.BuiltinType;
 import edu.uci.ics.asterix.om.types.EnumDeserializer;
 import edu.uci.ics.asterix.om.types.IAType;
 import edu.uci.ics.asterix.om.util.NonTaggedFormatUtil;
+import edu.uci.ics.asterix.om.util.container.IObjectPool;
+import edu.uci.ics.asterix.om.util.container.ListObjectPool;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.NotImplementedException;
 import edu.uci.ics.hyracks.api.dataflow.value.ISerializerDeserializer;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
@@ -104,29 +110,94 @@ public class JTypes {
         private AMutableRecord value;
         private byte[] recordBytes;
         private ARecordType recordType;
-        private IJObject[] fields;
-        private ISerializerDeserializer serde;
+        private List<IJObject> fields;
+        private List<String> fieldNames;
+        private List<IAType> fieldTypes;
+        private final IObjectPool<IJObject, IAType> objectPool = new ListObjectPool<IJObject, IAType>(
+                new JTypeObjectFactory());
+        private int numFieldsAdded = 0;
+        private List<Boolean> openField;
 
         private final static byte SER_NULL_TYPE_TAG = ATypeTag.NULL.serialize();
         private final static byte SER_RECORD_TYPE_TAG = ATypeTag.RECORD.serialize();
 
         public JRecord(ARecordType recordType) {
             this.recordType = recordType;
-            this.fields = new IJObject[recordType.getFieldTypes().length];
+            this.fields = new ArrayList<IJObject>();
+            initFieldInfo();
         }
 
         public JRecord(ARecordType recordType, IJObject[] fields) {
             this.recordType = recordType;
-            this.fields = fields;
+            this.fields = new ArrayList<IJObject>();
+            for (IJObject jObject : fields) {
+                this.fields.add(jObject);
+            }
+            initFieldInfo();
+        }
+
+        private void initFieldInfo() {
+            this.openField = new ArrayList<Boolean>();
+            fieldNames = new ArrayList<String>();
+            for (String name : recordType.getFieldNames()) {
+                fieldNames.add(name);
+                openField.add(false);
+            }
+            fieldTypes = new ArrayList<IAType>();
+            for (IAType type : recordType.getFieldTypes()) {
+                fieldTypes.add(type);
+            }
+
+        }
+
+        private IAObject[] getIAObjectArray(List<IJObject> fields) {
+            IAObject[] retValue = new IAObject[fields.size()];
+            int index = 0;
+            for (IJObject jObject : fields) {
+                retValue[index++] = getIAObject(jObject);
+            }
+            return retValue;
+        }
+
+        private IAObject getIAObject(IJObject jObject) {
+            IAObject retVal = null;
+            switch (jObject.getTypeTag()) {
+                case INT32:
+                case STRING:
+                    retVal = jObject.getIAObject();
+                    break;
+                case RECORD:
+                    ARecordType recType = ((JRecord) jObject).getRecordType();
+                    IAObject[] fields = new IAObject[((JRecord) jObject).getFields().size()];
+                    int index = 0;
+                    for (IJObject field : ((JRecord) jObject).getFields()) {
+                        fields[index++] = getIAObject(field);
+                    }
+
+                    retVal = new AMutableRecord(recType, fields);
+            }
+            return retVal;
+        }
+
+        public void addField(String fieldName, IJObject fieldValue) {
+            int pos = getFieldPosByName(fieldName);
+            if (pos >= 0) {
+                throw new IllegalArgumentException("field already defined");
+            }
+            numFieldsAdded++;
+            fields.add(fieldValue);
+            fieldNames.add(fieldName);
+            fieldTypes.add(fieldValue.getIAObject().getType());
+            openField.add(true);
         }
 
         public IJObject getValueByName(String fieldName) throws AsterixException, IOException {
             int fieldPos = getFieldPosByName(fieldName);
-            
+
             if (recordBytes == null) {
                 IJObject jtype = getJObject(value.getValueByPos(fieldPos));
-                fields[fieldPos] = jtype;
-                return fields[fieldPos];
+                fields.set(fieldPos, jtype);
+                return jtype;
             }
 
             if (recordBytes[0] == SER_NULL_TYPE_TAG) {
@@ -166,8 +237,9 @@ public class JTypes {
                 //                out.writeByte(fieldValueTypeTag.serialize());
             }
 
-            fields[fieldPos] = getJType(fieldValueTypeTag, recordBytes, fieldValueOffset, fieldValueLength, fieldPos);
-            return fields[fieldPos];
+            IJObject fieldValue = getJType(fieldValueTypeTag, recordBytes, fieldValueOffset, fieldValueLength, fieldPos);
+            fields.set(fieldPos, fieldValue);
+            return fieldValue;
         }
 
         public void setValue(byte[] recordBytes) {
@@ -175,7 +247,7 @@ public class JTypes {
         }
 
         public void setValueAtPos(int pos, IJObject jtype) {
-            fields[pos] = jtype;
+            fields.set(pos, jtype);
         }
 
         public void setValue(AMutableRecord mutableRecord) {
@@ -188,12 +260,29 @@ public class JTypes {
             return recordType.getTypeTag();
         }
 
+        public void setField(String fieldName, IJObject fieldValue) {
+            int pos = getFieldPosByName(fieldName);
+            switch (fields.get(pos).getTypeTag()) {
+                case INT32:
+                    ((JInt) fields.get(pos)).setValue(((AMutableInt32) fieldValue.getIAObject()).getIntegerValue()
+                            .intValue());
+                    break;
+                case STRING:
+                    ((JString) fields.get(pos)).setValue(((AMutableString) fieldValue.getIAObject()).getStringValue());
+                    break;
+                case RECORD:
+                    ((JRecord) fields.get(pos)).setValue(((AMutableRecord) fieldValue));
+                    break;
+            }
+        }
+
         private int getFieldPosByName(String fieldName) {
-            String[] fieldNames = recordType.getFieldNames();
-            for (int i = 0; i < fieldNames.length; i++) {
-                if (fieldNames[i].equals(fieldName)) {
-                    return i;
+            int index = 0;
+            for (String name : fieldNames) {
+                if (name.equals(fieldName)) {
+                    return index;
                 }
+                index++;
             }
             return -1;
         }
@@ -204,7 +293,7 @@ public class JTypes {
             switch (typeTag) {
                 case INT32: {
                     int v = valueFromBytes(argument, offset, len);
-                    jObject = new JInt();
+                    jObject = objectPool.allocate(BuiltinType.AINT32);
                     ((JInt) jObject).setValue(v);
                     break;
 
@@ -212,13 +301,13 @@ public class JTypes {
                 case STRING: {
                     String v = AStringSerializerDeserializer.INSTANCE.deserialize(
                             new DataInputStream(new ByteArrayInputStream(argument, offset, len))).getStringValue();
-                    jObject = new JString();
+                    jObject = objectPool.allocate(BuiltinType.ASTRING);
                     ((JString) jObject).setValue(v);
                     break;
                 }
                 case RECORD:
                     ARecordType fieldRecordType = (ARecordType) recordType.getFieldTypes()[fieldIndex];
-                    jObject = new JRecord(fieldRecordType);
+                    jObject = objectPool.allocate(fieldRecordType);
                     byte[] recBytes = new byte[len];
                     System.arraycopy(argument, offset, recBytes, 0, len);
                     ((JRecord) jObject).setValue(argument);
@@ -237,11 +326,12 @@ public class JTypes {
                     int v = ((AInt32) iaobject).getIntegerValue().intValue();
                     jtype = new JInt();
                     ((JInt) jtype).setValue(v);
-
+                    break;
                 }
                 case STRING: {
                     jtype = new JString();
                     ((JString) jtype).setValue(((AString) iaobject).getStringValue());
+                    break;
                 }
                 case RECORD:
                     ARecordType fieldRecordType = ((ARecord) iaobject).getType();
@@ -263,13 +353,29 @@ public class JTypes {
             return recordType;
         }
 
-        public IJObject[] getFields() {
+        public List<IJObject> getFields() {
             return fields;
         }
 
         @Override
         public IAObject getIAObject() {
+            if (value == null || numFieldsAdded > 0) {
+                value = new AMutableRecord(recordType, getIAObjectArray(fields));
+            }
             return value;
+        }
+
+        public void close() {
+            objectPool.reset();
+            if (numFieldsAdded > 0) {
+                int totalFields = fieldNames.size();
+                for (int i = 0; i < numFieldsAdded; i++) {
+                    fieldNames.remove(totalFields - 1 - i);
+                    fieldTypes.remove(totalFields - 1 - i);
+                    fields.remove(totalFields - 1 - i);
+                }
+                numFieldsAdded = 0;
+            }
         }
 
         private int getNullBitMapSize() {
@@ -280,6 +386,18 @@ public class JTypes {
                 nullBitmapSize = 0;
             }
             return nullBitmapSize;
+        }
+
+        public List<Boolean> getOpenField() {
+            return openField;
+        }
+
+        public List<String> getFieldNames() {
+            return fieldNames;
+        }
+
+        public List<IAType> getFieldTypes() {
+            return fieldTypes;
         }
 
     }

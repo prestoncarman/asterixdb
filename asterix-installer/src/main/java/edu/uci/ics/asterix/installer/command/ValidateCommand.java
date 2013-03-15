@@ -46,7 +46,7 @@ public class ValidateCommand extends AbstractCommand {
         if (((ValidateConfig) config).cluster != null) {
             logValidationResult("Cluster configuration", validateCluster(vConfig.cluster));
         } else {
-            logValidationResult("Installer Configuration", validateConfiguration());
+            logValidationResult("Managix Configuration", validateConfiguration());
         }
     }
 
