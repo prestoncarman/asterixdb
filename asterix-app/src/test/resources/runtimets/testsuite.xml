@@ -743,6 +743,11 @@
     -->
   </test-group>
   <test-group name="dml">
+     <test-case FilePath="dml">
+      <compilation-unit name="query-issue288">
+        <output-dir compare="Text">query-issue288</output-dir>
+      </compilation-unit>
+    </test-case>
     <test-case FilePath="dml">
       <compilation-unit name="query-issue205">
         <output-dir compare="Text">query-issue205</output-dir>
