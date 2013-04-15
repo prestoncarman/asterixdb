@@ -53,6 +53,10 @@ public class InstallerDriver {
         return conf;
     }
 
+    public static void setManagixHome(String managixHome) {
+        InstallerDriver.managixHome = managixHome;
+    }
+
     public static void initConfig() throws Exception {
         File configFile = new File(managixHome + File.separator + MANAGIX_CONF_XML);
         JAXBContext configCtx = JAXBContext.newInstance(Configuration.class);
@@ -131,10 +135,6 @@ public class InstallerDriver {
                 + "\n");
         buffer.append("install  " + ":" + " Installs a library to an asterix instance" + "\n");
         buffer.append("uninstall" + ":" + " Uninstalls a library from an asterix instance" + "\n");
-        buffer.append("shutdown " + ":" + " Shutdown the installer service" + "\n");
-        buffer.append("validate " + ":" + " Validates the installer/cluster configuration" + "\n");
-        buffer.append("configure" + ":" + " Auto-generate configuration for local psedu-distributed Asterix instance"
-                + "\n");
         buffer.append("shutdown " + ":" + " Shutdown the installer service" + "\n");
         buffer.append("help     " + ":" + " Provides usage description of a command" + "\n");
 
