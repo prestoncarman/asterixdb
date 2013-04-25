@@ -46,7 +46,7 @@ public class Index implements IMetadataEntity {
     // Specific to NGRAM indexes.
     private final int gramLength;
     // Type of pending operations with respect to atomic DDL operation
-    private final int pendingOp;
+    private  int pendingOp;
 
     public Index(String dataverseName, String datasetName, String indexName, IndexType indexType,
             List<String> keyFieldNames, int gramLength, boolean isPrimaryIndex, int pendingOp) {
@@ -166,4 +166,8 @@ public class Index implements IMetadataEntity {
     public Object dropFromCache(MetadataCache cache) {
         return cache.dropIndex(this);
     }
+
+	public void setPendingOp(int pendingOp) {
+		this.pendingOp = pendingOp;
+	}
 }
