@@ -1,0 +1,22 @@
+/*
+ * Description      :   Check temporal join functionality for interval
+ * Expected Result  :   Success
+ * Date             :   26th Jun, 2015
+ */
+
+use dataverse TinyCollege;
+
+insert into dataset Staff ({"name":"Alex", "office":"A", "employment":interval-from-date(date("2003-01-01"), date("2008-01-01"))});
+insert into dataset Staff ({"name":"Elisabeth", "office":"B", "employment":interval-from-date(date("2002-01-01"), date("2010-01-01"))});
+insert into dataset Staff ({"name":"Frank", "office":"A", "employment":interval-from-date(date("2004-01-01"), date("2009-01-01"))});
+insert into dataset Staff ({"name":"Henry", "office":"C", "employment":interval-from-date(date("2003-01-01"), date("2008-01-01"))});
+insert into dataset Staff ({"name":"Mary", "office":"B", "employment":interval-from-date(date("2006-01-01"), date("2010-01-01"))});
+insert into dataset Staff ({"name":"Vicky", "office":"D", "employment":interval-from-date(date("2001-01-01"), date("2010-01-01"))});
+
+insert into dataset Students ({"name":"Charles", "office":"X", "attendance":interval-from-date(date("2001-01-01"), date("2004-01-01"))});
+insert into dataset Students ({"name":"Frank", "office":"Y", "attendance":interval-from-date(date("2001-01-01"), date("2004-01-01"))});
+insert into dataset Students ({"name":"Karen", "office":"Y", "attendance":interval-from-date(date("2007-01-01"), date("2009-01-01"))});
+insert into dataset Students ({"name":"Mary", "office":"Y", "attendance":interval-from-date(date("2002-01-01"), date("2005-01-01"))});
+insert into dataset Students ({"name":"Olga", "office":"Z", "attendance":interval-from-date(date("2001-01-01"), date("2003-01-01"))});
+insert into dataset Students ({"name":"Steve", "office":"Z", "attendance":interval-from-date(date("2007-01-01"), date("2010-01-01"))});
+
