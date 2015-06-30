@@ -16,10 +16,10 @@ package edu.uci.ics.asterix.common.annotations;
 
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IExpressionAnnotation;
 
-public class SkipSecondaryIndexSearchExpressionAnnotation implements IExpressionAnnotation {
+public class IntervalMergeJoinExpressionAnnotation implements IExpressionAnnotation {
 
-    public static final String HINT_STRING = "skip-index";
-    public static final SkipSecondaryIndexSearchExpressionAnnotation INSTANCE = new SkipSecondaryIndexSearchExpressionAnnotation();
+    public static final String HINT_STRING = "interval-merge-join";
+    public static final IntervalMergeJoinExpressionAnnotation INSTANCE = new IntervalMergeJoinExpressionAnnotation();
 
     private Object object;
 
@@ -35,7 +35,7 @@ public class SkipSecondaryIndexSearchExpressionAnnotation implements IExpression
 
     @Override
     public IExpressionAnnotation copy() {
-        SkipSecondaryIndexSearchExpressionAnnotation clone = new SkipSecondaryIndexSearchExpressionAnnotation();
+        IntervalMergeJoinExpressionAnnotation clone = new IntervalMergeJoinExpressionAnnotation();
         clone.setObject(object);
         return clone;
     }
