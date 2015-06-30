@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- *
+ * 
  *     http://www.apache.org/licenses/LICENSE-2.0
- *
+ * 
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -16,10 +16,10 @@ package edu.uci.ics.asterix.common.annotations;
 
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IExpressionAnnotation;
 
-public class SkipSecondaryIndexSearchExpressionAnnotation implements IExpressionAnnotation {
+public class IntervalIopJoinExpressionAnnotation implements IExpressionAnnotation {
 
-    public static final String HINT_STRING = "skip-index";
-    public static final SkipSecondaryIndexSearchExpressionAnnotation INSTANCE = new SkipSecondaryIndexSearchExpressionAnnotation();
+    public static final String HINT_STRING = "interval-iop-join";
+    public static final IntervalIopJoinExpressionAnnotation INSTANCE = new IntervalIopJoinExpressionAnnotation();
 
     private Object object;
 
@@ -35,7 +35,7 @@ public class SkipSecondaryIndexSearchExpressionAnnotation implements IExpression
 
     @Override
     public IExpressionAnnotation copy() {
-        SkipSecondaryIndexSearchExpressionAnnotation clone = new SkipSecondaryIndexSearchExpressionAnnotation();
+        IntervalIopJoinExpressionAnnotation clone = new IntervalIopJoinExpressionAnnotation();
         clone.setObject(object);
         return clone;
     }
