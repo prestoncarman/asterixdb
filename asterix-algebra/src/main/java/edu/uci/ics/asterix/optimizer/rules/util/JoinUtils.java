@@ -15,9 +15,12 @@
 package edu.uci.ics.asterix.optimizer.rules.util;
 
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 
+import edu.uci.ics.asterix.common.annotations.IntervalJoinExpressionAnnotation;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
@@ -25,6 +28,7 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.base.IOptimizationContext;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalExpressionTag;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
+import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IExpressionAnnotation;
 import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractBinaryJoinOperator;
@@ -40,11 +44,35 @@ public class JoinUtils {
         List<LogicalVariable> sideRight = new LinkedList<LogicalVariable>();
         List<LogicalVariable> varsLeft = op.getInputs().get(0).getValue().getSchema();
         List<LogicalVariable> varsRight = op.getInputs().get(1).getValue().getSchema();
-        if (isIntervalJoinCondition(op.getCondition().getValue(), varsLeft, varsRight, sideLeft, sideRight)) {
-            // Sort Merge
-            // Overlapping Inverval Join
-            // ...
+        AbstractFunctionCallExpression fexp = (AbstractFunctionCallExpression) op.getCondition().getValue();
+        if (isIntervalJoinCondition(fexp, varsLeft, varsRight, sideLeft, sideRight)) {
+            IntervalJoinExpressionAnnotation ijea = getIntervalJoinAnnotation(fexp);
+            if (ijea == null) {
+                // Use default join method.
+                return;
+            }
+            if (ijea.isMergeJoin()) {
+                // Sort Merge.
+                System.err.println("Interval Join - Merge");
+            } else if (ijea.isIopJoin()) {
+                // Overlapping Interval Partition.
+                System.err.println("Interval Join - IOP");
+            } else if (ijea.isSpatialJoin()) {
+                // Spatial Partition.
+                System.err.println("Interval Join - Spatial Partitioning");
+            }
         }
+    }
+
+    private static IntervalJoinExpressionAnnotation getIntervalJoinAnnotation(AbstractFunctionCallExpression fexp) {
+        Iterator<IExpressionAnnotation> annotationIter = fexp.getAnnotations().values().iterator();
+        while (annotationIter.hasNext()) {
+            IExpressionAnnotation annotation = annotationIter.next();
+            if (annotation instanceof IntervalJoinExpressionAnnotation) {
+                return (IntervalJoinExpressionAnnotation) annotation;
+            }
+        }
+        return null;
     }
 
     private static void setNLJoinOp(AbstractBinaryJoinOperator op, IOptimizationContext context) {
