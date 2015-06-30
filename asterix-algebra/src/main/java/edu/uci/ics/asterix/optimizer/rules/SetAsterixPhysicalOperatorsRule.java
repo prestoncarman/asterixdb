@@ -29,6 +29,7 @@ import edu.uci.ics.asterix.metadata.declared.AqlSourceId;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
 import edu.uci.ics.asterix.optimizer.rules.am.AccessMethodJobGenParams;
 import edu.uci.ics.asterix.optimizer.rules.am.BTreeJobGenParams;
+import edu.uci.ics.asterix.optimizer.rules.util.JoinUtils;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.NotImplementedException;
 import edu.uci.ics.hyracks.algebricks.common.utils.Pair;
@@ -57,7 +58,6 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.operators.physical.ExternalGr
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.physical.PreclusteredGroupByPOperator;
 import edu.uci.ics.hyracks.algebricks.core.rewriter.base.IAlgebraicRewriteRule;
 import edu.uci.ics.hyracks.algebricks.core.rewriter.base.PhysicalOptimizationConfig;
-import edu.uci.ics.hyracks.algebricks.rewriter.util.JoinUtils;
 
 public class SetAsterixPhysicalOperatorsRule implements IAlgebraicRewriteRule {
 

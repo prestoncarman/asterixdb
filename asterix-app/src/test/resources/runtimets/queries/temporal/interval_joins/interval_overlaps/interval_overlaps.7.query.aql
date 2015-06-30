@@ -8,7 +8,7 @@ use dataverse TinyCollege;
 
 for $f in dataset Staff
 for $d in dataset Students
-where /*+ interval-merge-join ["F", "L", "R"] */ interval-overlaps($f.employment, $d.attendance)
+where interval-overlaps($d.attendance, $f.employment)
 /*+ range ["F", "L", "R"] */
 order by $f.name, $d.name
-return { "staff" : $f.name, "student" : $d.name }
+return {"staff":$f.name,"student":$d.name}
