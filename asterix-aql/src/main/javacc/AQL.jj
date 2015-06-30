@@ -116,9 +116,7 @@ import edu.uci.ics.asterix.common.annotations.FieldValFileDataGen;
 import edu.uci.ics.asterix.common.annotations.FieldValFileSameIndexDataGen;
 import edu.uci.ics.asterix.common.annotations.IRecordFieldDataGen;
 import edu.uci.ics.asterix.common.annotations.InsertRandIntDataGen;
-import edu.uci.ics.asterix.common.annotations.IntervalIopJoinExpressionAnnotation;
-import edu.uci.ics.asterix.common.annotations.IntervalMergeJoinExpressionAnnotation;
-import edu.uci.ics.asterix.common.annotations.IntervalSpatialJoinExpressionAnnotation;
+import edu.uci.ics.asterix.common.annotations.IntervalJoinExpressionAnnotation;
 import edu.uci.ics.asterix.common.annotations.ListDataGen;
 import edu.uci.ics.asterix.common.annotations.ListValFileDataGen;
 import edu.uci.ics.asterix.common.annotations.SkipSecondaryIndexSearchExpressionAnnotation;
@@ -153,9 +151,6 @@ public class AQLParser extends ScopeChecker {
     private static final String INMEMORY_HINT = "inmem";
     private static final String INSERT_RAND_INT_HINT = "insert-rand-int";
     private static final String INTERVAL_HINT = "interval";
-    private static final String INTERVAL_IOP_JOIN_HINT = IntervalIopJoinExpressionAnnotation.HINT_STRING;
-    private static final String INTERVAL_MERGE_JOIN_HINT = IntervalMergeJoinExpressionAnnotation.HINT_STRING;
-    private static final String INTERVAL_SPATIAL_JOIN_HINT = IntervalSpatialJoinExpressionAnnotation.HINT_STRING;
     private static final String LIST_HINT = "list";
     private static final String LIST_VAL_FILE_HINT = "list-val-file";
     private static final String RANGE_HINT = "range";
@@ -2046,12 +2041,12 @@ Expression FunctionCallExpr() throws ParseException:
       }
       callExpr = new CallExpr(signature,argList);
       if (hint != null) {
-        if (hint.startsWith(INTERVAL_IOP_JOIN_HINT)) {
-          callExpr.addHint(IntervalIopJoinExpressionAnnotation.INSTANCE);
-        } else if (hint.startsWith(INTERVAL_MERGE_JOIN_HINT)) {
-          callExpr.addHint(IntervalMergeJoinExpressionAnnotation.INSTANCE);
-        } else if (hint.startsWith(INTERVAL_SPATIAL_JOIN_HINT)) {
-          callExpr.addHint(IntervalSpatialJoinExpressionAnnotation.INSTANCE);
+        if (IntervalJoinExpressionAnnotation.isIntervalJoinHint(hint)) {
+          IntervalJoinExpressionAnnotation ijea = IntervalJoinExpressionAnnotation.INSTANCE;
+          ijea.setObject(hint);
+          ijea.setJoinType(hint);
+          ijea.setRangeMap(RangeMapBuilder.parseHint(hint.substring(IntervalJoinExpressionAnnotation.getHintLength(hint))));
+          callExpr.addHint(ijea);
         }
         if (hint.startsWith(INDEXED_NESTED_LOOP_JOIN_HINT)) {
           callExpr.addHint(IndexedNLJoinExpressionAnnotation.INSTANCE);
