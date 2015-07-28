@@ -20,6 +20,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
+import edu.uci.ics.asterix.algebra.operators.physical.interval.SortMergeIntervalJoinPOperator;
 import edu.uci.ics.asterix.common.annotations.IntervalJoinExpressionAnnotation;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
@@ -54,6 +55,7 @@ public class JoinUtils {
             if (ijea.isMergeJoin()) {
                 // Sort Merge.
                 System.err.println("Interval Join - Merge");
+                setSortMergeIntervalJoinOp(op, context);
             } else if (ijea.isIopJoin()) {
                 // Overlapping Interval Partition.
                 System.err.println("Interval Join - IOP");
@@ -73,6 +75,11 @@ public class JoinUtils {
             }
         }
         return null;
+    }
+
+    private static void setSortMergeIntervalJoinOp(AbstractBinaryJoinOperator op, IOptimizationContext context) {
+        op.setPhysicalOperator(new SortMergeIntervalJoinPOperator(op.getJoinKind(), JoinPartitioningType.BROADCAST, context
+                .getPhysicalOptimizationConfig().getMaxRecordsPerFrame()));
     }
 
     private static void setNLJoinOp(AbstractBinaryJoinOperator op, IOptimizationContext context) {
