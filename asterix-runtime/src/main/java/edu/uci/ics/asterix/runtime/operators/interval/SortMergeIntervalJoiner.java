@@ -16,26 +16,33 @@ package edu.uci.ics.asterix.runtime.operators.interval;
 
 import java.nio.ByteBuffer;
 
+import edu.uci.ics.hyracks.api.comm.IFrameWriter;
 import edu.uci.ics.hyracks.api.dataflow.value.RecordDescriptor;
 import edu.uci.ics.hyracks.dataflow.common.comm.io.FrameTupleAccessor;
 
 public class SortMergeIntervalJoiner {
 
     private final FrameTupleAccessor accessorLeft;
-    private final FrameTupleAccessor accessorRight;
+    private FrameTupleAccessor accessorRight;
 
     private SortMergeIntervalJoinLocks locks;
     private SortMergeIntervalStatus status;
 
     private int totalMemoryTuples = 0;
+    private IFrameWriter writer;
+
+    private ByteBuffer leftBuffer;
+    private ByteBuffer rightBuffer;
+    private int leftTupleIndex;
+    private int rightTupleIndex;
 
     public SortMergeIntervalJoiner(SortMergeIntervalStatus status, SortMergeIntervalJoinLocks locks,
-            RecordDescriptor leftRd, RecordDescriptor rightRd) {
+            IFrameWriter writer, RecordDescriptor leftRd) {
         this.status = status;
         this.locks = locks;
+        this.writer = writer;
 
         this.accessorLeft = new FrameTupleAccessor(leftRd);
-        this.accessorRight = new FrameTupleAccessor(rightRd);
     }
 
     private boolean addToMemory(int i) {
@@ -77,11 +84,11 @@ public class SortMergeIntervalJoiner {
     }
 
     private void incrementLeftTuple() {
-
+        leftTupleIndex++;
     }
 
     private void incrementRighTuple() {
-
+        rightTupleIndex++;
     }
 
     // memory management
@@ -151,10 +158,14 @@ public class SortMergeIntervalJoiner {
     }
 
     public void setLeftFrame(ByteBuffer buffer) {
-
+        leftBuffer = buffer;
     }
 
     public void setRightFrame(ByteBuffer buffer) {
+        rightBuffer = buffer;
+    }
 
+    public void setRightRecordDescriptor(RecordDescriptor rightRd) {
+        this.accessorRight = new FrameTupleAccessor(rightRd);
     }
 }

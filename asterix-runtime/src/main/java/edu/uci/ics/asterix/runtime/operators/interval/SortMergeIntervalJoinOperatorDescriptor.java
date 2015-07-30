@@ -66,6 +66,7 @@ public class SortMergeIntervalJoinOperatorDescriptor extends AbstractOperatorDes
 
     public static class SortMergeIntervalJoinTaskState extends AbstractStateObject {
         private SortMergeIntervalStatus status;
+        private SortMergeIntervalJoiner joiner;
         private ByteBuffer left;
         private ByteBuffer right;
         private boolean failed;
@@ -84,7 +85,6 @@ public class SortMergeIntervalJoinOperatorDescriptor extends AbstractOperatorDes
 
         @Override
         public void fromBytes(DataInput in) throws IOException {
-
         }
     }
 
@@ -139,6 +139,7 @@ public class SortMergeIntervalJoinOperatorDescriptor extends AbstractOperatorDes
                             state = new SortMergeIntervalJoinTaskState(ctx.getJobletContext().getJobId(), new TaskId(
                                     getActivityId(), partition));
                             state.status.openLeft();
+                            state.joiner = new SortMergeIntervalJoiner(state.status, locks, writer, recordDesc);
                             writer.open();
                             locks.getRight(partition).signal();
                         } finally {
@@ -150,7 +151,8 @@ public class SortMergeIntervalJoinOperatorDescriptor extends AbstractOperatorDes
                     public void nextFrame(ByteBuffer buffer) throws HyracksDataException {
                         locks.getLock(partition).lock();
                         try {
-                            writer.nextFrame(buffer);
+                            state.joiner.setLeftFrame(buffer);
+                            state.joiner.processMerge();
                         } finally {
                             locks.getLock(partition).unlock();
                         }
@@ -160,7 +162,6 @@ public class SortMergeIntervalJoinOperatorDescriptor extends AbstractOperatorDes
                     public void fail() throws HyracksDataException {
                         locks.getLock(partition).lock();
                         try {
-                            writer.fail();
                             state.failed = true;
                         } finally {
                             locks.getLock(partition).unlock();
@@ -174,6 +175,7 @@ public class SortMergeIntervalJoinOperatorDescriptor extends AbstractOperatorDes
                             if (state.failed) {
                                 writer.fail();
                             } else {
+                                state.joiner.processMerge();
                                 writer.close();
                             }
                             state.status.closeLeft();
@@ -218,6 +220,7 @@ public class SortMergeIntervalJoinOperatorDescriptor extends AbstractOperatorDes
                     SortMergeIntervalJoinLocks locks) {
                 this.ctx = ctx;
                 this.partition = partition;
+                this.recordDesc = inRecordDesc;
             }
 
             @Override
@@ -242,10 +245,10 @@ public class SortMergeIntervalJoinOperatorDescriptor extends AbstractOperatorDes
                                     locks.getRight(partition).await();
                                 }
                             } while (state == null);
+                            state.joiner.setRightRecordDescriptor(recordDesc);
                             state.status.openRight();
                         } catch (InterruptedException e) {
-                            // TODO Auto-generated catch block
-                            e.printStackTrace();
+                            throw new HyracksDataException("RightOperator interrupted exceptrion", e);
                         } finally {
                             locks.getLock(partition).unlock();
                         }
@@ -255,7 +258,7 @@ public class SortMergeIntervalJoinOperatorDescriptor extends AbstractOperatorDes
                     public void nextFrame(ByteBuffer buffer) throws HyracksDataException {
                         locks.getLock(partition).lock();
                         try {
-                            state.right = buffer;
+                            state.joiner.setRightFrame(buffer);
                         } finally {
                             locks.getLock(partition).unlock();
                         }

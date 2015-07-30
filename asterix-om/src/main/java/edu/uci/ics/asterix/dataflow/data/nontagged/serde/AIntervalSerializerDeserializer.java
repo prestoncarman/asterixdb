@@ -81,13 +81,17 @@ public class AIntervalSerializerDeserializer implements ISerializerDeserializer<
         return 8;
     }
 
+    public static int getIntervalTagOffset() {
+        return 16;
+    }
+
     public static byte getIntervalTimeType(byte[] data, int offset) {
         return data[offset + 8 * 2];
     }
 
     /**
      * create an interval value from two given datetime instance.
-     * 
+     *
      * @param interval
      * @param out
      * @throws HyracksDataException
