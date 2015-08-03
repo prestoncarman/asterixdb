@@ -15,12 +15,33 @@
 package edu.uci.ics.asterix.runtime.operators.interval;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 
+import edu.uci.ics.hyracks.api.comm.IFrameTupleAccessor;
 import edu.uci.ics.hyracks.api.comm.IFrameWriter;
+import edu.uci.ics.hyracks.api.comm.VSizeFrame;
+import edu.uci.ics.hyracks.api.context.IHyracksTaskContext;
 import edu.uci.ics.hyracks.api.dataflow.value.RecordDescriptor;
+import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
+import edu.uci.ics.hyracks.api.io.FileReference;
 import edu.uci.ics.hyracks.dataflow.common.comm.io.FrameTupleAccessor;
+import edu.uci.ics.hyracks.dataflow.common.comm.io.FrameTupleAppender;
+import edu.uci.ics.hyracks.dataflow.common.comm.io.FrameTuplePairComparator;
+import edu.uci.ics.hyracks.dataflow.common.comm.util.FrameUtils;
+import edu.uci.ics.hyracks.dataflow.common.io.RunFileWriter;
+import edu.uci.ics.hyracks.dataflow.std.sort.buffermanager.IFramePool;
+import edu.uci.ics.hyracks.dataflow.std.sort.buffermanager.IFrameTupleBufferAccessor;
+import edu.uci.ics.hyracks.dataflow.std.sort.buffermanager.ITupleBufferAccessor;
+import edu.uci.ics.hyracks.dataflow.std.sort.buffermanager.ITupleBufferManager;
+import edu.uci.ics.hyracks.dataflow.std.sort.buffermanager.VariableFramePool;
+import edu.uci.ics.hyracks.dataflow.std.sort.buffermanager.VariableTupleMemoryManager;
+import edu.uci.ics.hyracks.dataflow.std.structures.TuplePointer;
 
 public class SortMergeIntervalJoiner {
+
+    private static final int MEMORY_INDEX = -1;
 
     private final FrameTupleAccessor accessorLeft;
     private FrameTupleAccessor accessorRight;
@@ -28,7 +49,6 @@ public class SortMergeIntervalJoiner {
     private SortMergeIntervalJoinLocks locks;
     private SortMergeIntervalStatus status;
 
-    private int totalMemoryTuples = 0;
     private IFrameWriter writer;
 
     private ByteBuffer leftBuffer;
@@ -36,51 +56,71 @@ public class SortMergeIntervalJoiner {
     private int leftTupleIndex;
     private int rightTupleIndex;
 
-    public SortMergeIntervalJoiner(SortMergeIntervalStatus status, SortMergeIntervalJoinLocks locks,
-            IFrameWriter writer, RecordDescriptor leftRd) {
+    private ITupleBufferManager bufferManager;
+    private List<TuplePointer> memoryTuples;
+    private IFrameTupleBufferAccessor memoryAccessor;
+
+    private ByteBuffer runFileBuffer;
+    private FrameTupleAppender runFileAppender;
+    private final RunFileWriter runFileWriter;
+    private ITupleBufferAccessor runFileAccessor;
+
+    private FrameTupleAppender resultAppender;
+
+    private FrameTuplePairComparator comparator;
+
+    public SortMergeIntervalJoiner(IHyracksTaskContext ctx, int memorySize, SortMergeIntervalStatus status,
+            SortMergeIntervalJoinLocks locks, FrameTuplePairComparator comparator, IFrameWriter writer,
+            RecordDescriptor leftRd) throws HyracksDataException {
         this.status = status;
         this.locks = locks;
         this.writer = writer;
+        this.comparator = comparator;
 
-        this.accessorLeft = new FrameTupleAccessor(leftRd);
+        accessorLeft = new FrameTupleAccessor(leftRd);
+
+        // Memory
+        IFramePool framePool = new VariableFramePool(ctx, (memorySize - 1) * ctx.getInitialFrameSize());
+        bufferManager = new VariableTupleMemoryManager(framePool, leftRd);
+        memoryTuples = new ArrayList<TuplePointer>();
+        memoryAccessor = bufferManager.getFrameTupleAccessor();
+
+        // Run File and frame cache
+        FileReference file = ctx.getJobletContext().createManagedWorkspaceFile(
+                this.getClass().getSimpleName() + this.toString());
+        runFileWriter = new RunFileWriter(file, ctx.getIOManager());
+        runFileWriter.open();
+        runFileBuffer = ctx.allocateFrame(ctx.getInitialFrameSize());
+        runFileAppender = new FrameTupleAppender(new VSizeFrame(ctx));
+
+        // Result
+        resultAppender = new FrameTupleAppender(new VSizeFrame(ctx));
     }
 
-    private boolean addToMemory(int i) {
-        return true;
-    }
-
-    private boolean addToResult(int i, int j) {
-        return true;
-    }
-
-    private boolean addToRunFile(int i) {
-        return true;
-    }
-
-    private int compare(int i, int j) {
-        return -1;
-    }
-
-    private void flushMemory() {
-
-    }
-
-    private int getLeftTuple() {
-        // Get tuple from Left stream
-        return 0;
-    }
-
-    private int getMemoryTuple(int index) {
-        return index;
-    }
-
-    private int getRightTuple() {
-        if (status.processingRunFile) {
-            // Get next run file tuple
-        } else {
-            // Get tuple from Right stream
+    private boolean addToMemory(IFrameTupleAccessor accessor, int idx) throws HyracksDataException {
+        TuplePointer tuplePointer = new TuplePointer();
+        if (bufferManager.insertTuple(accessor, idx, tuplePointer)) {
+            memoryTuples.add(tuplePointer);
+            return true;
         }
-        return 0;
+        return false;
+    }
+
+    private void addToResult(IFrameTupleAccessor accessor1, int index1, IFrameTupleAccessor accessor2, int index2)
+            throws HyracksDataException {
+        FrameUtils.appendConcatToWriter(writer, resultAppender, accessor1, index1, accessor2, index2);
+    }
+
+    private void addToRunFile(IFrameTupleAccessor accessor, int idx) throws HyracksDataException {
+        if (!runFileAppender.append(accessor, idx)) {
+            runFileAppender.flush(runFileWriter, true);
+            runFileAppender.append(accessor, idx);
+        }
+    }
+
+    private void flushMemory() throws HyracksDataException {
+        bufferManager.reset();
+        memoryTuples.clear();
     }
 
     private void incrementLeftTuple() {
@@ -93,32 +133,40 @@ public class SortMergeIntervalJoiner {
 
     // memory management
     private boolean memoryHasTuples() {
-        return false;
+        return bufferManager.getNumTuples() > 0;
     }
 
-    public void processMerge() {
-        int rightTuple = 0;
-        int memoryTuple = 0;
-        int leftTuple = 0;
-
+    public void processMerge() throws HyracksDataException {
         if (status.reloadingLeftFrame) {
+            status.reloadingLeftFrame = false;
+        } else {
             // Get right tuple
-            rightTuple = getRightTuple();
+            if (status.processingRunFile) {
+                // Get next run file tuple
+                // TODO Read from disk
+                accessorRight.reset(runFileBuffer);
+            } else {
+                // Get tuple from Right stream
+                accessorRight.reset(rightBuffer);
+            }
 
             if (status.fixedMemory) {
                 // Write right tuple to run file
-                addToRunFile(rightTuple);
+                addToRunFile(accessorRight, rightTupleIndex);
             }
 
-            for (int i = 0; i < totalMemoryTuples; ++i) {
-                memoryTuple = getMemoryTuple(i);
-                int c = compare(memoryTuple, rightTuple);
+            for (Iterator<TuplePointer> memoryIterator = memoryTuples.iterator(); memoryIterator.hasNext();) {
+                TuplePointer tp = memoryIterator.next();
+                memoryAccessor.reset(tp);
+                int c = comparator.compare(memoryAccessor, MEMORY_INDEX, accessorRight, rightTupleIndex);
                 if (c < 0) {
                     // remove from memory
+                    bufferManager.deleteTuple(tp);
+                    memoryIterator.remove();
                 }
                 if (c == 0) {
                     // add to result
-                    addToResult(memoryTuple, rightTuple);
+                    addToResult(memoryAccessor, MEMORY_INDEX, accessorRight, rightTupleIndex);
                 }
             }
 
@@ -129,43 +177,41 @@ public class SortMergeIntervalJoiner {
                 //            enter run file state
                 //            reset memory state
             }
-
         }
 
         if (!status.fixedMemory) {
-            leftTuple = getLeftTuple();
-            int c = compare(leftTuple, rightTuple);
+            int c = comparator.compare(accessorLeft, leftTupleIndex, accessorRight, rightTupleIndex);
             while (c <= 0) {
                 if (c == 0) {
                     // add to result
-                    addToResult(leftTuple, rightTuple);
+                    addToResult(accessorLeft, leftTupleIndex, accessorRight, rightTupleIndex);
                     // append to memory
-                    if (!addToMemory(leftTuple)) {
+                    if (!addToMemory(accessorLeft, leftTupleIndex)) {
                         // go to fixed memory state
                         status.fixedMemory = true;
                         // write right tuple to run file
-                        addToRunFile(rightTuple);
+                        addToRunFile(accessorRight, rightTupleIndex);
                         // break (do not increment left tuple)
                         break;
                     }
                 }
             }
             incrementLeftTuple();
-            leftTuple = getLeftTuple();
         }
         incrementRighTuple();
-
     }
 
     public void setLeftFrame(ByteBuffer buffer) {
         leftBuffer = buffer;
+        accessorLeft.reset(leftBuffer);
     }
 
     public void setRightFrame(ByteBuffer buffer) {
         rightBuffer = buffer;
+        accessorRight.reset(rightBuffer);
     }
 
     public void setRightRecordDescriptor(RecordDescriptor rightRd) {
-        this.accessorRight = new FrameTupleAccessor(rightRd);
+        accessorRight = new FrameTupleAccessor(rightRd);
     }
 }

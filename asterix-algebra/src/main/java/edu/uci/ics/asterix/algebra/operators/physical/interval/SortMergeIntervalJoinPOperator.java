@@ -15,15 +15,17 @@
 package edu.uci.ics.asterix.algebra.operators.physical.interval;
 
 import java.util.ArrayList;
+import java.util.List;
 
+import edu.uci.ics.asterix.dataflow.data.nontagged.comparators.allenrelations.OverlapIntervalBinaryComparatorFactory;
 import edu.uci.ics.asterix.runtime.operators.interval.SortMergeIntervalJoinOperatorDescriptor;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
-import edu.uci.ics.hyracks.algebricks.common.utils.Triple;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IHyracksJobBuilder;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IOptimizationContext;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.PhysicalOperatorTag;
+import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.IVariableTypeEnvironment;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractBinaryJoinOperator.JoinKind;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.IOperatorSchema;
@@ -36,20 +38,26 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.properties.PhysicalRequiremen
 import edu.uci.ics.hyracks.algebricks.core.algebra.properties.StructuralPropertiesVector;
 import edu.uci.ics.hyracks.algebricks.core.jobgen.impl.JobGenContext;
 import edu.uci.ics.hyracks.algebricks.core.jobgen.impl.JobGenHelper;
+import edu.uci.ics.hyracks.algebricks.data.IBinaryComparatorFactoryProvider;
+import edu.uci.ics.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.RecordDescriptor;
 import edu.uci.ics.hyracks.api.job.IOperatorDescriptorRegistry;
 
 /**
- * Left input is broadcast and preserves its local properties.
- * Right input can be partitioned in any way.
  */
 public class SortMergeIntervalJoinPOperator extends AbstractJoinPOperator {
 
     private final int memSize;
 
-    public SortMergeIntervalJoinPOperator(JoinKind kind, JoinPartitioningType partitioningType, int memSize) {
+    protected List<LogicalVariable> keysLeftBranch;
+    protected List<LogicalVariable> keysRightBranch;
+
+    public SortMergeIntervalJoinPOperator(JoinKind kind, JoinPartitioningType partitioningType, int memSize,
+            List<LogicalVariable> sideLeft, List<LogicalVariable> sideRight) {
         super(kind, partitioningType);
         this.memSize = memSize;
+        this.keysLeftBranch = sideLeft;
+        this.keysRightBranch = sideRight;
     }
 
     @Override
@@ -67,7 +75,6 @@ public class SortMergeIntervalJoinPOperator extends AbstractJoinPOperator {
         AbstractLogicalOperator op2 = (AbstractLogicalOperator) op.getInputs().get(0).getValue();
         IPartitioningProperty pp = op2.getDeliveredPhysicalProperties().getPartitioningProperty();
         this.deliveredProperties = new StructuralPropertiesVector(pp, new ArrayList<ILocalStructuralProperty>(0));
-
     }
 
     @Override
@@ -83,27 +90,26 @@ public class SortMergeIntervalJoinPOperator extends AbstractJoinPOperator {
     public void contributeRuntimeOperator(IHyracksJobBuilder builder, JobGenContext context, ILogicalOperator op,
             IOperatorSchema opSchema, IOperatorSchema[] inputSchemas, IOperatorSchema outerPlanSchema)
             throws AlgebricksException {
-        //        SortMergeIntervalJoinOperator unionOp = (SortMergeIntervalJoinOperator) op;
-        //        int n = unionOp.getVariableMappings().size();
-        //        int[] leftColumns = new int[n];
-        //        int[] rightColumns = new int[n];
-        //        int i = 0;
-        //        for (Triple<LogicalVariable, LogicalVariable, LogicalVariable> t : unionOp.getVariableMappings()) {
-        //            int posLeft = inputSchemas[0].findVariable(t.first);
-        //            leftColumns[i] = posLeft;
-        //            int posRight = inputSchemas[1].findVariable(t.second);
-        //            rightColumns[i] = posRight;
-        //            ++i;
-        //        }
+        int[] keysLeft = JobGenHelper.variablesToFieldIndexes(keysLeftBranch, inputSchemas[0]);
+        int[] keysRight = JobGenHelper.variablesToFieldIndexes(keysRightBranch, inputSchemas[1]);
+        IVariableTypeEnvironment env = context.getTypeEnvironment(op);
+        IBinaryComparatorFactory[] comparatorFactories = new IBinaryComparatorFactory[keysLeft.length];
+        int i = 0;
+        //IBinaryComparatorFactoryProvider bcfp = context.getBinaryComparatorFactoryProvider();
+        IBinaryComparatorFactoryProvider bcfp = (IBinaryComparatorFactoryProvider) OverlapIntervalBinaryComparatorFactory.INSTANCE;
+        for (LogicalVariable v : keysLeftBranch) {
+            Object t = env.getVarType(v);
+            comparatorFactories[i++] = bcfp.getBinaryComparatorFactory(t, true);
+        }
 
         IOperatorDescriptorRegistry spec = builder.getJobSpec();
-        RecordDescriptor recordDescriptor = JobGenHelper.mkRecordDescriptor(context.getTypeEnvironment(op), opSchema, context);
+        RecordDescriptor recordDescriptor = JobGenHelper.mkRecordDescriptor(context.getTypeEnvironment(op), opSchema,
+                context);
 
-        // at algebricks level, union all only accepts two inputs, although at
-        // hyracks
-        // level, there is no restrictions
-        SortMergeIntervalJoinOperatorDescriptor opDesc = new SortMergeIntervalJoinOperatorDescriptor(spec, 2, recordDescriptor);
+        SortMergeIntervalJoinOperatorDescriptor opDesc = new SortMergeIntervalJoinOperatorDescriptor(spec, memSize,
+                recordDescriptor, keysLeft, keysRight, comparatorFactories);
         contributeOpDesc(builder, (AbstractLogicalOperator) op, opDesc);
+
         ILogicalOperator src1 = op.getInputs().get(0).getValue();
         builder.contributeGraphEdge(src1, 0, op, 0);
         ILogicalOperator src2 = op.getInputs().get(1).getValue();

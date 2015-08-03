@@ -25,11 +25,14 @@ import edu.uci.ics.hyracks.api.dataflow.ActivityId;
 import edu.uci.ics.hyracks.api.dataflow.IActivityGraphBuilder;
 import edu.uci.ics.hyracks.api.dataflow.IOperatorNodePushable;
 import edu.uci.ics.hyracks.api.dataflow.TaskId;
+import edu.uci.ics.hyracks.api.dataflow.value.IBinaryComparator;
+import edu.uci.ics.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.IRecordDescriptorProvider;
 import edu.uci.ics.hyracks.api.dataflow.value.RecordDescriptor;
 import edu.uci.ics.hyracks.api.exceptions.HyracksDataException;
 import edu.uci.ics.hyracks.api.job.IOperatorDescriptorRegistry;
 import edu.uci.ics.hyracks.api.job.JobId;
+import edu.uci.ics.hyracks.dataflow.common.comm.io.FrameTuplePairComparator;
 import edu.uci.ics.hyracks.dataflow.std.base.AbstractActivityNode;
 import edu.uci.ics.hyracks.dataflow.std.base.AbstractOperatorDescriptor;
 import edu.uci.ics.hyracks.dataflow.std.base.AbstractStateObject;
@@ -38,11 +41,17 @@ import edu.uci.ics.hyracks.dataflow.std.base.AbstractUnaryOutputOperatorNodePush
 public class SortMergeIntervalJoinOperatorDescriptor extends AbstractOperatorDescriptor {
     private static final int LEFT_ACTIVITY_ID = 0;
     private static final int RIGHT_ACTIVITY_ID = 1;
+    private IBinaryComparatorFactory[] comparatorFactories;
+    private int[] keys0;
+    private int[] keys1;
 
-    public SortMergeIntervalJoinOperatorDescriptor(IOperatorDescriptorRegistry spec, int nInputs,
-            RecordDescriptor recordDescriptor) {
-        super(spec, nInputs, 1);
+    public SortMergeIntervalJoinOperatorDescriptor(IOperatorDescriptorRegistry spec, int memSize,
+            RecordDescriptor recordDescriptor, int[] keys0, int[] keys1, IBinaryComparatorFactory[] comparatorFactories) {
+        super(spec, 2, 1);
         recordDescriptors[0] = recordDescriptor;
+        this.comparatorFactories = comparatorFactories;
+        this.keys0 = keys0;
+        this.keys1 = keys1;
     }
 
     private static final long serialVersionUID = 1L;
@@ -67,8 +76,6 @@ public class SortMergeIntervalJoinOperatorDescriptor extends AbstractOperatorDes
     public static class SortMergeIntervalJoinTaskState extends AbstractStateObject {
         private SortMergeIntervalStatus status;
         private SortMergeIntervalJoiner joiner;
-        private ByteBuffer left;
-        private ByteBuffer right;
         private boolean failed;
 
         public SortMergeIntervalJoinTaskState() {
@@ -106,20 +113,27 @@ public class SortMergeIntervalJoinOperatorDescriptor extends AbstractOperatorDes
                 IRecordDescriptorProvider recordDescProvider, int partition, int nPartitions)
                 throws HyracksDataException {
             locks.setPartitions(nPartitions);
-            RecordDescriptor inRecordDesc = recordDescProvider.getInputRecordDescriptor(getActivityId(), 0);
-            return new LeftOperator(ctx, partition, inRecordDesc, locks);
+            final RecordDescriptor inRecordDesc = recordDescProvider.getInputRecordDescriptor(getActivityId(), 0);
+            final IBinaryComparator[] comparators = new IBinaryComparator[comparatorFactories.length];
+            for (int i = 0; i < comparatorFactories.length; ++i) {
+                comparators[i] = comparatorFactories[i].createBinaryComparator();
+            }
+            return new LeftOperator(ctx, partition, inRecordDesc, locks, comparators);
         }
 
         private class LeftOperator extends AbstractUnaryOutputOperatorNodePushable {
 
-            private IHyracksTaskContext ctx;
+            private final IHyracksTaskContext ctx;
 
             private final int partition;
 
+            private final IBinaryComparator[] comparators;
+
             public LeftOperator(IHyracksTaskContext ctx, int partition, RecordDescriptor inRecordDesc,
-                    SortMergeIntervalJoinLocks locks) {
+                    SortMergeIntervalJoinLocks locks, IBinaryComparator[] comparators) {
                 this.ctx = ctx;
                 this.partition = partition;
+                this.comparators = comparators;
             }
 
             @Override
@@ -139,7 +153,8 @@ public class SortMergeIntervalJoinOperatorDescriptor extends AbstractOperatorDes
                             state = new SortMergeIntervalJoinTaskState(ctx.getJobletContext().getJobId(), new TaskId(
                                     getActivityId(), partition));
                             state.status.openLeft();
-                            state.joiner = new SortMergeIntervalJoiner(state.status, locks, writer, recordDesc);
+                            state.joiner = new SortMergeIntervalJoiner(ctx, 0, state.status, locks,
+                                    new FrameTuplePairComparator(keys0, keys1, comparators), writer, recordDesc);
                             writer.open();
                             locks.getRight(partition).signal();
                         } finally {

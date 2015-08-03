@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -18,7 +18,7 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
+import java.util.logging.Logger;
 
 import edu.uci.ics.asterix.algebra.operators.physical.interval.SortMergeIntervalJoinPOperator;
 import edu.uci.ics.asterix.common.annotations.IntervalJoinExpressionAnnotation;
@@ -39,6 +39,8 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.operators.physical.NLJoinPOpe
 
 public class JoinUtils {
 
+    private static final Logger LOGGER = Logger.getLogger(JoinUtils.class.getName());
+
     public static void setJoinAlgorithmAndExchangeAlgo(AbstractBinaryJoinOperator op, IOptimizationContext context)
             throws AlgebricksException {
         List<LogicalVariable> sideLeft = new LinkedList<LogicalVariable>();
@@ -54,14 +56,14 @@ public class JoinUtils {
             }
             if (ijea.isMergeJoin()) {
                 // Sort Merge.
-                System.err.println("Interval Join - Merge");
-                setSortMergeIntervalJoinOp(op, context);
+                LOGGER.fine("Interval Join - Merge");
+                setSortMergeIntervalJoinOp(op, sideLeft, sideRight, context);
             } else if (ijea.isIopJoin()) {
                 // Overlapping Interval Partition.
-                System.err.println("Interval Join - IOP");
+                LOGGER.fine("Interval Join - IOP");
             } else if (ijea.isSpatialJoin()) {
                 // Spatial Partition.
-                System.err.println("Interval Join - Spatial Partitioning");
+                LOGGER.fine("Interval Join - Spatial Partitioning");
             }
         }
     }
@@ -77,24 +79,10 @@ public class JoinUtils {
         return null;
     }
 
-    private static void setSortMergeIntervalJoinOp(AbstractBinaryJoinOperator op, IOptimizationContext context) {
-        op.setPhysicalOperator(new SortMergeIntervalJoinPOperator(op.getJoinKind(), JoinPartitioningType.BROADCAST, context
-                .getPhysicalOptimizationConfig().getMaxRecordsPerFrame()));
-    }
-
-    private static void setNLJoinOp(AbstractBinaryJoinOperator op, IOptimizationContext context) {
-        op.setPhysicalOperator(new NLJoinPOperator(op.getJoinKind(), JoinPartitioningType.BROADCAST, context
-                .getPhysicalOptimizationConfig().getMaxRecordsPerFrame()));
-    }
-
-    private static void setHashJoinOp(AbstractBinaryJoinOperator op, JoinPartitioningType partitioningType,
-            List<LogicalVariable> sideLeft, List<LogicalVariable> sideRight, IOptimizationContext context)
-            throws AlgebricksException {
-        op.setPhysicalOperator(new HybridHashJoinPOperator(op.getJoinKind(), partitioningType, sideLeft, sideRight,
-                context.getPhysicalOptimizationConfig().getMaxFramesHybridHash(), context
-                        .getPhysicalOptimizationConfig().getMaxFramesLeftInputHybridHash(), context
-                        .getPhysicalOptimizationConfig().getMaxRecordsPerFrame(), context
-                        .getPhysicalOptimizationConfig().getFudgeFactor()));
+    private static void setSortMergeIntervalJoinOp(AbstractBinaryJoinOperator op, List<LogicalVariable> sideLeft,
+            List<LogicalVariable> sideRight, IOptimizationContext context) {
+        op.setPhysicalOperator(new SortMergeIntervalJoinPOperator(op.getJoinKind(), JoinPartitioningType.BROADCAST,
+                context.getPhysicalOptimizationConfig().getMaxRecordsPerFrame(), sideLeft, sideRight));
     }
 
     private static boolean isIntervalJoinCondition(ILogicalExpression e, Collection<LogicalVariable> inLeftAll,
