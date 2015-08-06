@@ -17,7 +17,7 @@ package edu.uci.ics.asterix.algebra.operators.physical.interval;
 import java.util.ArrayList;
 import java.util.List;
 
-import edu.uci.ics.asterix.dataflow.data.nontagged.comparators.allenrelations.OverlapIntervalBinaryComparatorFactory;
+import edu.uci.ics.asterix.dataflow.data.nontagged.comparators.allenrelations.AllenRelationsBinaryComparatorFactoryProvider;
 import edu.uci.ics.asterix.runtime.operators.interval.SortMergeIntervalJoinOperatorDescriptor;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IHyracksJobBuilder;
@@ -96,7 +96,7 @@ public class SortMergeIntervalJoinPOperator extends AbstractJoinPOperator {
         IBinaryComparatorFactory[] comparatorFactories = new IBinaryComparatorFactory[keysLeft.length];
         int i = 0;
         //IBinaryComparatorFactoryProvider bcfp = context.getBinaryComparatorFactoryProvider();
-        IBinaryComparatorFactoryProvider bcfp = (IBinaryComparatorFactoryProvider) OverlapIntervalBinaryComparatorFactory.INSTANCE;
+        IBinaryComparatorFactoryProvider bcfp = (IBinaryComparatorFactoryProvider) AllenRelationsBinaryComparatorFactoryProvider.INSTANCE;
         for (LogicalVariable v : keysLeftBranch) {
             Object t = env.getVarType(v);
             comparatorFactories[i++] = bcfp.getBinaryComparatorFactory(t, true);

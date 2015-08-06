@@ -36,14 +36,11 @@ public class AllenRelationsBinaryComparatorFactoryProvider implements IBinaryCom
     public IBinaryComparatorFactory getBinaryComparatorFactory(Object type, boolean ascending) {
         // During a comparison, since proper type promotion among several numeric types are required,
         // we will use AObjectAscBinaryComparatorFactory, instead of using a specific comparator
-        return getBinaryComparatorFactory((FunctionIdentifier) type, ascending);
+        return OverlapIntervalBinaryComparatorFactory.INSTANCE;
     }
 
     public IBinaryComparatorFactory getBinaryComparatorFactory(FunctionIdentifier fid, boolean ascending) {
-        if (fid == AsterixBuiltinFunctions.INTERVAL_OVERLAPS) {
-            return addOffset(OverlapIntervalBinaryComparatorFactory.INSTANCE, ascending);
-        }
-        return null;
+        return OverlapIntervalBinaryComparatorFactory.INSTANCE;
     }
 
     private IBinaryComparatorFactory addOffset(final IBinaryComparatorFactory inst, final boolean ascending) {

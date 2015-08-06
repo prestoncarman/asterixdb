@@ -41,9 +41,10 @@ import edu.uci.ics.hyracks.dataflow.std.base.AbstractUnaryOutputOperatorNodePush
 public class SortMergeIntervalJoinOperatorDescriptor extends AbstractOperatorDescriptor {
     private static final int LEFT_ACTIVITY_ID = 0;
     private static final int RIGHT_ACTIVITY_ID = 1;
-    private IBinaryComparatorFactory[] comparatorFactories;
-    private int[] keys0;
-    private int[] keys1;
+    private final IBinaryComparatorFactory[] comparatorFactories;
+    private final int[] keys0;
+    private final int[] keys1;
+    private final int memSize;
 
     public SortMergeIntervalJoinOperatorDescriptor(IOperatorDescriptorRegistry spec, int memSize,
             RecordDescriptor recordDescriptor, int[] keys0, int[] keys1, IBinaryComparatorFactory[] comparatorFactories) {
@@ -52,6 +53,7 @@ public class SortMergeIntervalJoinOperatorDescriptor extends AbstractOperatorDes
         this.comparatorFactories = comparatorFactories;
         this.keys0 = keys0;
         this.keys1 = keys1;
+        this.memSize = memSize;
     }
 
     private static final long serialVersionUID = 1L;
@@ -79,6 +81,7 @@ public class SortMergeIntervalJoinOperatorDescriptor extends AbstractOperatorDes
         private boolean failed;
 
         public SortMergeIntervalJoinTaskState() {
+            status = new SortMergeIntervalStatus();
         }
 
         private SortMergeIntervalJoinTaskState(JobId jobId, TaskId taskId) {
@@ -145,6 +148,7 @@ public class SortMergeIntervalJoinOperatorDescriptor extends AbstractOperatorDes
             public IFrameWriter getInputFrameWriter(int index) {
                 return new IFrameWriter() {
                     private SortMergeIntervalJoinTaskState state;
+                    private boolean first = true;
 
                     @Override
                     public void open() throws HyracksDataException {
@@ -153,18 +157,23 @@ public class SortMergeIntervalJoinOperatorDescriptor extends AbstractOperatorDes
                             state = new SortMergeIntervalJoinTaskState(ctx.getJobletContext().getJobId(), new TaskId(
                                     getActivityId(), partition));
                             state.status.openLeft();
-                            state.joiner = new SortMergeIntervalJoiner(ctx, 0, state.status, locks,
+                            state.joiner = new SortMergeIntervalJoiner(ctx, memSize, partition, state.status, locks,
                                     new FrameTuplePairComparator(keys0, keys1, comparators), writer, recordDesc);
                             writer.open();
                             locks.getRight(partition).signal();
                         } finally {
                             locks.getLock(partition).unlock();
                         }
+
                     }
 
                     @Override
                     public void nextFrame(ByteBuffer buffer) throws HyracksDataException {
                         locks.getLock(partition).lock();
+                        if (first) {
+                            state.status.dataLeft();
+                            first = false;
+                        }
                         try {
                             state.joiner.setLeftFrame(buffer);
                             state.joiner.processMerge();
@@ -187,6 +196,7 @@ public class SortMergeIntervalJoinOperatorDescriptor extends AbstractOperatorDes
                     public void close() throws HyracksDataException {
                         locks.getLock(partition).lock();
                         try {
+                            state.status.leftHasMore = false;
                             if (state.failed) {
                                 writer.fail();
                             } else {
@@ -247,6 +257,7 @@ public class SortMergeIntervalJoinOperatorDescriptor extends AbstractOperatorDes
             public IFrameWriter getInputFrameWriter(int index) {
                 return new IFrameWriter() {
                     private SortMergeIntervalJoinTaskState state;
+                    private boolean first = true;
 
                     @Override
                     public void open() throws HyracksDataException {
@@ -272,8 +283,19 @@ public class SortMergeIntervalJoinOperatorDescriptor extends AbstractOperatorDes
                     @Override
                     public void nextFrame(ByteBuffer buffer) throws HyracksDataException {
                         locks.getLock(partition).lock();
+                        if (first) {
+                            state.status.dataRight();
+                            first = false;
+                        }
                         try {
+                            while (state.status.loadRightFrame == false) {
+                                // Wait for the state to request right frame.
+                                locks.getRight(partition).await();
+                            };
                             state.joiner.setRightFrame(buffer);
+                            locks.getLeft(partition).signal();
+                        } catch (InterruptedException e) {
+                            throw new HyracksDataException("RightOperator interrupted exceptrion", e);
                         } finally {
                             locks.getLock(partition).unlock();
                         }

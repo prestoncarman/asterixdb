@@ -18,8 +18,7 @@ public class SortMergeIntervalStatus {
     public enum BranchStatus {
         UNKNOWN,
         OPENED,
-        DATA_STARTED,
-        DATA_ENDED,
+        DATA_PROCESSING,
         CLOSED,
         FAILED,
     }
@@ -30,22 +29,19 @@ public class SortMergeIntervalStatus {
         READING,
     }
 
-    //
-    //    public enum memoryStatus {
-    //        NORMAL,
-    //        FIXED,
-    //        FLUSHING,
-    //    }
-
     public boolean reloadingLeftFrame = false;
-    public boolean fixedMemory = false;
-    public boolean processingRunFile = false;
-    public boolean savingToRunFile = false;
+    public boolean loadRightFrame = false;
+
+    public boolean leftHasMore = true;
+    public boolean rightHasMore = true;
 
     private BranchStatus leftStatus = BranchStatus.UNKNOWN;
     private BranchStatus rightStatus = BranchStatus.UNKNOWN;
 
-    private RunFileStatus runFileStatus = RunFileStatus.NOT_USED;
+    public RunFileStatus runFileStatus = RunFileStatus.NOT_USED;
+
+    public SortMergeIntervalStatus() {
+    }
 
     public BranchStatus getLeftStatus() {
         return leftStatus;
@@ -64,20 +60,18 @@ public class SortMergeIntervalStatus {
     }
 
     public void dataLeft() {
-        leftStatus = BranchStatus.DATA_STARTED;
+        leftStatus = BranchStatus.DATA_PROCESSING;
     }
 
     public void dataRight() {
-        rightStatus = BranchStatus.DATA_STARTED;
+        rightStatus = BranchStatus.DATA_PROCESSING;
     }
 
     public void closeLeft() {
-        leftStatus = BranchStatus.DATA_ENDED;
         leftStatus = BranchStatus.CLOSED;
     }
 
     public void closeRight() {
-        rightStatus = BranchStatus.DATA_ENDED;
         rightStatus = BranchStatus.CLOSED;
     }
 

@@ -47,7 +47,11 @@ public class JoinUtils {
         List<LogicalVariable> sideRight = new LinkedList<LogicalVariable>();
         List<LogicalVariable> varsLeft = op.getInputs().get(0).getValue().getSchema();
         List<LogicalVariable> varsRight = op.getInputs().get(1).getValue().getSchema();
-        AbstractFunctionCallExpression fexp = (AbstractFunctionCallExpression) op.getCondition().getValue();
+        ILogicalExpression conditionLE = op.getCondition().getValue();
+        if (conditionLE.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
+            return;
+        }
+        AbstractFunctionCallExpression fexp = (AbstractFunctionCallExpression) conditionLE;
         if (isIntervalJoinCondition(fexp, varsLeft, varsRight, sideLeft, sideRight)) {
             IntervalJoinExpressionAnnotation ijea = getIntervalJoinAnnotation(fexp);
             if (ijea == null) {
