@@ -1,11 +1,8 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
+/*
+ * Copyright 2009-2013 by The Regents of the University of California
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * you may obtain a copy of the License from
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -15,7 +12,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package edu.uci.ics.asterix.aoya;
 
 import java.io.BufferedReader;
@@ -348,7 +344,7 @@ public class AsterixYARNClient {
 
         this.conf = conf;
         yarnClient = YarnClient.createYarnClient();
-        //If the HDFS jars aren't on the classpath this won't be set 
+        //If the HDFS jars aren't on the classpath this won't be set
         if (conf.get("fs.hdfs.impl", null) == conf.get("fs.file.impl", null)) { //only would happen if both are null
             conf.set("fs.hdfs.impl", "org.apache.hadoop.hdfs.DistributedFileSystem");
             conf.set("fs.file.impl", "org.apache.hadoop.fs.LocalFileSystem");
@@ -401,7 +397,7 @@ public class AsterixYARNClient {
 
     /**
      * Initialize the client's arguments and parameters before execution.
-     * 
+     *
      * @param args
      *            - Standard command-line arguments.
      * @throws ParseException
@@ -459,7 +455,7 @@ public class AsterixYARNClient {
 
     /**
      * Cursory sanity checks for argument sanity, without considering the mode of the client
-     * 
+     *
      * @param args
      * @param cliParser
      *            The parsed arguments.
@@ -468,7 +464,7 @@ public class AsterixYARNClient {
     private void checkConfSanity(String[] args, CommandLine cliParser) throws ParseException {
         String message = null;
 
-        //Sanity check for no args 
+        //Sanity check for no args
         if (args.length == 0) {
             message = "No args specified for client to initialize";
         }
@@ -487,7 +483,7 @@ public class AsterixYARNClient {
 
     /**
      * Initialize the mode of the client from the arguments.
-     * 
+     *
      * @param args
      * @param cliParser
      * @throws ParseException
@@ -516,7 +512,7 @@ public class AsterixYARNClient {
 
     /**
      * Determine if the command line arguments are sufficient for the requested client mode.
-     * 
+     *
      * @param args
      *            The command line arguments.
      * @param cliParser
@@ -551,7 +547,7 @@ public class AsterixYARNClient {
 
     /**
      * Find the distributable asterix bundle, be it in the default location or in a user-specified location.
-     * 
+     *
      * @return
      */
     private File getAsterixDistributableLocation() {
@@ -572,7 +568,7 @@ public class AsterixYARNClient {
 
     /**
      * Initialize and register the application attempt with the YARN ResourceManager.
-     * 
+     *
      * @return
      * @throws IOException
      * @throws YarnException
@@ -625,7 +621,7 @@ public class AsterixYARNClient {
 
     /**
      * Upload the Asterix cluster description on to the DFS. This will persist the state of the instance.
-     * 
+     *
      * @return
      * @throws YarnException
      * @throws IOException
@@ -663,7 +659,7 @@ public class AsterixYARNClient {
 
     /**
      * Install the current Asterix parameters to the DFS. This can be modified via alter.
-     * 
+     *
      * @throws YarnException
      * @throws IOException
      */
@@ -862,7 +858,7 @@ public class AsterixYARNClient {
 
     /**
      * Submits the request to start the AsterixApplicationMaster to the YARN ResourceManager.
-     * 
+     *
      * @param app
      *            The application attempt handle.
      * @param resources
@@ -1174,7 +1170,7 @@ public class AsterixYARNClient {
 
     /**
      * Stops the instance and remove the lockfile to allow a restart.
-     * 
+     *
      * @throws IOException
      * @throws JAXBException
      * @throws YarnException

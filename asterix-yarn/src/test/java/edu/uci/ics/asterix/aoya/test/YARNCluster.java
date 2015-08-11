@@ -3,16 +3,15 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * you may obtain a copy of the License from
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package edu.uci.ics.asterix.aoya.test;
 
 import java.io.File;
@@ -34,7 +33,7 @@ import edu.uci.ics.asterix.external.dataset.adapter.HDFSAdapter;
 
 /**
  * Manages a Mini (local VM) YARN cluster with a configured number of NodeManager(s).
- * 
+ *
  */
 @SuppressWarnings("deprecation")
 public class YARNCluster {
@@ -71,13 +70,13 @@ public class YARNCluster {
         conf.setClass(YarnConfiguration.RM_SCHEDULER, FifoScheduler.class, ResourceScheduler.class);
         conf.set(MiniDFSCluster.HDFS_MINIDFS_BASEDIR, "target/integrationts/data");
         cleanupLocal();
-        //this constructor is deprecated in hadoop 2x 
+        //this constructor is deprecated in hadoop 2x
         //dfsCluster = new MiniDFSCluster(nameNodePort, conf, numDataNodes, true, true, StartupOption.REGULAR, null);
         miniCluster = new MiniYARNCluster("Asterix_testing", numDataNodes, 1, 1);
         miniCluster.init(conf);
         dfs = FileSystem.get(conf);
     }
-    
+
     public MiniYARNCluster getCluster(){
         return miniCluster;
     }
