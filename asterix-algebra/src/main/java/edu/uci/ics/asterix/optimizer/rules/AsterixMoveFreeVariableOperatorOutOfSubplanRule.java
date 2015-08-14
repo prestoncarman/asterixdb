@@ -19,6 +19,7 @@ import edu.uci.ics.hyracks.algebricks.rewriter.rules.MoveFreeVariableOperatorOut
 
 public class AsterixMoveFreeVariableOperatorOutOfSubplanRule extends MoveFreeVariableOperatorOutOfSubplanRule {
 
+    @Override
     protected boolean movableOperator(LogicalOperatorTag operatorTag) {
         return (operatorTag == LogicalOperatorTag.ASSIGN);
     }
