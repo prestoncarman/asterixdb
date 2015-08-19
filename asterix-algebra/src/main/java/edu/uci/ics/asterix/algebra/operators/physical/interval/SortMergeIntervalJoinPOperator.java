@@ -17,7 +17,6 @@ package edu.uci.ics.asterix.algebra.operators.physical.interval;
 import java.util.ArrayList;
 import java.util.List;
 
-import edu.uci.ics.asterix.dataflow.data.nontagged.comparators.allenrelations.AllenRelationsBinaryComparatorFactoryProvider;
 import edu.uci.ics.asterix.runtime.operators.interval.SortMergeIntervalJoinOperatorDescriptor;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.IHyracksJobBuilder;
@@ -43,21 +42,20 @@ import edu.uci.ics.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import edu.uci.ics.hyracks.api.dataflow.value.RecordDescriptor;
 import edu.uci.ics.hyracks.api.job.IOperatorDescriptorRegistry;
 
-/**
- */
 public class SortMergeIntervalJoinPOperator extends AbstractJoinPOperator {
 
     private final int memSize;
-
-    protected List<LogicalVariable> keysLeftBranch;
-    protected List<LogicalVariable> keysRightBranch;
+    protected final List<LogicalVariable> keysLeftBranch;
+    protected final List<LogicalVariable> keysRightBranch;
+    private final IBinaryComparatorFactoryProvider bcfp;
 
     public SortMergeIntervalJoinPOperator(JoinKind kind, JoinPartitioningType partitioningType, int memSize,
-            List<LogicalVariable> sideLeft, List<LogicalVariable> sideRight) {
+            List<LogicalVariable> sideLeft, List<LogicalVariable> sideRight, IBinaryComparatorFactoryProvider bcfp) {
         super(kind, partitioningType);
         this.memSize = memSize;
         this.keysLeftBranch = sideLeft;
         this.keysRightBranch = sideRight;
+        this.bcfp = bcfp;
     }
 
     @Override
@@ -89,14 +87,12 @@ public class SortMergeIntervalJoinPOperator extends AbstractJoinPOperator {
     @Override
     public void contributeRuntimeOperator(IHyracksJobBuilder builder, JobGenContext context, ILogicalOperator op,
             IOperatorSchema opSchema, IOperatorSchema[] inputSchemas, IOperatorSchema outerPlanSchema)
-            throws AlgebricksException {
+                    throws AlgebricksException {
         int[] keysLeft = JobGenHelper.variablesToFieldIndexes(keysLeftBranch, inputSchemas[0]);
         int[] keysRight = JobGenHelper.variablesToFieldIndexes(keysRightBranch, inputSchemas[1]);
         IVariableTypeEnvironment env = context.getTypeEnvironment(op);
         IBinaryComparatorFactory[] comparatorFactories = new IBinaryComparatorFactory[keysLeft.length];
         int i = 0;
-        //IBinaryComparatorFactoryProvider bcfp = context.getBinaryComparatorFactoryProvider();
-        IBinaryComparatorFactoryProvider bcfp = (IBinaryComparatorFactoryProvider) AllenRelationsBinaryComparatorFactoryProvider.INSTANCE;
         for (LogicalVariable v : keysLeftBranch) {
             Object t = env.getVarType(v);
             comparatorFactories[i++] = bcfp.getBinaryComparatorFactory(t, true);

@@ -47,7 +47,8 @@ public class SortMergeIntervalJoinOperatorDescriptor extends AbstractOperatorDes
     private final int memSize;
 
     public SortMergeIntervalJoinOperatorDescriptor(IOperatorDescriptorRegistry spec, int memSize,
-            RecordDescriptor recordDescriptor, int[] keys0, int[] keys1, IBinaryComparatorFactory[] comparatorFactories) {
+            RecordDescriptor recordDescriptor, int[] keys0, int[] keys1,
+            IBinaryComparatorFactory[] comparatorFactories) {
         super(spec, 2, 1);
         recordDescriptors[0] = recordDescriptor;
         this.comparatorFactories = comparatorFactories;
@@ -114,7 +115,7 @@ public class SortMergeIntervalJoinOperatorDescriptor extends AbstractOperatorDes
         @Override
         public IOperatorNodePushable createPushRuntime(IHyracksTaskContext ctx,
                 IRecordDescriptorProvider recordDescProvider, int partition, int nPartitions)
-                throws HyracksDataException {
+                        throws HyracksDataException {
             locks.setPartitions(nPartitions);
             final RecordDescriptor inRecordDesc = recordDescProvider.getInputRecordDescriptor(getActivityId(), 0);
             final IBinaryComparator[] comparators = new IBinaryComparator[comparatorFactories.length];
@@ -154,8 +155,8 @@ public class SortMergeIntervalJoinOperatorDescriptor extends AbstractOperatorDes
                     public void open() throws HyracksDataException {
                         locks.getLock(partition).lock();
                         try {
-                            state = new SortMergeIntervalJoinTaskState(ctx.getJobletContext().getJobId(), new TaskId(
-                                    getActivityId(), partition));
+                            state = new SortMergeIntervalJoinTaskState(ctx.getJobletContext().getJobId(),
+                                    new TaskId(getActivityId(), partition));
                             state.status.openLeft();
                             state.joiner = new SortMergeIntervalJoiner(ctx, memSize, partition, state.status, locks,
                                     new FrameTuplePairComparator(keys0, keys1, comparators), writer, recordDesc);
@@ -164,7 +165,6 @@ public class SortMergeIntervalJoinOperatorDescriptor extends AbstractOperatorDes
                         } finally {
                             locks.getLock(partition).unlock();
                         }
-
                     }
 
                     @Override
@@ -229,7 +229,7 @@ public class SortMergeIntervalJoinOperatorDescriptor extends AbstractOperatorDes
         @Override
         public IOperatorNodePushable createPushRuntime(IHyracksTaskContext ctx,
                 IRecordDescriptorProvider recordDescProvider, int partition, int nPartitions)
-                throws HyracksDataException {
+                        throws HyracksDataException {
             locks.setPartitions(nPartitions);
             RecordDescriptor inRecordDesc = recordDescProvider.getInputRecordDescriptor(getActivityId(), 0);
             return new RightOperator(ctx, partition, inRecordDesc, locks);
@@ -265,8 +265,8 @@ public class SortMergeIntervalJoinOperatorDescriptor extends AbstractOperatorDes
                         try {
                             do {
                                 // Wait for the state to be set in the context form Left.
-                                state = (SortMergeIntervalJoinTaskState) ctx.getStateObject(new TaskId(joinAid,
-                                        partition));
+                                state = (SortMergeIntervalJoinTaskState) ctx
+                                        .getStateObject(new TaskId(joinAid, partition));
                                 if (state == null) {
                                     locks.getRight(partition).await();
                                 }

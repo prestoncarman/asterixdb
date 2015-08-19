@@ -22,6 +22,7 @@ import java.util.logging.Logger;
 
 import edu.uci.ics.asterix.algebra.operators.physical.interval.SortMergeIntervalJoinPOperator;
 import edu.uci.ics.asterix.common.annotations.IntervalJoinExpressionAnnotation;
+import edu.uci.ics.asterix.dataflow.data.nontagged.comparators.allenrelations.AllenRelationsBinaryComparatorFactoryProvider;
 import edu.uci.ics.asterix.om.functions.AsterixBuiltinFunctions;
 import edu.uci.ics.hyracks.algebricks.common.exceptions.AlgebricksException;
 import edu.uci.ics.hyracks.algebricks.core.algebra.base.ILogicalExpression;
@@ -34,8 +35,7 @@ import edu.uci.ics.hyracks.algebricks.core.algebra.expressions.VariableReference
 import edu.uci.ics.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.logical.AbstractBinaryJoinOperator;
 import edu.uci.ics.hyracks.algebricks.core.algebra.operators.physical.AbstractJoinPOperator.JoinPartitioningType;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.physical.HybridHashJoinPOperator;
-import edu.uci.ics.hyracks.algebricks.core.algebra.operators.physical.NLJoinPOperator;
+import edu.uci.ics.hyracks.algebricks.data.IBinaryComparatorFactoryProvider;
 
 public class JoinUtils {
 
@@ -85,8 +85,9 @@ public class JoinUtils {
 
     private static void setSortMergeIntervalJoinOp(AbstractBinaryJoinOperator op, List<LogicalVariable> sideLeft,
             List<LogicalVariable> sideRight, IOptimizationContext context) {
+        IBinaryComparatorFactoryProvider bcfp = (IBinaryComparatorFactoryProvider) AllenRelationsBinaryComparatorFactoryProvider.INSTANCE;
         op.setPhysicalOperator(new SortMergeIntervalJoinPOperator(op.getJoinKind(), JoinPartitioningType.BROADCAST,
-                context.getPhysicalOptimizationConfig().getMaxRecordsPerFrame(), sideLeft, sideRight));
+                context.getPhysicalOptimizationConfig().getMaxRecordsPerFrame(), sideLeft, sideRight, bcfp));
     }
 
     private static boolean isIntervalJoinCondition(ILogicalExpression e, Collection<LogicalVariable> inLeftAll,
