@@ -2059,7 +2059,12 @@ Expression FunctionCallExpr() throws ParseException:
           ijea.setJoinType(hint);
           ijea.setRangeMap(RangeMapBuilder.parseHint(hint.substring(IntervalJoinExpressionAnnotation.getHintLength(hint))));
           callExpr.addHint(ijea);
+<<<<<<< HEAD
         } else if (hint.startsWith(INDEXED_NESTED_LOOP_JOIN_HINT)) {
+=======
+        }
+        if (hint.startsWith(INDEXED_NESTED_LOOP_JOIN_HINT)) {
+>>>>>>> Interval work up to apache.
           callExpr.addHint(IndexedNLJoinExpressionAnnotation.INSTANCE);
         } else if (hint.startsWith(SKIP_SECONDARY_INDEX_SEARCH_HINT)) {
           callExpr.addHint(SkipSecondaryIndexSearchExpressionAnnotation.INSTANCE);
