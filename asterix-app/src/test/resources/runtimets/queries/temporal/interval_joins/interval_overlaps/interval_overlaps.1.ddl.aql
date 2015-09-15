@@ -1,0 +1,26 @@
+/*
+ * Description      :   Check temporal join functionality for interval
+ * Expected Result  :   Success
+ * Date             :   26th Jun, 2015
+ */
+
+drop dataverse TinyCollege if exists;
+create dataverse TinyCollege;
+use dataverse TinyCollege;
+
+create type StaffType as open {
+        name: string,
+        office: string,
+        employment: interval
+}
+create dataset Staff(StaffType)
+primary key name;
+
+
+create type StudentType as open {
+        name: string,
+        office: string,
+        attendance: interval
+}
+create dataset Students(StudentType)
+primary key name;

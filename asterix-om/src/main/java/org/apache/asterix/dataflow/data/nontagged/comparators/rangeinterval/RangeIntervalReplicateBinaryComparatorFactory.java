@@ -16,25 +16,29 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.asterix.dataflow.data.nontagged.comparators;
+package org.apache.asterix.dataflow.data.nontagged.comparators.rangeinterval;
 
 import org.apache.asterix.dataflow.data.nontagged.serde.AInt64SerializerDeserializer;
 import org.apache.asterix.dataflow.data.nontagged.serde.AIntervalSerializerDeserializer;
 import org.apache.hyracks.api.dataflow.value.IBinaryComparator;
 import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 
-public class AIntervalPartialBinaryComparatorFactory implements IBinaryComparatorFactory {
+public class RangeIntervalReplicateBinaryComparatorFactory implements IBinaryComparatorFactory {
 
     private static final long serialVersionUID = 1L;
 
-    public static final AIntervalPartialBinaryComparatorFactory INSTANCE = new AIntervalPartialBinaryComparatorFactory();
+    public static final RangeIntervalReplicateBinaryComparatorFactory INSTANCE = new RangeIntervalReplicateBinaryComparatorFactory();
 
-    private AIntervalPartialBinaryComparatorFactory() {
+    private RangeIntervalReplicateBinaryComparatorFactory() {
 
     }
 
-    /* (non-Javadoc)
-     * @see org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory#createBinaryComparator()
+    /*
+     * The comparator uses the range map split value and an interval.
+     *
+     * -1: split point is less than the interval start point.
+     * 0: split point is equal to or greater than the interval start point
+     * 1: never happens
      */
     @Override
     public IBinaryComparator createBinaryComparator() {
@@ -42,21 +46,10 @@ public class AIntervalPartialBinaryComparatorFactory implements IBinaryComparato
 
             @Override
             public int compare(byte[] b1, int s1, int l1, byte[] b2, int s2, int l2) {
-                int c = Long.compare(
-                        AInt64SerializerDeserializer.getLong(b1,
-                                s1 + AIntervalSerializerDeserializer.getIntervalStartOffset()),
-                        AInt64SerializerDeserializer.getLong(b2,
-                                s2 + AIntervalSerializerDeserializer.getIntervalStartOffset()));
-                if (c == 0) {
-                    c = Long.compare(
-                            AInt64SerializerDeserializer.getLong(b1,
-                                    s1 + AIntervalSerializerDeserializer.getIntervalEndOffset()),
-                            AInt64SerializerDeserializer.getLong(b2,
-                                    s2 + AIntervalSerializerDeserializer.getIntervalEndOffset()));
-                    if (c == 0) {
-                        c = Byte.compare(b1[s1 + AIntervalSerializerDeserializer.getIntervalTagOffset()], b2[s2
-                                + AIntervalSerializerDeserializer.getIntervalTagOffset()]);
-                    }
+                int c = Long.compare(AInt64SerializerDeserializer.getLong(b1, s1), AInt64SerializerDeserializer
+                        .getLong(b2, s2 + AIntervalSerializerDeserializer.getIntervalStartOffset()));
+                if (c > 0) {
+                    c = 0;
                 }
                 return c;
             }

@@ -22,7 +22,7 @@ import org.apache.hyracks.algebricks.core.algebra.expressions.IExpressionAnnotat
 
 public class SkipSecondaryIndexSearchExpressionAnnotation implements IExpressionAnnotation {
 
-    public static final String SKIP_SECONDARY_INDEX_SEARCH_ANNOTATION_KEY = "skip-index";
+    public static final String HINT_STRING = "skip-index";
     public static final SkipSecondaryIndexSearchExpressionAnnotation INSTANCE = new SkipSecondaryIndexSearchExpressionAnnotation();
 
     private Object object;
