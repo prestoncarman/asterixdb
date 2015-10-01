@@ -18,16 +18,19 @@
  */
 package org.apache.asterix.runtime.operators.interval;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-public class SortMergeIntervalJoinLocks {
-    final List<Lock> lock = new ArrayList<Lock>();
-    final List<Condition> left = new ArrayList<Condition>();
-    final List<Condition> right = new ArrayList<Condition>();
+public class SortMergeIntervalJoinLocks implements Serializable {
+    private static final long serialVersionUID = 1L;
+
+    private final List<Lock> lock = new ArrayList<Lock>();
+    private final List<Condition> left = new ArrayList<Condition>();
+    private final List<Condition> right = new ArrayList<Condition>();
 
     public synchronized void setPartitions(int partitions) {
         for (int i = lock.size(); i < partitions; ++i) {

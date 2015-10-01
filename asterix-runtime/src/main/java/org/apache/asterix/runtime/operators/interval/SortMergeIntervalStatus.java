@@ -18,13 +18,16 @@
  */
 package org.apache.asterix.runtime.operators.interval;
 
-public class SortMergeIntervalStatus {
+import java.io.Serializable;
+
+public class SortMergeIntervalStatus implements Serializable {
+    private static final long serialVersionUID = 1L;
+
     public enum BranchStatus {
         UNKNOWN,
         OPENED,
         DATA_PROCESSING,
         CLOSED,
-        FAILED,
     }
 
     public enum RunFileStatus {

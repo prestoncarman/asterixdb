@@ -23,6 +23,7 @@ import java.io.DataOutput;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
+import org.apache.commons.lang3.tuple.Pair;
 import org.apache.hyracks.api.comm.IFrameWriter;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.dataflow.ActivityId;
@@ -85,12 +86,9 @@ public class SortMergeIntervalJoinOperatorDescriptor extends AbstractOperatorDes
         private SortMergeIntervalJoiner joiner;
         private boolean failed;
 
-        public SortMergeIntervalJoinTaskState() {
-            status = new SortMergeIntervalStatus();
-        }
-
         private SortMergeIntervalJoinTaskState(JobId jobId, TaskId taskId) {
             super(jobId, taskId);
+            status = new SortMergeIntervalStatus();
         }
 
         @Override
@@ -107,7 +105,6 @@ public class SortMergeIntervalJoinOperatorDescriptor extends AbstractOperatorDes
         private static final long serialVersionUID = 1L;
 
         private final ActivityId joinAid;
-
         private final SortMergeIntervalJoinLocks locks;
 
         public LeftActivityNode(ActivityId id, ActivityId joinAid, SortMergeIntervalJoinLocks locks) {
@@ -126,21 +123,21 @@ public class SortMergeIntervalJoinOperatorDescriptor extends AbstractOperatorDes
             for (int i = 0; i < comparatorFactories.length; ++i) {
                 comparators[i] = comparatorFactories[i].createBinaryComparator();
             }
-            return new LeftOperator(ctx, partition, inRecordDesc, locks, comparators);
+            return new LeftOperator(ctx, partition, inRecordDesc, comparators);
         }
 
         private class LeftOperator extends AbstractUnaryOutputOperatorNodePushable {
 
             private final IHyracksTaskContext ctx;
-
             private final int partition;
-
             private final IBinaryComparator[] comparators;
+            private final RecordDescriptor leftRD;
 
             public LeftOperator(IHyracksTaskContext ctx, int partition, RecordDescriptor inRecordDesc,
-                    SortMergeIntervalJoinLocks locks, IBinaryComparator[] comparators) {
+                    IBinaryComparator[] comparators) {
                 this.ctx = ctx;
                 this.partition = partition;
+                this.leftRD = inRecordDesc;
                 this.comparators = comparators;
             }
 
@@ -159,13 +156,15 @@ public class SortMergeIntervalJoinOperatorDescriptor extends AbstractOperatorDes
                     public void open() throws HyracksDataException {
                         locks.getLock(partition).lock();
                         try {
+                            writer.open();
                             state = new SortMergeIntervalJoinTaskState(ctx.getJobletContext().getJobId(),
                                     new TaskId(getActivityId(), partition));
                             state.status.openLeft();
                             state.joiner = new SortMergeIntervalJoiner(ctx, memSize, partition, state.status, locks,
-                                    new FrameTuplePairComparator(keys0, keys1, comparators), writer, recordDesc);
-                            writer.open();
+                                    new FrameTuplePairComparator(keys0, keys1, comparators), writer, leftRD);
                             locks.getRight(partition).signal();
+                        } catch (Exception e) {
+                            e.printStackTrace();
                         } finally {
                             locks.getLock(partition).unlock();
                         }
@@ -221,7 +220,6 @@ public class SortMergeIntervalJoinOperatorDescriptor extends AbstractOperatorDes
         private static final long serialVersionUID = 1L;
 
         private final ActivityId joinAid;
-
         private SortMergeIntervalJoinLocks locks;
 
         public RightActivityNode(ActivityId id, ActivityId joinAid, SortMergeIntervalJoinLocks locks) {
@@ -236,20 +234,19 @@ public class SortMergeIntervalJoinOperatorDescriptor extends AbstractOperatorDes
                         throws HyracksDataException {
             locks.setPartitions(nPartitions);
             RecordDescriptor inRecordDesc = recordDescProvider.getInputRecordDescriptor(getActivityId(), 0);
-            return new RightOperator(ctx, partition, inRecordDesc, locks);
+            return new RightOperator(ctx, partition, inRecordDesc);
         }
 
         private class RightOperator extends AbstractUnaryOutputOperatorNodePushable {
 
             private int partition;
-
             private IHyracksTaskContext ctx;
+            private final RecordDescriptor rightRD;
 
-            public RightOperator(IHyracksTaskContext ctx, int partition, RecordDescriptor inRecordDesc,
-                    SortMergeIntervalJoinLocks locks) {
+            public RightOperator(IHyracksTaskContext ctx, int partition, RecordDescriptor inRecordDesc) {
                 this.ctx = ctx;
                 this.partition = partition;
-                this.recordDesc = inRecordDesc;
+                this.rightRD = inRecordDesc;
             }
 
             @Override
@@ -275,7 +272,7 @@ public class SortMergeIntervalJoinOperatorDescriptor extends AbstractOperatorDes
                                     locks.getRight(partition).await();
                                 }
                             } while (state == null);
-                            state.joiner.setRightRecordDescriptor(recordDesc);
+                            state.joiner.setRightRecordDescriptor(rightRD);
                             state.status.openRight();
                         } catch (InterruptedException e) {
                             throw new HyracksDataException("RightOperator interrupted exceptrion", e);

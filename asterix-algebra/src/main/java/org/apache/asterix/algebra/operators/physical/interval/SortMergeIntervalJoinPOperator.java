@@ -32,11 +32,15 @@ import org.apache.hyracks.algebricks.core.algebra.expressions.IVariableTypeEnvir
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractBinaryJoinOperator.JoinKind;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.IOperatorSchema;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder.OrderKind;
 import org.apache.hyracks.algebricks.core.algebra.operators.physical.AbstractJoinPOperator;
 import org.apache.hyracks.algebricks.core.algebra.properties.ILocalStructuralProperty;
 import org.apache.hyracks.algebricks.core.algebra.properties.IPartitioningProperty;
 import org.apache.hyracks.algebricks.core.algebra.properties.IPartitioningRequirementsCoordinator;
 import org.apache.hyracks.algebricks.core.algebra.properties.IPhysicalPropertiesVector;
+import org.apache.hyracks.algebricks.core.algebra.properties.LocalOrderProperty;
+import org.apache.hyracks.algebricks.core.algebra.properties.OrderColumn;
+import org.apache.hyracks.algebricks.core.algebra.properties.OrderedPartitionedProperty;
 import org.apache.hyracks.algebricks.core.algebra.properties.PhysicalRequirements;
 import org.apache.hyracks.algebricks.core.algebra.properties.StructuralPropertiesVector;
 import org.apache.hyracks.algebricks.core.jobgen.impl.JobGenContext;
@@ -45,6 +49,8 @@ import org.apache.hyracks.algebricks.data.IBinaryComparatorFactoryProvider;
 import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import org.apache.hyracks.api.dataflow.value.RecordDescriptor;
 import org.apache.hyracks.api.job.IOperatorDescriptorRegistry;
+import org.apache.hyracks.dataflow.common.data.partition.range.IRangeMap;
+import org.apache.hyracks.dataflow.common.data.partition.range.IRangePartitionType.RangePartitioningType;
 
 public class SortMergeIntervalJoinPOperator extends AbstractJoinPOperator {
 
@@ -52,14 +58,17 @@ public class SortMergeIntervalJoinPOperator extends AbstractJoinPOperator {
     protected final List<LogicalVariable> keysLeftBranch;
     protected final List<LogicalVariable> keysRightBranch;
     private final IBinaryComparatorFactoryProvider bcfp;
+    private IRangeMap rangeMap;
 
     public SortMergeIntervalJoinPOperator(JoinKind kind, JoinPartitioningType partitioningType, int memSize,
-            List<LogicalVariable> sideLeft, List<LogicalVariable> sideRight, IBinaryComparatorFactoryProvider bcfp) {
+            List<LogicalVariable> sideLeft, List<LogicalVariable> sideRight, IBinaryComparatorFactoryProvider bcfp,
+            IRangeMap rangeMap) {
         super(kind, partitioningType);
         this.memSize = memSize;
         this.keysLeftBranch = sideLeft;
         this.keysRightBranch = sideRight;
         this.bcfp = bcfp;
+        this.rangeMap = rangeMap;
     }
 
     @Override
@@ -73,19 +82,48 @@ public class SortMergeIntervalJoinPOperator extends AbstractJoinPOperator {
     }
 
     @Override
-    public void computeDeliveredProperties(ILogicalOperator op, IOptimizationContext context) {
-        AbstractLogicalOperator op2 = (AbstractLogicalOperator) op.getInputs().get(0).getValue();
-        IPartitioningProperty pp = op2.getDeliveredPhysicalProperties().getPartitioningProperty();
-        this.deliveredProperties = new StructuralPropertiesVector(pp, new ArrayList<ILocalStructuralProperty>(0));
+    public void computeDeliveredProperties(ILogicalOperator iop, IOptimizationContext context) {
+        IPartitioningProperty pp = null;
+        ArrayList<OrderColumn> order = new ArrayList<OrderColumn>();
+        for (LogicalVariable v : keysLeftBranch) {
+            order.add(new OrderColumn(v, OrderKind.ASC));
+        }
+        pp = new OrderedPartitionedProperty(order, null, rangeMap, RangePartitioningType.PROJECT);
+        List<ILocalStructuralProperty> propsLocal = new ArrayList<ILocalStructuralProperty>();
+        propsLocal.add(new LocalOrderProperty(order));
+        deliveredProperties = new StructuralPropertiesVector(pp, propsLocal);
     }
 
     @Override
-    public PhysicalRequirements getRequiredPropertiesForChildren(ILogicalOperator op,
+    public PhysicalRequirements getRequiredPropertiesForChildren(ILogicalOperator iop,
             IPhysicalPropertiesVector reqdByParent) {
-        StructuralPropertiesVector pv0 = StructuralPropertiesVector.EMPTY_PROPERTIES_VECTOR;
-        StructuralPropertiesVector pv1 = StructuralPropertiesVector.EMPTY_PROPERTIES_VECTOR;
-        return new PhysicalRequirements(new StructuralPropertiesVector[] { pv0, pv1 },
-                IPartitioningRequirementsCoordinator.NO_COORDINATION);
+        StructuralPropertiesVector[] pv = new StructuralPropertiesVector[2];
+        AbstractLogicalOperator op = (AbstractLogicalOperator) iop;
+
+        IPartitioningProperty ppLeft = null;
+        List<ILocalStructuralProperty> ispLeft = new ArrayList<ILocalStructuralProperty>();
+        IPartitioningProperty ppRight = null;
+        List<ILocalStructuralProperty> ispRight = new ArrayList<ILocalStructuralProperty>();
+        if (op.getExecutionMode() == AbstractLogicalOperator.ExecutionMode.PARTITIONED) {
+            ArrayList<OrderColumn> orderLeft = new ArrayList<OrderColumn>();
+            for (LogicalVariable v : keysLeftBranch) {
+                orderLeft.add(new OrderColumn(v, OrderKind.ASC));
+            }
+            ppLeft = new OrderedPartitionedProperty(orderLeft, null, rangeMap, RangePartitioningType.PROJECT);
+            ispLeft.add(new LocalOrderProperty(orderLeft));
+
+            ArrayList<OrderColumn> orderRight = new ArrayList<OrderColumn>();
+            for (LogicalVariable v : keysRightBranch) {
+                orderRight.add(new OrderColumn(v, OrderKind.ASC));
+            }
+            ppRight = new OrderedPartitionedProperty(orderRight, null, rangeMap, RangePartitioningType.SPLIT);
+            ispRight.add(new LocalOrderProperty(orderRight));
+        }
+
+        pv[0] = new StructuralPropertiesVector(ppLeft, ispLeft);
+        pv[1] = new StructuralPropertiesVector(ppRight, ispRight);
+        IPartitioningRequirementsCoordinator prc = IPartitioningRequirementsCoordinator.NO_COORDINATION;
+        return new PhysicalRequirements(pv, prc);
     }
 
     @Override

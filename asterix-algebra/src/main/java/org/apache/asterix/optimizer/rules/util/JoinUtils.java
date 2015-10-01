@@ -40,6 +40,7 @@ import org.apache.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractBinaryJoinOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.physical.AbstractJoinPOperator.JoinPartitioningType;
 import org.apache.hyracks.algebricks.data.IBinaryComparatorFactoryProvider;
+import org.apache.hyracks.dataflow.common.data.partition.range.IRangeMap;
 
 public class JoinUtils {
 
@@ -65,7 +66,7 @@ public class JoinUtils {
             if (ijea.isMergeJoin()) {
                 // Sort Merge.
                 LOGGER.fine("Interval Join - Merge");
-                setSortMergeIntervalJoinOp(op, sideLeft, sideRight, context);
+                setSortMergeIntervalJoinOp(op, sideLeft, sideRight, ijea.getRangeMap(), context);
             } else if (ijea.isIopJoin()) {
                 // Overlapping Interval Partition.
                 LOGGER.fine("Interval Join - IOP");
@@ -88,10 +89,10 @@ public class JoinUtils {
     }
 
     private static void setSortMergeIntervalJoinOp(AbstractBinaryJoinOperator op, List<LogicalVariable> sideLeft,
-            List<LogicalVariable> sideRight, IOptimizationContext context) {
+            List<LogicalVariable> sideRight, IRangeMap rangeMap, IOptimizationContext context) {
         IBinaryComparatorFactoryProvider bcfp = (IBinaryComparatorFactoryProvider) AllenRelationsBinaryComparatorFactoryProvider.INSTANCE;
         op.setPhysicalOperator(new SortMergeIntervalJoinPOperator(op.getJoinKind(), JoinPartitioningType.BROADCAST,
-                context.getPhysicalOptimizationConfig().getMaxRecordsPerFrame(), sideLeft, sideRight, bcfp));
+                context.getPhysicalOptimizationConfig().getMaxRecordsPerFrame(), sideLeft, sideRight, bcfp, rangeMap));
     }
 
     private static boolean isIntervalJoinCondition(ILogicalExpression e, Collection<LogicalVariable> inLeftAll,
