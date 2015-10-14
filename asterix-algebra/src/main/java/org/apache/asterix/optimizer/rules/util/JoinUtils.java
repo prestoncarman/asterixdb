@@ -27,6 +27,8 @@ import java.util.logging.Logger;
 import org.apache.asterix.common.annotations.IntervalJoinExpressionAnnotation;
 import org.apache.asterix.dataflow.data.nontagged.comparators.allenrelations.AllenRelationsBinaryComparatorFactoryProvider;
 import org.apache.asterix.om.functions.AsterixBuiltinFunctions;
+import org.apache.asterix.runtime.operators.joins.OverlappedByIntervalMergeJoinCheckerFactory;
+import org.apache.asterix.runtime.operators.joins.OverlapsIntervalMergeJoinCheckerFactory;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import org.apache.hyracks.algebricks.core.algebra.base.IOptimizationContext;
@@ -41,6 +43,7 @@ import org.apache.hyracks.algebricks.core.algebra.operators.physical.AbstractJoi
 import org.apache.hyracks.algebricks.core.algebra.operators.physical.MergeJoinPOperator;
 import org.apache.hyracks.algebricks.data.IBinaryComparatorFactoryProvider;
 import org.apache.hyracks.dataflow.common.data.partition.range.IRangeMap;
+import org.apache.hyracks.dataflow.std.join.IMergeJoinCheckerFactory;
 
 public class JoinUtils {
 
@@ -57,7 +60,8 @@ public class JoinUtils {
             return;
         }
         AbstractFunctionCallExpression fexp = (AbstractFunctionCallExpression) conditionLE;
-        if (isIntervalJoinCondition(fexp, varsLeft, varsRight, sideLeft, sideRight)) {
+        FunctionIdentifier fi = isIntervalJoinCondition(fexp, varsLeft, varsRight, sideLeft, sideRight);
+        if (fi != null) {
             IntervalJoinExpressionAnnotation ijea = getIntervalJoinAnnotation(fexp);
             if (ijea == null) {
                 // Use default join method.
@@ -66,7 +70,7 @@ public class JoinUtils {
             if (ijea.isMergeJoin()) {
                 // Sort Merge.
                 LOGGER.fine("Interval Join - Merge");
-                setSortMergeIntervalJoinOp(op, sideLeft, sideRight, ijea.getRangeMap(), context);
+                setSortMergeIntervalJoinOp(op, fi, sideLeft, sideRight, ijea.getRangeMap(), context);
             } else if (ijea.isIopJoin()) {
                 // Overlapping Interval Partition.
                 LOGGER.fine("Interval Join - IOP");
@@ -88,50 +92,72 @@ public class JoinUtils {
         return null;
     }
 
-    private static void setSortMergeIntervalJoinOp(AbstractBinaryJoinOperator op, List<LogicalVariable> sideLeft,
-            List<LogicalVariable> sideRight, IRangeMap rangeMap, IOptimizationContext context) {
+    private static void setSortMergeIntervalJoinOp(AbstractBinaryJoinOperator op, FunctionIdentifier fi,
+            List<LogicalVariable> sideLeft, List<LogicalVariable> sideRight, IRangeMap rangeMap,
+            IOptimizationContext context) {
         IBinaryComparatorFactoryProvider bcfp = (IBinaryComparatorFactoryProvider) AllenRelationsBinaryComparatorFactoryProvider.INSTANCE;
+        IMergeJoinCheckerFactory mjcf = new OverlapsIntervalMergeJoinCheckerFactory();
+        if (fi.equals(AsterixBuiltinFunctions.INTERVAL_OVERLAPPED_BY)) {
+            mjcf = new OverlappedByIntervalMergeJoinCheckerFactory();
+        }
         op.setPhysicalOperator(new MergeJoinPOperator(op.getJoinKind(), JoinPartitioningType.BROADCAST,
-                context.getPhysicalOptimizationConfig().getMaxRecordsPerFrame(), sideLeft, sideRight, bcfp, rangeMap));
+                context.getPhysicalOptimizationConfig().getMaxRecordsPerFrame(), sideLeft, sideRight, bcfp, mjcf,
+                rangeMap));
     }
 
-    private static boolean isIntervalJoinCondition(ILogicalExpression e, Collection<LogicalVariable> inLeftAll,
-            Collection<LogicalVariable> inRightAll, Collection<LogicalVariable> outLeftFields,
-            Collection<LogicalVariable> outRightFields) {
+    private static FunctionIdentifier isIntervalJoinCondition(ILogicalExpression e,
+            Collection<LogicalVariable> inLeftAll, Collection<LogicalVariable> inRightAll,
+            Collection<LogicalVariable> outLeftFields, Collection<LogicalVariable> outRightFields) {
+        FunctionIdentifier fiReturn = null;
+        boolean switchArguments = false;
         switch (e.getExpressionTag()) {
             case FUNCTION_CALL: {
                 AbstractFunctionCallExpression fexp = (AbstractFunctionCallExpression) e;
                 FunctionIdentifier fi = fexp.getFunctionIdentifier();
-                if (!fi.equals(AsterixBuiltinFunctions.INTERVAL_OVERLAPS)) {
-                    return false;
+                if (fi.equals(AsterixBuiltinFunctions.INTERVAL_OVERLAPS)
+                        || fi.equals(AsterixBuiltinFunctions.INTERVAL_OVERLAPPED_BY)) {
+                    fiReturn = fi;
+                } else {
+                    return null;
                 }
                 ILogicalExpression opLeft = fexp.getArguments().get(0).getValue();
                 ILogicalExpression opRight = fexp.getArguments().get(1).getValue();
                 if (opLeft.getExpressionTag() != LogicalExpressionTag.VARIABLE
                         || opRight.getExpressionTag() != LogicalExpressionTag.VARIABLE) {
-                    return false;
+                    return null;
                 }
                 LogicalVariable var1 = ((VariableReferenceExpression) opLeft).getVariableReference();
                 if (inLeftAll.contains(var1) && !outLeftFields.contains(var1)) {
                     outLeftFields.add(var1);
                 } else if (inRightAll.contains(var1) && !outRightFields.contains(var1)) {
                     outRightFields.add(var1);
+                    fiReturn = reverseIntervalExpression(fi);
+                    switchArguments = true;
                 } else {
-                    return false;
+                    return null;
                 }
                 LogicalVariable var2 = ((VariableReferenceExpression) opRight).getVariableReference();
-                if (inLeftAll.contains(var2) && !outLeftFields.contains(var2)) {
+                if (inLeftAll.contains(var2) && !outLeftFields.contains(var2) && switchArguments) {
                     outLeftFields.add(var2);
-                } else if (inRightAll.contains(var2) && !outRightFields.contains(var2)) {
+                } else if (inRightAll.contains(var2) && !outRightFields.contains(var2) && !switchArguments) {
                     outRightFields.add(var2);
                 } else {
-                    return false;
+                    return null;
                 }
-                return true;
+                return fiReturn;
             }
             default: {
-                return false;
+                return null;
             }
         }
+    }
+
+    private static FunctionIdentifier reverseIntervalExpression(FunctionIdentifier fi) {
+        if (fi.equals(AsterixBuiltinFunctions.INTERVAL_OVERLAPS)) {
+            return AsterixBuiltinFunctions.INTERVAL_OVERLAPPED_BY;
+        } else if (fi.equals(AsterixBuiltinFunctions.INTERVAL_OVERLAPPED_BY)) {
+            return AsterixBuiltinFunctions.INTERVAL_OVERLAPS;
+        }
+        return null;
     }
 }

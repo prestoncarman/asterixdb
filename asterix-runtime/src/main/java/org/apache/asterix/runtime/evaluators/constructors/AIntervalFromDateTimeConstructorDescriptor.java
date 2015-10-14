@@ -158,8 +158,8 @@ public class AIntervalFromDateTimeConstructorDescriptor extends AbstractScalarFu
                             }
 
                             if (intervalEnd < intervalStart) {
-                                throw new AlgebricksException(FID.getName()
-                                        + ": interval end must not be less than the interval start.");
+                                throw new AlgebricksException(
+                                        FID.getName() + ": interval end must not be less than the interval start.");
                             }
 
                             aInterval.setValue(intervalStart, intervalEnd, ATypeTag.DATETIME.serialize());

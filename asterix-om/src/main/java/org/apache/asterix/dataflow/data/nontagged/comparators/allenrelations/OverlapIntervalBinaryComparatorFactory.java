@@ -38,19 +38,19 @@ public class OverlapIntervalBinaryComparatorFactory implements IBinaryComparator
 
             @Override
             public int compare(byte[] b1, int s1, int l1, byte[] b2, int s2, int l2) {
-                long start0 = AIntervalSerializerDeserializer.getIntervalStart(b1, s1);
-                long end0 = AIntervalSerializerDeserializer.getIntervalEnd(b1, s1);
-                long start1 = AIntervalSerializerDeserializer.getIntervalStart(b2, s2);
-                long end1 = AIntervalSerializerDeserializer.getIntervalEnd(b2, s2);
+                long start0 = AIntervalSerializerDeserializer.getIntervalStart(b1, s1 + 1);
+                long end0 = AIntervalSerializerDeserializer.getIntervalEnd(b1, s1 + 1);
+                long start1 = AIntervalSerializerDeserializer.getIntervalStart(b2, s2 + 1);
+                long end1 = AIntervalSerializerDeserializer.getIntervalEnd(b2, s2 + 1);
 
+                int c = -1;
                 if (start0 < start1 && end0 > start1 && end1 > end0) {
                     // These intervals overlap
-                    return 0;
+                    c = 0;
+                } else if (start0 < start1) {
+                    c = 1;
                 }
-                if (end0 < start1) {
-                    return 1;
-                }
-                return -1;
+                return c;
             }
         };
     }

@@ -114,7 +114,7 @@ public class GetOverlappingIntervalDescriptor extends AbstractScalarFunctionDyna
                                         1);
                                 long end1 = AIntervalSerializerDeserializer.getIntervalEnd(argOut1.getByteArray(), 1);
 
-                                if (IntervalLogic.overlap(start0, end0, start1, end1)
+                                if (IntervalLogic.overlaps(start0, end0, start1, end1)
                                         || IntervalLogic.overlappedBy(start0, end0, start1, end1)
                                         || IntervalLogic.covers(start0, end0, start1, end1)
                                         || IntervalLogic.coveredBy(start0, end0, start1, end1)) {
