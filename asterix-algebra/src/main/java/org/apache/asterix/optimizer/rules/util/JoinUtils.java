@@ -25,9 +25,11 @@ import java.util.List;
 import java.util.logging.Logger;
 
 import org.apache.asterix.common.annotations.IntervalJoinExpressionAnnotation;
-import org.apache.asterix.dataflow.data.nontagged.comparators.allenrelations.AllenRelationsBinaryComparatorFactoryProvider;
 import org.apache.asterix.om.functions.AsterixBuiltinFunctions;
+import org.apache.asterix.runtime.operators.joins.CoveredByIntervalMergeJoinCheckerFactory;
+import org.apache.asterix.runtime.operators.joins.CoversIntervalMergeJoinCheckerFactory;
 import org.apache.asterix.runtime.operators.joins.OverlappedByIntervalMergeJoinCheckerFactory;
+import org.apache.asterix.runtime.operators.joins.OverlappingIntervalMergeJoinCheckerFactory;
 import org.apache.asterix.runtime.operators.joins.OverlapsIntervalMergeJoinCheckerFactory;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalExpression;
@@ -41,7 +43,6 @@ import org.apache.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractBinaryJoinOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.physical.AbstractJoinPOperator.JoinPartitioningType;
 import org.apache.hyracks.algebricks.core.algebra.operators.physical.MergeJoinPOperator;
-import org.apache.hyracks.algebricks.data.IBinaryComparatorFactoryProvider;
 import org.apache.hyracks.dataflow.common.data.partition.range.IRangeMap;
 import org.apache.hyracks.dataflow.std.join.IMergeJoinCheckerFactory;
 
@@ -95,14 +96,18 @@ public class JoinUtils {
     private static void setSortMergeIntervalJoinOp(AbstractBinaryJoinOperator op, FunctionIdentifier fi,
             List<LogicalVariable> sideLeft, List<LogicalVariable> sideRight, IRangeMap rangeMap,
             IOptimizationContext context) {
-        IBinaryComparatorFactoryProvider bcfp = (IBinaryComparatorFactoryProvider) AllenRelationsBinaryComparatorFactoryProvider.INSTANCE;
         IMergeJoinCheckerFactory mjcf = new OverlapsIntervalMergeJoinCheckerFactory();
         if (fi.equals(AsterixBuiltinFunctions.INTERVAL_OVERLAPPED_BY)) {
             mjcf = new OverlappedByIntervalMergeJoinCheckerFactory();
+        } else if (fi.equals(AsterixBuiltinFunctions.INTERVAL_OVERLAPPING)) {
+            mjcf = new OverlappingIntervalMergeJoinCheckerFactory(rangeMap);
+        } else if (fi.equals(AsterixBuiltinFunctions.INTERVAL_COVERS)) {
+            mjcf = new CoversIntervalMergeJoinCheckerFactory();
+        } else if (fi.equals(AsterixBuiltinFunctions.INTERVAL_COVERED_BY)) {
+            mjcf = new CoveredByIntervalMergeJoinCheckerFactory();
         }
         op.setPhysicalOperator(new MergeJoinPOperator(op.getJoinKind(), JoinPartitioningType.BROADCAST,
-                context.getPhysicalOptimizationConfig().getMaxRecordsPerFrame(), sideLeft, sideRight, bcfp, mjcf,
-                rangeMap));
+                context.getPhysicalOptimizationConfig().getMaxRecordsPerFrame(), sideLeft, sideRight, mjcf, rangeMap));
     }
 
     private static FunctionIdentifier isIntervalJoinCondition(ILogicalExpression e,
@@ -114,8 +119,7 @@ public class JoinUtils {
             case FUNCTION_CALL: {
                 AbstractFunctionCallExpression fexp = (AbstractFunctionCallExpression) e;
                 FunctionIdentifier fi = fexp.getFunctionIdentifier();
-                if (fi.equals(AsterixBuiltinFunctions.INTERVAL_OVERLAPS)
-                        || fi.equals(AsterixBuiltinFunctions.INTERVAL_OVERLAPPED_BY)) {
+                if (isIntervalFunction(fi)) {
                     fiReturn = fi;
                 } else {
                     return null;
@@ -152,11 +156,25 @@ public class JoinUtils {
         }
     }
 
+    private static boolean isIntervalFunction(FunctionIdentifier fi) {
+        return fi.equals(AsterixBuiltinFunctions.INTERVAL_OVERLAPPING)
+                || fi.equals(AsterixBuiltinFunctions.INTERVAL_OVERLAPS)
+                || fi.equals(AsterixBuiltinFunctions.INTERVAL_OVERLAPPED_BY)
+                || fi.equals(AsterixBuiltinFunctions.INTERVAL_COVERS)
+                || fi.equals(AsterixBuiltinFunctions.INTERVAL_COVERED_BY);
+    }
+
     private static FunctionIdentifier reverseIntervalExpression(FunctionIdentifier fi) {
         if (fi.equals(AsterixBuiltinFunctions.INTERVAL_OVERLAPS)) {
             return AsterixBuiltinFunctions.INTERVAL_OVERLAPPED_BY;
         } else if (fi.equals(AsterixBuiltinFunctions.INTERVAL_OVERLAPPED_BY)) {
             return AsterixBuiltinFunctions.INTERVAL_OVERLAPS;
+        } else if (fi.equals(AsterixBuiltinFunctions.INTERVAL_COVERS)) {
+            return AsterixBuiltinFunctions.INTERVAL_COVERED_BY;
+        } else if (fi.equals(AsterixBuiltinFunctions.INTERVAL_COVERED_BY)) {
+            return AsterixBuiltinFunctions.INTERVAL_COVERS;
+        } else if (fi.equals(AsterixBuiltinFunctions.INTERVAL_OVERLAPPING)) {
+            return AsterixBuiltinFunctions.INTERVAL_OVERLAPPING;
         }
         return null;
     }

@@ -29,27 +29,6 @@ public class OverlappedByIntervalMergeJoinChecker extends AbstractIntervalMergeJ
         super(keysLeft[0], keysRight[0]);
     }
 
-    public boolean checkToSaveInMemory(IFrameTupleAccessor accessorLeft, int leftTupleIndex,
-            IFrameTupleAccessor accessorRight, int rightTupleIndex) throws HyracksDataException {
-        long end0 = getIntervalEnd(accessorLeft, leftTupleIndex, idLeft);
-        long start1 = getIntervalStart(accessorRight, rightTupleIndex, idRight);
-        return (start1 < end0);
-    }
-
-    public boolean checkToRemoveInMemory(IFrameTupleAccessor accessorLeft, int leftTupleIndex,
-            IFrameTupleAccessor accessorRight, int rightTupleIndex) throws HyracksDataException {
-        long start0 = getIntervalStart(accessorLeft, leftTupleIndex, idLeft);
-        long end1 = getIntervalEnd(accessorRight, rightTupleIndex, idRight);
-        return (end1 < start0);
-    }
-
-    public boolean checkToLoadNextRightTuple(IFrameTupleAccessor accessorLeft, int leftTupleIndex,
-            IFrameTupleAccessor accessorRight, int rightTupleIndex) throws HyracksDataException {
-        long end0 = getIntervalEnd(accessorLeft, leftTupleIndex, idLeft);
-        long start1 = getIntervalStart(accessorRight, rightTupleIndex, idRight);
-        return (start1 < end0);
-    }
-
     @Override
     public boolean checkToSaveInResult(IFrameTupleAccessor accessorLeft, int leftTupleIndex,
             IFrameTupleAccessor accessorRight, int rightTupleIndex) throws HyracksDataException {

@@ -18,17 +18,25 @@
  */
 package org.apache.asterix.runtime.operators.joins;
 
-import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
+import org.apache.hyracks.dataflow.common.data.partition.range.IRangePartitionType.RangePartitioningType;
 import org.apache.hyracks.dataflow.std.join.IMergeJoinChecker;
-import org.apache.hyracks.dataflow.std.join.IMergeJoinCheckerFactory;
 
-public class OverlappedByIntervalMergeJoinCheckerFactory implements IMergeJoinCheckerFactory {
+public class OverlappedByIntervalMergeJoinCheckerFactory extends AbstractIntervalMergeJoinCheckerFactory {
     private static final long serialVersionUID = 1L;
 
     @Override
-    public IMergeJoinChecker createMergeJoinChecker(IBinaryComparatorFactory[] comparatorFactories, int[] keys0,
-            int[] keys1) {
+    public IMergeJoinChecker createMergeJoinChecker(int[] keys0, int[] keys1, int partition) {
         return new OverlappedByIntervalMergeJoinChecker(keys0, keys1);
+    }
+
+    @Override
+    public RangePartitioningType getLeftPartitioningType() {
+        return RangePartitioningType.PROJECT;
+    }
+
+    @Override
+    public RangePartitioningType getRightPartitioningType() {
+        return RangePartitioningType.SPLIT;
     }
 
 }

@@ -34,7 +34,7 @@ public class RangeIntervalReplicateBinaryComparatorFactory implements IBinaryCom
     }
 
     /*
-     * The comparator uses the range map split value and an interval.
+     * The comparator uses the interval (1st argument) to compare with the range map split value (2nd argument).
      *
      * -1: split point is less than the interval start point.
      * 0: split point is equal to or greater than the interval start point
@@ -46,8 +46,10 @@ public class RangeIntervalReplicateBinaryComparatorFactory implements IBinaryCom
 
             @Override
             public int compare(byte[] b1, int s1, int l1, byte[] b2, int s2, int l2) {
-                int c = Long.compare(AInt64SerializerDeserializer.getLong(b1, s1), AInt64SerializerDeserializer
-                        .getLong(b2, s2 + AIntervalSerializerDeserializer.getIntervalStartOffset()));
+                int c = Long.compare(
+                        AInt64SerializerDeserializer.getLong(b1,
+                                s1 + AIntervalSerializerDeserializer.getIntervalStartOffset()),
+                        AInt64SerializerDeserializer.getLong(b2, s2));
                 if (c > 0) {
                     c = 0;
                 }
