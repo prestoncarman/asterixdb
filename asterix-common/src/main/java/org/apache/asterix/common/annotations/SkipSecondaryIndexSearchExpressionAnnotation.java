@@ -46,6 +46,6 @@ public class SkipSecondaryIndexSearchExpressionAnnotation implements IExpression
 
     @Override
     public String toString() {
-        return SKIP_SECONDARY_INDEX_SEARCH_ANNOTATION_KEY;
+        return HINT_STRING;
     }
 }
