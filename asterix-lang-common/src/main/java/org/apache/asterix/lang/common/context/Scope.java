@@ -194,6 +194,10 @@ public final class Scope {
                 }
             }
 
+            @Override
+            public void remove() {
+            }
+
         };
     }
 }

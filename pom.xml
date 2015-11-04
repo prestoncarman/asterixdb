@@ -8,7 +8,7 @@
  ! "License"); you may not use this file except in compliance
  ! with the License.  You may obtain a copy of the License at
  !
- !     http://www.apache.org/licenses/LICENSE-2.0
+ !   http://www.apache.org/licenses/LICENSE-2.0
  !
  ! Unless required by applicable law or agreed to in writing,
  ! software distributed under the License is distributed on an
@@ -53,7 +53,7 @@
         <invalid.tests>**/DmlTest.java</invalid.tests>
         <global.test.includes>**/*TestSuite.java,**/*Test.java,${execution.tests}</global.test.includes>
         <global.test.excludes>${optimizer.tests},${metadata.tests},${invalid.tests},${repeated.tests}</global.test.excludes>
-    <!-- Versions under dependency management or used in many projects via properties -->
+    <!-- Versions under dependencymanagement or used in many projects via properties -->
         <algebricks.version>0.2.17-SNAPSHOT</algebricks.version>
         <hyracks.version>0.2.17-SNAPSHOT</hyracks.version>
         <hadoop.version>2.2.0</hadoop.version>
@@ -144,6 +144,31 @@
                         <include>**/*.java</include>
                     </includes>
                 </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-assembly-plugin</artifactId>
+                 <!-- We override the configuration plugin to override the descriptor to use for building
+                  the source release zip. Specifically, we would like to control the inclusions/exclusions.
+                  For example, we exclude the KEYS file from the zip -->
+                <executions>
+                    <execution>
+                    <!-- Use this id to match the id mentioned in the assembly plugin configuration in
+                     the apache parent POM under the apache-release profile -->
+                        <id>source-release-assembly</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>single</goal>
+                        </goals>
+                        <!-- combine.self should be override to replace the configuration in the parent POM -->
+                        <configuration combine.self="override">
+                            <runOnlyAtExecutionRoot>true</runOnlyAtExecutionRoot>
+                            <descriptors>
+                                <descriptor>src/main/assembly/source.xml</descriptor>
+                            </descriptors>
+                        </configuration>
+                  </execution>
+              </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -437,15 +462,6 @@
             </snapshots>
             <id>algebricks-snapshots</id>
             <url>http://obelix.ics.uci.edu/nexus/content/repositories/algebricks-snapshots/</url>
-        </repository>
-        <repository>
-            <snapshots>
-                <enabled>true</enabled>
-                <updatePolicy>always</updatePolicy>
-                <checksumPolicy>fail</checksumPolicy>
-            </snapshots>
-            <id>apache-staging</id>
-            <url>https://repository.apache.org/content/repositories/orgapacheasterix-1005/</url>
         </repository>
     </repositories>
     <dependencyManagement>
