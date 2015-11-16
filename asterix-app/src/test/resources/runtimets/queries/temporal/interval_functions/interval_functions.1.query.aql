@@ -16,8 +16,6 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-use dataverse test;
-
 let $itv1 := interval-from-date("2010-10-30", "2010-12-21")
 let $itv2 := interval-from-date("2011-10-30", "2012-10-21")
 let $itv3 := interval-from-date("2010-12-21", "2013-01-01")
