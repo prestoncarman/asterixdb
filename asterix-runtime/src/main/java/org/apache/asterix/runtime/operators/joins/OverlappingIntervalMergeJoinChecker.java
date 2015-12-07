@@ -44,6 +44,11 @@ public class OverlappingIntervalMergeJoinChecker extends AbstractIntervalMergeJo
             // Both tuples will match in a different partition.
             return false;
         }
+        return compareInterval(start0, end0, start1, end1);
+    }
+
+    @Override
+    public <T extends Comparable<T>> boolean compareInterval(T start0, T end0, T start1, T end1) {
         return IntervalLogic.overlapping(start0, end0, start1, end1);
     }
 

@@ -68,4 +68,15 @@ public abstract class AbstractIntervalMergeJoinChecker implements IMergeJoinChec
         return (start1 < end0);
     }
 
+    public boolean checkToSaveInResult(IFrameTupleAccessor accessorLeft, int leftTupleIndex,
+            IFrameTupleAccessor accessorRight, int rightTupleIndex) throws HyracksDataException {
+        long start0 = getIntervalStart(accessorLeft, leftTupleIndex, idLeft);
+        long end0 = getIntervalEnd(accessorLeft, leftTupleIndex, idLeft);
+
+        long start1 = getIntervalStart(accessorRight, rightTupleIndex, idRight);
+        long end1 = getIntervalEnd(accessorRight, rightTupleIndex, idRight);
+
+        return compareInterval(start0, end0, start1, end1);
+    }
+
 }
