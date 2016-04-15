@@ -17,9 +17,11 @@
  * under the License.
  */
 
-package org.apache.hyracks.storage.am.common.ophelpers;
+package org.apache.hyracks.storage.common.arraylist;
 
-public class IntArrayList {
+import org.apache.hyracks.api.storage.IGrowableIntArray;
+
+public class IntArrayList implements IGrowableIntArray {
     private int[] data;
     private int size;
     private int first;
