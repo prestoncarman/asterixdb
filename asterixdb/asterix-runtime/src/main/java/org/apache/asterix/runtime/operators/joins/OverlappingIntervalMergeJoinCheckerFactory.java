@@ -40,13 +40,16 @@ public class OverlappingIntervalMergeJoinCheckerFactory extends AbstractInterval
             throw new HyracksDataException("Invalid range map type for interval merge join checker.");
         }
         int slot = partition - 1;
-        long partitionStart = Long.MIN_VALUE;
-        if (partition != 0 && partition <= rangeMap.getSplitCount()) {
-            // TODO determine first partition start and end.
+        long partitionStart = 0;
+        if (partition <= 0) {
+            partitionStart = LongPointable.getLong(rangeMap.getMinByteArray(fieldIndex),
+                    rangeMap.getMinStartOffset(fieldIndex));
+        } else if (partition <= rangeMap.getSplitCount()) {
             partitionStart = LongPointable.getLong(rangeMap.getByteArray(fieldIndex, slot),
                     rangeMap.getStartOffset(fieldIndex, slot) + 1);
         } else if (partition > rangeMap.getSplitCount()) {
-            partitionStart = Long.MAX_VALUE;
+            partitionStart = LongPointable.getLong(rangeMap.getMaxByteArray(fieldIndex),
+                    rangeMap.getMaxStartOffset(fieldIndex));
         }
         return new OverlappingIntervalMergeJoinChecker(keys0, keys1, partitionStart);
     }

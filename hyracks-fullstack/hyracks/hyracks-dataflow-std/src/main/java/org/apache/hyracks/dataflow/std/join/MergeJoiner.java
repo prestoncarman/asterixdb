@@ -258,8 +258,8 @@ public class MergeJoiner {
                 // Check against memory (right)
                 if (memoryHasTuples()) {
                     memoryAccessor.reset();
-                    while (memoryAccessor.hasNext()) {
-                        memoryAccessor.next();
+                    memoryAccessor.next();
+                    while (memoryAccessor.exists()) {
                         if (mjc.checkToSaveInResult(accessorLeft, memoryAccessor)) {
                             // add to result
                             addToResult(accessorLeft, memoryAccessor, writer);
@@ -268,6 +268,7 @@ public class MergeJoiner {
                             // remove from memory
                             removeFromMemory();
                         }
+                        memoryAccessor.next();
                     }
                 }
 
