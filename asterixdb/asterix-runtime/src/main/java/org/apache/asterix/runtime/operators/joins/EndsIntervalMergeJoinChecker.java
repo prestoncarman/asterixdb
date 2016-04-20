@@ -37,9 +37,7 @@ public class EndsIntervalMergeJoinChecker extends AbstractIntervalMergeJoinCheck
         try {
             IntervalJoinUtil.getIntervalPointable(accessorLeft, idLeft, tvp, ipLeft);
             IntervalJoinUtil.getIntervalPointable(accessorRight, idRight, tvp, ipRight);
-            ipLeft.getStart(startLeft);
             ipLeft.getEnd(endLeft);
-            ipRight.getStart(startRight);
             ipRight.getEnd(endRight);
             return ch.compare(ipLeft.getTypeTag(), ipRight.getTypeTag(), endLeft, endRight) <= 0;
         } catch (AsterixException e) {
