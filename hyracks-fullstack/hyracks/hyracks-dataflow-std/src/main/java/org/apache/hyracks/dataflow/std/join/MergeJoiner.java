@@ -22,7 +22,6 @@ import java.nio.ByteBuffer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import org.apache.hyracks.api.comm.FixedSizeFrame;
 import org.apache.hyracks.api.comm.IFrame;
 import org.apache.hyracks.api.comm.IFrameWriter;
 import org.apache.hyracks.api.comm.VSizeFrame;
@@ -41,7 +40,6 @@ import org.apache.hyracks.dataflow.std.buffermanager.ITupleAccessor;
 import org.apache.hyracks.dataflow.std.buffermanager.TupleAccessor;
 import org.apache.hyracks.dataflow.std.buffermanager.VariableDeletableTupleMemoryManager;
 import org.apache.hyracks.dataflow.std.join.MergeStatus.BranchStatus;
-import org.apache.hyracks.dataflow.std.join.MergeStatus.RunFileStatus;
 import org.apache.hyracks.dataflow.std.structures.TuplePointer;
 
 /**
@@ -71,12 +69,15 @@ public class MergeJoiner {
 
     private final IFrame runFileBuffer;
     private final FrameTupleAppender runFileAppender;
-    private final RunFileWriter runFileWriter;
+    private RunFileWriter runFileWriter;
+    private int runFileCounter;
     private RunFileReader runFileReader;
 
     private final FrameTupleAppender resultAppender;
 
     private final IMergeJoinChecker mjc;
+
+    private final IHyracksTaskContext ctx;
 
     private final int partition;
 
@@ -84,6 +85,7 @@ public class MergeJoiner {
 
     public MergeJoiner(IHyracksTaskContext ctx, int memorySize, int partition, MergeStatus status, MergeJoinLocks locks,
             IMergeJoinChecker mjc, RecordDescriptor leftRd) throws HyracksDataException {
+        this.ctx = ctx;
         this.partition = partition;
         this.status = status;
         this.locks = locks;
@@ -94,19 +96,24 @@ public class MergeJoiner {
         rightBuffer = ctx.allocateFrame();
 
         // Memory (right buffer)
-        framePool = new DeallocatableFramePool(ctx, (memorySize - 2) * ctx.getInitialFrameSize());
+        if (memorySize < 1) {
+            throw new HyracksDataException(
+                    "MergeJoiner does not have enough memory (needs > 0, got " + memorySize + ").");
+        }
+        framePool = new DeallocatableFramePool(ctx, (memorySize) * ctx.getInitialFrameSize());
         tp = new TuplePointer();
 
         // Run File and frame cache (left buffer)
-        FileReference file = ctx.getJobletContext()
-                .createManagedWorkspaceFile(this.getClass().getSimpleName() + this.toString());
-        runFileWriter = new RunFileWriter(file, ctx.getIOManager());
-        runFileWriter.open();
-        runFileBuffer = new FixedSizeFrame(ctx.allocateFrame(ctx.getInitialFrameSize()));
+        runFileCounter = 0;
+        runFileBuffer = new VSizeFrame(ctx);
         runFileAppender = new FrameTupleAppender(new VSizeFrame(ctx));
 
         // Result
         resultAppender = new FrameTupleAppender(new VSizeFrame(ctx));
+        if (LOGGER.isLoggable(Level.FINE)) {
+            LOGGER.fine(
+                    "MergeJoiner has started partition " + partition + " with " + memorySize + " frames of memory.");
+        }
     }
 
     private boolean addToMemory(ITupleAccessor accessor) throws HyracksDataException {
@@ -139,11 +146,23 @@ public class MergeJoiner {
         }
     }
 
+    private void startRunFile() throws HyracksDataException {
+        FileReference file = ctx.getJobletContext()
+                .createManagedWorkspaceFile(this.getClass().getSimpleName() + this.toString() + runFileCounter);
+        runFileWriter = new RunFileWriter(file, ctx.getIOManager());
+        runFileWriter.open();
+        ++runFileCounter;
+        status.setRunFileWriting(true);
+        if (LOGGER.isLoggable(Level.FINE)) {
+            LOGGER.fine("MergeJoiner has start a new run file (number: " + runFileCounter + ").");
+        }
+    }
+
     private void openRunFile() throws HyracksDataException {
-        status.runFileStatus = RunFileStatus.READING;
+        status.setRunFileReading(true);
 
         // Create reader
-        runFileReader = runFileWriter.createReader();
+        runFileReader = runFileWriter.createDeleteOnCloseReader();
         runFileReader.open();
 
         // Load first frame
@@ -151,8 +170,16 @@ public class MergeJoiner {
         accessorLeft.reset(runFileBuffer.getBuffer());
     }
 
+    private void flushAndStopRunFile() throws HyracksDataException {
+        status.setRunFileWriting(false);
+        // Flush buffer.
+        if (runFileAppender.getTupleCount() > 0) {
+            runFileAppender.write(runFileWriter, true);
+        }
+    }
+
     private void closeRunFile() throws HyracksDataException {
-        status.runFileStatus = RunFileStatus.NOT_USED;
+        status.setRunFileReading(false);
         runFileReader.close();
         accessorLeft.reset(leftBuffer);
     }
@@ -199,13 +226,21 @@ public class MergeJoiner {
      */
     private boolean loadLeftTuple() throws HyracksDataException {
         boolean loaded = true;
-        if (status.runFileStatus == RunFileStatus.READING) {
+        if (status.isRunFileReading()) {
             if (!accessorLeft.exists()) {
                 if (runFileReader.nextFrame(runFileBuffer)) {
                     accessorLeft.reset(runFileBuffer.getBuffer());
-                    accessorRight.next();
+                    accessorLeft.next();
                 } else {
-                    closeRunFile();
+                    if (memoryHasTuples()) {
+                        // More tuples from the right need to be processed. Clear memory and replay the run file.
+                        flushAndStopRunFile();
+                        flushMemory();
+                        runFileReader.reset();
+                    } else {
+                        // Memory is empty and replay is complete.
+                        closeRunFile();
+                    }
                     return loadLeftTuple();
                 }
             }
@@ -229,7 +264,7 @@ public class MergeJoiner {
      */
     public void processMergeUsingLeftTuple(IFrameWriter writer) throws HyracksDataException {
         while (loadLeftTuple() && (status.rightHasMore || memoryHasTuples())) {
-            if (status.runFileStatus == RunFileStatus.NOT_USED && loadRightTuple()
+            if (loadRightTuple() && !status.isRunFileWriting()
                     && mjc.checkToLoadNextRightTuple(accessorLeft, accessorRight)) {
                 // *********************
                 // Right side from stream
@@ -238,7 +273,7 @@ public class MergeJoiner {
                 if (mjc.checkToSaveInMemory(accessorLeft, accessorRight)) {
                     if (!addToMemory(accessorRight)) {
                         // go to log saving state
-                        status.runFileStatus = RunFileStatus.WRITING;
+                        startRunFile();
                         if (LOGGER.isLoggable(Level.FINE)) {
                             LOGGER.fine("MergeJoiner memory is full with " + bufferManager.getNumTuples() + " tuples.");
                         }
@@ -251,7 +286,7 @@ public class MergeJoiner {
                 // Left side from stream or disk
                 // *********************
                 // Write left tuple to run file
-                if (status.runFileStatus == RunFileStatus.WRITING) {
+                if (status.isRunFileWriting()) {
                     addToRunFile(accessorLeft);
                 }
 
@@ -273,11 +308,13 @@ public class MergeJoiner {
                 }
 
                 // Memory is empty and we can start processing the run file.
-                if (!memoryHasTuples() && status.runFileStatus == RunFileStatus.WRITING) {
-                    openRunFile();
+                if (!memoryHasTuples() && status.isRunFileWriting()) {
+                    flushAndStopRunFile();
                     flushMemory();
+                    openRunFile();
                     if (LOGGER.isLoggable(Level.FINE)) {
-                        LOGGER.fine("MergeJoiner memory is new empty. Continuing with right branch.");
+                        LOGGER.fine(
+                                "MergeJoiner memory is new empty. Replaying left branch while continuing with the right branch.");
                     }
                 }
                 accessorLeft.next();

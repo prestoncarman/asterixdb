@@ -34,12 +34,6 @@ public class MergeStatus implements Serializable {
         }
     }
 
-    public enum RunFileStatus {
-        NOT_USED,
-        WRITING,
-        READING,
-    }
-
     public boolean reloadingLeftFrame = false;
     public boolean loadRightFrame = false;
 
@@ -49,7 +43,8 @@ public class MergeStatus implements Serializable {
     private BranchStatus leftStatus = BranchStatus.UNKNOWN;
     private BranchStatus rightStatus = BranchStatus.UNKNOWN;
 
-    public RunFileStatus runFileStatus = RunFileStatus.NOT_USED;
+    private boolean runFileWriting = false;
+    private boolean runFileReading = false;
 
     public MergeStatus() {
     }
@@ -84,6 +79,22 @@ public class MergeStatus implements Serializable {
 
     public void closeRight() {
         rightStatus = BranchStatus.CLOSED;
+    }
+
+    public boolean isRunFileWriting() {
+        return runFileWriting;
+    }
+
+    public void setRunFileWriting(boolean runFileWriting) {
+        this.runFileWriting = runFileWriting;
+    }
+
+    public boolean isRunFileReading() {
+        return runFileReading;
+    }
+
+    public void setRunFileReading(boolean runFileReading) {
+        this.runFileReading = runFileReading;
     }
 
 }
