@@ -18,10 +18,14 @@
  */
 package org.apache.hyracks.storage.common.buffercache;
 
+import org.apache.hyracks.api.exceptions.HyracksDataException;
+
 public interface IPageReplacementStrategy {
     public Object createPerPageStrategyObject(int cpid);
 
     public void setBufferCache(IBufferCacheInternal bufferCache);
+
+    public IBufferCacheInternal getBufferCache();
 
     public void notifyCachePageReset(ICachedPageInternal cPage);
 
@@ -31,9 +35,17 @@ public interface IPageReplacementStrategy {
 
     public ICachedPageInternal findVictim();
 
+    public ICachedPageInternal findVictim(int multiplier);
+
     public int getNumPages();
+
+    void fixupCapacityOnLargeRead(ICachedPageInternal cPage)
+            throws HyracksDataException;
 
     public int getPageSize();
 
     public int getMaxAllowedNumPages();
+
+    void resizePage(ICachedPageInternal page, int multiplier, IExtraPageBlockHelper extraPageBlockHelper)
+            throws HyracksDataException;
 }

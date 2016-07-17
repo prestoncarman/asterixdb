@@ -91,10 +91,12 @@ public class ClassAdParser extends AbstractDataParser implements IRecordDataPars
     private ARecordType recordType;
     private IObjectPool<IARecordBuilder, ATypeTag> recordBuilderPool = new ListObjectPool<IARecordBuilder, ATypeTag>(
             new RecordBuilderFactory());
-    private IObjectPool<IAsterixListBuilder, ATypeTag> listBuilderPool = new ListObjectPool<IAsterixListBuilder, ATypeTag>(
-            new ListBuilderFactory());
-    private IObjectPool<IMutableValueStorage, ATypeTag> abvsBuilderPool = new ListObjectPool<IMutableValueStorage, ATypeTag>(
-            new AbvsBuilderFactory());
+    private IObjectPool<IAsterixListBuilder, ATypeTag> listBuilderPool =
+            new ListObjectPool<IAsterixListBuilder, ATypeTag>(
+                    new ListBuilderFactory());
+    private IObjectPool<IMutableValueStorage, ATypeTag> abvsBuilderPool =
+            new ListObjectPool<IMutableValueStorage, ATypeTag>(
+                    new AbvsBuilderFactory());
     private final ClassAd rootAd;
     private String exprPrefix = "expr=";
     private String exprSuffix = "";
@@ -339,11 +341,11 @@ public class ClassAdParser extends AbstractDataParser implements IRecordDataPars
             // add field value to value buffer
             writeFieldValueToBuffer(fieldType, fieldValueBuffer.getDataOutput(), fldName, entry.getValue(), pAd);
             if (openRecordField) {
-                if (fieldValueBuffer.getByteArray()[0] != ATypeTag.NULL.serialize()) {
+                if (fieldValueBuffer.getByteArray()[0] != ATypeTag.MISSING.serialize()) {
                     recBuilder.addField(fieldNameBuffer, fieldValueBuffer);
                 }
             } else if (NonTaggedFormatUtil.isOptional(fieldType)) {
-                if (fieldValueBuffer.getByteArray()[0] != ATypeTag.NULL.serialize()) {
+                if (fieldValueBuffer.getByteArray()[0] != ATypeTag.MISSING.serialize()) {
                     recBuilder.addField(fieldId, fieldValueBuffer);
                 }
             } else {
@@ -352,10 +354,10 @@ public class ClassAdParser extends AbstractDataParser implements IRecordDataPars
         }
 
         if (recType != null) {
-            int nullableFieldId = checkNullConstraints(recType, nulls);
-            if (nullableFieldId != -1) {
+            int optionalFieldId = checkOptionalConstraints(recType, nulls);
+            if (optionalFieldId != -1) {
                 throw new HyracksDataException(
-                        "Field: " + recType.getFieldNames()[nullableFieldId] + " can not be null");
+                        "Field: " + recType.getFieldNames()[optionalFieldId] + " can not be optional");
             }
         }
         recBuilder.write(out, true);
@@ -387,7 +389,7 @@ public class ClassAdParser extends AbstractDataParser implements IRecordDataPars
 
         if (fieldType != null) {
             if (NonTaggedFormatUtil.isOptional(fieldType)) {
-                fieldType = ((AUnionType) fieldType).getNullableType();
+                fieldType = ((AUnionType) fieldType).getActualType();
             }
         }
         switch (val.getValueType()) {
@@ -621,24 +623,17 @@ public class ClassAdParser extends AbstractDataParser implements IRecordDataPars
         return objectPool.bitSetPool.get();
     }
 
-    public static int checkNullConstraints(ARecordType recType, BitSet nulls) {
-        boolean isNull = false;
+    public static int checkOptionalConstraints(ARecordType recType, BitSet nulls) {
         for (int i = 0; i < recType.getFieldTypes().length; i++) {
             if (nulls.get(i) == false) {
                 IAType type = recType.getFieldTypes()[i];
-                if (type.getTypeTag() != ATypeTag.NULL && type.getTypeTag() != ATypeTag.UNION) {
+                if (type.getTypeTag() != ATypeTag.MISSING && type.getTypeTag() != ATypeTag.UNION) {
                     return i;
                 }
 
                 if (type.getTypeTag() == ATypeTag.UNION) { // union
-                    List<IAType> unionList = ((AUnionType) type).getUnionList();
-                    for (int j = 0; j < unionList.size(); j++) {
-                        if (unionList.get(j).getTypeTag() == ATypeTag.NULL) {
-                            isNull = true;
-                            break;
-                        }
-                    }
-                    if (!isNull) {
+                    AUnionType unionType = (AUnionType) type;
+                    if (!unionType.isUnknownableType()) {
                         return i;
                     }
                 }
@@ -685,7 +680,7 @@ public class ClassAdParser extends AbstractDataParser implements IRecordDataPars
             case SLIST_VALUE:
                 return ATypeTag.UNORDEREDLIST;
             case NULL_VALUE:
-                return ATypeTag.NULL;
+                return ATypeTag.MISSING;
             case REAL_VALUE:
                 return ATypeTag.DOUBLE;
             case RELATIVE_TIME_VALUE:
@@ -796,6 +791,7 @@ public class ClassAdParser extends AbstractDataParser implements IRecordDataPars
     }
 
     public boolean parseNext(ClassAd classad) throws IOException {
+        resetPools();
         return parseClassAd(currentSource, classad, false);
     }
 
@@ -1355,7 +1351,7 @@ public class ClassAdParser extends AbstractDataParser implements IRecordDataPars
                     if (!parseArgumentList(argList)) {
                         tree.setInnerTree(null);
                         return false;
-                    } ;
+                    };
                     // special case function-calls should be converted
                     // into a literal expression if the argument is a
                     // string literal
@@ -1403,7 +1399,7 @@ public class ClassAdParser extends AbstractDataParser implements IRecordDataPars
                 tree.setInnerTree(Operation.createOperation(Operation.OpKind_PARENTHESES_OP, treeL, objectPool));
                 return (tree.size() != 0);
             }
-            // constants
+                // constants
             case LEX_OPEN_BOX: {
                 isExpr = true;
                 ClassAd newAd = objectPool.classAdPool.get();
@@ -1581,7 +1577,6 @@ public class ClassAdParser extends AbstractDataParser implements IRecordDataPars
             }
 
             isExpr = false;
-            // parse the expression
             parseExpression(tree);
             if (tree.getInnerTree() == null) {
                 throw new HyracksDataException("parse expression returned empty tree");

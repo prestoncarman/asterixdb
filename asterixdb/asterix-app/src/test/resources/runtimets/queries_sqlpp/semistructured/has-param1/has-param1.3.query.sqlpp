@@ -20,10 +20,10 @@
 use test;
 
 
-set "import-private-functions" "true";
+set `import-private-functions` `true`;
 
 select element o
 from  Orders as o
-where test.not(test."is-null"(o.param1))
+where o.param1 IS NOT MISSING
 order by o.oid
 ;

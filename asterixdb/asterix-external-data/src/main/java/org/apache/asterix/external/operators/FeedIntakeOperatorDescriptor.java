@@ -22,16 +22,11 @@ import java.util.Map;
 import java.util.logging.Logger;
 
 import org.apache.asterix.common.api.IAsterixAppRuntimeContext;
+import org.apache.asterix.common.library.ILibraryManager;
 import org.apache.asterix.external.api.IAdapterFactory;
 import org.apache.asterix.external.feed.api.IFeed;
-import org.apache.asterix.external.feed.api.IFeedManager;
-import org.apache.asterix.external.feed.api.IFeedRuntime.FeedRuntimeType;
-import org.apache.asterix.external.feed.api.IFeedSubscriptionManager;
 import org.apache.asterix.external.feed.management.FeedId;
 import org.apache.asterix.external.feed.policy.FeedPolicyAccessor;
-import org.apache.asterix.external.feed.runtime.IngestionRuntime;
-import org.apache.asterix.external.feed.runtime.SubscribableFeedRuntimeId;
-import org.apache.asterix.external.library.ExternalLibraryManager;
 import org.apache.asterix.om.types.ARecordType;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.dataflow.IOperatorNodePushable;
@@ -99,33 +94,27 @@ public class FeedIntakeOperatorDescriptor extends AbstractSingleActivityOperator
     @Override
     public IOperatorNodePushable createPushRuntime(IHyracksTaskContext ctx,
             IRecordDescriptorProvider recordDescProvider, int partition, int nPartitions) throws HyracksDataException {
-        IAsterixAppRuntimeContext runtimeCtx = (IAsterixAppRuntimeContext) ctx.getJobletContext()
-                .getApplicationContext().getApplicationObject();
-        IFeedSubscriptionManager feedSubscriptionManager = ((IFeedManager) runtimeCtx.getFeedManager())
-                .getFeedSubscriptionManager();
-        SubscribableFeedRuntimeId feedIngestionId = new SubscribableFeedRuntimeId(feedId, FeedRuntimeType.INTAKE,
-                partition);
-        IngestionRuntime ingestionRuntime = (IngestionRuntime) feedSubscriptionManager
-                .getSubscribableRuntime(feedIngestionId);
         if (adaptorFactory == null) {
-            try {
-                adaptorFactory = createExtenralAdapterFactory(ctx, partition);
-            } catch (Exception exception) {
-                throw new HyracksDataException(exception);
-            }
-
+            adaptorFactory = createExternalAdapterFactory(ctx);
         }
-        return new FeedIntakeOperatorNodePushable(ctx, feedId, adaptorFactory, partition, ingestionRuntime,
-                policyAccessor, recordDescProvider, this);
+        return new FeedIntakeOperatorNodePushable(ctx, feedId, adaptorFactory, partition, policyAccessor,
+                recordDescProvider, this);
     }
 
-    private IAdapterFactory createExtenralAdapterFactory(IHyracksTaskContext ctx, int partition) throws Exception {
-        IAdapterFactory adapterFactory = null;
-        ClassLoader classLoader = ExternalLibraryManager.getLibraryClassLoader(feedId.getDataverse(),
-                adaptorLibraryName);
+    private IAdapterFactory createExternalAdapterFactory(IHyracksTaskContext ctx) throws HyracksDataException {
+        IAdapterFactory adapterFactory;
+        IAsterixAppRuntimeContext runtimeCtx =
+                (IAsterixAppRuntimeContext) ctx.getJobletContext().getApplicationContext().getApplicationObject();
+        ILibraryManager libraryManager = runtimeCtx.getLibraryManager();
+        ClassLoader classLoader = libraryManager.getLibraryClassLoader(feedId.getDataverse(), adaptorLibraryName);
         if (classLoader != null) {
-            adapterFactory = ((IAdapterFactory) (classLoader.loadClass(adaptorFactoryClassName).newInstance()));
-            adapterFactory.configure(adaptorConfiguration, adapterOutputType);
+            try {
+                adapterFactory = (IAdapterFactory) (classLoader.loadClass(adaptorFactoryClassName).newInstance());
+                adapterFactory.setOutputType(adapterOutputType);
+                adapterFactory.configure(libraryManager, adaptorConfiguration);
+            } catch (Exception e) {
+                throw new HyracksDataException(e);
+            }
         } else {
             String message = "Unable to create adapter as class loader not configured for library " + adaptorLibraryName
                     + " in dataverse " + feedId.getDataverse();

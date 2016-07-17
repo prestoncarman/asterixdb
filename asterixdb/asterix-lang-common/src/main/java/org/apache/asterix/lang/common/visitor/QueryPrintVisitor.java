@@ -98,7 +98,7 @@ public class QueryPrintVisitor extends AbstractQueryExpressionVisitor<Void, Inte
     public Void visit(LiteralExpr l, Integer step) {
         Literal lc = l.getValue();
         if (lc.getLiteralType().equals(Literal.Type.TRUE) || lc.getLiteralType().equals(Literal.Type.FALSE)
-                || lc.getLiteralType().equals(Literal.Type.NULL)) {
+                || lc.getLiteralType().equals(Literal.Type.NULL) || lc.getLiteralType().equals(Literal.Type.MISSING)) {
             out.println(skip(step) + "LiteralExpr [" + l.getValue().getLiteralType() + "]");
         } else {
             out.println(skip(step) + "LiteralExpr [" + l.getValue().getLiteralType() + "] ["
@@ -284,8 +284,8 @@ public class QueryPrintVisitor extends AbstractQueryExpressionVisitor<Void, Inte
 
     @Override
     public Void visit(UnaryExpr u, Integer step) throws AsterixException {
-        if (u.getSign() != null) {
-            out.print(skip(step) + u.getSign() + " ");
+        if (u.getExprType() != null) {
+            out.print(skip(step) + u.getExprType() + " ");
             u.getExpr().accept(this, 0);
         } else {
             u.getExpr().accept(this, step);
@@ -340,7 +340,7 @@ public class QueryPrintVisitor extends AbstractQueryExpressionVisitor<Void, Inte
         out.println("RecordType {");
         Iterator<String> nameIter = r.getFieldNames().iterator();
         Iterator<TypeExpression> typeIter = r.getFieldTypes().iterator();
-        Iterator<Boolean> isnullableIter = r.getNullableFields().iterator();
+        Iterator<Boolean> isOptionalIter = r.getOptionableFields().iterator();
         boolean first = true;
         while (nameIter.hasNext()) {
             if (first) {
@@ -350,7 +350,7 @@ public class QueryPrintVisitor extends AbstractQueryExpressionVisitor<Void, Inte
             }
             String name = nameIter.next();
             TypeExpression texp = typeIter.next();
-            Boolean isNullable = isnullableIter.next();
+            Boolean isNullable = isOptionalIter.next();
             out.print(skip(step + 1) + name + " : ");
             texp.accept(this, step + 2);
             if (isNullable) {

@@ -21,14 +21,13 @@ package org.apache.asterix.external.provider;
 import java.util.Map;
 
 import org.apache.asterix.common.exceptions.AsterixException;
+import org.apache.asterix.common.library.ILibraryManager;
 import org.apache.asterix.external.api.IExternalDataSourceFactory;
 import org.apache.asterix.external.api.IExternalDataSourceFactory.DataSourceType;
 import org.apache.asterix.external.api.IInputStreamFactory;
 import org.apache.asterix.external.api.IRecordReaderFactory;
 import org.apache.asterix.external.input.HDFSDataSourceFactory;
-import org.apache.asterix.external.input.record.reader.RecordWithPKTestReaderFactory;
-import org.apache.asterix.external.input.record.reader.kv.KVReaderFactory;
-import org.apache.asterix.external.input.record.reader.kv.KVTestReaderFactory;
+import org.apache.asterix.external.input.record.reader.rss.RSSRecordReaderFactory;
 import org.apache.asterix.external.input.record.reader.stream.StreamRecordReaderFactory;
 import org.apache.asterix.external.input.record.reader.twitter.TwitterRecordReaderFactory;
 import org.apache.asterix.external.input.stream.factory.LocalFSInputStreamFactory;
@@ -40,24 +39,28 @@ import org.apache.asterix.external.util.ExternalDataUtils;
 
 public class DatasourceFactoryProvider {
 
-    public static IExternalDataSourceFactory getExternalDataSourceFactory(Map<String, String> configuration)
-            throws AsterixException {
+    private DatasourceFactoryProvider() {
+    }
+
+    public static IExternalDataSourceFactory getExternalDataSourceFactory(ILibraryManager libraryManager,
+            Map<String, String> configuration) throws AsterixException {
         if (ExternalDataUtils.getDataSourceType(configuration).equals(DataSourceType.RECORDS)) {
             String reader = configuration.get(ExternalDataConstants.KEY_READER);
-            return DatasourceFactoryProvider.getRecordReaderFactory(reader, configuration);
+            return DatasourceFactoryProvider.getRecordReaderFactory(libraryManager, reader, configuration);
         } else {
             // get stream source
             String streamSource = configuration.get(ExternalDataConstants.KEY_STREAM_SOURCE);
-            return DatasourceFactoryProvider.getInputStreamFactory(streamSource, configuration);
+            return DatasourceFactoryProvider.getInputStreamFactory(libraryManager, streamSource, configuration);
         }
     }
 
-    public static IInputStreamFactory getInputStreamFactory(String streamSource, Map<String, String> configuration)
-            throws AsterixException {
+    public static IInputStreamFactory getInputStreamFactory(ILibraryManager libraryManager, String streamSource,
+            Map<String, String> configuration) throws AsterixException {
         IInputStreamFactory streamSourceFactory;
         if (ExternalDataUtils.isExternal(streamSource)) {
             String dataverse = ExternalDataUtils.getDataverse(configuration);
-            streamSourceFactory = ExternalDataUtils.createExternalInputStreamFactory(dataverse, streamSource);
+            streamSourceFactory = ExternalDataUtils.createExternalInputStreamFactory(libraryManager, dataverse,
+                    streamSource);
         } else {
             switch (streamSource) {
                 case ExternalDataConstants.STREAM_LOCAL_FILESYSTEM:
@@ -74,22 +77,22 @@ public class DatasourceFactoryProvider {
                     streamSourceFactory = new TwitterFirehoseStreamFactory();
                     break;
                 default:
-                    throw new AsterixException("unknown input stream factory");
+                    try {
+                        streamSourceFactory = (IInputStreamFactory) Class.forName(streamSource).newInstance();
+                    } catch (Exception e) {
+                        throw new AsterixException("unknown input stream factory: " + streamSource, e);
+                    }
             }
         }
         return streamSourceFactory;
     }
 
-    public static IRecordReaderFactory<?> getRecordReaderFactory(String reader, Map<String, String> configuration)
-            throws AsterixException {
+    public static IRecordReaderFactory<?> getRecordReaderFactory(ILibraryManager libraryManager, String reader,
+            Map<String, String> configuration) throws AsterixException {
         if (reader.equals(ExternalDataConstants.EXTERNAL)) {
-            return ExternalDataUtils.createExternalRecordReaderFactory(configuration);
+            return ExternalDataUtils.createExternalRecordReaderFactory(libraryManager, configuration);
         }
         switch (reader) {
-            case ExternalDataConstants.READER_KV:
-                return new KVReaderFactory();
-            case ExternalDataConstants.READER_KV_TEST:
-                return new KVTestReaderFactory();
             case ExternalDataConstants.READER_HDFS:
                 return new HDFSDataSourceFactory();
             case ExternalDataConstants.ALIAS_LOCALFS_ADAPTER:
@@ -99,8 +102,6 @@ public class DatasourceFactoryProvider {
             case ExternalDataConstants.READER_PUSH_TWITTER:
             case ExternalDataConstants.READER_PULL_TWITTER:
                 return new TwitterRecordReaderFactory();
-            case ExternalDataConstants.TEST_RECORD_WITH_PK:
-                return new RecordWithPKTestReaderFactory();
             case ExternalDataConstants.ALIAS_TWITTER_FIREHOSE_ADAPTER:
                 return new StreamRecordReaderFactory(new TwitterFirehoseStreamFactory());
             case ExternalDataConstants.ALIAS_SOCKET_ADAPTER:
@@ -108,8 +109,15 @@ public class DatasourceFactoryProvider {
                 return new StreamRecordReaderFactory(new SocketServerInputStreamFactory());
             case ExternalDataConstants.STREAM_SOCKET_CLIENT:
                 return new StreamRecordReaderFactory(new SocketClientInputStreamFactory());
+            case ExternalDataConstants.READER_RSS:
+                return new RSSRecordReaderFactory();
             default:
-                throw new AsterixException("unknown record reader factory: " + reader);
+                try {
+                    return (IRecordReaderFactory<?>) Class.forName(reader).newInstance();
+                } catch (IllegalAccessException | ClassNotFoundException | InstantiationException
+                        | ClassCastException e) {
+                    throw new AsterixException("Unknown record reader factory: " + reader, e);
+                }
         }
     }
 }

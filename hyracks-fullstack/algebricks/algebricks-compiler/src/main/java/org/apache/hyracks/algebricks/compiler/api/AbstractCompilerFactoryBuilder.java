@@ -20,13 +20,14 @@ package org.apache.hyracks.algebricks.compiler.api;
 
 import java.util.List;
 
+import org.apache.hyracks.algebricks.common.constraints.AlgebricksAbsolutePartitionConstraint;
 import org.apache.hyracks.algebricks.common.constraints.AlgebricksPartitionConstraint;
 import org.apache.hyracks.algebricks.common.utils.Pair;
 import org.apache.hyracks.algebricks.core.algebra.expressions.IExpressionEvalSizeComputer;
 import org.apache.hyracks.algebricks.core.algebra.expressions.IExpressionRuntimeProvider;
 import org.apache.hyracks.algebricks.core.algebra.expressions.IExpressionTypeComputer;
 import org.apache.hyracks.algebricks.core.algebra.expressions.IMergeAggregationExpressionFactory;
-import org.apache.hyracks.algebricks.core.algebra.expressions.INullableTypeComputer;
+import org.apache.hyracks.algebricks.core.algebra.expressions.IMissableTypeComputer;
 import org.apache.hyracks.algebricks.core.algebra.expressions.IPartialAggregationTypeComputer;
 import org.apache.hyracks.algebricks.core.rewriter.base.AbstractRuleController;
 import org.apache.hyracks.algebricks.core.rewriter.base.IAlgebraicRewriteRule;
@@ -40,7 +41,7 @@ import org.apache.hyracks.algebricks.data.INormalizedKeyComputerFactoryProvider;
 import org.apache.hyracks.algebricks.data.IPrinterFactoryProvider;
 import org.apache.hyracks.algebricks.data.ISerializerDeserializerProvider;
 import org.apache.hyracks.algebricks.data.ITypeTraitProvider;
-import org.apache.hyracks.api.dataflow.value.INullWriterFactory;
+import org.apache.hyracks.api.dataflow.value.IMissingWriterFactory;
 import org.apache.hyracks.api.dataflow.value.IPredicateEvaluatorFactoryProvider;
 
 public abstract class AbstractCompilerFactoryBuilder {
@@ -58,14 +59,14 @@ public abstract class AbstractCompilerFactoryBuilder {
     protected IPredicateEvaluatorFactoryProvider predEvaluatorFactoryProvider;
     protected IExpressionRuntimeProvider expressionRuntimeProvider;
     protected IExpressionTypeComputer expressionTypeComputer;
-    protected INullableTypeComputer nullableTypeComputer;
+    protected IMissableTypeComputer missableTypeComputer;
     protected IExpressionEvalSizeComputer expressionEvalSizeComputer;
-    protected INullWriterFactory nullWriterFactory;
+    protected IMissingWriterFactory missingWriterFactory;
     protected INormalizedKeyComputerFactoryProvider normalizedKeyComputerFactoryProvider;
     protected IPartialAggregationTypeComputer partialAggregationTypeComputer;
     protected IMergeAggregationExpressionFactory mergeAggregationExpressionFactory;
     protected PhysicalOptimizationConfig physicalOptimizationConfig = new PhysicalOptimizationConfig();
-    protected AlgebricksPartitionConstraint clusterLocations;
+    protected AlgebricksAbsolutePartitionConstraint clusterLocations;
 
     public abstract ICompilerFactory create();
 
@@ -165,7 +166,7 @@ public abstract class AbstractCompilerFactoryBuilder {
         return expressionTypeComputer;
     }
 
-    public void setClusterLocations(AlgebricksPartitionConstraint clusterLocations) {
+    public void setClusterLocations(AlgebricksAbsolutePartitionConstraint clusterLocations) {
         this.clusterLocations = clusterLocations;
     }
 
@@ -173,12 +174,12 @@ public abstract class AbstractCompilerFactoryBuilder {
         return clusterLocations;
     }
 
-    public void setNullWriterFactory(INullWriterFactory nullWriterFactory) {
-        this.nullWriterFactory = nullWriterFactory;
+    public void setMissingWriterFactory(IMissingWriterFactory missingWriterFactory) {
+        this.missingWriterFactory = missingWriterFactory;
     }
 
-    public INullWriterFactory getNullWriterFactory() {
-        return nullWriterFactory;
+    public IMissingWriterFactory getMissingWriterFactory() {
+        return missingWriterFactory;
     }
 
     public void setExpressionEvalSizeComputer(IExpressionEvalSizeComputer expressionEvalSizeComputer) {
@@ -223,12 +224,12 @@ public abstract class AbstractCompilerFactoryBuilder {
         this.physicalOptimizationConfig = physicalOptimizationConfig;
     }
 
-    public void setNullableTypeComputer(INullableTypeComputer nullableTypeComputer) {
-        this.nullableTypeComputer = nullableTypeComputer;
+    public void setMissableTypeComputer(IMissableTypeComputer missableTypeComputer) {
+        this.missableTypeComputer = missableTypeComputer;
     }
 
-    public INullableTypeComputer getNullableTypeComputer() {
-        return nullableTypeComputer;
+    public IMissableTypeComputer getMissableTypeComputer() {
+        return missableTypeComputer;
     }
 
 }

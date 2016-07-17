@@ -31,10 +31,12 @@ import org.apache.hyracks.storage.am.common.ophelpers.MultiComparator;
 import org.apache.hyracks.storage.am.rtree.api.IRTreeFrame;
 import org.apache.hyracks.storage.am.rtree.api.IRTreePolicy;
 import org.apache.hyracks.storage.am.rtree.impls.UnorderedSlotManager;
+import org.apache.hyracks.storage.common.buffercache.IBufferCache;
+import org.apache.hyracks.storage.common.buffercache.IExtraPageBlockHelper;
 
 public abstract class RTreeNSMFrame extends TreeIndexNSMFrame implements IRTreeFrame {
-    protected static final int pageNsnOff = smFlagOff + 1;
-    protected static final int rightPageOff = pageNsnOff + 8;
+    protected static final int pageNsnOff = flagOff + 1; // 22
+    protected static final int rightPageOff = pageNsnOff + 8; // 30
 
     protected ITreeIndexTupleReference[] mbrTuples;
     protected ITreeIndexTupleReference cmpFrameTuple;
@@ -43,9 +45,10 @@ public abstract class RTreeNSMFrame extends TreeIndexNSMFrame implements IRTreeF
     protected final IPrimitiveValueProvider[] keyValueProviders;
 
     protected IRTreePolicy rtreePolicy;
+    protected final boolean isPointMBR;
 
     public RTreeNSMFrame(ITreeIndexTupleWriter tupleWriter, IPrimitiveValueProvider[] keyValueProviders,
-            RTreePolicyType rtreePolicyType) {
+                         RTreePolicyType rtreePolicyType, boolean isPointMBR) {
         super(tupleWriter, new UnorderedSlotManager());
         this.mbrTuples = new ITreeIndexTupleReference[keyValueProviders.length];
         for (int i = 0; i < keyValueProviders.length; i++) {
@@ -59,6 +62,7 @@ public abstract class RTreeNSMFrame extends TreeIndexNSMFrame implements IRTreeF
         } else {
             rtreePolicy = new RStarTreePolicy(tupleWriter, keyValueProviders, cmpFrameTuple, totalFreeSpaceOff);
         }
+        this.isPointMBR = isPointMBR;
     }
 
     private static double computeDoubleEpsilon() {
@@ -96,12 +100,6 @@ public abstract class RTreeNSMFrame extends TreeIndexNSMFrame implements IRTreeF
     }
 
     @Override
-    protected void resetSpaceParams() {
-        buf.putInt(freeSpaceOff, rightPageOff + 4);
-        buf.putInt(totalFreeSpaceOff, buf.capacity() - (rightPageOff + 4));
-    }
-
-    @Override
     public int getRightPage() {
         return buf.getInt(rightPageOff);
     }
@@ -116,7 +114,8 @@ public abstract class RTreeNSMFrame extends TreeIndexNSMFrame implements IRTreeF
     }
 
     @Override
-    public void split(ITreeIndexFrame rightFrame, ITupleReference tuple, ISplitKey splitKey)
+    public void split(ITreeIndexFrame rightFrame, ITupleReference tuple, ISplitKey splitKey,
+                      IExtraPageBlockHelper extraPageBlockHelper, IBufferCache bufferCache)
             throws HyracksDataException {
         rtreePolicy.split(this, buf, rightFrame, slotManager, frameTuple, tuple, splitKey);
     }

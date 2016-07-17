@@ -15,8 +15,7 @@ RecordConstructor [
 FROM [  FunctionCall Metadata.dataset@1[
     LiteralExpr [STRING] [MyData]
   ]
-  AS
-  Variable [ Name=$o ]
+  AS Variable [ Name=$o ]
 ]
 Where
   FunctionCall test.spatial-intersect@2[
@@ -30,7 +29,7 @@ Where
         LiteralExpr [DOUBLE] [9.0]
       ]
       FunctionCall test.create-point@2[
-        NEGATIVE LiteralExpr [DOUBLE] [1.0]
+        - LiteralExpr [DOUBLE] [1.0]
         LiteralExpr [DOUBLE] [5.0]
       ]
     ]

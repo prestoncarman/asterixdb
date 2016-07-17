@@ -28,8 +28,7 @@ RecordConstructor [
 FROM [  FunctionCall Metadata.dataset@1[
     LiteralExpr [STRING] [Customers]
   ]
-  AS
-  Variable [ Name=$c ]
+  AS Variable [ Name=$c ]
 ]
 Let Variable [ Name=$rec ]
   :=
@@ -93,7 +92,7 @@ Let Variable [ Name=$rec ]
     (
       LiteralExpr [STRING] [-age]
       :
-      NEGATIVE FieldAccessor [
+      - FieldAccessor [
   Variable [ Name=$c ]
   Field=age
 ]

@@ -18,10 +18,6 @@
  */
 package org.apache.asterix.dataflow.data.nontagged.comparators;
 
-import org.apache.asterix.om.types.ATypeTag;
-import org.apache.asterix.om.types.EnumDeserializer;
-import org.apache.asterix.om.types.hierachy.ATypeHierarchy;
-import org.apache.hyracks.api.dataflow.value.BinaryComparatorConstant.ComparableResultCode;
 import org.apache.hyracks.api.dataflow.value.IBinaryComparator;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 
@@ -29,26 +25,6 @@ import org.apache.hyracks.api.exceptions.HyracksDataException;
  * Asterix-level comparators will extend this class so that they can execute isComparable() first before doing actual compare().
  */
 public abstract class ABinaryComparator implements IBinaryComparator {
-
-    public static ComparableResultCode isComparable(byte[] b1, int s1, int l1, byte[] b2, int s2, int l2) {
-        // NULL Check. If one type is NULL, then we return NULL
-        if (b1[s1] == ATypeTag.SERIALIZED_NULL_TYPE_TAG || b2[s2] == ATypeTag.SERIALIZED_NULL_TYPE_TAG || b1[s1] == 0
-                || b2[s2] == 0) {
-            return ComparableResultCode.UNKNOWN;
-        }
-
-        // Checks whether two types are comparable or not
-        ATypeTag tag1 = EnumDeserializer.ATYPETAGDESERIALIZER.deserialize(b1[s1]);
-        ATypeTag tag2 = EnumDeserializer.ATYPETAGDESERIALIZER.deserialize(b2[s2]);
-
-        // Are two types compatible, meaning that they can be compared? (e.g., compare between numeric types
-        if (ATypeHierarchy.isCompatible(tag1, tag2)) {
-            return ComparableResultCode.TRUE;
-        } else {
-            return ComparableResultCode.FALSE;
-        }
-
-    }
 
     @Override
     public abstract int compare(byte[] b1, int s1, int l1, byte[] b2, int s2, int l2) throws HyracksDataException;

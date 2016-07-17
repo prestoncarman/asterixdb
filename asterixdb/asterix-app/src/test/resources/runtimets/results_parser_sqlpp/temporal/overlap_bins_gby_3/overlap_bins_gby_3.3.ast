@@ -21,17 +21,16 @@ RecordConstructor [
         (
           LiteralExpr [STRING] [item_count]
           :
-          FunctionCall multitask.count@1[
+          FunctionCall multitask.sql-count@1[
             (
               SELECT ELEMENT [
               FieldAccessor [
-                Variable [ Name=#2 ]
+                Variable [ Name=#3 ]
                 Field=i
               ]
               ]
               FROM [                Variable [ Name=#1 ]
-                AS
-                Variable [ Name=#2 ]
+                AS Variable [ Name=#3 ]
               ]
             )
           ]
@@ -41,8 +40,7 @@ RecordConstructor [
       FROM [        FunctionCall Metadata.dataset@1[
           LiteralExpr [STRING] [logs]
         ]
-        AS
-        Variable [ Name=$i ]
+        AS Variable [ Name=$i ]
       ]
       Where
         FunctionCall multitask.interval-covers@2[
@@ -67,29 +65,25 @@ RecordConstructor [
           Variable [ Name=$i ]
           Field=app
         ]
-        GROUP AS
-        Variable [ Name=#1 ]
+        GROUP AS Variable [ Name=#1 ]
         (
-        Variable [ Name=$i ]
-         AS i
-        Variable [ Name=$bin ]
-         AS bin
+          i:=Variable [ Name=$i ]
+          bin:=Variable [ Name=$bin ]
         )
 
       Orderby
         Variable [ Name=$subgid ]
         ASC
-        FunctionCall multitask.count@1[
+        FunctionCall multitask.sql-count@1[
           (
             SELECT ELEMENT [
             FieldAccessor [
-              Variable [ Name=#3 ]
+              Variable [ Name=#2 ]
               Field=i
             ]
             ]
             FROM [              Variable [ Name=#1 ]
-              AS
-              Variable [ Name=#3 ]
+              AS Variable [ Name=#2 ]
             ]
           )
         ]
@@ -112,8 +106,7 @@ FROM [  FunctionCall multitask.overlap-bins@3[
           FROM [            FunctionCall Metadata.dataset@1[
               LiteralExpr [STRING] [logs]
             ]
-            AS
-            Variable [ Name=$i ]
+            AS Variable [ Name=$i ]
           ]
         )
       ]
@@ -141,8 +134,7 @@ FROM [  FunctionCall multitask.overlap-bins@3[
           FROM [            FunctionCall Metadata.dataset@1[
               LiteralExpr [STRING] [logs]
             ]
-            AS
-            Variable [ Name=$i ]
+            AS Variable [ Name=$i ]
           ]
         )
       ]
@@ -154,8 +146,7 @@ FROM [  FunctionCall multitask.overlap-bins@3[
       LiteralExpr [STRING] [PT1M]
     ]
   ]
-  AS
-  Variable [ Name=$bin ]
+  AS Variable [ Name=$bin ]
 ]
 Orderby
   FunctionCall multitask.get-interval-start@1[

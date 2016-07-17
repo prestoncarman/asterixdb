@@ -35,7 +35,7 @@ import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAccessor;
 import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAppender;
 import org.apache.hyracks.dataflow.common.data.marshalling.IntegerSerializerDeserializer;
 import org.apache.hyracks.dataflow.common.data.marshalling.UTF8StringSerializerDeserializer;
-import org.apache.hyracks.dataflow.common.util.IntSerDeUtils;
+import org.apache.hyracks.util.IntSerDeUtils;
 import org.apache.hyracks.dataflow.std.sort.Utility;
 import org.apache.hyracks.dataflow.std.structures.TuplePointer;
 
@@ -47,10 +47,10 @@ public abstract class AbstractTupleMemoryManagerTest {
     FrameTupleAccessor inFTA = new FrameTupleAccessor(recordDescriptor);
     Random random = new Random(System.currentTimeMillis());
 
-    abstract ITuplePointerAccessor getTupleAccessor();
+    abstract ITuplePointerAccessor getTuplePointerAccessor();
 
     protected void assertEachTupleInFTAIsInBuffer(Map<Integer, Integer> map, Map<TuplePointer, Integer> mapInserted) {
-        ITuplePointerAccessor accessor = getTupleAccessor();
+        ITuplePointerAccessor accessor = getTuplePointerAccessor();
         for (Map.Entry<TuplePointer, Integer> entry : mapInserted.entrySet()) {
             accessor.reset(entry.getKey());
             int dataLength = map.get(entry.getValue());

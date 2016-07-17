@@ -49,9 +49,9 @@ public class RecordMergeTypeComputer implements IResultTypeComputer {
         AbstractFunctionCallExpression f = (AbstractFunctionCallExpression) expression;
         IAType t0 = (IAType) env.getType(f.getArguments().get(0).getValue());
         IAType t1 = (IAType) env.getType(f.getArguments().get(1).getValue());
-        boolean nullable = TypeHelper.canBeNull(t0) || TypeHelper.canBeNull(t1);
-        ARecordType recType0 = TypeComputerUtils.extractRecordType(t0);
-        ARecordType recType1 = TypeComputerUtils.extractRecordType(t1);
+        boolean unknownable = TypeHelper.canBeUnknown(t0) || TypeHelper.canBeUnknown(t1);
+        ARecordType recType0 = TypeComputeUtils.extractRecordType(t0);
+        ARecordType recType1 = TypeComputeUtils.extractRecordType(t1);
 
         if (recType0 == null || recType1 == null) {
             throw new AlgebricksException(
@@ -109,8 +109,8 @@ public class RecordMergeTypeComputer implements IResultTypeComputer {
         IAType resultType = new ARecordType(resultTypeName, resultFieldNames.toArray(new String[] {}),
                 resultFieldTypes.toArray(new IAType[] {}), isOpen);
 
-        if (nullable) {
-            resultType = AUnionType.createNullableType(resultType);
+        if (unknownable) {
+            resultType = AUnionType.createUnknownableType(resultType);
         }
         return resultType;
     }

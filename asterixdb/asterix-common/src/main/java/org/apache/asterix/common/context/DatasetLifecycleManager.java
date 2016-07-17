@@ -63,6 +63,7 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
     private final ILogManager logManager;
     private final LogRecord logRecord;
     private final int numPartitions;
+    private boolean stopped = false;
 
     public DatasetLifecycleManager(AsterixStorageProperties storageProperties,
             ILocalResourceRepository resourceRepository, int firstAvilableUserDatasetID, ILogManager logManager,
@@ -82,6 +83,7 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
 
     @Override
     public synchronized IIndex getIndex(String resourcePath) throws HyracksDataException {
+        validateDatasetLifecycleManagerState();
         int datasetID = getDIDfromResourcePath(resourcePath);
         long resourceID = getResourceIDfromResourcePath(resourcePath);
         return getIndex(datasetID, resourceID);
@@ -89,6 +91,7 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
 
     @Override
     public synchronized IIndex getIndex(int datasetID, long resourceID) throws HyracksDataException {
+        validateDatasetLifecycleManagerState();
         DatasetInfo dsInfo = datasetInfos.get(datasetID);
         if (dsInfo == null) {
             return null;
@@ -102,6 +105,7 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
 
     @Override
     public synchronized void register(String resourcePath, IIndex index) throws HyracksDataException {
+        validateDatasetLifecycleManagerState();
         int did = getDIDfromResourcePath(resourcePath);
         long resourceID = getResourceIDfromResourcePath(resourcePath);
         DatasetInfo dsInfo = datasetInfos.get(did);
@@ -138,6 +142,7 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
 
     @Override
     public synchronized void unregister(String resourcePath) throws HyracksDataException {
+        validateDatasetLifecycleManagerState();
         int did = getDIDfromResourcePath(resourcePath);
         long resourceID = getResourceIDfromResourcePath(resourcePath);
 
@@ -168,10 +173,6 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
             }
         }
 
-        // Flush and wait for it to finish, it is separated from the above wait so they don't deadlock each other.
-        // TODO: Find a better way to do this.
-        flushAndWaitForIO(dsInfo, iInfo);
-
         if (iInfo.isOpen) {
             ILSMOperationTracker indexOpTracker = iInfo.index.getOperationTracker();
             synchronized (indexOpTracker) {
@@ -187,6 +188,7 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
 
     @Override
     public synchronized void open(String resourcePath) throws HyracksDataException {
+        validateDatasetLifecycleManagerState();
         int did = getDIDfromResourcePath(resourcePath);
         long resourceID = getResourceIDfromResourcePath(resourcePath);
 
@@ -271,6 +273,7 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
 
     @Override
     public synchronized void close(String resourcePath) throws HyracksDataException {
+        validateDatasetLifecycleManagerState();
         int did = getDIDfromResourcePath(resourcePath);
         long resourceID = getResourceIDfromResourcePath(resourcePath);
 
@@ -349,6 +352,12 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
                 datasetOpTrackers.put(datasetID, opTracker);
             }
             return opTracker;
+        }
+    }
+
+    private void validateDatasetLifecycleManagerState() throws HyracksDataException {
+        if (stopped) {
+            throw new HyracksDataException(DatasetLifecycleManager.class.getSimpleName() + " was stopped.");
         }
     }
 
@@ -634,6 +643,9 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
 
     @Override
     public synchronized void stop(boolean dumpState, OutputStream outputStream) throws IOException {
+        if (stopped) {
+            return;
+        }
         if (dumpState) {
             dumpState(outputStream);
         }
@@ -643,6 +655,7 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
         datasetVirtualBufferCachesMap.clear();
         datasetOpTrackers.clear();
         datasetInfos.clear();
+        stopped = true;
     }
 
     @Override

@@ -230,7 +230,7 @@ public class PropertiesUtil {
                 }
             }
         }
-        ArrayList<OrderColumn> norm = new ArrayList<OrderColumn>(orderColumns.size() - deleted);
+        List<OrderColumn> norm = new ArrayList<>(orderColumns.size() - deleted);
         for (OrderColumn oc : orderColumns) {
             if (oc != null) {
                 norm.add(oc);
@@ -244,7 +244,7 @@ public class PropertiesUtil {
         if (equivalenceClasses == null || equivalenceClasses.isEmpty()) {
             return orderColumns;
         }
-        ArrayList<OrderColumn> norm = new ArrayList<OrderColumn>();
+        List<OrderColumn> norm = new ArrayList<>();
         for (OrderColumn v : orderColumns) {
             EquivalenceClass ec = equivalenceClasses.get(v.getColumn());
             if (ec == null) {

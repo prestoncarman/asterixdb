@@ -22,7 +22,7 @@ import java.util.ArrayList;
 import java.util.Random;
 
 import org.apache.hyracks.api.exceptions.HyracksDataException;
-import org.apache.hyracks.api.storage.IGrowableIntArray;
+import org.apache.hyracks.util.MathUtil;
 import org.apache.hyracks.storage.am.common.api.IMetaDataPageManager;
 import org.apache.hyracks.storage.am.common.api.ITreeIndexFrame;
 import org.apache.hyracks.storage.am.common.api.ITreeIndexMetaDataFrame;
@@ -30,27 +30,28 @@ import org.apache.hyracks.storage.common.arraylist.IntArrayList;
 import org.apache.hyracks.storage.common.buffercache.IBufferCache;
 import org.apache.hyracks.storage.common.buffercache.ICachedPage;
 import org.apache.hyracks.storage.common.file.BufferedFileHandle;
-import org.apache.hyracks.util.MathUtil;
 
 public class TreeIndexBufferCacheWarmup {
     private final IBufferCache bufferCache;
-    private final IMetaDataPageManager metaDataPageManager;
+    private final IMetaDataPageManager freePageManager;
     private final int fileId;
-    private final ArrayList<IntArrayList> pagesByLevel = new ArrayList<IntArrayList>();
+    private final ArrayList<IntArrayList> pagesByLevel = new ArrayList<>();
     private final Random rnd = new Random();
 
-    public TreeIndexBufferCacheWarmup(IBufferCache bufferCache, IMetaDataPageManager metaDataPageManager, int fileId) {
+    public TreeIndexBufferCacheWarmup(IBufferCache bufferCache,
+            IMetaDataPageManager freePageManager, int fileId) {
         this.bufferCache = bufferCache;
-        this.metaDataPageManager = metaDataPageManager;
+        this.freePageManager = freePageManager;
         this.fileId = fileId;
     }
 
-    public void warmup(ITreeIndexFrame frame, ITreeIndexMetaDataFrame metaFrame, int[] warmupTreeLevels,
+    public void warmup(ITreeIndexFrame frame,
+            ITreeIndexMetaDataFrame metaFrame, int[] warmupTreeLevels,
             int[] warmupRepeats) throws HyracksDataException {
         bufferCache.openFile(fileId);
 
         // scan entire file to determine pages in each level
-        int maxPageId = metaDataPageManager.getMaxPage(metaFrame);
+        int maxPageId = freePageManager.getMaxPage(metaFrame);
         for (int pageId = 0; pageId <= maxPageId; pageId++) {
             ICachedPage page = bufferCache.pin(BufferedFileHandle.getDiskPageId(fileId, pageId), false);
             page.acquireReadLatch();
@@ -61,7 +62,6 @@ public class TreeIndexBufferCacheWarmup {
                     pagesByLevel.add(new IntArrayList(100, 100));
                 }
                 if (level >= 0) {
-                    // System.out.println("ADDING: " + level + " " + pageId);
                     pagesByLevel.get(level).add(pageId);
                 }
             } finally {
@@ -74,7 +74,7 @@ public class TreeIndexBufferCacheWarmup {
         for (int i = 0; i < warmupTreeLevels.length; i++) {
             if (warmupTreeLevels[i] < pagesByLevel.size()) {
                 int repeats = warmupRepeats[i];
-                IGrowableIntArray pageIds = pagesByLevel.get(warmupTreeLevels[i]);
+                IntArrayList pageIds = pagesByLevel.get(warmupTreeLevels[i]);
                 int[] remainingPageIds = new int[pageIds.size()];
                 for (int r = 0; r < repeats; r++) {
                     for (int j = 0; j < pageIds.size(); j++) {

@@ -37,12 +37,8 @@ public class LogManagerWithReplication extends LogManager {
 
     @Override
     public void log(ILogRecord logRecord) throws ACIDException {
-        if (logRecord.getLogSize() > logPageSize) {
-            throw new IllegalStateException();
-        }
-
         //only locally generated logs should be replicated
-        logRecord.setReplicated(logRecord.getLogSource() == LogSource.LOCAL);
+        logRecord.setReplicated(logRecord.getLogSource() == LogSource.LOCAL && logRecord.getLogType() != LogType.WAIT);
 
         //Remote flush logs do not need to be flushed separately since they may not trigger local flush
         if (logRecord.getLogType() == LogType.FLUSH && logRecord.getLogSource() == LogSource.LOCAL) {
@@ -58,27 +54,33 @@ public class LogManagerWithReplication extends LogManager {
         syncAppendToLogTail(logRecord);
 
         if (logRecord.isReplicated()) {
-            replicationManager.replicateLog(logRecord);
+            try {
+                replicationManager.replicateLog(logRecord);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
 
         if (logRecord.getLogSource() == LogSource.LOCAL) {
-            if ((logRecord.getLogType() == LogType.JOB_COMMIT || logRecord.getLogType() == LogType.ABORT)
-                    && !logRecord.isFlushed()) {
+            if ((logRecord.getLogType() == LogType.JOB_COMMIT || logRecord.getLogType() == LogType.ABORT
+                    || logRecord.getLogType() == LogType.WAIT) && !logRecord.isFlushed()) {
                 synchronized (logRecord) {
                     while (!logRecord.isFlushed()) {
                         try {
                             logRecord.wait();
                         } catch (InterruptedException e) {
-                            //ignore
+                            Thread.currentThread().interrupt();
                         }
                     }
 
                     //wait for job Commit/Abort ACK from replicas
-                    while (!replicationManager.hasBeenReplicated(logRecord)) {
-                        try {
-                            logRecord.wait();
-                        } catch (InterruptedException e) {
-                            //ignore
+                    if (logRecord.getLogType() == LogType.JOB_COMMIT || logRecord.getLogType() == LogType.ABORT) {
+                        while (!replicationManager.hasBeenReplicated(logRecord)) {
+                            try {
+                                logRecord.wait();
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                            }
                         }
                     }
                 }
@@ -88,15 +90,11 @@ public class LogManagerWithReplication extends LogManager {
 
     @Override
     protected synchronized void syncAppendToLogTail(ILogRecord logRecord) throws ACIDException {
-        ITransactionContext txnCtx = null;
-
-        if (logRecord.getLogSource() == LogSource.LOCAL) {
-            if (logRecord.getLogType() != LogType.FLUSH) {
-                txnCtx = logRecord.getTxnCtx();
-                if (txnCtx.getTxnState() == ITransactionManager.ABORTED && logRecord.getLogType() != LogType.ABORT) {
-                    throw new ACIDException(
-                            "Aborted job(" + txnCtx.getJobId() + ") tried to write non-abort type log record.");
-                }
+        if (logRecord.getLogSource() == LogSource.LOCAL && logRecord.getLogType() != LogType.FLUSH) {
+            ITransactionContext txnCtx = logRecord.getTxnCtx();
+            if (txnCtx.getTxnState() == ITransactionManager.ABORTED && logRecord.getLogType() != LogType.ABORT) {
+                throw new ACIDException(
+                        "Aborted job(" + txnCtx.getJobId() + ") tried to write non-abort type log record.");
             }
         }
 
@@ -106,11 +104,10 @@ public class LogManagerWithReplication extends LogManager {
             getAndInitNewPage();
         } else if (!appendPage.hasSpace(logRecord.getLogSize())) {
             appendPage.isFull(true);
-            getAndInitNewPage();
-        }
-        if (logRecord.getLogSource() == LogSource.LOCAL) {
-            if (logRecord.getLogType() == LogType.UPDATE) {
-                logRecord.setPrevLSN(txnCtx.getLastLSN());
+            if (logRecord.getLogSize() > logPageSize) {
+                getAndInitNewLargePage(logRecord.getLogSize());
+            } else {
+                getAndInitNewPage();
             }
         }
         appendPage.appendWithReplication(logRecord, appendLSN.get());

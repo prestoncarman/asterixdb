@@ -19,16 +19,12 @@
 package org.apache.asterix.external.dataflow;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 
 import javax.annotation.Nonnull;
 
-import org.apache.asterix.common.api.IAsterixAppRuntimeContext;
 import org.apache.asterix.external.api.ITupleForwarder;
 import org.apache.asterix.external.util.DataflowUtils;
-import org.apache.asterix.external.util.ExternalDataConstants;
 import org.apache.asterix.external.util.FeedLogManager;
-import org.apache.asterix.external.util.FeedMessageUtils;
 import org.apache.hyracks.api.comm.IFrame;
 import org.apache.hyracks.api.comm.IFrameWriter;
 import org.apache.hyracks.api.comm.VSizeFrame;
@@ -37,11 +33,11 @@ import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.dataflow.common.comm.io.ArrayTupleBuilder;
 import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAppender;
 import org.apache.hyracks.dataflow.common.comm.util.FrameUtils;
+import org.apache.hyracks.dataflow.common.io.MessagingFrameTupleAppender;
 
 public class FeedTupleForwarder implements ITupleForwarder {
 
     private final FeedLogManager feedLogManager;
-    private int maxRecordSize; // temporary until the big object in storage is solved
     private FrameTupleAppender appender;
     private IFrame frame;
     private IFrameWriter writer;
@@ -59,29 +55,20 @@ public class FeedTupleForwarder implements ITupleForwarder {
     @Override
     public void initialize(IHyracksTaskContext ctx, IFrameWriter writer) throws HyracksDataException {
         if (!initialized) {
-            this.maxRecordSize = ((IAsterixAppRuntimeContext) ctx.getJobletContext().getApplicationContext()
-                    .getApplicationObject()).getBufferCache().getPageSize() / 2;
             this.frame = new VSizeFrame(ctx);
             this.writer = writer;
             this.appender = new FrameTupleAppender(frame);
             // Set null feed message
-            ByteBuffer message = (ByteBuffer) ctx.getSharedObject();
+            VSizeFrame message = (VSizeFrame) ctx.getSharedObject();
             // a null message
-            message.put(FeedMessageUtils.NULL_FEED_MESSAGE);
-            message.flip();
+            message.getBuffer().put(MessagingFrameTupleAppender.NULL_FEED_MESSAGE);
+            message.getBuffer().flip();
             initialized = true;
         }
     }
 
     @Override
     public void addTuple(ArrayTupleBuilder tb) throws HyracksDataException {
-        if (tb.getSize() > maxRecordSize) {
-            try {
-                feedLogManager.logRecord(tb.toString(), ExternalDataConstants.ERROR_LARGE_RECORD);
-            } catch (IOException e) {
-                throw new HyracksDataException(e);
-            }
-        }
         if (paused) {
             synchronized (this) {
                 while (paused) {
@@ -107,21 +94,34 @@ public class FeedTupleForwarder implements ITupleForwarder {
 
     @Override
     public void close() throws HyracksDataException {
-        if (appender.getTupleCount() > 0) {
-            FrameUtils.flushFrame(frame.getBuffer(), writer);
-        }
+        Throwable throwable = null;
         try {
-            feedLogManager.close();
-        } catch (IOException e) {
-            throw new HyracksDataException(e);
+            if (appender.getTupleCount() > 0) {
+                FrameUtils.flushFrame(frame.getBuffer(), writer);
+            }
+        } catch (Throwable th) {
+            throwable = th;
+            throw th;
+        } finally {
+            try {
+                feedLogManager.close();
+            } catch (IOException e) {
+                if (throwable != null) {
+                    throwable.addSuppressed(e);
+                } else {
+                    throw new HyracksDataException(e);
+                }
+            } catch (Throwable th) {
+                if (throwable != null) {
+                    throwable.addSuppressed(th);
+                } else {
+                    throw th;
+                }
+            }
         }
     }
 
     public void flush() throws HyracksDataException {
         appender.flush(writer);
-    }
-
-    public int getMaxRecordSize() {
-        return maxRecordSize;
     }
 }

@@ -3,7 +3,7 @@ Query:
 SELECT ELEMENT [
 OrderedListConstructor [
   Variable [ Name=$m ]
-  FunctionCall test.count@1[
+  FunctionCall test.sql-count@1[
     (
       SELECT ELEMENT [
       FieldAccessor [
@@ -12,8 +12,7 @@ OrderedListConstructor [
       ]
       ]
       FROM [        Variable [ Name=#1 ]
-        AS
-        Variable [ Name=#2 ]
+        AS Variable [ Name=#2 ]
       ]
     )
   ]
@@ -22,8 +21,7 @@ OrderedListConstructor [
 FROM [  FunctionCall Metadata.dataset@1[
     LiteralExpr [STRING] [DataOpen]
   ]
-  AS
-  Variable [ Name=$x ]
+  AS Variable [ Name=$x ]
 ]
 Let Variable [ Name=$id ]
   :=
@@ -38,12 +36,9 @@ Groupby
     Variable [ Name=$x ]
     Field=int_m
   ]
-  GROUP AS
-  Variable [ Name=#1 ]
+  GROUP AS Variable [ Name=#1 ]
   (
-  Variable [ Name=$id ]
-   AS id
-  Variable [ Name=$x ]
-   AS x
+    id:=Variable [ Name=$id ]
+    x:=Variable [ Name=$x ]
   )
 

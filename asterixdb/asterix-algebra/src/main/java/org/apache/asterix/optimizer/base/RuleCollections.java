@@ -42,7 +42,6 @@ import org.apache.asterix.optimizer.rules.IntroduceAutogenerateIDRule;
 import org.apache.asterix.optimizer.rules.IntroduceDynamicTypeCastForExternalFunctionRule;
 import org.apache.asterix.optimizer.rules.IntroduceDynamicTypeCastRule;
 import org.apache.asterix.optimizer.rules.IntroduceEnforcedListTypeRule;
-import org.apache.asterix.optimizer.rules.IntroduceInstantLockSearchCallbackRule;
 import org.apache.asterix.optimizer.rules.IntroduceMaterializationForInsertWithSelfScanRule;
 import org.apache.asterix.optimizer.rules.IntroduceRandomPartitioningFeedComputationRule;
 import org.apache.asterix.optimizer.rules.IntroduceRapidFrameFlushProjectAssignRule;
@@ -59,11 +58,13 @@ import org.apache.asterix.optimizer.rules.PushGroupByThroughProduct;
 import org.apache.asterix.optimizer.rules.PushLimitIntoOrderByRule;
 import org.apache.asterix.optimizer.rules.PushProperJoinThroughProduct;
 import org.apache.asterix.optimizer.rules.PushSimilarityFunctionsBelowJoin;
+import org.apache.asterix.optimizer.rules.RemoveLeftOuterUnnestForLeftOuterJoinRule;
 import org.apache.asterix.optimizer.rules.RemoveRedundantListifyRule;
 import org.apache.asterix.optimizer.rules.RemoveRedundantSelectRule;
 import org.apache.asterix.optimizer.rules.RemoveSortInFeedIngestionRule;
 import org.apache.asterix.optimizer.rules.RemoveUnusedOneToOneEquiJoinRule;
 import org.apache.asterix.optimizer.rules.ReplaceSinkOpWithCommitOpRule;
+import org.apache.asterix.optimizer.rules.ResolveVariableRule;
 import org.apache.asterix.optimizer.rules.SetAsterixPhysicalOperatorsRule;
 import org.apache.asterix.optimizer.rules.SetClosedRecordConstructorsRule;
 import org.apache.asterix.optimizer.rules.SimilarityCheckRule;
@@ -125,28 +126,32 @@ import org.apache.hyracks.algebricks.rewriter.rules.subplan.SubplanOutOfGroupRul
 
 public final class RuleCollections {
 
-    public final static List<IAlgebraicRewriteRule> buildInitialTranslationRuleCollection() {
-        List<IAlgebraicRewriteRule> typeInfer = new LinkedList<IAlgebraicRewriteRule>();
+    private RuleCollections() {
+    }
+
+    public static final List<IAlgebraicRewriteRule> buildInitialTranslationRuleCollection() {
+        List<IAlgebraicRewriteRule> typeInfer = new LinkedList<>();
         typeInfer.add(new TranslateIntervalExpressionRule());
         return typeInfer;
     }
 
-    public final static List<IAlgebraicRewriteRule> buildTypeInferenceRuleCollection() {
-        List<IAlgebraicRewriteRule> typeInfer = new LinkedList<IAlgebraicRewriteRule>();
+    public static final List<IAlgebraicRewriteRule> buildTypeInferenceRuleCollection() {
+        List<IAlgebraicRewriteRule> typeInfer = new LinkedList<>();
         typeInfer.add(new InlineUnnestFunctionRule());
         typeInfer.add(new InferTypesRule());
         typeInfer.add(new CheckFilterExpressionTypeRule());
         return typeInfer;
     }
 
-    public final static List<IAlgebraicRewriteRule> buildAutogenerateIDRuleCollection() {
+    public static final List<IAlgebraicRewriteRule> buildAutogenerateIDRuleCollection() {
         List<IAlgebraicRewriteRule> autogen = new LinkedList<>();
         autogen.add(new IntroduceAutogenerateIDRule());
         return autogen;
     }
 
-    public final static List<IAlgebraicRewriteRule> buildNormalizationRuleCollection() {
-        List<IAlgebraicRewriteRule> normalization = new LinkedList<IAlgebraicRewriteRule>();
+    public static final List<IAlgebraicRewriteRule> buildNormalizationRuleCollection() {
+        List<IAlgebraicRewriteRule> normalization = new LinkedList<>();
+        normalization.add(new ResolveVariableRule());
         normalization.add(new IntroduceUnnestForCollectionToSequenceRule());
         normalization.add(new EliminateSubplanRule());
         normalization.add(new EnforceOrderByAfterSubplan());
@@ -155,7 +160,6 @@ public final class RuleCollections {
         normalization.add(new ExtractGbyExpressionsRule());
         normalization.add(new ExtractDistinctByExpressionsRule());
         normalization.add(new ExtractOrderExpressionsRule());
-        normalization.add(new AsterixMoveFreeVariableOperatorOutOfSubplanRule());
 
         // IntroduceStaticTypeCastRule should go before
         // IntroduceDynamicTypeCastRule to
@@ -175,8 +179,8 @@ public final class RuleCollections {
         return normalization;
     }
 
-    public final static List<IAlgebraicRewriteRule> buildCondPushDownAndJoinInferenceRuleCollection() {
-        List<IAlgebraicRewriteRule> condPushDownAndJoinInference = new LinkedList<IAlgebraicRewriteRule>();
+    public static final List<IAlgebraicRewriteRule> buildCondPushDownAndJoinInferenceRuleCollection() {
+        List<IAlgebraicRewriteRule> condPushDownAndJoinInference = new LinkedList<>();
 
         condPushDownAndJoinInference.add(new PushSelectDownRule());
         condPushDownAndJoinInference.add(new PushSortDownRule());
@@ -206,12 +210,15 @@ public final class RuleCollections {
         condPushDownAndJoinInference.add(new PushSubplanIntoGroupByRule());
         condPushDownAndJoinInference.add(new NestedSubplanToJoinRule());
         condPushDownAndJoinInference.add(new EliminateSubplanWithInputCardinalityOneRule());
+        // The following rule should be fired after PushAggregateIntoGroupbyRule because
+        // pulling invariants out of a subplan will make PushAggregateIntoGroupby harder.
+        condPushDownAndJoinInference.add(new AsterixMoveFreeVariableOperatorOutOfSubplanRule());
 
         return condPushDownAndJoinInference;
     }
 
-    public final static List<IAlgebraicRewriteRule> buildLoadFieldsRuleCollection() {
-        List<IAlgebraicRewriteRule> fieldLoads = new LinkedList<IAlgebraicRewriteRule>();
+    public static final List<IAlgebraicRewriteRule> buildLoadFieldsRuleCollection() {
+        List<IAlgebraicRewriteRule> fieldLoads = new LinkedList<>();
         fieldLoads.add(new LoadRecordFieldsRule());
         fieldLoads.add(new PushFieldAccessRule());
         // fieldLoads.add(new ByNameToByHandleFieldAccessRule()); -- disabled
@@ -224,18 +231,19 @@ public final class RuleCollections {
         fieldLoads.add(new FeedScanCollectionToUnnest());
         fieldLoads.add(new NestedSubplanToJoinRule());
         fieldLoads.add(new InlineSubplanInputForNestedTupleSourceRule());
+        fieldLoads.add(new RemoveLeftOuterUnnestForLeftOuterJoinRule());
         return fieldLoads;
     }
 
-    public final static List<IAlgebraicRewriteRule> buildFuzzyJoinRuleCollection() {
-        List<IAlgebraicRewriteRule> fuzzy = new LinkedList<IAlgebraicRewriteRule>();
+    public static final List<IAlgebraicRewriteRule> buildFuzzyJoinRuleCollection() {
+        List<IAlgebraicRewriteRule> fuzzy = new LinkedList<>();
         // fuzzy.add(new FuzzyJoinRule()); -- The non-indexed fuzzy join will be temporarily disabled. It should be enabled some time in the near future.
         fuzzy.add(new InferTypesRule());
         return fuzzy;
     }
 
-    public final static List<IAlgebraicRewriteRule> buildConsolidationRuleCollection() {
-        List<IAlgebraicRewriteRule> consolidation = new LinkedList<IAlgebraicRewriteRule>();
+    public static final List<IAlgebraicRewriteRule> buildConsolidationRuleCollection() {
+        List<IAlgebraicRewriteRule> consolidation = new LinkedList<>();
         consolidation.add(new ConsolidateSelectsRule());
         consolidation.add(new ConsolidateAssignsRule());
         consolidation.add(new InlineAssignIntoAggregateRule());
@@ -250,8 +258,8 @@ public final class RuleCollections {
         return consolidation;
     }
 
-    public final static List<IAlgebraicRewriteRule> buildAccessMethodRuleCollection() {
-        List<IAlgebraicRewriteRule> accessMethod = new LinkedList<IAlgebraicRewriteRule>();
+    public static final List<IAlgebraicRewriteRule> buildAccessMethodRuleCollection() {
+        List<IAlgebraicRewriteRule> accessMethod = new LinkedList<>();
         accessMethod.add(new IntroduceSelectAccessMethodRule());
         accessMethod.add(new IntroduceJoinAccessMethodRule());
         accessMethod.add(new IntroduceLSMComponentFilterRule());
@@ -262,8 +270,8 @@ public final class RuleCollections {
         return accessMethod;
     }
 
-    public final static List<IAlgebraicRewriteRule> buildPlanCleanupRuleCollection() {
-        List<IAlgebraicRewriteRule> planCleanupRules = new LinkedList<IAlgebraicRewriteRule>();
+    public static final List<IAlgebraicRewriteRule> buildPlanCleanupRuleCollection() {
+        List<IAlgebraicRewriteRule> planCleanupRules = new LinkedList<>();
         planCleanupRules.add(new PushAssignBelowUnionAllRule());
         planCleanupRules.add(new ExtractCommonExpressionsRule());
         planCleanupRules.add(new RemoveRedundantVariablesRule());
@@ -277,21 +285,19 @@ public final class RuleCollections {
         return planCleanupRules;
     }
 
-    public final static List<IAlgebraicRewriteRule> buildDataExchangeRuleCollection() {
-        List<IAlgebraicRewriteRule> dataExchange = new LinkedList<IAlgebraicRewriteRule>();
+    public static final List<IAlgebraicRewriteRule> buildDataExchangeRuleCollection() {
+        List<IAlgebraicRewriteRule> dataExchange = new LinkedList<>();
         dataExchange.add(new SetExecutionModeRule());
         return dataExchange;
     }
 
-    public final static List<IAlgebraicRewriteRule> buildPhysicalRewritesAllLevelsRuleCollection() {
-        List<IAlgebraicRewriteRule> physicalRewritesAllLevels = new LinkedList<IAlgebraicRewriteRule>();
+    public static final List<IAlgebraicRewriteRule> buildPhysicalRewritesAllLevelsRuleCollection() {
+        List<IAlgebraicRewriteRule> physicalRewritesAllLevels = new LinkedList<>();
         physicalRewritesAllLevels.add(new PullSelectOutOfEqJoin());
         //Turned off the following rule for now not to change OptimizerTest results.
-        //physicalRewritesAllLevels.add(new IntroduceTransactionCommitByAssignOpRule());
         physicalRewritesAllLevels.add(new ReplaceSinkOpWithCommitOpRule());
         physicalRewritesAllLevels.add(new SetAlgebricksPhysicalOperatorsRule());
         physicalRewritesAllLevels.add(new SetAsterixPhysicalOperatorsRule());
-        physicalRewritesAllLevels.add(new IntroduceInstantLockSearchCallbackRule());
         physicalRewritesAllLevels.add(new AddEquivalenceClassForRecordConstructorRule());
         physicalRewritesAllLevels.add(new EnforceStructuralPropertiesRule());
         physicalRewritesAllLevels.add(new RemoveSortInFeedIngestionRule());
@@ -307,8 +313,8 @@ public final class RuleCollections {
         return physicalRewritesAllLevels;
     }
 
-    public final static List<IAlgebraicRewriteRule> buildPhysicalRewritesTopLevelRuleCollection() {
-        List<IAlgebraicRewriteRule> physicalRewritesTopLevel = new LinkedList<IAlgebraicRewriteRule>();
+    public static final List<IAlgebraicRewriteRule> buildPhysicalRewritesTopLevelRuleCollection() {
+        List<IAlgebraicRewriteRule> physicalRewritesTopLevel = new LinkedList<>();
         physicalRewritesTopLevel.add(new PushNestedOrderByUnderPreSortedGroupByRule());
         physicalRewritesTopLevel.add(new CopyLimitDownRule());
         // CopyLimitDownRule may generates non-topmost limits with numeric_adds functions.
@@ -323,8 +329,8 @@ public final class RuleCollections {
         return physicalRewritesTopLevel;
     }
 
-    public final static List<IAlgebraicRewriteRule> prepareForJobGenRuleCollection() {
-        List<IAlgebraicRewriteRule> prepareForJobGenRewrites = new LinkedList<IAlgebraicRewriteRule>();
+    public static final List<IAlgebraicRewriteRule> prepareForJobGenRuleCollection() {
+        List<IAlgebraicRewriteRule> prepareForJobGenRewrites = new LinkedList<>();
         prepareForJobGenRewrites
                 .add(new IsolateHyracksOperatorsRule(HeuristicOptimizer.hyraxOperatorsBelowWhichJobGenIsDisabled));
         prepareForJobGenRewrites.add(new ExtractCommonOperatorsRule());

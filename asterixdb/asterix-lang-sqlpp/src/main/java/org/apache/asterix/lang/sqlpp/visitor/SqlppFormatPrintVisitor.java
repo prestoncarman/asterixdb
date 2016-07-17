@@ -41,6 +41,7 @@ import org.apache.asterix.lang.sqlpp.clause.SelectElement;
 import org.apache.asterix.lang.sqlpp.clause.SelectRegular;
 import org.apache.asterix.lang.sqlpp.clause.SelectSetOperation;
 import org.apache.asterix.lang.sqlpp.clause.UnnestClause;
+import org.apache.asterix.lang.sqlpp.expression.IndependentSubquery;
 import org.apache.asterix.lang.sqlpp.expression.SelectExpression;
 import org.apache.asterix.lang.sqlpp.struct.SetOperationRight;
 import org.apache.asterix.lang.sqlpp.visitor.base.ISqlppVisitor;
@@ -126,7 +127,10 @@ public class SqlppFormatPrintVisitor extends FormatPrintVisitor implements ISqlp
     @Override
     public Void visit(Projection projection, Integer step) throws AsterixException {
         projection.getExpression().accept(this, step);
-        out.print(" as " + projection.getName());
+        String name = projection.getName();
+        if (name != null) {
+            out.print(" as " + name);
+        }
         return null;
     }
 
@@ -295,6 +299,12 @@ public class SqlppFormatPrintVisitor extends FormatPrintVisitor implements ISqlp
                 out.print(COMMA);
             }
         }
+    }
+
+    @Override
+    public Void visit(IndependentSubquery independentSubquery, Integer step) throws AsterixException {
+        independentSubquery.getExpr().accept(this, step);
+        return null;
     }
 
 }

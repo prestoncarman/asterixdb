@@ -31,11 +31,9 @@ create type DocumentType as open{
 
 create type KVMetaType as open{
 "key":string,
-bucket:string,
 vbucket:int32,
 seq:int64,
 cas:int64,
-creationTime:int64,
 expiration:int32,
 flags:int32,
 revSeq:int64,
@@ -47,7 +45,7 @@ create dataset KVStore(DocumentType) with meta(KVMetaType)primary key meta()."ke
 create feed KVChangeStream using adapter(
     ("type-name"="DocumentType"),
     ("meta-type-name"="KVMetaType"),
-    ("reader"="kv_test"),
+    ("reader"="org.apache.asterix.external.input.record.reader.kv.KVTestReaderFactory"),
     ("parser"="record-with-metadata"),
     ("format"="dcp"),
     ("record-format"="json"),

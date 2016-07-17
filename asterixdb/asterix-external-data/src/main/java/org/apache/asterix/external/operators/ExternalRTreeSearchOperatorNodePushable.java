@@ -50,20 +50,20 @@ public class ExternalRTreeSearchOperatorNodePushable extends RTreeSearchOperator
         indexHelper.open();
         ExternalRTreeDataflowHelper rTreeDataflowHelper = (ExternalRTreeDataflowHelper) indexHelper;
         index = indexHelper.getIndexInstance();
-        if (retainNull) {
+        if (retainMissing) {
             int fieldCount = getFieldCount();
-            nullTupleBuild = new ArrayTupleBuilder(fieldCount);
-            DataOutput out = nullTupleBuild.getDataOutput();
+            nonMatchTupleBuild = new ArrayTupleBuilder(fieldCount);
+            DataOutput out = nonMatchTupleBuild.getDataOutput();
             for (int i = 0; i < fieldCount; i++) {
                 try {
-                    nullWriter.writeNull(out);
+                    nonMatchWriter.writeMissing(out);
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
-                nullTupleBuild.addFieldEndOffset();
+                nonMatchTupleBuild.addFieldEndOffset();
             }
         } else {
-            nullTupleBuild = null;
+            nonMatchTupleBuild = null;
         }
         ExternalRTree rTreeIndex = (ExternalRTree) index;
         try {
@@ -72,7 +72,7 @@ public class ExternalRTreeSearchOperatorNodePushable extends RTreeSearchOperator
             dos = tb.getDataOutput();
             appender = new FrameTupleAppender(new VSizeFrame(ctx));
             ISearchOperationCallback searchCallback = opDesc.getSearchOpCallbackFactory()
-                    .createSearchOperationCallback(indexHelper.getResourceID(), ctx);
+                    .createSearchOperationCallback(indexHelper.getResourceID(), ctx, null);
             // The next line is the reason we override this method
             indexAccessor = rTreeIndex.createAccessor(searchCallback, rTreeDataflowHelper.getTargetVersion());
             cursor = createCursor();

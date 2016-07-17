@@ -50,4 +50,26 @@ public class SelectElement implements Clause {
     public void setExpression(Expression expr) {
         this.expr = expr;
     }
+
+    @Override
+    public String toString() {
+        return String.valueOf(expr);
+    }
+
+    @Override
+    public int hashCode() {
+        return expr.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object object) {
+        if (this == object) {
+            return true;
+        }
+        if (!(object instanceof SelectElement)) {
+            return false;
+        }
+        SelectElement target = (SelectElement) object;
+        return expr.equals(target.expr);
+    }
 }

@@ -128,7 +128,8 @@ public class AqlBinaryComparatorFactoryProvider implements IBinaryComparatorFact
             case UNION: { // we could do smth better for nullable fields
                 return anyBinaryComparatorFactory(ascending);
             }
-            case NULL: {
+            case NULL:
+            case MISSING:
                 return new IBinaryComparatorFactory() {
 
                     private static final long serialVersionUID = 1L;
@@ -144,7 +145,6 @@ public class AqlBinaryComparatorFactoryProvider implements IBinaryComparatorFact
                         };
                     }
                 };
-            }
             case BOOLEAN: {
                 return addOffset(BooleanBinaryComparatorFactory.INSTANCE, ascending);
             }

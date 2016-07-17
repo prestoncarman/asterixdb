@@ -35,7 +35,7 @@ import org.apache.asterix.om.types.IAType;
  */
 public class AsterixBuiltinTypeMap {
 
-    private static final Map<String, BuiltinType> _builtinTypeMap = new HashMap<String, BuiltinType>();
+    private static final Map<String, BuiltinType> _builtinTypeMap = new HashMap<>();
 
     static {
         _builtinTypeMap.put("int8", BuiltinType.AINT8);
@@ -60,9 +60,14 @@ public class AsterixBuiltinTypeMap {
         _builtinTypeMap.put("polygon", BuiltinType.APOLYGON);
         _builtinTypeMap.put("circle", BuiltinType.ACIRCLE);
         _builtinTypeMap.put("rectangle", BuiltinType.ARECTANGLE);
+        _builtinTypeMap.put("missing", BuiltinType.AMISSING);
         _builtinTypeMap.put("null", BuiltinType.ANULL);
         _builtinTypeMap.put("uuid", BuiltinType.AUUID);
         _builtinTypeMap.put("shortwithouttypeinfo", BuiltinType.SHORTWITHOUTTYPEINFO);
+    }
+
+    private AsterixBuiltinTypeMap() {
+
     }
 
     public static Map<String, BuiltinType> getBuiltinTypes() {
@@ -70,7 +75,7 @@ public class AsterixBuiltinTypeMap {
     }
 
     public static IAType getTypeFromTypeName(MetadataNode metadataNode, JobId jobId, String dataverseName,
-            String typeName, boolean isNullable) throws MetadataException {
+            String typeName, boolean optional) throws MetadataException {
         IAType type = AsterixBuiltinTypeMap.getBuiltinTypes().get(typeName);
         if (type == null) {
             try {
@@ -80,8 +85,9 @@ public class AsterixBuiltinTypeMap {
                 throw new MetadataException(e);
             }
         }
-        if (isNullable)
-            type = AUnionType.createNullableType(type);
+        if (optional) {
+            type = AUnionType.createUnknownableType(type);
+        }
         return type;
     }
 }

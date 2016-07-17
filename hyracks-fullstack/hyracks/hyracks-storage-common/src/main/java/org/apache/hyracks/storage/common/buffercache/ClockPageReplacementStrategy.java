@@ -18,10 +18,17 @@
  */
 package org.apache.hyracks.storage.common.buffercache;
 
+import java.nio.ByteBuffer;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
+import org.apache.hyracks.api.exceptions.HyracksDataException;
 
 public class ClockPageReplacementStrategy implements IPageReplacementStrategy {
+    private static final Logger LOGGER = Logger.getLogger(ClockPageReplacementStrategy.class.getName());
     private static final int MAX_UNSUCCESSFUL_CYCLE_COUNT = 3;
 
     private IBufferCacheInternal bufferCache;
@@ -31,6 +38,7 @@ public class ClockPageReplacementStrategy implements IPageReplacementStrategy {
     private AtomicInteger cpIdCounter;
     private final int pageSize;
     private final int maxAllowedNumPages;
+    private final ConcurrentLinkedQueue<Integer> cpIdFreeList;
 
     public ClockPageReplacementStrategy(ICacheMemoryAllocator allocator, int pageSize, int maxAllowedNumPages) {
         this.allocator = allocator;
@@ -39,6 +47,7 @@ public class ClockPageReplacementStrategy implements IPageReplacementStrategy {
         this.clockPtr = new AtomicInteger(0);
         this.numPages = new AtomicInteger(0);
         this.cpIdCounter = new AtomicInteger(0);
+        cpIdFreeList = new ConcurrentLinkedQueue<>();
     }
 
     @Override
@@ -49,6 +58,11 @@ public class ClockPageReplacementStrategy implements IPageReplacementStrategy {
     @Override
     public void setBufferCache(IBufferCacheInternal bufferCache) {
         this.bufferCache = bufferCache;
+    }
+
+    @Override
+    public IBufferCacheInternal getBufferCache() {
+        return bufferCache;
     }
 
     @Override
@@ -63,43 +77,71 @@ public class ClockPageReplacementStrategy implements IPageReplacementStrategy {
 
     @Override
     public ICachedPageInternal findVictim() {
-        ICachedPageInternal cachedPage = null;
-        if (numPages.get() >= maxAllowedNumPages) {
-            cachedPage = findVictimByEviction();
-        } else {
-            cachedPage = allocatePage();
+        return findVictim(1);
+    }
+
+    @Override
+    public ICachedPageInternal findVictim(int multiplier) {
+        while (numPages.get() + multiplier > maxAllowedNumPages) {
+            // TODO: is dropping pages on the floor enough to adhere to memory budget?
+            ICachedPageInternal victim = findVictimByEviction();
+            if (victim == null) {
+                return null;
+            }
+            int multiple = victim.getFrameSizeMultiplier();
+            if (multiple == multiplier) {
+                return victim;
+            } else if (bufferCache.removePage(victim)) {
+                cpIdFreeList.add(victim.getCachedPageId());
+                numPages.getAndAdd(-multiple);
+            }
         }
-        return cachedPage;
+        return allocatePage(multiplier);
     }
 
     private ICachedPageInternal findVictimByEviction() {
         //check if we're starved from confiscation
         assert (maxAllowedNumPages > 0);
-        int startClockPtr = clockPtr.get();
+        int clockPtr = advanceClock();
+        int startClockPtr = clockPtr;
+        int lastClockPtr = -1;
         int cycleCount = 0;
-        do {
-            ICachedPageInternal cPage = bufferCache.getPage(clockPtr.get());
-
-            /*
-             * We do two things here:
-             * 1. If the page has been accessed, then we skip it -- The CAS would return
-             * false if the current value is false which makes the page a possible candidate
-             * for replacement.
-             * 2. We check with the buffer manager if it feels its a good idea to use this
-             * page as a victim.
-             */
-            AtomicBoolean accessedFlag = getPerPageObject(cPage);
-            if (!accessedFlag.compareAndSet(true, false)) {
-                if (cPage.pinIfGoodVictim()) {
+        boolean looped = false;
+        while (true) {
+            ICachedPageInternal cPage = bufferCache.getPage(clockPtr);
+            if (cPage != null) {
+                /*
+                 * We do two things here:
+                 * 1. If the page has been accessed, then we skip it -- The CAS would return
+                 * false if the current value is false which makes the page a possible candidate
+                 * for replacement.
+                 * 2. We check with the buffer manager if it feels it's a good idea to use this
+                 * page as a victim.
+                 */
+                AtomicBoolean accessedFlag = getPerPageObject(cPage);
+                if (!accessedFlag.compareAndSet(true, false)) {
+                    if (cPage.isGoodVictim()) {
                         return cPage;
+                    }
                 }
             }
-            advanceClock();
-            if (clockPtr.get() == startClockPtr) {
-                ++cycleCount;
+            if (clockPtr < lastClockPtr) {
+                looped = true;
             }
-        } while (cycleCount < MAX_UNSUCCESSFUL_CYCLE_COUNT);
-        return null;
+            if (looped && clockPtr >= startClockPtr) {
+                cycleCount++;
+                if (LOGGER.isLoggable(Level.FINE)) {
+                    LOGGER.fine("completed " + cycleCount + "/" + MAX_UNSUCCESSFUL_CYCLE_COUNT
+                            + " clock cycle(s) without finding victim");
+                }
+                if (cycleCount >= MAX_UNSUCCESSFUL_CYCLE_COUNT) {
+                    return null;
+                }
+                looped = false;
+            }
+            lastClockPtr = clockPtr;
+            clockPtr = advanceClock();
+        }
     }
 
     @Override
@@ -107,31 +149,98 @@ public class ClockPageReplacementStrategy implements IPageReplacementStrategy {
         return numPages.get();
     }
 
-    private ICachedPageInternal allocatePage() {
-        CachedPage cPage = new CachedPage(cpIdCounter.getAndIncrement(), allocator.allocate(pageSize, 1)[0], this);
+    private ICachedPageInternal allocatePage(int multiplier) {
+        Integer cpId = cpIdFreeList.poll();
+        if (cpId == null) {
+            cpId = cpIdCounter.getAndIncrement();
+        }
+        CachedPage cPage = new CachedPage(cpId, allocator.allocate(pageSize * multiplier, 1)[0], this);
+        cPage.setFrameSizeMultiplier(multiplier);
         bufferCache.addPage(cPage);
-        numPages.incrementAndGet();
-        AtomicBoolean accessedFlag = getPerPageObject(cPage);
-        if (!accessedFlag.compareAndSet(true, false)) {
-            if (cPage.pinIfGoodVictim()) {
-                return cPage;
+        numPages.getAndAdd(multiplier);
+        return cPage;
+    }
+
+    @Override
+    public void resizePage(ICachedPageInternal cPage, int multiplier, IExtraPageBlockHelper extraPageBlockHelper)
+            throws HyracksDataException {
+        int origMultiplier = cPage.getFrameSizeMultiplier();
+        if (origMultiplier == multiplier) {
+            // no-op
+            return;
+        }
+        final int newSize = pageSize * multiplier;
+        ByteBuffer oldBuffer = ((CachedPage)cPage).buffer;
+        oldBuffer.position(0);
+        final int delta = multiplier - origMultiplier;
+        if (multiplier < origMultiplier) {
+            oldBuffer.limit(newSize);
+            final int gap = -delta;
+            // we return the unused portion of our block to the page manager
+            extraPageBlockHelper.returnFreePageBlock(cPage.getExtraBlockPageId() + gap, gap);
+        } else {
+            ensureBudgetForLargePages(delta);
+            if (origMultiplier != 1) {
+                // return the old block to the page manager
+                extraPageBlockHelper.returnFreePageBlock(cPage.getExtraBlockPageId(), origMultiplier);
+            }
+            cPage.setExtraBlockPageId(extraPageBlockHelper.getFreeBlock(multiplier));
+        }
+        cPage.setFrameSizeMultiplier(multiplier);
+        ByteBuffer newBuffer = allocator.allocate(newSize, 1)[0];
+        newBuffer.put(oldBuffer);
+        numPages.getAndAdd(delta);
+        ((CachedPage) cPage).buffer = newBuffer;
+    }
+
+    @Override
+    public void fixupCapacityOnLargeRead(ICachedPageInternal cPage)
+            throws HyracksDataException {
+        ByteBuffer oldBuffer = ((CachedPage) cPage).buffer;
+        final int multiplier = cPage.getFrameSizeMultiplier();
+        final int newSize = pageSize * multiplier;
+        final int delta = multiplier - 1;
+        oldBuffer.position(0);
+        ensureBudgetForLargePages(delta);
+        ByteBuffer newBuffer = allocator.allocate(newSize, 1)[0];
+        newBuffer.put(oldBuffer);
+        numPages.getAndAdd(delta);
+        ((CachedPage) cPage).buffer = newBuffer;
+    }
+
+    private void ensureBudgetForLargePages(int delta) {
+        while (numPages.get() + delta >= maxAllowedNumPages) {
+            ICachedPageInternal victim = findVictimByEviction();
+            if (victim != null) {
+                final int victimMultiplier = victim.getFrameSizeMultiplier();
+                if (bufferCache.removePage(victim)) {
+                    cpIdFreeList.add(victim.getCachedPageId());
+                    numPages.getAndAdd(-victimMultiplier);
+                }
+            } else {
+                // we don't have the budget to resize- proceed anyway, but log
+                if (LOGGER.isLoggable(Level.WARNING)) {
+                    LOGGER.warning("Exceeding buffer cache budget of " + maxAllowedNumPages + " by "
+                            + (numPages.get() + delta - maxAllowedNumPages)
+                            + " pages in order to satisfy large page read");
+                }
+                break;
+
             }
         }
-        return null;
     }
 
     //derived from RoundRobinAllocationPolicy in Apache directmemory
-    private int advanceClock(){
-        boolean clockInDial = false;
-        int newClockPtr = 0;
-        do
-        {
-            int currClockPtr = clockPtr.get();
-            newClockPtr = ( currClockPtr + 1 ) % numPages.get();
-            clockInDial = clockPtr.compareAndSet( currClockPtr, newClockPtr );
-        }
-        while ( !clockInDial );
-        return newClockPtr;
+    private int advanceClock() {
+
+        boolean clockInDial;
+        int currClockPtr;
+        do {
+            currClockPtr = clockPtr.get();
+            int newClockPtr = (currClockPtr + 1) % cpIdCounter.get();
+            clockInDial = clockPtr.compareAndSet(currClockPtr, newClockPtr);
+        } while (!clockInDial);
+        return currClockPtr;
 
     }
 
@@ -154,4 +263,5 @@ public class ClockPageReplacementStrategy implements IPageReplacementStrategy {
         //make the page appear as if it wasn't accessed even if it was
         getPerPageObject(cPage).set(false);
     }
+
 }

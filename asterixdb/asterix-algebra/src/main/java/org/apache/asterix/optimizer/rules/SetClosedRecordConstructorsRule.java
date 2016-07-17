@@ -21,12 +21,10 @@ package org.apache.asterix.optimizer.rules;
 import org.apache.asterix.common.config.GlobalConfig;
 import org.apache.asterix.lang.common.util.FunctionUtil;
 import org.apache.asterix.om.functions.AsterixBuiltinFunctions;
-import org.apache.asterix.om.typecomputer.base.TypeComputerUtilities;
-import org.apache.asterix.om.types.AOrderedListType;
+import org.apache.asterix.om.typecomputer.base.TypeCastUtils;
 import org.apache.asterix.om.types.ARecordType;
-import org.apache.asterix.om.types.AUnionType;
-import org.apache.asterix.om.types.AUnorderedListType;
 import org.apache.asterix.om.types.IAType;
+import org.apache.asterix.om.types.TypeHelper;
 import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalExpression;
@@ -108,7 +106,7 @@ public class SetClosedRecordConstructorsRule implements IAlgebraicRewriteRule {
             boolean allClosed = true;
             boolean changed = false;
             if (expr.getFunctionIdentifier().equals(AsterixBuiltinFunctions.OPEN_RECORD_CONSTRUCTOR)) {
-                ARecordType reqType = (ARecordType) TypeComputerUtilities.getRequiredType(expr);
+                ARecordType reqType = (ARecordType) TypeCastUtils.getRequiredType(expr);
                 if (reqType == null || !reqType.isOpen()) {
                     int n = expr.getArguments().size();
                     if (n % 2 > 0) {
@@ -142,7 +140,7 @@ public class SetClosedRecordConstructorsRule implements IAlgebraicRewriteRule {
                 boolean rewrite = true;
                 if (expr.getFunctionIdentifier().equals(AsterixBuiltinFunctions.ORDERED_LIST_CONSTRUCTOR)
                         || (expr.getFunctionIdentifier().equals(AsterixBuiltinFunctions.UNORDERED_LIST_CONSTRUCTOR))) {
-                    IAType reqType = TypeComputerUtilities.getRequiredType(expr);
+                    IAType reqType = TypeCastUtils.getRequiredType(expr);
                     if (reqType == null) {
                         rewrite = false;
                     }
@@ -172,72 +170,12 @@ public class SetClosedRecordConstructorsRule implements IAlgebraicRewriteRule {
                 throw new AlgebricksException(
                         "Could not infer type for variable '" + expr.getVariableReference() + "'.");
             }
-            boolean dataIsClosed = isClosedRec((IAType) varType);
-            return new ClosedDataInfo(false, dataIsClosed, expr);
+            return new ClosedDataInfo(false, TypeHelper.isClosed((IAType) varType), expr);
         }
 
         private boolean hasClosedType(ILogicalExpression expr) throws AlgebricksException {
             IAType t = (IAType) context.getExpressionTypeComputer().getType(expr, context.getMetadataProvider(), env);
-            return isClosedRec(t);
-        }
-
-        private static boolean isClosedRec(IAType t) throws AlgebricksException {
-            switch (t.getTypeTag()) {
-                case ANY: {
-                    return false;
-                }
-                case CIRCLE:
-                case INT8:
-                case INT16:
-                case INT32:
-                case INT64:
-                case BINARY:
-                case BITARRAY:
-                case FLOAT:
-                case DOUBLE:
-                case STRING:
-                case LINE:
-                case NULL:
-                case BOOLEAN:
-                case DATETIME:
-                case DATE:
-                case TIME:
-                case UUID:
-                case DURATION:
-                case YEARMONTHDURATION:
-                case DAYTIMEDURATION:
-                case INTERVAL:
-                case POINT:
-                case POINT3D:
-                case POLYGON:
-                case RECTANGLE:
-                case SHORTWITHOUTTYPEINFO: {
-                    return true;
-                }
-                case RECORD: {
-                    return !((ARecordType) t).isOpen();
-                }
-                case UNION: {
-                    AUnionType ut = (AUnionType) t;
-                    for (IAType t2 : ut.getUnionList()) {
-                        if (!isClosedRec(t2)) {
-                            return false;
-                        }
-                    }
-                    return true;
-                }
-                case ORDEREDLIST: {
-                    AOrderedListType ol = (AOrderedListType) t;
-                    return isClosedRec(ol.getItemType());
-                }
-                case UNORDEREDLIST: {
-                    AUnorderedListType ul = (AUnorderedListType) t;
-                    return isClosedRec(ul.getItemType());
-                }
-                default: {
-                    throw new IllegalStateException("Closed type analysis not implemented for type " + t);
-                }
-            }
+            return TypeHelper.isClosed(t);
         }
     }
 

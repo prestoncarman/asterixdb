@@ -39,6 +39,9 @@ import org.apache.hyracks.dataflow.common.data.accessors.IFrameTupleReference;
 
 public class CastRecordDescriptor extends AbstractScalarFunctionDynamicDescriptor {
 
+    private CastRecordDescriptor() {
+    }
+
     public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
         @Override
         public IFunctionDescriptor createFunctionDescriptor() {
@@ -78,8 +81,8 @@ public class CastRecordDescriptor extends AbstractScalarFunctionDynamicDescripto
                     final IVisitablePointable recAccessor = allocator.allocateRecordValue(inputType);
                     final IVisitablePointable resultAccessor = allocator.allocateRecordValue(reqType);
                     final ACastVisitor castVisitor = new ACastVisitor();
-                    final Triple<IVisitablePointable, IAType, Boolean> arg = new Triple<IVisitablePointable, IAType, Boolean>(
-                            resultAccessor, reqType, Boolean.FALSE);
+                    final Triple<IVisitablePointable, IAType, Boolean> arg = new Triple<>(resultAccessor, reqType,
+                            Boolean.FALSE);
 
                     @Override
                     public void evaluate(IFrameTupleReference tuple, IPointable result) throws AlgebricksException {

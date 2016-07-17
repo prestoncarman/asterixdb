@@ -26,7 +26,6 @@ import org.apache.asterix.om.functions.AsterixBuiltinFunctions;
 import org.apache.asterix.om.functions.IFunctionDescriptor;
 import org.apache.asterix.om.functions.IFunctionDescriptorFactory;
 import org.apache.asterix.om.types.ARecordType;
-import org.apache.asterix.om.types.ATypeTag;
 import org.apache.asterix.runtime.evaluators.base.AbstractScalarFunctionDynamicDescriptor;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
@@ -97,14 +96,12 @@ public class OpenRecordConstructorDescriptor extends AbstractScalarFunctionDynam
                             recBuilder.init();
                             for (int i = 0; i < evalFields.length; i++) {
                                 evalFields[i].evaluate(tuple, fieldValuePointable);
-                                if (openFields[i]) {
+                                boolean openField = openFields[i];
+                                if (openField) {
                                     evalNames[i].evaluate(tuple, fieldNamePointable);
                                     recBuilder.addField(fieldNamePointable, fieldValuePointable);
                                 } else {
-                                    if (fieldValuePointable.getByteArray()[fieldValuePointable
-                                            .getStartOffset()] != ATypeTag.NULL.serialize()) {
-                                        recBuilder.addField(closedFieldId, fieldValuePointable);
-                                    }
+                                    recBuilder.addField(closedFieldId, fieldValuePointable);
                                     closedFieldId++;
                                 }
                             }

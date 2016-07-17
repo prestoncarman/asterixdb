@@ -18,7 +18,7 @@
  */
 package org.apache.asterix.formats.nontagged;
 
-import org.apache.asterix.dataflow.data.nontagged.printers.adm.ABinaryPrinterFactory;
+import org.apache.asterix.dataflow.data.nontagged.printers.adm.ABinaryHexPrinterFactory;
 import org.apache.asterix.dataflow.data.nontagged.printers.adm.ABooleanPrinterFactory;
 import org.apache.asterix.dataflow.data.nontagged.printers.adm.ACirclePrinterFactory;
 import org.apache.asterix.dataflow.data.nontagged.printers.adm.ADatePrinterFactory;
@@ -34,7 +34,7 @@ import org.apache.asterix.dataflow.data.nontagged.printers.adm.AInt8PrinterFacto
 import org.apache.asterix.dataflow.data.nontagged.printers.adm.AIntervalPrinterFactory;
 import org.apache.asterix.dataflow.data.nontagged.printers.adm.ALinePrinterFactory;
 import org.apache.asterix.dataflow.data.nontagged.printers.adm.ANullPrinterFactory;
-import org.apache.asterix.dataflow.data.nontagged.printers.adm.ANullableFieldPrinterFactory;
+import org.apache.asterix.dataflow.data.nontagged.printers.adm.AOptionalFieldPrinterFactory;
 import org.apache.asterix.dataflow.data.nontagged.printers.adm.AObjectPrinterFactory;
 import org.apache.asterix.dataflow.data.nontagged.printers.adm.AOrderedlistPrinterFactory;
 import org.apache.asterix.dataflow.data.nontagged.printers.adm.APoint3DPrinterFactory;
@@ -54,7 +54,6 @@ import org.apache.asterix.om.types.ARecordType;
 import org.apache.asterix.om.types.AUnionType;
 import org.apache.asterix.om.types.AUnorderedListType;
 import org.apache.asterix.om.types.IAType;
-import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.data.IPrinterFactory;
 import org.apache.hyracks.algebricks.data.IPrinterFactoryProvider;
 
@@ -79,6 +78,7 @@ public class AqlADMPrinterFactoryProvider implements IPrinterFactoryProvider {
                     return AInt32PrinterFactory.INSTANCE;
                 case INT64:
                     return AInt64PrinterFactory.INSTANCE;
+                case MISSING:
                 case NULL:
                     return ANullPrinterFactory.INSTANCE;
                 case BOOLEAN:
@@ -116,7 +116,7 @@ public class AqlADMPrinterFactoryProvider implements IPrinterFactoryProvider {
                 case STRING:
                     return AStringPrinterFactory.INSTANCE;
                 case BINARY:
-                    return ABinaryPrinterFactory.INSTANCE;
+                    return ABinaryHexPrinterFactory.INSTANCE;
                 case RECORD:
                     return new ARecordPrinterFactory((ARecordType) aqlType);
                 case ORDEREDLIST:
@@ -124,10 +124,11 @@ public class AqlADMPrinterFactoryProvider implements IPrinterFactoryProvider {
                 case UNORDEREDLIST:
                     return new AUnorderedlistPrinterFactory((AUnorderedListType) aqlType);
                 case UNION: {
-                    if (((AUnionType) aqlType).isNullableType())
-                        return new ANullableFieldPrinterFactory((AUnionType) aqlType);
-                    else
+                    if (((AUnionType) aqlType).isUnknownableType()) {
+                        return new AOptionalFieldPrinterFactory((AUnionType) aqlType);
+                    } else {
                         return new AUnionPrinterFactory((AUnionType) aqlType);
+                    }
                 }
                 case UUID: {
                     return AUUIDPrinterFactory.INSTANCE;

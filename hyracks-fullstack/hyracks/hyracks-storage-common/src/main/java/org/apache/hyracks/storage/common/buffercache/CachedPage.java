@@ -28,7 +28,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  */
 public class CachedPage implements ICachedPageInternal {
     final int cpid;
-    final ByteBuffer buffer;
+    ByteBuffer buffer;
     public final AtomicInteger pinCount;
     final AtomicBoolean dirty;
     final ReentrantReadWriteLock latch;
@@ -39,6 +39,11 @@ public class CachedPage implements ICachedPageInternal {
     volatile boolean valid;
     final AtomicBoolean confiscated;
     private IQueueInfo queueInfo;
+    private int multiplier;
+    private int extraBlockPageId;
+    // DEBUG
+    private static final boolean DEBUG = false;
+    private final StackTraceElement[] ctorStack;
 
     //Constructor for making dummy entry for FIFO queue
     public CachedPage(){
@@ -51,6 +56,7 @@ public class CachedPage implements ICachedPageInternal {
         queueInfo = null;
         replacementStrategyObject = null;
         latch =null;
+        ctorStack = DEBUG ? new Throwable().getStackTrace() : null;
     }
 
     public CachedPage(int cpid, ByteBuffer buffer, IPageReplacementStrategy pageReplacementStrategy) {
@@ -65,6 +71,7 @@ public class CachedPage implements ICachedPageInternal {
         valid = false;
         confiscated = new AtomicBoolean(false);
         queueInfo = null;
+        ctorStack = DEBUG ? new Throwable().getStackTrace() : null;
     }
 
     public void reset(long dpid) {
@@ -91,11 +98,11 @@ public class CachedPage implements ICachedPageInternal {
     }
 
     @Override
-    public boolean pinIfGoodVictim() {
+    public boolean isGoodVictim() {
         if (confiscated.get())
-            return false; //i am not a good victim because i cant flush!
+            return false; // i am not a good victim because i cant flush!
         else {
-            return pinCount.compareAndSet(0, 1);
+            return pinCount.get() == 0;
         }
     }
 
@@ -152,6 +159,31 @@ public class CachedPage implements ICachedPageInternal {
         return dpid;
     }
 
+    @Override
+    public int getFrameSizeMultiplier() {
+        return multiplier;
+    }
+
+    @Override
+    public int getPageSize() {
+        return pageReplacementStrategy.getPageSize();
+    }
+
+    @Override
+    public void setFrameSizeMultiplier(int multiplier) {
+        this.multiplier = multiplier;
+    }
+
+    @Override
+    public void setExtraBlockPageId(int extraBlockPageId) {
+        this.extraBlockPageId = extraBlockPageId;
+    }
+
+    @Override
+    public int getExtraBlockPageId() {
+        return extraBlockPageId;
+    }
+
     CachedPage getNext() {
         return next;
     }
@@ -159,5 +191,4 @@ public class CachedPage implements ICachedPageInternal {
     void setNext(CachedPage next) {
         this.next = next;
     }
-
 }

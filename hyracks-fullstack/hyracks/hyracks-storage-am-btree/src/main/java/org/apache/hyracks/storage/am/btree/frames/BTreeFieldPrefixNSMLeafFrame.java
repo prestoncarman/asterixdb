@@ -47,7 +47,9 @@ import org.apache.hyracks.storage.am.common.ophelpers.FindTupleNoExactMatchPolic
 import org.apache.hyracks.storage.am.common.ophelpers.MultiComparator;
 import org.apache.hyracks.storage.am.common.ophelpers.SlotOffTupleOff;
 import org.apache.hyracks.storage.am.common.tuples.TypeAwareTupleWriter;
+import org.apache.hyracks.storage.common.buffercache.IBufferCache;
 import org.apache.hyracks.storage.common.buffercache.ICachedPage;
+import org.apache.hyracks.storage.common.buffercache.IExtraPageBlockHelper;
 
 /**
  * WARNING: only works when tupleWriter is an instance of TypeAwareTupleWriter
@@ -532,6 +534,16 @@ public class BTreeFieldPrefixNSMLeafFrame implements IBTreeLeafFrame {
             buf.put(smFlagOff, (byte) 0);
     }
 
+    @Override
+    public void setLargeFlag(boolean largePage) {
+        throw new IllegalStateException();
+    }
+
+    @Override
+    public boolean getLargeFlag() {
+        return false;
+    }
+
     public int getPrefixTupleCount() {
         return buf.getInt(prefixTupleCountOff);
     }
@@ -572,7 +584,8 @@ public class BTreeFieldPrefixNSMLeafFrame implements IBTreeLeafFrame {
     }
 
     @Override
-    public void split(ITreeIndexFrame rightFrame, ITupleReference tuple, ISplitKey splitKey)
+    public void split(ITreeIndexFrame rightFrame, ITupleReference tuple, ISplitKey splitKey,
+                      IExtraPageBlockHelper extraPageBlockHelper, IBufferCache bufferCache)
             throws HyracksDataException {
 
         BTreeFieldPrefixNSMLeafFrame rf = (BTreeFieldPrefixNSMLeafFrame) rightFrame;
@@ -778,4 +791,11 @@ public class BTreeFieldPrefixNSMLeafFrame implements IBTreeLeafFrame {
     public void validate(PageValidationInfo pvi) {
         // Do nothing
     }
+
+    @Override
+    public void ensureCapacity(IBufferCache bufferCache, ITupleReference tuple, IExtraPageBlockHelper helper)
+            throws HyracksDataException {
+        throw new IllegalStateException("nyi");
+    }
+
 }

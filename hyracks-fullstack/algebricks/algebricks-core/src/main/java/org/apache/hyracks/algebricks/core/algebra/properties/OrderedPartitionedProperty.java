@@ -77,9 +77,11 @@ public class OrderedPartitionedProperty implements IPartitioningProperty {
     }
 
     @Override
-    public void normalize(Map<LogicalVariable, EquivalenceClass> equivalenceClasses, List<FunctionalDependency> fds) {
-        orderColumns = PropertiesUtil.replaceOrderColumnsByEqClasses(orderColumns, equivalenceClasses);
-        orderColumns = PropertiesUtil.applyFDsToOrderColumns(orderColumns, fds);
+    public IPartitioningProperty normalize(Map<LogicalVariable, EquivalenceClass> equivalenceClasses,
+            List<FunctionalDependency> fds) {
+        List<OrderColumn> columns = PropertiesUtil.replaceOrderColumnsByEqClasses(orderColumns, equivalenceClasses);
+        columns = PropertiesUtil.applyFDsToOrderColumns(columns, fds);
+        return new OrderedPartitionedProperty(columns, domain);
     }
 
     @Override

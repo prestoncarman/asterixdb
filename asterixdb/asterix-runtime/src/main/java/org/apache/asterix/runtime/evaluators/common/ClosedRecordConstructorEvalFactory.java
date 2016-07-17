@@ -24,7 +24,6 @@ import java.io.DataOutput;
 import org.apache.asterix.builders.IARecordBuilder;
 import org.apache.asterix.builders.RecordBuilder;
 import org.apache.asterix.om.types.ARecordType;
-import org.apache.asterix.om.types.ATypeTag;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluator;
 import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluatorFactory;
@@ -82,10 +81,7 @@ public class ClosedRecordConstructorEvalFactory implements IScalarEvaluatorFacto
                 recBuilder.init();
                 for (int i = 0; i < evalFields.length; i++) {
                     evalFields[i].evaluate(tuple, fieldValuePointable);
-                    if (fieldValuePointable.getByteArray()[fieldValuePointable
-                            .getStartOffset()] != ATypeTag.SERIALIZED_NULL_TYPE_TAG) {
-                        recBuilder.addField(i, fieldValuePointable);
-                    }
+                    recBuilder.addField(i, fieldValuePointable);
                 }
                 recBuilder.write(out, true);
                 result.set(resultStorage);

@@ -30,7 +30,7 @@ import org.apache.asterix.om.types.ARecordType;
 import org.apache.asterix.om.types.ATypeTag;
 import org.apache.hyracks.api.comm.VSizeFrame;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
-import org.apache.hyracks.api.dataflow.value.INullWriter;
+import org.apache.hyracks.api.dataflow.value.IMissingWriter;
 import org.apache.hyracks.api.dataflow.value.IRecordDescriptorProvider;
 import org.apache.hyracks.api.dataflow.value.RecordDescriptor;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
@@ -59,8 +59,8 @@ public class AsterixLSMPrimaryUpsertOperatorNodePushable extends LSMIndexInsertU
 
     private final PermutingFrameTupleReference key;
     private MultiComparator keySearchCmp;
-    private ArrayTupleBuilder nullTupleBuilder;
-    private final INullWriter nullWriter;
+    private ArrayTupleBuilder missingTupleBuilder;
+    private final IMissingWriter missingWriter;
     private ArrayTupleBuilder tb;
     private DataOutput dos;
     private RangePredicate searchPred;
@@ -74,29 +74,31 @@ public class AsterixLSMPrimaryUpsertOperatorNodePushable extends LSMIndexInsertU
     private int presetFieldIndex = -1;
     private ARecordPointable recPointable;
     private DataOutput prevDos;
+    private final boolean hasMeta;
 
     public AsterixLSMPrimaryUpsertOperatorNodePushable(IIndexOperatorDescriptor opDesc, IHyracksTaskContext ctx,
             int partition, int[] fieldPermutation, IRecordDescriptorProvider recordDescProvider, int numOfPrimaryKeys,
             ARecordType recordType, int filterFieldIndex) {
         super(opDesc, ctx, partition, fieldPermutation, recordDescProvider, IndexOperation.UPSERT);
-        // initialize nullWriter
-        this.nullWriter = opDesc.getNullWriterFactory().createNullWriter();
-        // The search key should only have the primary index and not use the permutations.
         this.key = new PermutingFrameTupleReference();
+        this.numOfPrimaryKeys = numOfPrimaryKeys;
+        missingWriter = opDesc.getMissingWriterFactory().createMissingWriter();
         int[] searchKeyPermutations = new int[numOfPrimaryKeys];
         for (int i = 0; i < searchKeyPermutations.length; i++) {
             searchKeyPermutations[i] = fieldPermutation[i];
         }
         key.setFieldPermutation(searchKeyPermutations);
-        this.numOfPrimaryKeys = numOfPrimaryKeys;
+        hasMeta = (fieldPermutation.length > numOfPrimaryKeys + 1) && (filterFieldIndex < 0
+                || (filterFieldIndex >= 0 && (fieldPermutation.length > numOfPrimaryKeys + 2)));
         if (filterFieldIndex >= 0) {
             isFiltered = true;
             this.recordType = recordType;
             this.presetFieldIndex = filterFieldIndex;
             this.recPointable = (ARecordPointable) ARecordPointable.FACTORY.createPointable();
-            this.prevRecWithPKWithFilterValue = new ArrayTupleBuilder(fieldPermutation.length);
+            this.prevRecWithPKWithFilterValue = new ArrayTupleBuilder(fieldPermutation.length + (hasMeta ? 1 : 0));
             this.prevDos = prevRecWithPKWithFilterValue.getDataOutput();
         }
+
     }
 
     // we have the permutation which has [pk locations, record location, optional:filter-location]
@@ -114,24 +116,23 @@ public class AsterixLSMPrimaryUpsertOperatorNodePushable extends LSMIndexInsertU
         index = indexHelper.getIndexInstance();
 
         try {
-            nullTupleBuilder = new ArrayTupleBuilder(1);
-            DataOutput out = nullTupleBuilder.getDataOutput();
+            missingTupleBuilder = new ArrayTupleBuilder(1);
+            DataOutput out = missingTupleBuilder.getDataOutput();
             try {
-                nullWriter.writeNull(out);
+                missingWriter.writeMissing(out);
             } catch (IOException e) {
                 throw new HyracksDataException(e);
             }
-            nullTupleBuilder.addFieldEndOffset();
+            missingTupleBuilder.addFieldEndOffset();
             searchPred = createSearchPredicate();
             tb = new ArrayTupleBuilder(recordDesc.getFieldCount());
             dos = tb.getDataOutput();
             appender = new FrameTupleAppender(new VSizeFrame(ctx), true);
             modCallback = opDesc.getModificationOpCallbackFactory().createModificationOperationCallback(
                     indexHelper.getResourcePath(), indexHelper.getResourceID(), indexHelper.getResourcePartition(),
-                    index, ctx);
-
+                    index, ctx, this);
             indexAccessor = index.createAccessor(modCallback, opDesc.getSearchOpCallbackFactory()
-                    .createSearchOperationCallback(indexHelper.getResourceID(), ctx));
+                    .createSearchOperationCallback(indexHelper.getResourceID(), ctx, this));
             cursor = indexAccessor.createSearchCursor(false);
             frameTuple = new FrameTupleReference();
             IAsterixAppRuntimeContext runtimeCtx = (IAsterixAppRuntimeContext) ctx.getJobletContext()
@@ -161,14 +162,24 @@ public class AsterixLSMPrimaryUpsertOperatorNodePushable extends LSMIndexInsertU
             dos.write(prevTuple.getFieldData(numOfPrimaryKeys), prevTuple.getFieldStart(numOfPrimaryKeys),
                     prevTuple.getFieldLength(numOfPrimaryKeys));
             tb.addFieldEndOffset();
-            // if with filters, append the filter
-            if (isFiltered) {
+            // if has meta, then append meta
+            if (hasMeta) {
                 dos.write(prevTuple.getFieldData(numOfPrimaryKeys + 1), prevTuple.getFieldStart(numOfPrimaryKeys + 1),
                         prevTuple.getFieldLength(numOfPrimaryKeys + 1));
                 tb.addFieldEndOffset();
             }
+            // if with filters, append the filter
+            if (isFiltered) {
+                dos.write(prevTuple.getFieldData(numOfPrimaryKeys + (hasMeta ? 2 : 1)),
+                        prevTuple.getFieldStart(numOfPrimaryKeys + (hasMeta ? 2 : 1)),
+                        prevTuple.getFieldLength(numOfPrimaryKeys + (hasMeta ? 2 : 1)));
+                tb.addFieldEndOffset();
+            }
         } else {
             addNullField();
+            if (hasMeta) {
+                addNullField();
+            }
             // if with filters, append null
             if (isFiltered) {
                 addNullField();
@@ -180,11 +191,11 @@ public class AsterixLSMPrimaryUpsertOperatorNodePushable extends LSMIndexInsertU
     }
 
     public static boolean isNull(ITupleReference t1, int field) {
-        return t1.getFieldData(field)[t1.getFieldStart(field)] == ATypeTag.SERIALIZED_NULL_TYPE_TAG;
+        return t1.getFieldData(field)[t1.getFieldStart(field)] == ATypeTag.SERIALIZED_MISSING_TYPE_TAG;
     }
 
     private void addNullField() throws IOException {
-        dos.write(nullTupleBuilder.getByteArray());
+        dos.write(missingTupleBuilder.getByteArray());
         tb.addFieldEndOffset();
     }
 
@@ -237,6 +248,15 @@ public class AsterixLSMPrimaryUpsertOperatorNodePushable extends LSMIndexInsertU
         } catch (IndexException | IOException | AsterixException e) {
             throw new HyracksDataException(e);
         }
+    }
+
+    /**
+     * Flushes tuples (which have already been written to tuple appender's buffer in writeOutput() method)
+     * to the next operator/consumer.
+     */
+    @Override
+    public void flushPartialFrame() throws HyracksDataException {
+        appender.write(writer, true);
     }
 
     private ITupleReference getPrevTupleWithFilter(ITupleReference prevTuple) throws IOException, AsterixException {

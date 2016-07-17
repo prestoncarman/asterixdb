@@ -25,6 +25,11 @@ public interface ICachedPageInternal extends ICachedPage {
 
     public Object getReplacementStrategyObject();
 
-    public boolean pinIfGoodVictim();
+    public boolean isGoodVictim();
 
+    void setFrameSizeMultiplier(int multiplier);
+
+    int getExtraBlockPageId();
+
+    void setExtraBlockPageId(int extraBlockPageId);
 }

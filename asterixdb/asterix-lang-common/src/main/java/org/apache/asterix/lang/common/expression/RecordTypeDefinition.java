@@ -19,31 +19,30 @@
 package org.apache.asterix.lang.common.expression;
 
 import java.util.ArrayList;
+import java.util.List;
 
 import org.apache.asterix.common.annotations.IRecordFieldDataGen;
 import org.apache.asterix.common.annotations.UndeclaredFieldsDataGen;
 import org.apache.asterix.common.exceptions.AsterixException;
 import org.apache.asterix.lang.common.visitor.base.ILangVisitor;
+import org.apache.commons.lang3.ObjectUtils;
 
-public class RecordTypeDefinition extends TypeExpression {
+public class RecordTypeDefinition implements TypeExpression {
 
     public enum RecordKind {
         OPEN,
         CLOSED
     }
 
-    private ArrayList<String> fieldNames;
-    private ArrayList<TypeExpression> fieldTypes;
-    private ArrayList<IRecordFieldDataGen> fieldDataGen;
-    private ArrayList<Boolean> nullableFields;
+    private final List<String> fieldNames = new ArrayList<>();
+    private final List<TypeExpression> fieldTypes = new ArrayList<>();
+    private final List<IRecordFieldDataGen> fieldDataGen = new ArrayList<>();
+    private final List<Boolean> optionalFields = new ArrayList<>();
     private RecordKind recordKind;
     private UndeclaredFieldsDataGen undeclaredFieldsDataGen;
 
     public RecordTypeDefinition() {
-        fieldNames = new ArrayList<String>();
-        fieldTypes = new ArrayList<TypeExpression>();
-        nullableFields = new ArrayList<Boolean>();
-        fieldDataGen = new ArrayList<IRecordFieldDataGen>();
+        // Default constructor.
     }
 
     @Override
@@ -54,29 +53,29 @@ public class RecordTypeDefinition extends TypeExpression {
     public void addField(String name, TypeExpression type, Boolean nullable, IRecordFieldDataGen fldDataGen) {
         fieldNames.add(name);
         fieldTypes.add(type);
-        nullableFields.add(nullable);
+        optionalFields.add(nullable);
         fieldDataGen.add(fldDataGen);
     }
 
-    public void addField(String name, TypeExpression type, Boolean nullable) {
+    public void addField(String name, TypeExpression type, Boolean optional) {
         fieldNames.add(name);
         fieldTypes.add(type);
-        nullableFields.add(nullable);
+        optionalFields.add(optional);
     }
 
-    public ArrayList<String> getFieldNames() {
+    public List<String> getFieldNames() {
         return fieldNames;
     }
 
-    public ArrayList<TypeExpression> getFieldTypes() {
+    public List<TypeExpression> getFieldTypes() {
         return fieldTypes;
     }
 
-    public ArrayList<Boolean> getNullableFields() {
-        return nullableFields;
+    public List<Boolean> getOptionableFields() {
+        return optionalFields;
     }
 
-    public ArrayList<IRecordFieldDataGen> getFieldDataGen() {
+    public List<IRecordFieldDataGen> getFieldDataGen() {
         return fieldDataGen;
     }
 
@@ -99,6 +98,28 @@ public class RecordTypeDefinition extends TypeExpression {
 
     public UndeclaredFieldsDataGen getUndeclaredFieldsDataGen() {
         return undeclaredFieldsDataGen;
+    }
+
+    @Override
+    public int hashCode() {
+        return ObjectUtils.hashCodeMulti(fieldDataGen, fieldNames, fieldTypes, optionalFields, recordKind,
+                undeclaredFieldsDataGen);
+    }
+
+    @Override
+    public boolean equals(Object object) {
+        if (this == object) {
+            return true;
+        }
+        if (!(object instanceof RecordTypeDefinition)) {
+            return false;
+        }
+        RecordTypeDefinition target = (RecordTypeDefinition) object;
+        boolean equals = fieldDataGen.equals(target.getFieldDataGen()) && fieldNames.equals(target.getFieldNames())
+                && fieldTypes.equals(target.getFieldNames()) && optionalFields.equals(target.getOptionableFields());
+        equals = equals && ObjectUtils.equals(recordKind, target.getRecordKind())
+                && ObjectUtils.equals(undeclaredFieldsDataGen, target.getUndeclaredFieldsDataGen());
+        return equals;
     }
 
 }

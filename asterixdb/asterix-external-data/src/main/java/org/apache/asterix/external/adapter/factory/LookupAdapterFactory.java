@@ -22,6 +22,7 @@ import java.io.Serializable;
 import java.util.Map;
 
 import org.apache.asterix.common.exceptions.AsterixException;
+import org.apache.asterix.common.library.ILibraryManager;
 import org.apache.asterix.external.api.ILookupReaderFactory;
 import org.apache.asterix.external.api.ILookupRecordReader;
 import org.apache.asterix.external.api.IRecordDataParser;
@@ -35,7 +36,7 @@ import org.apache.asterix.external.provider.ParserFactoryProvider;
 import org.apache.asterix.om.types.ARecordType;
 import org.apache.hyracks.api.comm.IFrameWriter;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
-import org.apache.hyracks.api.dataflow.value.INullWriterFactory;
+import org.apache.hyracks.api.dataflow.value.IMissingWriterFactory;
 import org.apache.hyracks.api.dataflow.value.RecordDescriptor;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 
@@ -49,16 +50,16 @@ public class LookupAdapterFactory<T> implements Serializable {
     private final int[] ridFields;
     private Map<String, String> configuration;
     private final boolean retainInput;
-    private final boolean retainNull;
-    private final INullWriterFactory iNullWriterFactory;
+    private final boolean retainMissing;
+    private final IMissingWriterFactory isMissingWriterFactory;
 
     public LookupAdapterFactory(ARecordType recordType, int[] ridFields, boolean retainInput, boolean retainNull,
-            INullWriterFactory iNullWriterFactory) {
+            IMissingWriterFactory iNullWriterFactory) {
         this.recordType = recordType;
         this.ridFields = ridFields;
         this.retainInput = retainInput;
-        this.retainNull = retainNull;
-        this.iNullWriterFactory = iNullWriterFactory;
+        this.retainMissing = retainNull;
+        this.isMissingWriterFactory = iNullWriterFactory;
     }
 
     public LookupAdapter<T> createAdapter(IHyracksTaskContext ctx, int partition, RecordDescriptor inRecDesc,
@@ -69,17 +70,18 @@ public class LookupAdapterFactory<T> implements Serializable {
                     snapshotAccessor);
             reader.configure(configuration);
             RecordIdReader ridReader = RecordIdReaderFactory.create(configuration, ridFields);
-            return new LookupAdapter<T>(dataParser, reader, inRecDesc, ridReader, retainInput, retainNull,
-                    iNullWriterFactory, ctx, writer);
+            return new LookupAdapter<>(dataParser, reader, inRecDesc, ridReader, retainInput, retainMissing,
+                    isMissingWriterFactory, ctx, writer);
         } catch (Exception e) {
             throw new HyracksDataException(e);
         }
     }
 
-    public void configure(Map<String, String> configuration) throws AsterixException {
+    public void configure(ILibraryManager libraryManager, Map<String, String> configuration) throws AsterixException {
         this.configuration = configuration;
         readerFactory = LookupReaderFactoryProvider.getLookupReaderFactory(configuration);
-        dataParserFactory = (IRecordDataParserFactory<T>) ParserFactoryProvider.getDataParserFactory(configuration);
+        dataParserFactory = (IRecordDataParserFactory<T>) ParserFactoryProvider.getDataParserFactory(libraryManager,
+                configuration);
         dataParserFactory.setRecordType(recordType);
         readerFactory.configure(configuration);
         dataParserFactory.configure(configuration);

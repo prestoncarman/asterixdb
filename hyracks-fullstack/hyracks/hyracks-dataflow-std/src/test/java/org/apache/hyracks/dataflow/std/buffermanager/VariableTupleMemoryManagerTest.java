@@ -29,7 +29,7 @@ import java.util.Map;
 import org.apache.hyracks.api.comm.FixedSizeFrame;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAppender;
-import org.apache.hyracks.dataflow.common.util.IntSerDeUtils;
+import org.apache.hyracks.util.IntSerDeUtils;
 import org.apache.hyracks.dataflow.std.structures.TuplePointer;
 import org.junit.Before;
 import org.junit.Test;
@@ -108,8 +108,8 @@ public class VariableTupleMemoryManagerTest extends AbstractTupleMemoryManagerTe
     }
 
     @Override
-    ITuplePointerAccessor getTupleAccessor() {
-        return tupleMemoryManager.createTupleAccessor();
+    ITuplePointerAccessor getTuplePointerAccessor() {
+        return tupleMemoryManager.createTuplePointerAccessor();
     }
 
     private Map<TuplePointer, Integer> insertInFTAToBufferShouldAllSuccess() throws HyracksDataException {
@@ -165,7 +165,7 @@ public class VariableTupleMemoryManagerTest extends AbstractTupleMemoryManagerTe
         assert (minNumOfRecordTobeDeleted < mapInserted.size());
         int countDeleted = minNumOfRecordTobeDeleted + random.nextInt(mapInserted.size() - minNumOfRecordTobeDeleted);
 
-        ITuplePointerAccessor accessor = tupleMemoryManager.createTupleAccessor();
+        ITuplePointerAccessor accessor = tupleMemoryManager.createTuplePointerAccessor();
         for (int i = 0; i < countDeleted; i++) {
             Iterator<Map.Entry<TuplePointer, Integer>> iter = mapInserted.entrySet().iterator();
             assert (iter.hasNext());

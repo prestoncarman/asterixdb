@@ -51,20 +51,20 @@ public class ExternalBTreeSearchOperatorNodePushable extends BTreeSearchOperator
         accessor = new FrameTupleAccessor(inputRecDesc);
         dataFlowHelper.open();
         index = indexHelper.getIndexInstance();
-        if (retainNull) {
+        if (retainMissing) {
             int fieldCount = getFieldCount();
-            nullTupleBuild = new ArrayTupleBuilder(fieldCount);
-            DataOutput out = nullTupleBuild.getDataOutput();
+            nonMatchTupleBuild = new ArrayTupleBuilder(fieldCount);
+            DataOutput out = nonMatchTupleBuild.getDataOutput();
             for (int i = 0; i < fieldCount; i++) {
                 try {
-                    nullWriter.writeNull(out);
+                    nonMatchWriter.writeMissing(out);
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
-                nullTupleBuild.addFieldEndOffset();
+                nonMatchTupleBuild.addFieldEndOffset();
             }
         } else {
-            nullTupleBuild = null;
+            nonMatchTupleBuild = null;
         }
         ExternalBTreeWithBuddy externalIndex = (ExternalBTreeWithBuddy) index;
         try {
@@ -73,7 +73,7 @@ public class ExternalBTreeSearchOperatorNodePushable extends BTreeSearchOperator
             dos = tb.getDataOutput();
             appender = new FrameTupleAppender(new VSizeFrame(ctx));
             ISearchOperationCallback searchCallback = opDesc.getSearchOpCallbackFactory()
-                    .createSearchOperationCallback(indexHelper.getResourceID(), ctx);
+                    .createSearchOperationCallback(indexHelper.getResourceID(), ctx, null);
             // The next line is the reason we override this method
             indexAccessor = externalIndex.createAccessor(searchCallback, dataFlowHelper.getTargetVersion());
             cursor = createCursor();

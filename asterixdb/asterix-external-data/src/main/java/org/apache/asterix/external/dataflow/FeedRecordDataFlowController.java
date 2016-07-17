@@ -67,23 +67,7 @@ public class FeedRecordDataFlowController<T> extends AbstractFeedDataFlowControl
                     continue;
                 }
                 tb.reset();
-                try {
-                    dataParser.parse(record, tb.getDataOutput());
-                } catch (Exception e) {
-                    e.printStackTrace();
-                    LOGGER.warn(ExternalDataConstants.ERROR_PARSE_RECORD, e);
-                    feedLogManager.logRecord(record.toString(), ExternalDataConstants.ERROR_PARSE_RECORD);
-                    continue;
-                }
-                tb.addFieldEndOffset();
-                addMetaPart(tb, record);
-                addPrimaryKeys(tb, record);
-                if (tb.getSize() > tupleForwarder.getMaxRecordSize()) {
-                    // log
-                    feedLogManager.logRecord(record.toString(), ExternalDataConstants.ERROR_LARGE_RECORD);
-                    continue;
-                }
-                tupleForwarder.addTuple(tb);
+                parseAndForward(record);
             }
         } catch (InterruptedException e) {
             //TODO: Find out what could cause an interrupted exception beside termination of a job/feed
@@ -97,18 +81,35 @@ public class FeedRecordDataFlowController<T> extends AbstractFeedDataFlowControl
         try {
             tupleForwarder.close();
         } catch (Throwable th) {
-            hde = ExternalDataExceptionUtils.suppress(hde, th);
+            hde = ExternalDataExceptionUtils.suppressIntoHyracksDataException(hde, th);
         }
         try {
             recordReader.close();
         } catch (Throwable th) {
             LOGGER.warn("Failure during while operating a feed sourcec", th);
-            hde = ExternalDataExceptionUtils.suppress(hde, th);
+            hde = ExternalDataExceptionUtils.suppressIntoHyracksDataException(hde, th);
         } finally {
             closeSignal();
             if (hde != null) {
                 throw hde;
             }
+        }
+    }
+
+    private void parseAndForward(IRawRecord<? extends T> record) throws IOException {
+        synchronized (dataParser) {
+            try {
+                dataParser.parse(record, tb.getDataOutput());
+            } catch (Exception e) {
+                LOGGER.warn(ExternalDataConstants.ERROR_PARSE_RECORD, e);
+                feedLogManager.logRecord(record.toString(), ExternalDataConstants.ERROR_PARSE_RECORD);
+                // continue the outer loop
+                return;
+            }
+            tb.addFieldEndOffset();
+            addMetaPart(tb, record);
+            addPrimaryKeys(tb, record);
+            tupleForwarder.addTuple(tb);
         }
     }
 
@@ -142,12 +143,12 @@ public class FeedRecordDataFlowController<T> extends AbstractFeedDataFlowControl
                 try {
                     tupleForwarder.close();
                 } catch (Throwable th) {
-                    hde = ExternalDataExceptionUtils.suppress(hde, th);
+                    hde = ExternalDataExceptionUtils.suppressIntoHyracksDataException(hde, th);
                 }
                 try {
                     recordReader.close();
                 } catch (Throwable th) {
-                    hde = ExternalDataExceptionUtils.suppress(hde, th);
+                    hde = ExternalDataExceptionUtils.suppressIntoHyracksDataException(hde, th);
                 }
                 if (hde != null) {
                     throw hde;

@@ -20,14 +20,16 @@ package org.apache.hyracks.dataflow.std.join;
 
 import java.nio.ByteBuffer;
 import java.util.BitSet;
+import java.util.logging.Logger;
 
+import org.apache.commons.io.FileUtils;
 import org.apache.hyracks.api.comm.IFrame;
 import org.apache.hyracks.api.comm.IFrameWriter;
 import org.apache.hyracks.api.comm.VSizeFrame;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.dataflow.value.IBinaryComparator;
-import org.apache.hyracks.api.dataflow.value.INullWriter;
-import org.apache.hyracks.api.dataflow.value.INullWriterFactory;
+import org.apache.hyracks.api.dataflow.value.IMissingWriter;
+import org.apache.hyracks.api.dataflow.value.IMissingWriterFactory;
 import org.apache.hyracks.api.dataflow.value.IPredicateEvaluator;
 import org.apache.hyracks.api.dataflow.value.ITuplePartitionComputer;
 import org.apache.hyracks.api.dataflow.value.RecordDescriptor;
@@ -80,7 +82,7 @@ public class OptimizedHybridHashJoin {
 
     private final IPredicateEvaluator predEvaluator;
     private final boolean isLeftOuter;
-    private final INullWriter[] nullWriters;
+    private final IMissingWriter[] nonMatchWriters;
 
     private final BitSet spilledStatus; //0=resident, 1=spilled
     private final int numOfPartitions;
@@ -106,7 +108,7 @@ public class OptimizedHybridHashJoin {
             String buildRelName, int[] probeKeys, int[] buildKeys, IBinaryComparator[] comparators,
             RecordDescriptor probeRd, RecordDescriptor buildRd, ITuplePartitionComputer probeHpc,
             ITuplePartitionComputer buildHpc, IPredicateEvaluator predEval, boolean isLeftOuter,
-            INullWriterFactory[] nullWriterFactories1) {
+            IMissingWriterFactory[] nullWriterFactories1) {
         this.ctx = ctx;
         this.memForJoin = memForJoin;
         this.buildRd = buildRd;
@@ -132,10 +134,10 @@ public class OptimizedHybridHashJoin {
 
         this.spilledStatus = new BitSet(numOfPartitions);
 
-        this.nullWriters = isLeftOuter ? new INullWriter[nullWriterFactories1.length] : null;
+        this.nonMatchWriters = isLeftOuter ? new IMissingWriter[nullWriterFactories1.length] : null;
         if (isLeftOuter) {
             for (int i = 0; i < nullWriterFactories1.length; i++) {
-                nullWriters[i] = nullWriterFactories1[i].createNullWriter();
+                nonMatchWriters[i] = nullWriterFactories1[i].createMissingWriter();
             }
         }
     }
@@ -273,7 +275,7 @@ public class OptimizedHybridHashJoin {
     }
 
     private boolean loadPartitionInMem(int pid, RunFileWriter wr) throws HyracksDataException {
-        RunFileReader r = wr.createDeleteOnCloseReader();
+        RunFileReader r = wr.createReader();
         r.open();
         if (reloadBuffer == null) {
             reloadBuffer = new VSizeFrame(ctx);
@@ -290,6 +292,7 @@ public class OptimizedHybridHashJoin {
             }
         }
 
+        FileUtils.deleteQuietly(wr.getFileReference().getFile()); // delete the runfile if it already loaded into memory.
         r.close();
         spilledStatus.set(pid, false);
         buildRFWriters[pid] = null;
@@ -310,7 +313,7 @@ public class OptimizedHybridHashJoin {
         ISerializableTable table = new SerializableHashTable(inMemTupCount, ctx);
         this.inMemJoiner = new InMemoryHashJoin(ctx, inMemTupCount, new FrameTupleAccessor(probeRd), probeHpc,
                 new FrameTupleAccessor(buildRd), buildHpc,
-                new FrameTuplePairComparator(probeKeys, buildKeys, comparators), isLeftOuter, nullWriters, table,
+                new FrameTuplePairComparator(probeKeys, buildKeys, comparators), isLeftOuter, nonMatchWriters, table,
                 predEvaluator, isReversed);
     }
 

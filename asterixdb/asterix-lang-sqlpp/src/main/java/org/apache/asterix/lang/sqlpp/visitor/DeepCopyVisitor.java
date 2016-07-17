@@ -46,6 +46,7 @@ import org.apache.asterix.lang.common.statement.FunctionDecl;
 import org.apache.asterix.lang.common.statement.Query;
 import org.apache.asterix.lang.common.struct.Identifier;
 import org.apache.asterix.lang.common.struct.QuantifiedPair;
+import org.apache.asterix.lang.common.struct.VarIdentifier;
 import org.apache.asterix.lang.sqlpp.clause.AbstractBinaryCorrelateClause;
 import org.apache.asterix.lang.sqlpp.clause.FromClause;
 import org.apache.asterix.lang.sqlpp.clause.FromTerm;
@@ -59,6 +60,7 @@ import org.apache.asterix.lang.sqlpp.clause.SelectElement;
 import org.apache.asterix.lang.sqlpp.clause.SelectRegular;
 import org.apache.asterix.lang.sqlpp.clause.SelectSetOperation;
 import org.apache.asterix.lang.sqlpp.clause.UnnestClause;
+import org.apache.asterix.lang.sqlpp.expression.IndependentSubquery;
 import org.apache.asterix.lang.sqlpp.expression.SelectExpression;
 import org.apache.asterix.lang.sqlpp.struct.SetOperationInput;
 import org.apache.asterix.lang.sqlpp.struct.SetOperationRight;
@@ -137,7 +139,7 @@ public class DeepCopyVisitor extends AbstractSqlppQueryExpressionVisitor<ILangEx
         GroupbyClause gbyClause = null;
         List<LetClause> gbyLetClauses = new ArrayList<>();
         HavingClause havingClause = null;
-        SelectClause selectCluase = null;
+        SelectClause selectCluase;
         // Traverses the select block in the order of "from", "let"s, "where",
         // "group by", "let"s, "having" and "select".
         if (selectBlock.hasFromClause()) {
@@ -199,7 +201,7 @@ public class DeepCopyVisitor extends AbstractSqlppQueryExpressionVisitor<ILangEx
     @Override
     public SelectSetOperation visit(SelectSetOperation selectSetOperation, Void arg) throws AsterixException {
         SetOperationInput leftInput = selectSetOperation.getLeftInput();
-        SetOperationInput newLeftInput = null;
+        SetOperationInput newLeftInput;
         if (leftInput.selectBlock()) {
             newLeftInput = new SetOperationInput((SelectBlock) leftInput.accept(this, arg), null);
         } else {
@@ -207,12 +209,12 @@ public class DeepCopyVisitor extends AbstractSqlppQueryExpressionVisitor<ILangEx
         }
         List<SetOperationRight> rightInputs = new ArrayList<>();
         for (SetOperationRight right : selectSetOperation.getRightInputs()) {
-            SetOperationInput newRightInput = null;
+            SetOperationInput newRightInput;
             SetOperationInput setOpRightInput = right.getSetOperationRightInput();
             if (setOpRightInput.selectBlock()) {
-                newRightInput = new SetOperationInput((SelectBlock) leftInput.accept(this, arg), null);
+                newRightInput = new SetOperationInput((SelectBlock) setOpRightInput.accept(this, arg), null);
             } else {
-                newRightInput = new SetOperationInput(null, (SelectExpression) leftInput.accept(this, arg));
+                newRightInput = new SetOperationInput(null, (SelectExpression) setOpRightInput.accept(this, arg));
             }
             rightInputs.add(new SetOperationRight(right.getSetOpType(), right.isSetSemantics(), newRightInput));
         }
@@ -242,7 +244,7 @@ public class DeepCopyVisitor extends AbstractSqlppQueryExpressionVisitor<ILangEx
 
     @Override
     public OrderbyClause visit(OrderbyClause oc, Void arg) throws AsterixException {
-        List<Expression> newOrderbyList = new ArrayList<Expression>();
+        List<Expression> newOrderbyList = new ArrayList<>();
         for (Expression orderExpr : oc.getOrderbyList()) {
             newOrderbyList.add((Expression) orderExpr.accept(this, arg));
         }
@@ -257,11 +259,13 @@ public class DeepCopyVisitor extends AbstractSqlppQueryExpressionVisitor<ILangEx
         VariableExpr groupVarExpr = null;
         List<Pair<Expression, Identifier>> groupFieldList = new ArrayList<>();
         for (GbyVariableExpressionPair gbyVarExpr : gc.getGbyPairList()) {
-            gbyPairList.add(new GbyVariableExpressionPair((VariableExpr) gbyVarExpr.getVar().accept(this, arg),
+            VariableExpr var = gbyVarExpr.getVar();
+            gbyPairList.add(new GbyVariableExpressionPair(var == null ? null : (VariableExpr) var.accept(this, arg),
                     (Expression) gbyVarExpr.getExpr().accept(this, arg)));
         }
         for (GbyVariableExpressionPair gbyVarExpr : gc.getDecorPairList()) {
-            decorPairList.add(new GbyVariableExpressionPair((VariableExpr) gbyVarExpr.getVar().accept(this, arg),
+            VariableExpr var = gbyVarExpr.getVar();
+            decorPairList.add(new GbyVariableExpressionPair(var == null ? null : (VariableExpr) var.accept(this, arg),
                     (Expression) gbyVarExpr.getExpr().accept(this, arg)));
         }
         for (VariableExpr withVar : gc.getWithVarList()) {
@@ -293,7 +297,7 @@ public class DeepCopyVisitor extends AbstractSqlppQueryExpressionVisitor<ILangEx
     @Override
     public SelectExpression visit(SelectExpression selectExpression, Void arg) throws AsterixException {
         List<LetClause> lets = new ArrayList<>();
-        SelectSetOperation select = null;
+        SelectSetOperation select;
         OrderbyClause orderby = null;
         LimitClause limit = null;
 
@@ -330,7 +334,7 @@ public class DeepCopyVisitor extends AbstractSqlppQueryExpressionVisitor<ILangEx
 
     @Override
     public ListConstructor visit(ListConstructor lc, Void arg) throws AsterixException {
-        List<Expression> newExprList = new ArrayList<Expression>();
+        List<Expression> newExprList = new ArrayList<>();
         for (Expression expr : lc.getExprList()) {
             newExprList.add((Expression) expr.accept(this, arg));
         }
@@ -350,7 +354,7 @@ public class DeepCopyVisitor extends AbstractSqlppQueryExpressionVisitor<ILangEx
 
     @Override
     public OperatorExpr visit(OperatorExpr operatorExpr, Void arg) throws AsterixException {
-        List<Expression> newExprList = new ArrayList<Expression>();
+        List<Expression> newExprList = new ArrayList<>();
         for (Expression expr : operatorExpr.getExprList()) {
             newExprList.add((Expression) expr.accept(this, arg));
         }
@@ -380,7 +384,7 @@ public class DeepCopyVisitor extends AbstractSqlppQueryExpressionVisitor<ILangEx
 
     @Override
     public CallExpr visit(CallExpr callExpr, Void arg) throws AsterixException {
-        List<Expression> newExprList = new ArrayList<Expression>();
+        List<Expression> newExprList = new ArrayList<>();
         for (Expression expr : callExpr.getExprList()) {
             newExprList.add((Expression) expr.accept(this, arg));
         }
@@ -389,12 +393,16 @@ public class DeepCopyVisitor extends AbstractSqlppQueryExpressionVisitor<ILangEx
 
     @Override
     public VariableExpr visit(VariableExpr varExpr, Void arg) throws AsterixException {
-        return new VariableExpr(varExpr.getVar());
+        VariableExpr clonedVar =
+                new VariableExpr(new VarIdentifier(varExpr.getVar().getValue(), varExpr.getVar().getId()));
+        clonedVar.setIsNewVar(varExpr.getIsNewVar());
+        clonedVar.setNamedValueAccess(varExpr.namedValueAccess());
+        return clonedVar;
     }
 
     @Override
     public UnaryExpr visit(UnaryExpr u, Void arg) throws AsterixException {
-        return new UnaryExpr(u.getSign(), (Expression) u.getExpr().accept(this, arg));
+        return new UnaryExpr(u.getExprType(), (Expression) u.getExpr().accept(this, arg));
     }
 
     @Override
@@ -410,6 +418,11 @@ public class DeepCopyVisitor extends AbstractSqlppQueryExpressionVisitor<ILangEx
             indexExpr = ia.getIndexExpr();
         }
         return new IndexAccessor(expr, indexExpr);
+    }
+
+    @Override
+    public ILangExpression visit(IndependentSubquery independentSubquery, Void arg) throws AsterixException {
+        return new IndependentSubquery((Expression) independentSubquery.getExpr().accept(this, arg));
     }
 
 }

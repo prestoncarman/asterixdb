@@ -28,7 +28,7 @@ import java.util.Map;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.dataflow.common.comm.io.ArrayTupleBuilder;
 import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAccessor;
-import org.apache.hyracks.dataflow.common.util.IntSerDeUtils;
+import org.apache.hyracks.util.IntSerDeUtils;
 import org.apache.hyracks.dataflow.std.structures.TuplePointer;
 import org.junit.Before;
 import org.junit.Test;
@@ -153,7 +153,7 @@ public class VPartitionTupleBufferManagerTest extends AbstractTupleMemoryManager
     }
 
     @Override
-    ITuplePointerAccessor getTupleAccessor() {
-        return bufferManager.getTupleAccessor(recordDescriptor);
+    ITuplePointerAccessor getTuplePointerAccessor() {
+        return bufferManager.getTuplePointerAccessor(recordDescriptor);
     }
 }

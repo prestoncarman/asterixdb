@@ -197,6 +197,12 @@ public class DebugBufferCache implements IBufferCache {
     }
 
     @Override
+    public ICachedPage confiscateLargePage(long dpid, int multiplier, int extraBlockPageId)
+            throws HyracksDataException {
+        return bufferCache.confiscateLargePage(dpid, multiplier, extraBlockPageId);
+    }
+
+    @Override
     public void returnPage(ICachedPage page) {
         bufferCache.returnPage(page);
     }
@@ -247,5 +253,11 @@ public class DebugBufferCache implements IBufferCache {
     @Override
     public void purgeHandle(int fileId) throws HyracksDataException {
         bufferCache.purgeHandle(fileId);
+    }
+
+    @Override
+    public void resizePage(ICachedPage page, int multiplier, IExtraPageBlockHelper extraPageBlockHelper)
+            throws HyracksDataException {
+        bufferCache.resizePage(page, multiplier, extraPageBlockHelper);
     }
 }

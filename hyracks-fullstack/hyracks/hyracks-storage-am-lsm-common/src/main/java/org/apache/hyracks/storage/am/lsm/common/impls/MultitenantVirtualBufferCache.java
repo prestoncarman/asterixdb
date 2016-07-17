@@ -26,6 +26,7 @@ import org.apache.hyracks.api.io.FileReference;
 import org.apache.hyracks.api.replication.IIOReplicationManager;
 import org.apache.hyracks.storage.am.lsm.common.api.IVirtualBufferCache;
 import org.apache.hyracks.storage.common.buffercache.ICachedPage;
+import org.apache.hyracks.storage.common.buffercache.IExtraPageBlockHelper;
 import org.apache.hyracks.storage.common.buffercache.IFIFOPageQueue;
 import org.apache.hyracks.storage.common.file.IFileMapManager;
 
@@ -157,6 +158,12 @@ public class MultitenantVirtualBufferCache implements IVirtualBufferCache {
     }
 
     @Override
+    public ICachedPage confiscateLargePage(long dpid, int multiplier, int extraBlockPageId)
+            throws HyracksDataException {
+        return vbc.confiscateLargePage(dpid, multiplier, extraBlockPageId);
+    }
+
+    @Override
     public void returnPage(ICachedPage page) {
         vbc.returnPage(page);
     }
@@ -204,5 +211,11 @@ public class MultitenantVirtualBufferCache implements IVirtualBufferCache {
     @Override
     public void purgeHandle(int fileId) throws HyracksDataException {
 
+    }
+
+    @Override
+    public void resizePage(ICachedPage page, int multiplier, IExtraPageBlockHelper extraPageBlockHelper)
+            throws HyracksDataException {
+        vbc.resizePage(page, multiplier, extraPageBlockHelper);
     }
 }

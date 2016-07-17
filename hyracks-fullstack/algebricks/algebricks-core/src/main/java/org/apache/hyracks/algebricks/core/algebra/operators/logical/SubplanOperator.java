@@ -24,7 +24,6 @@ import java.util.List;
 
 import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.commons.lang3.mutable.MutableObject;
-
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalPlan;
@@ -108,8 +107,8 @@ public class SubplanOperator extends AbstractOperatorWithNestedPlans {
                 i++;
             }
         }
-        return new PropagatingTypeEnvironment(ctx.getExpressionTypeComputer(), ctx.getNullableTypeComputer(),
-                ctx.getMetadataProvider(), TypePropagationPolicy.LEFT_OUTER, envPointers);
+        return new PropagatingTypeEnvironment(ctx.getExpressionTypeComputer(), ctx.getMissableTypeComputer(),
+                ctx.getMetadataProvider(), TypePropagationPolicy.ALL, envPointers);
     }
 
 }

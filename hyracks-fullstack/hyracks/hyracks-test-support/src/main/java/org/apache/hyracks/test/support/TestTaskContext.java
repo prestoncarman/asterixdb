@@ -44,6 +44,7 @@ public class TestTaskContext implements IHyracksTaskContext {
     private WorkspaceFileFactory fileFactory;
 
     private Map<Object, IStateObject> stateObjectMap = new HashMap<>();
+    private Object sharedObject;
 
     public TestTaskContext(TestJobletContext jobletContext, TaskAttemptId taskId) {
         this.jobletContext = jobletContext;
@@ -134,12 +135,12 @@ public class TestTaskContext implements IHyracksTaskContext {
     }
 
     @Override
-    public void sendApplicationMessageToCC(byte[] message, DeploymentId deploymentId) throws Exception {
+    public void sendApplicationMessageToCC(byte[] message, DeploymentId deploymentId) {
 
     }
 
     @Override
-    public void sendApplicationMessageToCC(Serializable message, DeploymentId deploymentId) throws Exception {
+    public void sendApplicationMessageToCC(Serializable message, DeploymentId deploymentId) {
     }
 
     @Override
@@ -149,10 +150,11 @@ public class TestTaskContext implements IHyracksTaskContext {
 
     @Override
     public Object getSharedObject() {
-        return null;
+        return sharedObject;
     }
 
     @Override
     public void setSharedObject(Object sharedObject) {
+        this.sharedObject = sharedObject;
     }
 }

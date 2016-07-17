@@ -19,19 +19,17 @@
 package org.apache.asterix.external.util;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import org.apache.asterix.common.exceptions.AsterixException;
+import org.apache.asterix.common.library.ILibraryManager;
 import org.apache.asterix.external.api.IDataParserFactory;
 import org.apache.asterix.external.api.IExternalDataSourceFactory.DataSourceType;
 import org.apache.asterix.external.api.IInputStreamFactory;
 import org.apache.asterix.external.api.IRecordReaderFactory;
-import org.apache.asterix.external.library.ExternalLibraryManager;
 import org.apache.asterix.om.types.ARecordType;
 import org.apache.asterix.om.types.ATypeTag;
 import org.apache.asterix.om.types.AUnionType;
-import org.apache.asterix.om.types.IAType;
 import org.apache.hyracks.algebricks.common.exceptions.NotImplementedException;
 import org.apache.hyracks.dataflow.common.data.parsers.DoubleParserFactory;
 import org.apache.hyracks.dataflow.common.data.parsers.FloatParserFactory;
@@ -80,13 +78,25 @@ public class ExternalDataUtils {
     }
 
     public static void validateParameters(Map<String, String> configuration) throws AsterixException {
+        validateDataSourceParameters(configuration);
+        validateDataParserParameters(configuration);
+    }
+
+    public static void validateDataParserParameters(Map<String, String> configuration) throws AsterixException {
+        String parser = configuration.get(ExternalDataConstants.KEY_FORMAT);
+        if (parser == null) {
+            String parserFactory = configuration.get(ExternalDataConstants.KEY_PARSER_FACTORY);
+            if (parserFactory == null) {
+                throw new AsterixException("The parameter " + ExternalDataConstants.KEY_FORMAT + " or "
+                        + ExternalDataConstants.KEY_PARSER_FACTORY + " must be specified.");
+            }
+        }
+    }
+
+    public static void validateDataSourceParameters(Map<String, String> configuration) throws AsterixException {
         String reader = configuration.get(ExternalDataConstants.KEY_READER);
         if (reader == null) {
             throw new AsterixException("The parameter " + ExternalDataConstants.KEY_READER + " must be specified.");
-        }
-        String parser = configuration.get(ExternalDataConstants.KEY_FORMAT);
-        if (parser == null) {
-            throw new AsterixException("The parameter " + ExternalDataConstants.KEY_FORMAT + " must be specified.");
         }
     }
 
@@ -104,8 +114,8 @@ public class ExternalDataUtils {
                 && (aString.trim().length() > 1));
     }
 
-    public static ClassLoader getClassLoader(String dataverse, String library) {
-        return ExternalLibraryManager.getLibraryClassLoader(dataverse, library);
+    public static ClassLoader getClassLoader(ILibraryManager libraryManager, String dataverse, String library) {
+        return libraryManager.getLibraryClassLoader(dataverse, library);
     }
 
     public static String getLibraryName(String aString) {
@@ -116,12 +126,12 @@ public class ExternalDataUtils {
         return aString.trim().split(FeedConstants.NamingConstants.LIBRARY_NAME_SEPARATOR)[1];
     }
 
-    public static IInputStreamFactory createExternalInputStreamFactory(String dataverse, String stream)
-            throws AsterixException {
+    public static IInputStreamFactory createExternalInputStreamFactory(ILibraryManager libraryManager, String dataverse,
+            String stream) throws AsterixException {
         try {
             String libraryName = getLibraryName(stream);
             String className = getExternalClassName(stream);
-            ClassLoader classLoader = getClassLoader(dataverse, libraryName);
+            ClassLoader classLoader = getClassLoader(libraryManager, dataverse, libraryName);
             return ((IInputStreamFactory) (classLoader.loadClass(className).newInstance()));
         } catch (InstantiationException | IllegalAccessException | ClassNotFoundException e) {
             throw new AsterixException("Failed to create stream factory", e);
@@ -164,11 +174,11 @@ public class ExternalDataUtils {
         for (int i = 0; i < n; i++) {
             ATypeTag tag = null;
             if (recordType.getFieldTypes()[i].getTypeTag() == ATypeTag.UNION) {
-                List<IAType> unionTypes = ((AUnionType) recordType.getFieldTypes()[i]).getUnionList();
-                if ((unionTypes.size() != 2) && (unionTypes.get(0).getTypeTag() != ATypeTag.NULL)) {
+                AUnionType unionType = (AUnionType) recordType.getFieldTypes()[i];
+                if (!unionType.isUnknownableType()) {
                     throw new NotImplementedException("Non-optional UNION type is not supported.");
                 }
-                tag = unionTypes.get(1).getTypeTag();
+                tag = unionType.getActualType().getTypeTag();
             } else {
                 tag = recordType.getFieldTypes()[i].getTypeTag();
             }
@@ -200,8 +210,8 @@ public class ExternalDataUtils {
         return false;
     }
 
-    public static IRecordReaderFactory<?> createExternalRecordReaderFactory(Map<String, String> configuration)
-            throws AsterixException {
+    public static IRecordReaderFactory<?> createExternalRecordReaderFactory(ILibraryManager libraryManager,
+            Map<String, String> configuration) throws AsterixException {
         String readerFactory = configuration.get(ExternalDataConstants.KEY_READER_FACTORY);
         if (readerFactory == null) {
             throw new AsterixException("to use " + ExternalDataConstants.EXTERNAL + " reader, the parameter "
@@ -218,8 +228,7 @@ public class ExternalDataUtils {
                     + " must follow the format \"DataverseName.LibraryName#ReaderFactoryFullyQualifiedName\"");
         }
 
-        ClassLoader classLoader = ExternalLibraryManager.getLibraryClassLoader(dataverseAndLibrary[0],
-                dataverseAndLibrary[1]);
+        ClassLoader classLoader = libraryManager.getLibraryClassLoader(dataverseAndLibrary[0], dataverseAndLibrary[1]);
         try {
             return (IRecordReaderFactory<?>) classLoader.loadClass(libraryAndFactory[1]).newInstance();
         } catch (InstantiationException | IllegalAccessException | ClassNotFoundException e) {
@@ -227,12 +236,12 @@ public class ExternalDataUtils {
         }
     }
 
-    public static IDataParserFactory createExternalParserFactory(String dataverse, String parserFactoryName)
-            throws AsterixException {
+    public static IDataParserFactory createExternalParserFactory(ILibraryManager libraryManager, String dataverse,
+            String parserFactoryName) throws AsterixException {
         try {
             String library = parserFactoryName.substring(0,
                     parserFactoryName.indexOf(ExternalDataConstants.EXTERNAL_LIBRARY_SEPARATOR));
-            ClassLoader classLoader = ExternalLibraryManager.getLibraryClassLoader(dataverse, library);
+            ClassLoader classLoader = libraryManager.getLibraryClassLoader(dataverse, library);
             return (IDataParserFactory) classLoader
                     .loadClass(parserFactoryName
                             .substring(parserFactoryName.indexOf(ExternalDataConstants.EXTERNAL_LIBRARY_SEPARATOR) + 1))

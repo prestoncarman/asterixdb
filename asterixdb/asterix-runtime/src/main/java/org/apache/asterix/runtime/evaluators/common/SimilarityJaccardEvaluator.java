@@ -100,7 +100,20 @@ public class SimilarityJaccardEvaluator implements IScalarEvaluator {
     @Override
     public void evaluate(IFrameTupleReference tuple, IPointable result) throws AlgebricksException {
         resultStorage.reset();
-        runArgEvals(tuple);
+
+        firstOrdListEval.evaluate(tuple, argPtr1);
+        secondOrdListEval.evaluate(tuple, argPtr2);
+
+        firstTypeTag = EnumDeserializer.ATYPETAGDESERIALIZER
+                .deserialize(argPtr1.getByteArray()[argPtr1.getStartOffset()]);
+        secondTypeTag = EnumDeserializer.ATYPETAGDESERIALIZER
+                .deserialize(argPtr2.getByteArray()[argPtr2.getStartOffset()]);
+
+        firstItemTypeTag = EnumDeserializer.ATYPETAGDESERIALIZER
+                .deserialize(argPtr1.getByteArray()[argPtr1.getStartOffset() + 1]);
+        secondItemTypeTag = EnumDeserializer.ATYPETAGDESERIALIZER
+                .deserialize(argPtr2.getByteArray()[argPtr2.getStartOffset() + 1]);
+
         if (!checkArgTypes(firstTypeTag, secondTypeTag)) {
             result.set(resultStorage);
             return;
@@ -118,31 +131,13 @@ public class SimilarityJaccardEvaluator implements IScalarEvaluator {
         result.set(resultStorage);
     }
 
-    protected void runArgEvals(IFrameTupleReference tuple) throws AlgebricksException {
-        firstOrdListEval.evaluate(tuple, argPtr1);
-        secondOrdListEval.evaluate(tuple, argPtr2);
-
-        firstTypeTag = EnumDeserializer.ATYPETAGDESERIALIZER
-                .deserialize(argPtr1.getByteArray()[argPtr1.getStartOffset()]);
-        secondTypeTag = EnumDeserializer.ATYPETAGDESERIALIZER
-                .deserialize(argPtr2.getByteArray()[argPtr2.getStartOffset()]);
-
-        if (firstTypeTag == ATypeTag.NULL) {
-            return;
-        }
-        if (secondTypeTag == ATypeTag.NULL) {
-            return;
-        }
-
-        firstItemTypeTag = EnumDeserializer.ATYPETAGDESERIALIZER
-                .deserialize(argPtr1.getByteArray()[argPtr1.getStartOffset() + 1]);
-        secondItemTypeTag = EnumDeserializer.ATYPETAGDESERIALIZER
-                .deserialize(argPtr2.getByteArray()[argPtr2.getStartOffset() + 1]);
-    }
-
     protected boolean prepareLists(IPointable left, IPointable right, ATypeTag argType) throws AlgebricksException {
-        firstListIter.reset(left.getByteArray(), left.getStartOffset());
-        secondListIter.reset(right.getByteArray(), right.getStartOffset());
+        try {
+            firstListIter.reset(left.getByteArray(), left.getStartOffset());
+            secondListIter.reset(right.getByteArray(), right.getStartOffset());
+        } catch (HyracksDataException e) {
+            throw new AlgebricksException(e);
+        }
         // Check for special case where one of the lists is empty, since list
         // types won't match.
         if (firstListIter.size() == 0 || secondListIter.size() == 0) {
@@ -245,15 +240,6 @@ public class SimilarityJaccardEvaluator implements IScalarEvaluator {
     }
 
     protected boolean checkArgTypes(ATypeTag typeTag1, ATypeTag typeTag2) throws AlgebricksException {
-        // Jaccard between null and anything else is 0
-        if (typeTag1 == ATypeTag.NULL || typeTag2 == ATypeTag.NULL) {
-            try {
-                writeResult(0.0f);
-            } catch (IOException e) {
-                throw new AlgebricksException(e);
-            }
-            return false;
-        }
         switch (typeTag1) {
             case ORDEREDLIST: {
                 firstListIter = fstOrdListIter;

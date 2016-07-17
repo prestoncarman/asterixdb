@@ -18,11 +18,10 @@
  */
 package org.apache.asterix.common.replication;
 
-import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.Set;
 
-import org.apache.asterix.common.exceptions.ACIDException;
 import org.apache.asterix.common.transactions.ILogRecord;
 import org.apache.hyracks.api.replication.IIOReplicationManager;
 
@@ -33,8 +32,9 @@ public interface IReplicationManager extends IIOReplicationManager {
      *
      * @param logRecord
      *            The log record to be replicated,
+     * @throws InterruptedException
      */
-    public void replicateLog(ILogRecord logRecord);
+    public void replicateLog(ILogRecord logRecord) throws InterruptedException;
 
     /**
      * Checks whether a log record has been replicated
@@ -44,23 +44,6 @@ public interface IReplicationManager extends IIOReplicationManager {
      * @return true, if all ACKs were received from remote replicas.
      */
     public boolean hasBeenReplicated(ILogRecord logRecord);
-
-    /**
-     * Requests txns logs from a remote replica.
-     *
-     * @param remoteReplicaId
-     *            The replica id to send the request to.
-     * @param replicasDataToRecover
-     *            Get logs that belong to those replicas.
-     * @param fromLSN
-     *            Low water mark for logs to be requested.
-     * @param recoveryLogsFile
-     *            a temporary file to store the logs required for recovery
-     * @throws IOException
-     * @throws ACIDException
-     */
-    public void requestReplicaLogs(String remoteReplicaId, Set<String> replicasDataToRecover, long fromLSN,
-            File recoveryLogsFile) throws IOException, ACIDException;
 
     /**
      * Requests LSM components files from a remote replica.
@@ -98,8 +81,10 @@ public interface IReplicationManager extends IIOReplicationManager {
 
     /**
      * Starts processing of ASYNC replication jobs as well as Txn logs.
+     *
+     * @throws InterruptedException
      */
-    public void startReplicationThreads();
+    public void startReplicationThreads() throws InterruptedException;
 
     /**
      * Checks and sets each remote replica state.
@@ -127,20 +112,19 @@ public interface IReplicationManager extends IIOReplicationManager {
     public void reportReplicaEvent(ReplicaEvent event);
 
     /**
-     * Requests the current minimum LSN of a remote replica.
-     *
-     * @param replicaId
-     *            The replica to send the request to.
-     * @return The returned minimum LSN from the remote replica.
-     * @throws IOException
-     */
-    public long requestReplicaMinLSN(String replicaId) throws IOException;
-
-    /**
      * Sends a request to remote replicas to flush indexes that have LSN less than nonSharpCheckpointTargetLSN
      *
      * @param nonSharpCheckpointTargetLSN
      * @throws IOException
      */
     public void requestFlushLaggingReplicaIndexes(long nonSharpCheckpointTargetLSN) throws IOException;
+
+    /**
+     * Transfers the contents of the {@code buffer} to active remote replicas.
+     * The transfer starts from the {@code buffer} current position to its limit.
+     * After the transfer, the {@code buffer} position will be its limit.
+     *
+     * @param buffer
+     */
+    public void replicateTxnLogBatch(ByteBuffer buffer);
 }

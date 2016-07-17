@@ -34,7 +34,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
+import org.apache.hyracks.control.cc.work.TriggerNCWork;
+import org.apache.hyracks.control.common.controllers.IniUtils;
+import org.ini4j.Ini;
+import org.xml.sax.InputSource;
 import org.apache.hyracks.api.application.ICCApplicationEntryPoint;
 import org.apache.hyracks.api.client.ClusterControllerInfo;
 import org.apache.hyracks.api.client.HyracksClientInterfaceFunctions;
@@ -244,15 +247,13 @@ public class ClusterControllerService implements IControllerService {
 
         datasetDirectoryService.init(executor);
         workQueue.start();
+        connectNCs();
         LOGGER.log(Level.INFO, "Started ClusterControllerService");
-        if (aep != null) {
-            // Sometimes, there is no application entry point. Check hyracks-client project
-            aep.startupCompleted();
-        }
+        notifyApplication();
     }
 
     private void startApplication() throws Exception {
-        appCtx = new CCApplicationContext(this, serverCtx, ccContext);
+        appCtx = new CCApplicationContext(this, serverCtx, ccContext, ccConfig.getAppConfig());
         appCtx.addJobLifecycleListener(datasetDirectoryService);
         String className = ccConfig.appCCMainClass;
         if (className != null) {
@@ -265,9 +266,36 @@ public class ClusterControllerService implements IControllerService {
         executor = Executors.newCachedThreadPool(appCtx.getThreadFactory());
     }
 
+    private void connectNCs() throws Exception {
+        Ini ini = ccConfig.getIni();
+        if (ini == null) {
+            return;
+        }
+        for (String section : ini.keySet()) {
+            if (!section.startsWith("nc/")) {
+                continue;
+            }
+            String ncid = section.substring(3);
+            String address = IniUtils.getString(ini, section, "address", null);
+            int port = IniUtils.getInt(ini, section, "port", 9090);
+            if (address == null) {
+                address = InetAddress.getLoopbackAddress().getHostAddress();
+            }
+            workQueue.schedule(new TriggerNCWork(this, address, port, ncid));
+        }
+    }
+
+    private void notifyApplication() throws Exception {
+        if (aep != null) {
+            // Sometimes, there is no application entry point. Check hyracks-client project
+            aep.startupCompleted();
+        }
+    }
+
     @Override
     public void stop() throws Exception {
         LOGGER.log(Level.INFO, "Stopping ClusterControllerService");
+        stopApplication();
         webServer.stop();
         sweeper.cancel();
         workQueue.stop();
@@ -276,6 +304,12 @@ public class ClusterControllerService implements IControllerService {
         jobLog.close();
         clientIPC.stop();
         LOGGER.log(Level.INFO, "Stopped ClusterControllerService");
+    }
+
+    private void stopApplication() throws Exception {
+        if (aep != null) {
+            aep.stop();
+        }
     }
 
     public ServerContext getServerContext() {
@@ -317,7 +351,6 @@ public class ClusterControllerService implements IControllerService {
     public Map<String, NodeControllerState> getNodeMap() {
         return nodeRegistry;
     }
-
     public CCConfig getConfig() {
         return ccConfig;
     }
@@ -614,7 +647,7 @@ public class ClusterControllerService implements IControllerService {
      * Add a deployment run
      *
      * @param deploymentKey
-     * @param nodeControllerIds
+     * @param dRun
      */
     public synchronized void addDeploymentRun(DeploymentId deploymentKey, DeploymentRun dRun) {
         deploymentRunMap.put(deploymentKey, dRun);

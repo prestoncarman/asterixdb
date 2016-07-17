@@ -79,12 +79,11 @@ public class NCApplicationEntryPoint implements INCApplicationEntryPoint {
     @Override
     public void start(INCApplicationContext ncAppCtx, String[] args) throws Exception {
         CmdLineParser parser = new CmdLineParser(this);
-
         try {
             parser.parseArgument(args);
         } catch (CmdLineException e) {
-            System.err.println(e.getMessage());
-            System.err.println("Usage:");
+            LOGGER.severe(e.getMessage());
+            LOGGER.severe("Usage:");
             parser.printUsage(System.err);
             throw e;
         }
@@ -123,18 +122,13 @@ public class NCApplicationEntryPoint implements INCApplicationEntryPoint {
             }
 
             //do not attempt to perform remote recovery if this is a virtual NC
-            if (replicationEnabled && !virtualNC) {
+            if (autoFailover && !virtualNC) {
                 if (systemState == SystemState.NEW_UNIVERSE || systemState == SystemState.CORRUPTED) {
-                    //Try to perform remote recovery
+                    //Start failback process
                     IRemoteRecoveryManager remoteRecoveryMgr = runtimeContext.getRemoteRecoveryManager();
-                    if (autoFailover) {
-                        remoteRecoveryMgr.startFailbackProcess();
-                        systemState = SystemState.RECOVERING;
-                        pendingFailbackCompletion = true;
-                    } else {
-                        remoteRecoveryMgr.performRemoteRecovery();
-                        systemState = SystemState.HEALTHY;
-                    }
+                    remoteRecoveryMgr.startFailbackProcess();
+                    systemState = SystemState.RECOVERING;
+                    pendingFailbackCompletion = true;
                 }
             } else {
                 //recover if the system is corrupted by checking system state.
@@ -155,7 +149,7 @@ public class NCApplicationEntryPoint implements INCApplicationEntryPoint {
         }
     }
 
-    private void startReplicationService() {
+    private void startReplicationService() throws InterruptedException {
         //Open replication channel
         runtimeContext.getReplicationChannel().start();
 
@@ -216,7 +210,8 @@ public class NCApplicationEntryPoint implements INCApplicationEntryPoint {
         if (isMetadataNode && !pendingFailbackCompletion) {
             runtimeContext.initializeMetadata(systemState == SystemState.NEW_UNIVERSE);
         }
-        ExternalLibraryUtils.setUpExternaLibraries(isMetadataNode && !pendingFailbackCompletion);
+        ExternalLibraryUtils.setUpExternaLibraries(runtimeContext.getLibraryManager(),
+                isMetadataNode && !pendingFailbackCompletion);
 
         if (LOGGER.isLoggable(Level.INFO)) {
             LOGGER.info("Starting lifecycle components");

@@ -32,13 +32,16 @@ import org.apache.hyracks.storage.am.common.api.ITreeIndexTupleWriter;
 import org.apache.hyracks.storage.am.common.api.TreeIndexException;
 import org.apache.hyracks.storage.am.common.exceptions.TreeIndexDuplicateKeyException;
 import org.apache.hyracks.storage.am.common.exceptions.TreeIndexNonExistentKeyException;
+import org.apache.hyracks.storage.am.common.frames.FrameOpSpaceStatus;
 import org.apache.hyracks.storage.am.common.frames.TreeIndexNSMFrame;
 import org.apache.hyracks.storage.am.common.ophelpers.FindTupleMode;
 import org.apache.hyracks.storage.am.common.ophelpers.FindTupleNoExactMatchPolicy;
 import org.apache.hyracks.storage.am.common.ophelpers.MultiComparator;
+import org.apache.hyracks.storage.common.buffercache.IBufferCache;
+import org.apache.hyracks.storage.common.buffercache.IExtraPageBlockHelper;
 
 public class BTreeNSMLeafFrame extends TreeIndexNSMFrame implements IBTreeLeafFrame {
-    protected static final int nextLeafOff = smFlagOff + 1;
+    protected static final int nextLeafOff = flagOff + 1; // 22
 
     private MultiComparator cmp;
 
@@ -47,6 +50,11 @@ public class BTreeNSMLeafFrame extends TreeIndexNSMFrame implements IBTreeLeafFr
     public BTreeNSMLeafFrame(ITreeIndexTupleWriter tupleWriter) {
         super(tupleWriter, new OrderedSlotManager());
         previousFt = tupleWriter.createTupleReference();
+    }
+
+    @Override
+    public int getPageHeaderSize() {
+        return nextLeafOff + 4;
     }
 
     @Override
@@ -166,19 +174,55 @@ public class BTreeNSMLeafFrame extends TreeIndexNSMFrame implements IBTreeLeafFr
         insert(tuple, slotManager.getGreatestKeyIndicator());
     }
 
+    boolean isLargeTuple(int tupleSize) {
+        return tupleSize > getMaxTupleSize(page.getPageSize());
+    }
+
     @Override
-    public void split(ITreeIndexFrame rightFrame, ITupleReference tuple, ISplitKey splitKey)
+    public FrameOpSpaceStatus hasSpaceInsert(ITupleReference tuple) throws HyracksDataException {
+        int tupleSize = getBytesRequiredToWriteTuple(tuple);
+
+        if (isLargeTuple(tupleSize)) {
+            // when do we want to overload this frame instead of creating a new one?
+            // If we have fewer than two tuples in the frame, grow the current page
+            return getTupleCount() < 2 ? FrameOpSpaceStatus.EXPAND : FrameOpSpaceStatus.INSUFFICIENT_SPACE;
+        } else {
+            return super.hasSpaceInsert(tuple);
+        }
+    }
+
+    @Override
+    public FrameOpSpaceStatus hasSpaceUpdate(ITupleReference newTuple, int oldTupleIndex) {
+        frameTuple.resetByTupleIndex(this, oldTupleIndex);
+        int oldTupleBytes = frameTuple.getTupleSize();
+        int newTupleBytes = tupleWriter.bytesRequired(newTuple);
+        FrameOpSpaceStatus status = hasSpaceUpdate(oldTupleBytes, newTupleBytes);
+        if (status == FrameOpSpaceStatus.INSUFFICIENT_SPACE && (getLargeFlag() || getTupleCount() == 1)
+                && isLargeTuple(newTupleBytes)) {
+            return FrameOpSpaceStatus.EXPAND;
+        }
+        return status;
+    }
+
+    @Override
+    public void split(ITreeIndexFrame rightFrame, ITupleReference tuple, ISplitKey splitKey,
+                      IExtraPageBlockHelper extraPageBlockHelper, IBufferCache bufferCache)
             throws HyracksDataException {
-        ByteBuffer right = rightFrame.getBuffer();
+
+        int tupleSize = getBytesRequiredToWriteTuple(tuple);
+
+        boolean tupleLarge = isLargeTuple(tupleSize);
+
+        // normal case.
         int tupleCount = getTupleCount();
 
         // Find split point, and determine into which frame the new tuple should
         // be inserted into.
-        ITreeIndexFrame targetFrame = null;
+        BTreeNSMLeafFrame targetFrame;
         frameTuple.resetByTupleIndex(this, tupleCount - 1);
         if (cmp.compare(tuple, frameTuple) > 0) {
             // This is a special optimization case when the tuple to be inserted is the largest key on the page.
-            targetFrame = rightFrame;
+            targetFrame = (BTreeNSMLeafFrame) rightFrame;
         } else {
             int tuplesToLeft;
             int totalSize = 0;
@@ -194,20 +238,27 @@ public class BTreeNSMLeafFrame extends TreeIndexNSMFrame implements IBTreeLeafFr
 
             if (cmp.compare(tuple, frameTuple) >= 0) {
                 tuplesToLeft = i + 1;
-                targetFrame = rightFrame;
+                targetFrame = (BTreeNSMLeafFrame) rightFrame;
             } else {
                 tuplesToLeft = i;
                 targetFrame = this;
             }
             int tuplesToRight = tupleCount - tuplesToLeft;
 
+            ((BTreeNSMLeafFrame) rightFrame).setLargeFlag(getLargeFlag());
+            int deltaPages = page.getFrameSizeMultiplier() - rightFrame.getPage().getFrameSizeMultiplier();
+            if (deltaPages > 0) {
+                ((BTreeNSMLeafFrame) rightFrame).growCapacity(extraPageBlockHelper, bufferCache, deltaPages);
+            }
+
+            ByteBuffer right = rightFrame.getBuffer();
             // Copy entire page.
             System.arraycopy(buf.array(), 0, right.array(), 0, buf.capacity());
 
             // On the right page we need to copy rightmost slots to the left.
             int src = rightFrame.getSlotManager().getSlotEndOff();
-            int dest = rightFrame.getSlotManager().getSlotEndOff() + tuplesToLeft
-                    * rightFrame.getSlotManager().getSlotSize();
+            int dest = rightFrame.getSlotManager().getSlotEndOff()
+                    + tuplesToLeft * rightFrame.getSlotManager().getSlotSize();
             int length = rightFrame.getSlotManager().getSlotSize() * tuplesToRight;
             System.arraycopy(right.array(), src, right.array(), dest, length);
             right.putInt(tupleCountOff, tuplesToRight);
@@ -220,12 +271,16 @@ public class BTreeNSMLeafFrame extends TreeIndexNSMFrame implements IBTreeLeafFr
             compact();
         }
 
+        if (tupleLarge) {
+            targetFrame.ensureCapacity(bufferCache, tuple, extraPageBlockHelper);
+        }
+
         // Insert the new tuple.
         int targetTupleIndex;
         // it's safe to catch this exception since it will have been caught
         // before reaching here
         try {
-            targetTupleIndex = ((BTreeNSMLeafFrame) targetFrame).findInsertTupleIndex(tuple);
+            targetTupleIndex = targetFrame.findInsertTupleIndex(tuple);
         } catch (TreeIndexException e) {
             throw new IllegalStateException(e);
         }
@@ -240,10 +295,35 @@ public class BTreeNSMLeafFrame extends TreeIndexNSMFrame implements IBTreeLeafFr
         splitKey.getTuple().resetByTupleOffset(splitKey.getBuffer(), 0);
     }
 
-    @Override
-    protected void resetSpaceParams() {
-        buf.putInt(freeSpaceOff, nextLeafOff + 4);
-        buf.putInt(totalFreeSpaceOff, buf.capacity() - (nextLeafOff + 4));
+    public void ensureCapacity(IBufferCache bufferCache, ITupleReference tuple,
+                               IExtraPageBlockHelper extraPageBlockHelper) throws HyracksDataException {
+        // we call ensureCapacity() for large tuples- ensure large flag is set
+        setLargeFlag(true);
+        int gapBytes = getBytesRequiredToWriteTuple(tuple) - getFreeContiguousSpace();
+        if (gapBytes > 0) {
+            int deltaPages = (int) Math.ceil((double) gapBytes / bufferCache.getPageSize());
+            growCapacity(extraPageBlockHelper, bufferCache, deltaPages);
+        }
+    }
+
+    private void growCapacity(IExtraPageBlockHelper extraPageBlockHelper,
+            IBufferCache bufferCache, int deltaPages) throws HyracksDataException {
+        int framePagesOld = page.getFrameSizeMultiplier();
+        int newMultiplier = framePagesOld + deltaPages;
+
+        // we need to get the old slot offsets before we grow
+        int oldSlotEnd = slotManager.getSlotEndOff();
+        int oldSlotStart = slotManager.getSlotStartOff() + slotManager.getSlotSize();
+
+        bufferCache.resizePage(getPage(), newMultiplier, extraPageBlockHelper);
+
+        buf = getPage().getBuffer();
+
+        // fixup the slots
+        System.arraycopy(buf.array(), oldSlotEnd, buf.array(), slotManager.getSlotEndOff(), oldSlotStart - oldSlotEnd);
+
+        // fixup total free space counter
+        buf.putInt(totalFreeSpaceOff, buf.getInt(totalFreeSpaceOff) + (bufferCache.getPageSize() * deltaPages));
     }
 
     @Override
@@ -255,25 +335,6 @@ public class BTreeNSMLeafFrame extends TreeIndexNSMFrame implements IBTreeLeafFr
     public int findTupleIndex(ITupleReference searchKey, ITreeIndexTupleReference pageTuple, MultiComparator cmp,
             FindTupleMode ftm, FindTupleNoExactMatchPolicy ftp) throws HyracksDataException {
         return slotManager.findTupleIndex(searchKey, pageTuple, cmp, ftm, ftp);
-    }
-
-    @Override
-    public int getPageHeaderSize() {
-        return nextLeafOff + 4;
-    }
-
-    @Override
-    public boolean getSmFlag() {
-        return buf.get(smFlagOff) != 0;
-    }
-
-    @Override
-    public void setSmFlag(boolean smFlag) {
-        if (smFlag) {
-            buf.put(smFlagOff, (byte) 1);
-        } else {
-            buf.put(smFlagOff, (byte) 0);
-        }
     }
 
     @Override
@@ -298,5 +359,12 @@ public class BTreeNSMLeafFrame extends TreeIndexNSMFrame implements IBTreeLeafFr
                 assert cmp.compare(previousFt, frameTuple) < 0;
             }
         }
+    }
+
+    @Override
+    public String printHeader() {
+        StringBuilder strBuilder = new StringBuilder(super.printHeader());
+        strBuilder.append("nextLeafOff:       " + nextLeafOff + "\n");
+        return strBuilder.toString();
     }
 }

@@ -23,6 +23,7 @@
 
 * [Numeric Functions](#NumericFunctions)
 * [String Functions](#StringFunctions)
+* [Binary Functions](#BinaryFunctions)
 * [Aggregate Functions](#AggregateFunctions)
 * [Spatial Functions](#SpatialFunctions)
 * [Similarity Functions](#SimilarityFunctions)
@@ -589,6 +590,110 @@ Asterix provides various classes of functions to support operations on numeric, 
         " its touch-screen is horrible"
         " the voice-command is bad:("
         " the voicemail-service is awesome"
+
+## <a id="BinaryFunctions">Binary Functions</a> <font size="4"><a href="#toc">[Back to TOC]</a></font> ##
+### parse-binary ###
+  * Syntax:
+
+      parse-binary(string, encoding)
+
+  * Creates a `binary` from an string encoded in `encoding` format.
+  * Arguments:
+    * `string` : An encoded `string`
+    * `encoding` : A string notation specifies the encoding type of the given `string`.
+    Currently we support `hex` and `base64` format.
+  * Return Value:
+    * A `binary` that is decoded from the given `string`.
+
+  * Example:
+
+        let $c1 := parse-binary("ABCDEF0123456789","hex")
+        let $c2 := parse-binary("abcdef0123456789","HEX")
+        let $c3 := parse-binary('QXN0ZXJpeAE=',"base64")
+        return [ $c1, $c2, $c3 ]
+
+  * The expected result is:
+
+      [ hex("ABCDEF0123456789"), hex("ABCDEF0123456789"), hex("4173746572697801") ]
+
+### print-binary ###
+  * Syntax:
+
+      print-binary(binary, encoding)
+
+  * Prints a `binary` to the required encoding `string` format.
+  * Arguments:
+    * `binary` : A `binary` data need to be printed.
+    * `encoding` : A string notation specifies the expected encoding type.
+    Currently we support `hex` and `base64` format.
+  * Return Value:
+    * A `string` that represents the encoded format of a `binary`.
+
+  * Example:
+
+        print-binary(hex("ABCDEF0123456789"), "base64")
+        print-binary(base64("q83vASNFZ4k="), "hex")
+
+  * The expected result is:
+
+        "q83vASNFZ4k="
+        "ABCDEF0123456789"
+
+### binary-length ###
+  * Syntax:
+
+      binary-length(binary)
+
+  * Returns the number of bytes storing the binary data.
+  * Arguments:
+    * `binary` : A `binary` data to be checked.
+  * Return Value:
+    * An `int64` that represents the number of bytes
+  * Example:
+
+        binary-length(hex("00AA"))
+
+  * The expected result is:
+
+       2
+
+### sub-binary ###
+  * Syntax:
+
+      sub-binary(binary, offset[, length])
+
+  * Returns the sub binary from the given `binary` based on the given start offset with the optional `length`.
+  * Arguments:
+    * `binary` : A `binary` to be extracted.
+    * `offset` : An `int64` as the starting offset of the sub binary in `binary`.
+    * `length` : (Optional) An `int64` as the length of the sub binary.
+  * Return Value:
+    * A `binary` that represents the sub binary.
+  * Example:
+
+        sub-binary(hex("AABBCCDD"), 4)
+
+  * The expected result is
+
+        hex("DD")
+
+### binary-concat ###
+  * Syntax:
+
+      binary-concat(list)
+
+  * Concatenates a list of binary `list` into a single binary.
+  * Arguments:
+    * `list` : An OrderedList of binaries (could be null) to be concatenated.
+  * Return Value  :
+    * Returns the concatenated `binary` value.
+  * Example:
+
+      binary-concat([hex("42"), hex(""), hex('42')])
+
+  * The expected result is
+
+      hex("4242")
 
 ## <a id="AggregateFunctions">Aggregate Functions</a> <font size="4"><a href="#toc">[Back to TOC]</a></font> ##
 ### count ###
@@ -1712,9 +1817,9 @@ including [edit distance](http://en.wikipedia.org/wiki/Levenshtein_distance) and
 
 * Example:
 
-        let $itv1 := interval-from-date("2010-10-30", "2010-12-21")
-        let $itv2 := interval-from-datetime("2012-06-26T01:01:01.111", "2012-07-27T02:02:02.222")
-        let $itv3 := interval-from-time("12:32:38", "20:29:20")
+        let $itv1 := interval("2010-10-30", "2010-12-21")
+        let $itv2 := interval("2012-06-26T01:01:01.111", "2012-07-27T02:02:02.222")
+        let $itv3 := interval("12:32:38", "20:29:20")
 
         return { "dr1" : duration-from-interval($itv1),
           "dr2" : duration-from-interval($itv2),
@@ -1791,7 +1896,7 @@ including [edit distance](http://en.wikipedia.org/wiki/Levenshtein_distance) and
 
  * Get the time value from the given datetime value `datetime`
  * Arguments:
-    * `datetime`: A `datetime` value to be extracted from
+    * `datetime`: A `datetime` value to be extracted from.
  * Return Value:
     * A `time` value from the datetime.
 
@@ -1889,6 +1994,66 @@ datetime-from-date-time(date,time)
     * `numeric_value`: A `int8`/`int16`/`int32`/`int64` value representing the number of milliseconds.
  * Return Value:
     * A `time` value as the time after `numeric_value` milliseconds since 00:00:00.000Z.
+
+ * Example:
+
+        use dataverse TinySocial;
+
+        let $d := date-from-unix-time-in-days(15800)
+        let $dt := datetime-from-unix-time-in-ms(1365139700000)
+        let $t := time-from-unix-time-in-ms(3748)
+        return {"date": $d, "datetime": $dt, "time": $t}
+
+
+ * The expected result is:
+
+        { "date": date("2013-04-05"), "datetime": datetime("2013-04-05T05:28:20.000Z"), "time": time("00:00:03.748Z") }
+
+
+### unix-time-from-date-in-days ###
+ * Syntax:
+
+        unix-time-from-date-in-days(date_value)
+
+ * Gets an integer value representing the number of days since 1970-01-01 for `date_value`.
+ * Arguments:
+    * `date_value`: A `date` value.
+ * Return Value:
+    * A `int64` value representing the number of days.
+
+### unix-time-from-datetime-in-ms ###
+ * Syntax:
+
+        unix-time-from-datetime-in-ms(datetime_value)
+
+ * Gets an integer value representing the time in milliseconds since 1970-01-01T00:00:00Z for `datetime_value`.
+ * Arguments:
+    * `datetime_value` : A `datetime` value.
+ * Return Value:
+    * A `int64` value representing the number of milliseconds.
+
+### unix-time-from-datetime-in-secs ###
+ * Syntax:
+
+        unix-time-from-datetime-in-secs(datetime_value)
+
+ * Gets an integer value representing the time in seconds since 1970-01-01T00:00:00Z for `datetime_value`.
+ * Arguments:
+    * `datetime_value` : A `datetime` value.
+ * Return Value:
+    * A `int64` value representing the number of seconds.
+
+
+### unix-time-from-time-in-ms ###
+ * Syntax:
+
+        unix-time-from-time-in-ms(time_value)
+
+ * Gets an integer value representing the time the milliseconds since 00:00:00.000Z for `time_value`.
+ * Arguments:
+    * `time_value` : A `time` value.
+ * Return Value:
+    * A `int64` value representing the number of milliseconds.
 
  * Example:
 
@@ -2031,12 +2196,12 @@ parse-date/parse-time/parse-datetime(date,formatting_expression)
 
  * Example:
 
-        { "overlap1": get-overlapping-interval(interval-from-time(time("11:23:39"), time("18:27:19")), interval-from-time(time("12:23:39"), time("23:18:00"))),
-          "overlap2": get-overlapping-interval(interval-from-time(time("12:23:39"), time("18:27:19")), interval-from-time(time("07:19:39"), time("09:18:00"))),
-          "overlap3": get-overlapping-interval(interval-from-date(date("1980-11-30"), date("1999-09-09")), interval-from-date(date("2013-01-01"), date("2014-01-01"))),
-          "overlap4": get-overlapping-interval(interval-from-date(date("1980-11-30"), date("2099-09-09")), interval-from-date(date("2013-01-01"), date("2014-01-01"))),
-          "overlap5": get-overlapping-interval(interval-from-datetime(datetime("1844-03-03T11:19:39"), datetime("2000-10-30T18:27:19")), interval-from-datetime(datetime("1989-03-04T12:23:39"), datetime("2009-10-10T23:18:00"))),
-          "overlap6": get-overlapping-interval(interval-from-datetime(datetime("1989-03-04T12:23:39"), datetime("2000-10-30T18:27:19")), interval-from-datetime(datetime("1844-03-03T11:19:39"), datetime("1888-10-10T23:18:00")))  }
+        { "overlap1": get-overlapping-interval(interval(time("11:23:39"), time("18:27:19")), interval(time("12:23:39"), time("23:18:00"))),
+          "overlap2": get-overlapping-interval(interval(time("12:23:39"), time("18:27:19")), interval(time("07:19:39"), time("09:18:00"))),
+          "overlap3": get-overlapping-interval(interval(date("1980-11-30"), date("1999-09-09")), interval(date("2013-01-01"), date("2014-01-01"))),
+          "overlap4": get-overlapping-interval(interval(date("1980-11-30"), date("2099-09-09")), interval(date("2013-01-01"), date("2014-01-01"))),
+          "overlap5": get-overlapping-interval(interval(datetime("1844-03-03T11:19:39"), datetime("2000-10-30T18:27:19")), interval(datetime("1989-03-04T12:23:39"), datetime("2009-10-10T23:18:00"))),
+          "overlap6": get-overlapping-interval(interval(datetime("1989-03-04T12:23:39"), datetime("2000-10-30T18:27:19")), interval(datetime("1844-03-03T11:19:39"), datetime("1888-10-10T23:18:00")))  }
 
  * The expected result is:
 
@@ -2141,9 +2306,9 @@ See the [Allen's Relations](allens.html).
 
   * Example:
 
-        let $itv1 := interval-from-time(time("17:23:37"), time("18:30:21"))
-        let $itv2 := interval-from-date(date("1984-03-17"), date("2013-08-22"))
-        let $itv3 := interval-from-datetime(datetime("1800-01-01T23:59:48.938"), datetime("2015-07-26T13:28:30.218"))
+        let $itv1 := interval(time("17:23:37"), time("18:30:21"))
+        let $itv2 := interval(date("1984-03-17"), date("2013-08-22"))
+        let $itv3 := interval(datetime("1800-01-01T23:59:48.938"), datetime("2015-07-26T13:28:30.218"))
         return { "timebins": overlap-bins($itv1, time("00:00:00"), day-time-duration("PT30M")),
           "datebins": overlap-bins($itv2, date("1990-01-01"), year-month-duration("P20Y")),
           "datetimebins": overlap-bins($itv3, datetime("1900-01-01T00:00:00.000"), year-month-duration("P100Y")) }

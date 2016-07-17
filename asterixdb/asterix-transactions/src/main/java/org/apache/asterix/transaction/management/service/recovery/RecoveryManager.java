@@ -93,9 +93,8 @@ public class RecoveryManager implements IRecoveryManager, ILifeCycleComponent {
     private final boolean replicationEnabled;
     public static final long NON_SHARP_CHECKPOINT_TARGET_LSN = -1;
     private final static String RECOVERY_FILES_DIR_NAME = "recovery_temp";
-    private static final long MEGABYTE = 1024L * 1024L;
     private Map<Integer, JobEntityCommits> jobId2WinnerEntitiesMap = null;
-    private static final long MAX_CACHED_ENTITY_COMMITS_PER_JOB_SIZE = 4 * MEGABYTE; //4MB;
+    private final long cachedEntityCommitsPerJobSize;
     private final PersistentLocalResourceRepository localResourceRepository;
 
     /**
@@ -114,6 +113,7 @@ public class RecoveryManager implements IRecoveryManager, ILifeCycleComponent {
         replicationEnabled = propertiesProvider.getReplicationProperties().isReplicationEnabled();
         localResourceRepository = (PersistentLocalResourceRepository) txnSubsystem.getAsterixAppRuntimeContextProvider()
                 .getLocalResourceRepository();
+        cachedEntityCommitsPerJobSize = txnSubsystem.getTransactionProperties().getJobRecoveryMemorySize();
     }
 
     /**
@@ -270,6 +270,7 @@ public class RecoveryManager implements IRecoveryManager, ILifeCycleComponent {
                     abortLogCount++;
                     break;
                 case LogType.FLUSH:
+                case LogType.WAIT:
                     break;
                 default:
                     throw new ACIDException("Unsupported LogType: " + logRecord.getLogType());
@@ -289,8 +290,8 @@ public class RecoveryManager implements IRecoveryManager, ILifeCycleComponent {
         return winnerJobSet;
     }
 
-    private synchronized void startRecoveryRedoPhase(Set<Integer> partitions, ILogReader logReader, long lowWaterMarkLSN,
-            Set<Integer> winnerJobSet) throws IOException, ACIDException {
+    private synchronized void startRecoveryRedoPhase(Set<Integer> partitions, ILogReader logReader,
+            long lowWaterMarkLSN, Set<Integer> winnerJobSet) throws IOException, ACIDException {
         int redoCount = 0;
         int jobId = -1;
 
@@ -421,8 +422,8 @@ public class RecoveryManager implements IRecoveryManager, ILifeCycleComponent {
         }
     }
 
-    private static boolean needToFreeMemory() {
-        return Runtime.getRuntime().freeMemory() < MAX_CACHED_ENTITY_COMMITS_PER_JOB_SIZE;
+    private boolean needToFreeMemory() {
+        return Runtime.getRuntime().freeMemory() < cachedEntityCommitsPerJobSize;
     }
 
     @Override
@@ -688,18 +689,34 @@ public class RecoveryManager implements IRecoveryManager, ILifeCycleComponent {
         int abortedJobId = txnContext.getJobId().getId();
         // Obtain the first/last log record LSNs written by the Job
         long firstLSN = txnContext.getFirstLSN();
+        /**
+         * The effect of any log record with LSN below minFirstLSN has already been written to disk and
+         * will not be rolled back. Therefore, we will set the first LSN of the job to the maximum of
+         * minFirstLSN and the job's first LSN.
+         */
+        try {
+            long localMinFirstLSN = getLocalMinFirstLSN();
+            firstLSN = Math.max(firstLSN, localMinFirstLSN);
+        } catch (HyracksDataException e) {
+            throw new ACIDException(e);
+        }
         long lastLSN = txnContext.getLastLSN();
-
-        LOGGER.log(Level.INFO, "rollbacking transaction log records from " + firstLSN + " to " + lastLSN);
+        if (LOGGER.isLoggable(Level.INFO)) {
+            LOGGER.info("rollbacking transaction log records from " + firstLSN + " to " + lastLSN);
+        }
         // check if the transaction actually wrote some logs.
-        if (firstLSN == TransactionManagementConstants.LogManagerConstants.TERMINAL_LSN) {
-            LOGGER.log(Level.INFO,
-                    "no need to roll back as there were no operations by the transaction " + txnContext.getJobId());
+        if (firstLSN == TransactionManagementConstants.LogManagerConstants.TERMINAL_LSN || firstLSN > lastLSN) {
+            if (LOGGER.isLoggable(Level.INFO)) {
+                LOGGER.info(
+                        "no need to roll back as there were no operations by the transaction " + txnContext.getJobId());
+            }
             return;
         }
 
         // While reading log records from firstLsn to lastLsn, collect uncommitted txn's Lsns
-        LOGGER.log(Level.INFO, "collecting loser transaction's LSNs from " + firstLSN + " to " + lastLSN);
+        if (LOGGER.isLoggable(Level.INFO)) {
+            LOGGER.info("collecting loser transaction's LSNs from " + firstLSN + " to " + lastLSN);
+        }
 
         Map<TxnId, List<Long>> jobLoserEntity2LSNsMap = new HashMap<TxnId, List<Long>>();
         TxnId tempKeyTxnId = new TxnId(-1, -1, -1, null, -1, false);
@@ -765,6 +782,7 @@ public class RecoveryManager implements IRecoveryManager, ILifeCycleComponent {
                         throw new ACIDException("Unexpected LogType(" + logRecord.getLogType() + ") during abort.");
                     case LogType.ABORT:
                     case LogType.FLUSH:
+                    case LogType.WAIT:
                         //ignore
                         break;
                     default:
@@ -810,7 +828,6 @@ public class RecoveryManager implements IRecoveryManager, ILifeCycleComponent {
                 LOGGER.info("[RecoveryManager's rollback log count] update/entityCommit/undo:" + updateLogCount + "/"
                         + entityCommitLogCount + "/" + undoCount);
             }
-
         } finally {
             logReader.close();
         }
@@ -900,7 +917,7 @@ public class RecoveryManager implements IRecoveryManager, ILifeCycleComponent {
             partitionMaxLSN = logRecord.getLSN();
             currentPartitionSize += winnerEntity.getCurrentSize();
             //if the memory budget for the current partition exceeded the limit, spill it to disk and free memory
-            if (currentPartitionSize >= MAX_CACHED_ENTITY_COMMITS_PER_JOB_SIZE) {
+            if (currentPartitionSize >= cachedEntityCommitsPerJobSize) {
                 spillToDiskAndfreeMemory();
             }
         }

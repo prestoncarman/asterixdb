@@ -55,7 +55,7 @@ public class ExternalDataConstants {
     public static final String KEY_HADOOP_BUFFER_SIZE = "io.file.buffer.size";
     public static final String KEY_SOURCE_DATATYPE = "type-name";
     public static final String KEY_DELIMITER = "delimiter";
-    public static final String KEY_PARSER_FACTORY = "tuple-parser";
+    public static final String KEY_PARSER_FACTORY = "parser-factory";
     public static final String KEY_DATA_PARSER = "parser";
     public static final String KEY_HEADER = "header";
     public static final String KEY_READER = "reader";
@@ -120,7 +120,6 @@ public class ExternalDataConstants {
      * Builtin record readers
      */
     public static final String READER_HDFS = "hdfs";
-    public static final String READER_KV = "key-value";
     public static final String READER_TWITTER_PUSH = "twitter_push";
     public static final String READER_PUSH_TWITTER = "push_twitter";
     public static final String READER_TWITTER_PULL = "twitter_pull";
@@ -206,7 +205,7 @@ public class ExternalDataConstants {
      * Size default values
      */
     public static final int DEFAULT_BUFFER_SIZE = 4096;
-    public static final int DEFAULT_BUFFER_INCREMENT = 2048;
+    public static final float DEFAULT_BUFFER_INCREMENT_FACTOR = 1.5F;
     public static final int DEFAULT_QUEUE_SIZE = 64;
     public static final int MAX_RECORD_SIZE = 32000000;
 
@@ -222,11 +221,8 @@ public class ExternalDataConstants {
     public static final String KEY_STREAM_SOURCE = "stream-source";
     public static final String EXTERNAL = "external";
     public static final String KEY_READER_FACTORY = "reader-factory";
-    public static final String READER_KV_TEST = "kv_test";
     public static final String READER_RSS = "rss";
     public static final String FORMAT_CSV = "csv";
-    public static final String TEST_RECORD_WITH_PK = "test-record-with-pk";
 
-    public static final String ERROR_LARGE_RECORD = "Record is too large";
     public static final String ERROR_PARSE_RECORD = "Parser failed to parse record";
 }

@@ -28,7 +28,7 @@ import org.apache.hyracks.api.comm.IFrameTupleAccessor;
 import org.apache.hyracks.api.comm.IFrameWriter;
 import org.apache.hyracks.api.comm.VSizeFrame;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
-import org.apache.hyracks.api.dataflow.value.INullWriter;
+import org.apache.hyracks.api.dataflow.value.IMissingWriter;
 import org.apache.hyracks.api.dataflow.value.IPredicateEvaluator;
 import org.apache.hyracks.api.dataflow.value.ITuplePartitionComputer;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
@@ -51,7 +51,7 @@ public class InMemoryHashJoin {
     private final FrameTupleAppender appender;
     private final FrameTuplePairComparator tpComparator;
     private final boolean isLeftOuter;
-    private final ArrayTupleBuilder nullTupleBuild;
+    private final ArrayTupleBuilder missingTupleBuild;
     private final ISerializableTable table;
     private final int tableSize;
     private final TuplePointer storedTuplePointer;
@@ -62,22 +62,21 @@ public class InMemoryHashJoin {
 
     public InMemoryHashJoin(IHyracksTaskContext ctx, int tableSize, FrameTupleAccessor accessorProbe,
             ITuplePartitionComputer tpcProbe, FrameTupleAccessor accessorBuild, ITuplePartitionComputer tpcBuild,
-            FrameTuplePairComparator comparator, boolean isLeftOuter, INullWriter[] nullWritersBuild,
+            FrameTuplePairComparator comparator, boolean isLeftOuter, IMissingWriter[] missingWritersBuild,
             ISerializableTable table, IPredicateEvaluator predEval) throws HyracksDataException {
         this(ctx, tableSize, accessorProbe, tpcProbe, accessorBuild, tpcBuild, comparator, isLeftOuter,
-                nullWritersBuild, table, predEval,
-                false);
+                missingWritersBuild, table, predEval, false);
     }
 
     public InMemoryHashJoin(IHyracksTaskContext ctx, int tableSize, FrameTupleAccessor accessorProbe,
             ITuplePartitionComputer tpcProbe, FrameTupleAccessor accessorBuild, ITuplePartitionComputer tpcBuild,
-            FrameTuplePairComparator comparator, boolean isLeftOuter, INullWriter[] nullWritersBuild,
+            FrameTuplePairComparator comparator, boolean isLeftOuter, IMissingWriter[] missingWritersBuild,
             ISerializableTable table, IPredicateEvaluator predEval, boolean reverse) throws HyracksDataException {
         this.ctx = ctx;
         this.tableSize = tableSize;
         this.table = table;
         storedTuplePointer = new TuplePointer();
-        buffers = new ArrayList<ByteBuffer>();
+        buffers = new ArrayList<>();
         this.accessorBuild = accessorBuild;
         this.tpcBuild = tpcBuild;
         this.accessorProbe = accessorProbe;
@@ -88,14 +87,14 @@ public class InMemoryHashJoin {
         this.isLeftOuter = isLeftOuter;
         if (isLeftOuter) {
             int fieldCountOuter = accessorBuild.getFieldCount();
-            nullTupleBuild = new ArrayTupleBuilder(fieldCountOuter);
-            DataOutput out = nullTupleBuild.getDataOutput();
+            missingTupleBuild = new ArrayTupleBuilder(fieldCountOuter);
+            DataOutput out = missingTupleBuild.getDataOutput();
             for (int i = 0; i < fieldCountOuter; i++) {
-                nullWritersBuild[i].writeNull(out);
-                nullTupleBuild.addFieldEndOffset();
+                missingWritersBuild[i].writeMissing(out);
+                missingTupleBuild.addFieldEndOffset();
             }
         } else {
-            nullTupleBuild = null;
+            missingTupleBuild = null;
         }
         reverseOutputOrder = reverse;
         LOGGER.fine("InMemoryHashJoin has been created for a table size of " + tableSize + " for Thread ID "
@@ -109,8 +108,7 @@ public class InMemoryHashJoin {
         int tCount = accessorBuild.getTupleCount();
         for (int i = 0; i < tCount; ++i) {
             int entry = tpcBuild.partition(accessorBuild, i, tableSize);
-            storedTuplePointer.frameIndex = bIndex;
-            storedTuplePointer.tupleIndex = i;
+            storedTuplePointer.reset(bIndex, i);
             table.insert(entry, storedTuplePointer);
         }
     }
@@ -123,10 +121,11 @@ public class InMemoryHashJoin {
             int offset = 0;
             do {
                 table.getTuplePointer(entry, offset++, storedTuplePointer);
-                if (storedTuplePointer.frameIndex < 0)
+                if (storedTuplePointer.getFrameIndex() < 0) {
                     break;
-                int bIndex = storedTuplePointer.frameIndex;
-                int tIndex = storedTuplePointer.tupleIndex;
+                }
+                int bIndex = storedTuplePointer.getFrameIndex();
+                int tIndex = storedTuplePointer.getTupleIndex();
                 accessorBuild.reset(buffers.get(bIndex));
                 int c = tpComparator.compare(accessorProbe, tid, accessorBuild, tIndex);
                 if (c == 0) {
@@ -140,8 +139,8 @@ public class InMemoryHashJoin {
         }
         if (!matchFound && isLeftOuter) {
             FrameUtils.appendConcatToWriter(writer, appender, accessorProbe, tid,
-                    nullTupleBuild.getFieldEndOffsets(), nullTupleBuild.getByteArray(), 0,
-                    nullTupleBuild.getSize());
+                    missingTupleBuild.getFieldEndOffsets(), missingTupleBuild.getByteArray(), 0,
+                    missingTupleBuild.getSize());
         }
     }
 
@@ -164,9 +163,9 @@ public class InMemoryHashJoin {
 
     private boolean evaluatePredicate(int tIx1, int tIx2) {
         if (reverseOutputOrder) { //Role Reversal Optimization is triggered
-            return ((predEvaluator == null) || predEvaluator.evaluate(accessorBuild, tIx2, accessorProbe, tIx1));
+            return (predEvaluator == null) || predEvaluator.evaluate(accessorBuild, tIx2, accessorProbe, tIx1);
         } else {
-            return ((predEvaluator == null) || predEvaluator.evaluate(accessorProbe, tIx1, accessorBuild, tIx2));
+            return (predEvaluator == null) || predEvaluator.evaluate(accessorProbe, tIx1, accessorBuild, tIx2);
         }
     }
 

@@ -20,14 +20,12 @@ package org.apache.asterix.jobgen;
 
 import java.util.List;
 
-import org.apache.asterix.common.exceptions.AsterixException;
 import org.apache.asterix.common.functions.FunctionDescriptorTag;
 import org.apache.asterix.external.library.ExternalFunctionDescriptorProvider;
 import org.apache.asterix.formats.base.IDataFormat;
 import org.apache.asterix.om.functions.AsterixBuiltinFunctions;
 import org.apache.asterix.om.functions.IExternalFunctionInfo;
 import org.apache.asterix.om.functions.IFunctionDescriptor;
-import org.apache.asterix.runtime.evaluators.comparisons.ComparisonEvalFactory;
 import org.apache.asterix.runtime.formats.FormatUtils;
 import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
@@ -41,14 +39,11 @@ import org.apache.hyracks.algebricks.core.algebra.expressions.IVariableTypeEnvir
 import org.apache.hyracks.algebricks.core.algebra.expressions.StatefulFunctionCallExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.UnnestingFunctionCallExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
-import org.apache.hyracks.algebricks.core.algebra.functions.AlgebricksBuiltinFunctions;
-import org.apache.hyracks.algebricks.core.algebra.functions.AlgebricksBuiltinFunctions.ComparisonKind;
-import org.apache.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.IOperatorSchema;
 import org.apache.hyracks.algebricks.core.jobgen.impl.JobGenContext;
 import org.apache.hyracks.algebricks.runtime.base.IAggregateEvaluatorFactory;
-import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluatorFactory;
 import org.apache.hyracks.algebricks.runtime.base.IRunningAggregateEvaluatorFactory;
+import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluatorFactory;
 import org.apache.hyracks.algebricks.runtime.base.ISerializedAggregateEvaluatorFactory;
 import org.apache.hyracks.algebricks.runtime.base.IUnnestingEvaluatorFactory;
 import org.apache.hyracks.algebricks.runtime.evaluators.ColumnAccessEvalFactory;
@@ -63,7 +58,7 @@ public class QueryLogicalExpressionJobGen implements ILogicalExpressionJobGen {
     @Override
     public IAggregateEvaluatorFactory createAggregateFunctionFactory(AggregateFunctionCallExpression expr,
             IVariableTypeEnvironment env, IOperatorSchema[] inputSchemas, JobGenContext context)
-                    throws AlgebricksException {
+            throws AlgebricksException {
         IScalarEvaluatorFactory[] args = codegenArguments(expr, env, inputSchemas, context);
         IFunctionDescriptor fd = getFunctionDescriptor(expr, env, context);
         switch (fd.getFunctionDescriptorTag()) {
@@ -79,9 +74,9 @@ public class QueryLogicalExpressionJobGen implements ILogicalExpressionJobGen {
     }
 
     @Override
-    public IRunningAggregateEvaluatorFactory createRunningAggregateFunctionFactory(
-            StatefulFunctionCallExpression expr, IVariableTypeEnvironment env, IOperatorSchema[] inputSchemas,
-            JobGenContext context) throws AlgebricksException {
+    public IRunningAggregateEvaluatorFactory createRunningAggregateFunctionFactory(StatefulFunctionCallExpression expr,
+            IVariableTypeEnvironment env, IOperatorSchema[] inputSchemas, JobGenContext context)
+            throws AlgebricksException {
         IScalarEvaluatorFactory[] args = codegenArguments(expr, env, inputSchemas, context);
         return getFunctionDescriptor(expr, env, context).createRunningAggregateEvaluatorFactory(args);
     }
@@ -89,7 +84,7 @@ public class QueryLogicalExpressionJobGen implements ILogicalExpressionJobGen {
     @Override
     public IUnnestingEvaluatorFactory createUnnestingFunctionFactory(UnnestingFunctionCallExpression expr,
             IVariableTypeEnvironment env, IOperatorSchema[] inputSchemas, JobGenContext context)
-                    throws AlgebricksException {
+            throws AlgebricksException {
         IScalarEvaluatorFactory[] args = codegenArguments(expr, env, inputSchemas, context);
         return getFunctionDescriptor(expr, env, context).createUnnestingEvaluatorFactory(args);
     }
@@ -134,25 +129,15 @@ public class QueryLogicalExpressionJobGen implements ILogicalExpressionJobGen {
 
     private IScalarEvaluatorFactory createScalarFunctionEvaluatorFactory(AbstractFunctionCallExpression expr,
             IVariableTypeEnvironment env, IOperatorSchema[] inputSchemas, JobGenContext context)
-                    throws AlgebricksException {
+            throws AlgebricksException {
         IScalarEvaluatorFactory[] args = codegenArguments(expr, env, inputSchemas, context);
-        FunctionIdentifier fi = expr.getFunctionIdentifier();
-        ComparisonKind ck = AlgebricksBuiltinFunctions.getComparisonType(fi);
-        if (ck != null) {
-            return new ComparisonEvalFactory(args[0], args[1], ck);
-        }
-
         IFunctionDescriptor fd = null;
         if (!(expr.getFunctionInfo() instanceof IExternalFunctionInfo)) {
             IDataFormat format = FormatUtils.getDefaultFormat();
             fd = format.resolveFunction(expr, env);
         } else {
-            try {
-                fd = ExternalFunctionDescriptorProvider
-                        .getExternalFunctionDescriptor((IExternalFunctionInfo) expr.getFunctionInfo());
-            } catch (AsterixException ae) {
-                throw new AlgebricksException(ae);
-            }
+            fd = ExternalFunctionDescriptorProvider
+                    .getExternalFunctionDescriptor((IExternalFunctionInfo) expr.getFunctionInfo());
         }
         return fd.createEvaluatorFactory(args);
     }
@@ -163,8 +148,9 @@ public class QueryLogicalExpressionJobGen implements ILogicalExpressionJobGen {
         return format.getConstantEvalFactory(expr.getValue());
     }
 
-    private IScalarEvaluatorFactory[] codegenArguments(AbstractFunctionCallExpression expr, IVariableTypeEnvironment env,
-            IOperatorSchema[] inputSchemas, JobGenContext context) throws AlgebricksException {
+    private IScalarEvaluatorFactory[] codegenArguments(AbstractFunctionCallExpression expr,
+            IVariableTypeEnvironment env, IOperatorSchema[] inputSchemas, JobGenContext context)
+            throws AlgebricksException {
         List<Mutable<ILogicalExpression>> arguments = expr.getArguments();
         int n = arguments.size();
         IScalarEvaluatorFactory[] args = new IScalarEvaluatorFactory[n];

@@ -42,4 +42,5 @@ public class BTreeNSMInteriorFrameFactory implements ITreeIndexFrameFactory {
     public ITreeIndexTupleWriterFactory getTupleWriterFactory() {
         return tupleWriterFactory;
     }
+
 }

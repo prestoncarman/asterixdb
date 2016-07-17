@@ -26,7 +26,16 @@ import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.io.FileReference;
 import org.apache.hyracks.dataflow.common.data.accessors.ITupleReference;
-import org.apache.hyracks.storage.am.common.api.*;
+import org.apache.hyracks.storage.am.common.api.IIndexBulkLoader;
+import org.apache.hyracks.storage.am.common.api.IMetaDataPageManager;
+import org.apache.hyracks.storage.am.common.api.ITreeIndex;
+import org.apache.hyracks.storage.am.common.api.ITreeIndexAccessor;
+import org.apache.hyracks.storage.am.common.api.ITreeIndexFrame;
+import org.apache.hyracks.storage.am.common.api.ITreeIndexFrameFactory;
+import org.apache.hyracks.storage.am.common.api.ITreeIndexMetaDataFrame;
+import org.apache.hyracks.storage.am.common.api.ITreeIndexTupleWriter;
+import org.apache.hyracks.storage.am.common.api.IndexException;
+import org.apache.hyracks.storage.am.common.api.TreeIndexException;
 import org.apache.hyracks.storage.am.common.ophelpers.MultiComparator;
 import org.apache.hyracks.storage.common.buffercache.IBufferCache;
 import org.apache.hyracks.storage.common.buffercache.ICachedPage;
@@ -61,10 +70,12 @@ public abstract class AbstractTreeIndex implements ITreeIndex {
 
     protected int bulkloadLeafStart = 0;
 
+
     public AbstractTreeIndex(IBufferCache bufferCache, IFileMapProvider fileMapProvider,
-            IMetaDataPageManager freePageManager, ITreeIndexFrameFactory interiorFrameFactory,
-            ITreeIndexFrameFactory leafFrameFactory, IBinaryComparatorFactory[] cmpFactories, int fieldCount,
-            FileReference file) {
+                             IMetaDataPageManager freePageManager, ITreeIndexFrameFactory interiorFrameFactory,
+                             ITreeIndexFrameFactory leafFrameFactory, IBinaryComparatorFactory[] cmpFactories,
+                             int fieldCount,
+                             FileReference file) {
         this.bufferCache = bufferCache;
         this.fileMapProvider = fileMapProvider;
         this.freePageManager = freePageManager;
@@ -177,7 +188,7 @@ public abstract class AbstractTreeIndex implements ITreeIndex {
         int mdPageLoc = freePageManager.getFirstMetadataPage();
         ITreeIndexMetaDataFrame metaFrame = freePageManager.getMetaDataFrameFactory().createFrame();
         int numPages = freePageManager.getMaxPage(metaFrame);
-        if(mdPageLoc > 1 || (mdPageLoc == 1 && numPages <= MINIMAL_TREE_PAGE_COUNT -1  )){ //md page doesn't count itself
+        if(mdPageLoc > 1 || (mdPageLoc == 1 && numPages <= MINIMAL_TREE_PAGE_COUNT -1)) { //md page doesn't count itself
             appendOnly = true;
         }
         else{
@@ -312,9 +323,9 @@ public abstract class AbstractTreeIndex implements ITreeIndex {
         protected final ITreeIndexTupleWriter tupleWriter;
         protected ITreeIndexFrame leafFrame;
         protected ITreeIndexFrame interiorFrame;
-        // Immutable bulk loaders write their root page at page -2, as needed e.g. by append-only file systems such as HDFS.
-        // Since loading this tree relies on the root page actually being at that point, no further inserts into that tree are allowed.
-        // Currently, this is not enforced.
+        // Immutable bulk loaders write their root page at page -2, as needed e.g. by append-only file systems such as
+        // HDFS.  Since loading this tree relies on the root page actually being at that point, no further inserts into
+        // that tree are allowed.  Currently, this is not enforced.
         protected boolean releasedLatches;
         public boolean appendOnly = false;
         protected final IFIFOPageQueue queue;

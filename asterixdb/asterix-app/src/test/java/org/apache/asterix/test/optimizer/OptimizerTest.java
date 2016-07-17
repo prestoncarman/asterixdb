@@ -34,11 +34,13 @@ import org.apache.asterix.common.config.GlobalConfig;
 import org.apache.asterix.common.exceptions.AsterixException;
 import org.apache.asterix.compiler.provider.AqlCompilationProvider;
 import org.apache.asterix.compiler.provider.ILangCompilationProvider;
+import org.apache.asterix.compiler.provider.SqlppCompilationProvider;
 import org.apache.asterix.external.util.ExternalDataConstants;
 import org.apache.asterix.external.util.IdentitiyResolverFactory;
 import org.apache.asterix.test.base.AsterixTestHelper;
 import org.apache.asterix.test.common.TestHelper;
 import org.apache.asterix.test.runtime.HDFSCluster;
+import org.apache.hyracks.api.client.IHyracksClientConnection;
 import org.junit.AfterClass;
 import org.junit.Assume;
 import org.junit.BeforeClass;
@@ -54,7 +56,8 @@ public class OptimizerTest {
     private static final Logger LOGGER = Logger.getLogger(OptimizerTest.class.getName());
 
     private static final String SEPARATOR = File.separator;
-    private static final String EXTENSION_QUERY = "aql";
+    private static final String EXTENSION_AQL = "aql";
+    private static final String EXTENSION_SQLPP = "sqlpp";
     private static final String EXTENSION_RESULT = "plan";
     private static final String FILENAME_IGNORE = "ignore.txt";
     private static final String FILENAME_ONLY = "only.txt";
@@ -67,7 +70,8 @@ public class OptimizerTest {
     private static final ArrayList<String> ignore = AsterixTestHelper.readFile(FILENAME_IGNORE, PATH_BASE);
     private static final ArrayList<String> only = AsterixTestHelper.readFile(FILENAME_ONLY, PATH_BASE);
     private static final String TEST_CONFIG_FILE_NAME = "asterix-build-configuration.xml";
-    private static final ILangCompilationProvider compilationProvider = new AqlCompilationProvider();
+    private static final ILangCompilationProvider aqlCompilationProvider = new AqlCompilationProvider();
+    private static final ILangCompilationProvider sqlppCompilationProvider = new SqlppCompilationProvider();
 
     @BeforeClass
     public static void setUp() throws Exception {
@@ -104,10 +108,10 @@ public class OptimizerTest {
                 suiteBuildPerFile(innerfile, testArgs, subdir);
             }
         }
-        if (file.isFile() && file.getName().endsWith(EXTENSION_QUERY)) {
+        if (file.isFile() && (file.getName().endsWith(EXTENSION_AQL) || file.getName().endsWith(EXTENSION_SQLPP))) {
             String resultFileName = AsterixTestHelper.extToResExt(file.getName(), EXTENSION_RESULT);
             File expectedFile = new File(PATH_EXPECTED + path + resultFileName);
-            File actualFile = new File(PATH_ACTUAL + SEPARATOR + path.replace(SEPARATOR, "_") + resultFileName);
+            File actualFile = new File(PATH_ACTUAL + SEPARATOR + path + resultFileName);
             testArgs.add(new Object[] { file, expectedFile, actualFile });
         }
     }
@@ -157,9 +161,15 @@ public class OptimizerTest {
 
             LOGGER.info("RUN TEST: \"" + queryFile.getPath() + "\"");
             Reader query = new BufferedReader(new InputStreamReader(new FileInputStream(queryFile), "UTF-8"));
+
+            // Forces the creation of actualFile.
+            actualFile.getParentFile().mkdirs();
+
             PrintWriter plan = new PrintWriter(actualFile);
-            AsterixJavaClient asterix = new AsterixJavaClient(
-                    AsterixHyracksIntegrationUtil.getHyracksClientConnection(), query, plan, compilationProvider);
+            ILangCompilationProvider provider = queryFile.getName().endsWith("aql") ? aqlCompilationProvider
+                    : sqlppCompilationProvider;
+            IHyracksClientConnection hcc = AsterixHyracksIntegrationUtil.getHyracksClientConnection();
+            AsterixJavaClient asterix = new AsterixJavaClient(hcc, query, plan, provider);
             try {
                 asterix.compile(true, false, false, true, true, false, false);
             } catch (AsterixException e) {

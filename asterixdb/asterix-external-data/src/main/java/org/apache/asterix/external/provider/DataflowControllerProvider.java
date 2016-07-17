@@ -32,6 +32,7 @@ import org.apache.asterix.external.api.IRecordDataParser;
 import org.apache.asterix.external.api.IRecordDataParserFactory;
 import org.apache.asterix.external.api.IRecordReader;
 import org.apache.asterix.external.api.IRecordReaderFactory;
+import org.apache.asterix.external.api.IRecordWithMetadataParser;
 import org.apache.asterix.external.api.IRecordWithPKDataParser;
 import org.apache.asterix.external.api.IStreamDataParser;
 import org.apache.asterix.external.api.IStreamDataParserFactory;
@@ -44,11 +45,9 @@ import org.apache.asterix.external.dataflow.FeedWithMetaDataFlowController;
 import org.apache.asterix.external.dataflow.IndexingDataFlowController;
 import org.apache.asterix.external.dataflow.RecordDataFlowController;
 import org.apache.asterix.external.dataflow.StreamDataFlowController;
-import org.apache.asterix.external.parser.RecordWithMetadataParser;
 import org.apache.asterix.external.util.DataflowUtils;
 import org.apache.asterix.external.util.ExternalDataUtils;
 import org.apache.asterix.external.util.FeedLogManager;
-import org.apache.asterix.external.util.FeedUtils;
 import org.apache.asterix.om.types.ARecordType;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
@@ -60,7 +59,7 @@ public class DataflowControllerProvider {
     public static IDataFlowController getDataflowController(ARecordType recordType, IHyracksTaskContext ctx,
             int partition, IExternalDataSourceFactory dataSourceFactory, IDataParserFactory dataParserFactory,
             Map<String, String> configuration, boolean indexingOp, boolean isFeed, FeedLogManager feedLogManager)
-            throws HyracksDataException {
+                    throws HyracksDataException {
         try {
             switch (dataSourceFactory.getDataSourceType()) {
                 case RECORDS:
@@ -73,18 +72,18 @@ public class DataflowControllerProvider {
                                 DataflowUtils.getTupleForwarder(configuration, feedLogManager), dataParser,
                                 recordReader, ((IIndexingDatasource) recordReader).getIndexer());
                     } else if (isFeed) {
-                        FeedTupleForwarder tupleForwarder = (FeedTupleForwarder) DataflowUtils
-                                .getTupleForwarder(configuration, feedLogManager);
+                        FeedTupleForwarder tupleForwarder =
+                                (FeedTupleForwarder) DataflowUtils.getTupleForwarder(configuration, feedLogManager);
                         boolean isChangeFeed = ExternalDataUtils.isChangeFeed(configuration);
                         boolean isRecordWithMeta = ExternalDataUtils.isRecordWithMeta(configuration);
                         if (isRecordWithMeta) {
                             if (isChangeFeed) {
                                 int numOfKeys = ExternalDataUtils.getNumberOfKeys(configuration);
                                 return new ChangeFeedWithMetaDataFlowController(ctx, tupleForwarder, feedLogManager,
-                                        numOfKeys + 2, (RecordWithMetadataParser) dataParser, recordReader);
+                                        numOfKeys + 2, (IRecordWithMetadataParser) dataParser, recordReader);
                             } else {
                                 return new FeedWithMetaDataFlowController(ctx, tupleForwarder, feedLogManager, 2,
-                                        (RecordWithMetadataParser) dataParser, recordReader);
+                                        (IRecordWithMetadataParser) dataParser, recordReader);
                             }
                         } else if (isChangeFeed) {
                             int numOfKeys = ExternalDataUtils.getNumberOfKeys(configuration);
@@ -108,7 +107,7 @@ public class DataflowControllerProvider {
                     if (isFeed) {
                         return new FeedStreamDataFlowController(ctx,
                                 (FeedTupleForwarder) DataflowUtils.getTupleForwarder(configuration, feedLogManager),
-                                feedLogManager, FeedUtils.getNumOfFields(configuration), streamParser, stream);
+                                feedLogManager, streamParser, stream);
                     } else {
                         return new StreamDataFlowController(ctx, DataflowUtils.getTupleForwarder(configuration, null),
                                 streamParser);

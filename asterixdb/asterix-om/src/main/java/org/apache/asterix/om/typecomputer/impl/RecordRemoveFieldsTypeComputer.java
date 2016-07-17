@@ -36,6 +36,7 @@ import org.apache.asterix.om.typecomputer.base.IResultTypeComputer;
 import org.apache.asterix.om.types.AOrderedListType;
 import org.apache.asterix.om.types.ARecordType;
 import org.apache.asterix.om.types.ATypeTag;
+import org.apache.asterix.om.types.AUnionType;
 import org.apache.asterix.om.types.BuiltinType;
 import org.apache.asterix.om.types.IAType;
 import org.apache.commons.lang3.mutable.Mutable;
@@ -154,14 +155,14 @@ public class RecordRemoveFieldsTypeComputer implements IResultTypeComputer {
         Set<String> fieldNameSet = new HashSet<>();
         Deque<String> fieldPathStack = new ArrayDeque<>();
 
-        ARecordType inputRecordType = NonTaggedFieldAccessByNameResultType.getRecordTypeFromType(type0, expression);
+        ARecordType inputRecordType = getRecordTypeFromType(type0, expression);
         if (inputRecordType == null) {
             return BuiltinType.ANY;
         }
 
         AbstractLogicalExpression arg1 = (AbstractLogicalExpression) funcExpr.getArguments().get(1).getValue();
         IAType inputListType = (IAType) env.getType(arg1);
-        AOrderedListType inputOrderedListType = TypeComputerUtils.extractOrderedListType(inputListType);
+        AOrderedListType inputOrderedListType = TypeComputeUtils.extractOrderedListType(inputListType);
         if (inputOrderedListType == null) {
             throw new AlgebricksException(
                     "The function 'remove-fields' expects an ordered list as the second argument, but got "
@@ -209,7 +210,6 @@ public class RecordRemoveFieldsTypeComputer implements IResultTypeComputer {
 
     private IAType buildOutputType(Deque<String> fieldPathStack, ARecordType inputRecordType, Set<String> fieldNameSet,
             List<List<String>> pathList) throws AlgebricksException {
-        IAType resultType;
         List<String> resultFieldNames = new ArrayList<>();
         List<IAType> resultFieldTypes = new ArrayList<>();
 
@@ -247,11 +247,13 @@ public class RecordRemoveFieldsTypeComputer implements IResultTypeComputer {
      * Note: l2 uses a LIFO insert and removal.
      */
     private <E> boolean isEqualPaths(List<E> l1, Deque<E> l2) {
-        if ((l1 == null) || (l2 == null))
+        if ((l1 == null) || (l2 == null)) {
             return false;
+        }
 
-        if (l1.size() != l2.size())
+        if (l1.size() != l2.size()) {
             return false;
+        }
 
         Iterator<E> it2 = l2.iterator();
 
@@ -259,8 +261,9 @@ public class RecordRemoveFieldsTypeComputer implements IResultTypeComputer {
         for (int i = len - 1; i >= 0; i--) {
             E o1 = l1.get(i);
             E o2 = it2.next();
-            if (!o1.equals(o2))
+            if (!o1.equals(o2)) {
                 return false;
+            }
         }
         return true;
     }
@@ -315,6 +318,28 @@ public class RecordRemoveFieldsTypeComputer implements IResultTypeComputer {
         }
         return new ARecordType(srcRecType.getTypeName(), destFieldNames.toArray(new String[n]),
                 destFieldTypes.toArray(new IAType[n]), isOpen);
+    }
+
+    private static ARecordType getRecordTypeFromType(IAType type0, ILogicalExpression expression)
+            throws AlgebricksException {
+        switch (type0.getTypeTag()) {
+            case RECORD:
+                return (ARecordType) type0;
+            case ANY:
+                return DefaultOpenFieldType.NESTED_OPEN_RECORD_TYPE;
+            case UNION:
+                AUnionType u = (AUnionType) type0;
+                IAType t1 = u.getActualType();
+                if (t1.getTypeTag() == ATypeTag.RECORD) {
+                    return (ARecordType) t1;
+                } else if (t1.getTypeTag() == ATypeTag.ANY) {
+                    return DefaultOpenFieldType.NESTED_OPEN_RECORD_TYPE;
+                }
+                // Falls through for other cases.
+            default:
+                throw new AlgebricksException(
+                        "Unsupported type " + type0 + " for field access expression: " + expression);
+        }
     }
 
 }

@@ -35,7 +35,7 @@ import org.apache.asterix.dataflow.data.nontagged.printers.csv.AInt8PrinterFacto
 import org.apache.asterix.dataflow.data.nontagged.printers.csv.AIntervalPrinterFactory;
 import org.apache.asterix.dataflow.data.nontagged.printers.csv.ALinePrinterFactory;
 import org.apache.asterix.dataflow.data.nontagged.printers.csv.ANullPrinterFactory;
-import org.apache.asterix.dataflow.data.nontagged.printers.csv.ANullableFieldPrinterFactory;
+import org.apache.asterix.dataflow.data.nontagged.printers.csv.AOptionalFieldPrinterFactory;
 import org.apache.asterix.dataflow.data.nontagged.printers.csv.AObjectPrinterFactory;
 import org.apache.asterix.dataflow.data.nontagged.printers.csv.APoint3DPrinterFactory;
 import org.apache.asterix.dataflow.data.nontagged.printers.csv.APointPrinterFactory;
@@ -49,7 +49,6 @@ import org.apache.asterix.dataflow.data.nontagged.printers.csv.AYearMonthDuratio
 import org.apache.asterix.om.types.ARecordType;
 import org.apache.asterix.om.types.AUnionType;
 import org.apache.asterix.om.types.IAType;
-import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.common.exceptions.NotImplementedException;
 import org.apache.hyracks.algebricks.data.IPrinterFactory;
 import org.apache.hyracks.algebricks.data.IPrinterFactoryProvider;
@@ -75,6 +74,7 @@ public class AqlCSVPrinterFactoryProvider implements IPrinterFactoryProvider {
                     return AInt32PrinterFactory.INSTANCE;
                 case INT64:
                     return AInt64PrinterFactory.INSTANCE;
+                case MISSING:
                 case NULL:
                     return ANullPrinterFactory.INSTANCE;
                 case BOOLEAN:
@@ -118,10 +118,11 @@ public class AqlCSVPrinterFactoryProvider implements IPrinterFactoryProvider {
                 case UNORDEREDLIST:
                     throw new NotImplementedException("'Unorderedlist' type unsupported for CSV output");
                 case UNION: {
-                    if (((AUnionType) aqlType).isNullableType())
-                        return new ANullableFieldPrinterFactory((AUnionType) aqlType);
-                    else
+                    if (((AUnionType) aqlType).isUnknownableType()) {
+                        return new AOptionalFieldPrinterFactory((AUnionType) aqlType);
+                    } else {
                         return new AUnionPrinterFactory((AUnionType) aqlType);
+                    }
                 }
                 case UUID: {
                     return AUUIDPrinterFactory.INSTANCE;

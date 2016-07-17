@@ -20,22 +20,19 @@ package org.apache.asterix.runtime.evaluators.constructors;
 
 import java.io.DataOutput;
 import java.io.IOException;
+import java.util.regex.Pattern;
 
 import org.apache.asterix.dataflow.data.nontagged.serde.APointSerializerDeserializer;
-import org.apache.asterix.formats.nontagged.AqlSerializerDeserializerProvider;
-import org.apache.asterix.om.base.ANull;
 import org.apache.asterix.om.functions.AsterixBuiltinFunctions;
 import org.apache.asterix.om.functions.IFunctionDescriptor;
 import org.apache.asterix.om.functions.IFunctionDescriptorFactory;
 import org.apache.asterix.om.types.ATypeTag;
-import org.apache.asterix.om.types.BuiltinType;
 import org.apache.asterix.runtime.evaluators.base.AbstractScalarFunctionDynamicDescriptor;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluator;
 import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluatorFactory;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
-import org.apache.hyracks.api.dataflow.value.ISerializerDeserializer;
 import org.apache.hyracks.data.std.api.IPointable;
 import org.apache.hyracks.data.std.primitive.UTF8StringPointable;
 import org.apache.hyracks.data.std.primitive.VoidPointable;
@@ -44,6 +41,10 @@ import org.apache.hyracks.dataflow.common.data.accessors.IFrameTupleReference;
 
 public class APolygonConstructorDescriptor extends AbstractScalarFunctionDynamicDescriptor {
     private static final long serialVersionUID = 1L;
+
+    private static final Pattern WS = Pattern.compile("\\s+");
+    private static final Pattern COMMA = Pattern.compile(",");
+
     public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
         @Override
         public IFunctionDescriptor createFunctionDescriptor() {
@@ -65,9 +66,6 @@ public class APolygonConstructorDescriptor extends AbstractScalarFunctionDynamic
                     private IPointable inputArg = new VoidPointable();
                     private IScalarEvaluator eval = args[0].createScalarEvaluator(ctx);
                     private String errorMessage = "This can not be an instance of polygon";
-                    @SuppressWarnings("unchecked")
-                    private ISerializerDeserializer<ANull> nullSerde = AqlSerializerDeserializerProvider.INSTANCE
-                            .getSerializerDeserializer(BuiltinType.ANULL);
                     private final UTF8StringPointable utf8Ptr = new UTF8StringPointable();
 
                     @Override
@@ -83,18 +81,17 @@ public class APolygonConstructorDescriptor extends AbstractScalarFunctionDynamic
                             if (serString[offset] == ATypeTag.SERIALIZED_STRING_TYPE_TAG) {
                                 utf8Ptr.set(serString, offset + 1, len - 1);
                                 String s = utf8Ptr.toString();
-                                String[] points = s.split(" ");
+                                String[] points = WS.split(s.trim());
                                 if (points.length <= 2) {
                                     throw new AlgebricksException(errorMessage);
                                 }
                                 out.writeByte(ATypeTag.SERIALIZED_POLYGON_TYPE_TAG);
                                 out.writeShort(points.length);
                                 for (int i = 0; i < points.length; i++) {
-                                    APointSerializerDeserializer.serialize(Double.parseDouble(points[i].split(",")[0]),
-                                            Double.parseDouble(points[i].split(",")[1]), out);
+                                    final String[] point = COMMA.split(points[i]);
+                                    APointSerializerDeserializer.serialize(Double.parseDouble(point[0]),
+                                            Double.parseDouble(point[1]), out);
                                 }
-                            } else if (serString[offset] == ATypeTag.SERIALIZED_NULL_TYPE_TAG) {
-                                nullSerde.serialize(ANull.NULL, out);
                             } else {
                                 throw new AlgebricksException(errorMessage);
                             }

@@ -60,12 +60,12 @@ public class LeftOuterUnnestMapOperator extends AbstractUnnestMapOperator {
         // Propagates all input variables that come from the outer branch.
         PropagatingTypeEnvironment env = createPropagatingAllInputsTypeEnvironment(ctx);
 
-        env.getCorrelatedNullableVariableLists().add(variables);
+        env.getCorrelatedMissableVariableLists().add(variables);
 
         // For the variables from the inner branch, the output type is the union
         // of (original type + null).
         for (int i = 0; i < variables.size(); i++) {
-            env.setVarType(variables.get(i), ctx.getNullableTypeComputer().makeNullableType(variableTypes.get(i)));
+            env.setVarType(variables.get(i), ctx.getMissableTypeComputer().makeMissableType(variableTypes.get(i)));
         }
 
         return env;

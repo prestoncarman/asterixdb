@@ -25,6 +25,7 @@ import org.apache.asterix.common.functions.FunctionSignature;
 import org.apache.asterix.lang.common.base.AbstractExpression;
 import org.apache.asterix.lang.common.base.Expression;
 import org.apache.asterix.lang.common.visitor.base.ILangVisitor;
+import org.apache.commons.lang3.ObjectUtils;
 
 public class CallExpr extends AbstractExpression {
     private FunctionSignature functionSignature;
@@ -64,5 +65,28 @@ public class CallExpr extends AbstractExpression {
     @Override
     public <R, T> R accept(ILangVisitor<R, T> visitor, T arg) throws AsterixException {
         return visitor.visit(this, arg);
+    }
+
+    @Override
+    public String toString() {
+        return "call " + functionSignature;
+    }
+
+    @Override
+    public int hashCode() {
+        return ObjectUtils.hashCodeMulti(exprList, functionSignature, isBuiltin);
+    }
+
+    @Override
+    public boolean equals(Object object) {
+        if (this == object) {
+            return true;
+        }
+        if (!(object instanceof CallExpr)) {
+            return false;
+        }
+        CallExpr target = (CallExpr) object;
+        return ObjectUtils.equals(exprList, target.exprList)
+                && ObjectUtils.equals(functionSignature, target.functionSignature) && isBuiltin == target.isBuiltin;
     }
 }

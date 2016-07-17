@@ -36,15 +36,14 @@
     </license>
   </licenses>
 
-
-
   <properties>
-      <root.dir>${basedir}/../..</root.dir>
+    <root.dir>${basedir}/../..</root.dir>
   </properties>
   <dependencies>
     <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
+      <scope>test</scope>
     </dependency>
   </dependencies>
 </project>

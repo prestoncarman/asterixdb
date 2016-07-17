@@ -21,14 +21,14 @@
   <modelVersion>4.0.0</modelVersion>
   <artifactId>piglet-example</artifactId>
   <name>piglet-example</name>
- <parent>
+  <parent>
     <groupId>org.apache.hyracks</groupId>
     <artifactId>algebricks-examples</artifactId>
     <version>0.2.18-SNAPSHOT</version>
   </parent>
 
   <properties>
-      <root.dir>${basedir}/../../..</root.dir>
+    <root.dir>${basedir}/../../..</root.dir>
   </properties>
 
   <build>
@@ -95,7 +95,7 @@
                     </goals>
                   </pluginExecutionFilter>
                   <action>
-                    <ignore />
+                    <ignore/>
                   </action>
                 </pluginExecution>
               </pluginExecutions>
@@ -110,16 +110,17 @@
       <!-- Dependency management inherited from top-level hyracks -->
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
+      <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.apache.hyracks</groupId>
       <artifactId>algebricks-compiler</artifactId>
       <version>0.2.18-SNAPSHOT</version>
     </dependency>
-      <dependency>
-          <groupId>org.apache.hyracks</groupId>
-          <artifactId>hyracks-util</artifactId>
-          <version>0.2.18-SNAPSHOT</version>
-      </dependency>
+    <dependency>
+      <groupId>org.apache.hyracks</groupId>
+      <artifactId>hyracks-util</artifactId>
+      <version>0.2.18-SNAPSHOT</version>
+    </dependency>
   </dependencies>
 </project>

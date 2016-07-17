@@ -45,14 +45,19 @@ import org.apache.asterix.lang.sqlpp.clause.SelectElement;
 import org.apache.asterix.lang.sqlpp.clause.SelectRegular;
 import org.apache.asterix.lang.sqlpp.clause.SelectSetOperation;
 import org.apache.asterix.lang.sqlpp.clause.UnnestClause;
+import org.apache.asterix.lang.sqlpp.expression.IndependentSubquery;
 import org.apache.asterix.lang.sqlpp.expression.SelectExpression;
 import org.apache.asterix.lang.sqlpp.parser.FunctionParser;
 import org.apache.asterix.lang.sqlpp.parser.SqlppParserFactory;
+import org.apache.asterix.lang.sqlpp.rewrites.visitor.GenerateColumnNameVisitor;
 import org.apache.asterix.lang.sqlpp.rewrites.visitor.InlineColumnAliasVisitor;
+import org.apache.asterix.lang.sqlpp.rewrites.visitor.InlineWithExpressionVisitor;
+import org.apache.asterix.lang.sqlpp.rewrites.visitor.OperatorExpressionVisitor;
 import org.apache.asterix.lang.sqlpp.rewrites.visitor.SqlppBuiltinFunctionRewriteVisitor;
 import org.apache.asterix.lang.sqlpp.rewrites.visitor.SqlppGlobalAggregationSugarVisitor;
 import org.apache.asterix.lang.sqlpp.rewrites.visitor.SqlppGroupByVisitor;
 import org.apache.asterix.lang.sqlpp.rewrites.visitor.SqlppInlineUdfsVisitor;
+import org.apache.asterix.lang.sqlpp.rewrites.visitor.SubstituteGroupbyExpressionWithVariableVisitor;
 import org.apache.asterix.lang.sqlpp.rewrites.visitor.VariableCheckAndRewriteVisitor;
 import org.apache.asterix.lang.sqlpp.struct.SetOperationRight;
 import org.apache.asterix.lang.sqlpp.util.FunctionMapUtil;
@@ -64,6 +69,8 @@ import org.apache.asterix.metadata.entities.Function;
 import org.apache.asterix.om.functions.AsterixBuiltinFunctions;
 
 class SqlppQueryRewriter implements IQueryRewriter {
+    private static final String INLINE_WITH = "inline_with";
+    private static final String NOT_INLINE_WITH = "false";
     private final FunctionParser functionRepository = new FunctionParser(new SqlppParserFactory());
     private Query topExpr;
     private List<FunctionDecl> declaredFunctions;
@@ -83,17 +90,32 @@ class SqlppQueryRewriter implements IQueryRewriter {
     @Override
     public void rewrite(List<FunctionDecl> declaredFunctions, Query topExpr, AqlMetadataProvider metadataProvider,
             LangRewritingContext context) throws AsterixException {
+        // Marks the current variable counter.
+        context.markCounter();
+
         // Sets up parameters.
         setup(declaredFunctions, topExpr, metadataProvider, context);
 
         // Inlines column aliases.
         inlineColumnAlias();
 
+        // Generates column names.
+        generateColumnNames();
+
+        // Substitutes group-by key expressions.
+        substituteGroupbyKeyExpression();
+
+        // Inlines WITH expressions.
+        inlineWithExpressions();
+
         // Rewrites SQL-92 global aggregations.
         rewriteGlobalAggregations();
 
         // Group-by core/sugar rewrites.
         rewriteGroupBys();
+
+        // Rewrites like/not-like expressions.
+        rewriteOperatorExpression();
 
         // Generate ids for variables (considering scopes) and replace global variable access with the dataset function.
         variableCheckAndRewrite(true);
@@ -105,6 +127,11 @@ class SqlppQueryRewriter implements IQueryRewriter {
         // This should be done after inlineDeclaredUdfs() because user-defined function
         // names could be case sensitive.
         rewriteFunctionNames();
+
+        // Resets the variable counter to the previous marked value.
+        // Therefore, the variable ids in the final query plans will not be perturbed
+        // by the additon or removal of intermediate AST rewrites.
+        context.resetCounter();
 
         // Replace global variable access with the dataset function for inlined expressions.
         variableCheckAndRewrite(true);
@@ -129,12 +156,53 @@ class SqlppQueryRewriter implements IQueryRewriter {
         functionNameMapVisitor.visit(topExpr, null);
     }
 
+    protected void inlineWithExpressions() throws AsterixException {
+        if (topExpr == null) {
+            return;
+        }
+        String inlineWith = metadataProvider.getConfig().get(INLINE_WITH);
+        if (inlineWith != null && inlineWith.equalsIgnoreCase(NOT_INLINE_WITH)) {
+            return;
+        }
+        // Inlines with expressions.
+        InlineWithExpressionVisitor inlineWithExpressionVisitor = new InlineWithExpressionVisitor();
+        inlineWithExpressionVisitor.visit(topExpr, null);
+    }
+
+    protected void generateColumnNames() throws AsterixException {
+        if (topExpr == null) {
+            return;
+        }
+        // Generate column names if they are missing in the user query.
+        GenerateColumnNameVisitor generateColumnNameVisitor = new GenerateColumnNameVisitor(context);
+        generateColumnNameVisitor.visit(topExpr, null);
+    }
+
+    protected void substituteGroupbyKeyExpression() throws AsterixException {
+        if (topExpr == null) {
+            return;
+        }
+        // Substitute group-by key expressions that appear in the select clause.
+        SubstituteGroupbyExpressionWithVariableVisitor substituteGbyExprVisitor =
+                new SubstituteGroupbyExpressionWithVariableVisitor();
+        substituteGbyExprVisitor.visit(topExpr, null);
+    }
+
+    protected void rewriteOperatorExpression() throws AsterixException {
+        if (topExpr == null) {
+            return;
+        }
+        // Rewrites like/not-like/in/not-in operators into function call expressions.
+        OperatorExpressionVisitor operatorExpressionVisitor = new OperatorExpressionVisitor(context);
+        operatorExpressionVisitor.visit(topExpr, null);
+    }
+
     protected void inlineColumnAlias() throws AsterixException {
         if (topExpr == null) {
             return;
         }
         // Inline column aliases.
-        InlineColumnAliasVisitor inlineColumnAliasVisitor = new InlineColumnAliasVisitor(context);
+        InlineColumnAliasVisitor inlineColumnAliasVisitor = new InlineColumnAliasVisitor();
         inlineColumnAliasVisitor.visit(topExpr, false);
     }
 
@@ -142,8 +210,8 @@ class SqlppQueryRewriter implements IQueryRewriter {
         if (topExpr == null) {
             return;
         }
-        VariableCheckAndRewriteVisitor variableCheckAndRewriteVisitor = new VariableCheckAndRewriteVisitor(context,
-                overwrite, metadataProvider);
+        VariableCheckAndRewriteVisitor variableCheckAndRewriteVisitor =
+                new VariableCheckAndRewriteVisitor(context, overwrite, metadataProvider);
         variableCheckAndRewriteVisitor.visit(topExpr, null);
     }
 
@@ -194,17 +262,17 @@ class SqlppQueryRewriter implements IQueryRewriter {
 
             Function function = lookupUserDefinedFunctionDecl(signature);
             if (function == null) {
-                FunctionSignature normalizedSignature = FunctionMapUtil.normalizeBuiltinFunctionSignature(signature,
-                        false);
+                FunctionSignature normalizedSignature =
+                        FunctionMapUtil.normalizeBuiltinFunctionSignature(signature, false);
                 if (AsterixBuiltinFunctions.isBuiltinCompilerFunction(normalizedSignature, includePrivateFunctions)) {
                     continue;
                 }
                 StringBuilder messageBuilder = new StringBuilder();
                 if (functionDecls.size() > 0) {
-                    messageBuilder.append(" function " + functionDecls.get(functionDecls.size() - 1).getSignature()
+                    messageBuilder.append("function " + functionDecls.get(functionDecls.size() - 1).getSignature()
                             + " depends upon function " + signature + " which is undefined");
                 } else {
-                    messageBuilder.append(" function " + signature + " is undefined ");
+                    messageBuilder.append("function " + signature + " is undefined ");
                 }
                 throw new AsterixException(messageBuilder.toString());
             }
@@ -213,9 +281,9 @@ class SqlppQueryRewriter implements IQueryRewriter {
                 FunctionDecl functionDecl = functionRepository.getFunctionDecl(function);
                 if (functionDecl != null) {
                     if (functionDecls.contains(functionDecl)) {
-                        throw new AsterixException("ERROR:Recursive invocation "
-                                + functionDecls.get(functionDecls.size() - 1).getSignature() + " <==> "
-                                + functionDecl.getSignature());
+                        throw new AsterixException(
+                                "Recursive invocation " + functionDecls.get(functionDecls.size() - 1).getSignature()
+                                        + " <==> " + functionDecl.getSignature());
                     }
                     functionDecls.add(functionDecl);
                     buildOtherUdfs(functionDecl.getFuncBody(), functionDecls, declaredFunctions);
@@ -276,7 +344,9 @@ class SqlppQueryRewriter implements IQueryRewriter {
 
         @Override
         public Void visit(Projection projection, Void arg) throws AsterixException {
-            projection.getExpression().accept(this, arg);
+            if (!projection.star()) {
+                projection.getExpression().accept(this, arg);
+            }
             return null;
         }
 
@@ -362,6 +432,12 @@ class SqlppQueryRewriter implements IQueryRewriter {
         @Override
         public Void visit(HavingClause havingClause, Void arg) throws AsterixException {
             havingClause.getFilterExpression().accept(this, arg);
+            return null;
+        }
+
+        @Override
+        public Void visit(IndependentSubquery independentSubquery, Void arg) throws AsterixException {
+            independentSubquery.getExpr().accept(this, arg);
             return null;
         }
 

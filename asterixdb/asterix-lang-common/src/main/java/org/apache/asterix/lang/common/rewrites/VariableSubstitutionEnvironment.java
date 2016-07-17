@@ -29,7 +29,7 @@ public class VariableSubstitutionEnvironment {
     private Map<String, Expression> oldVarToNewExpressionMap = new HashMap<String, Expression>();
 
     public VariableSubstitutionEnvironment() {
-
+        // Default constructor.
     }
 
     public VariableSubstitutionEnvironment(Map<VariableExpr, Expression> varExprMap) {
@@ -46,7 +46,7 @@ public class VariableSubstitutionEnvironment {
         oldVarToNewExpressionMap.putAll(varExprMap);
     }
 
-    public Expression findSubstituion(VariableExpr oldVar) {
+    public Expression findSubstitution(VariableExpr oldVar) {
         return oldVarToNewExpressionMap.get(oldVar.getVar().getValue());
     }
 

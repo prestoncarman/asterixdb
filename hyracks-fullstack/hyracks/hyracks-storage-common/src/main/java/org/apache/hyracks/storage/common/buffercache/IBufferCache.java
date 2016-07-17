@@ -19,14 +19,14 @@
 package org.apache.hyracks.storage.common.buffercache;
 
 import org.apache.hyracks.api.exceptions.HyracksDataException;
-import org.apache.hyracks.api.io.IFileHandle;
 import org.apache.hyracks.api.io.FileReference;
 import org.apache.hyracks.api.replication.IIOReplicationManager;
 
 public interface IBufferCache {
 
-    public static final long INVALID_DPID = -1l;
-    public static final int INVALID_PAGEID = -1;
+    long INVALID_DPID = -1l;
+    int INVALID_PAGEID = -1;
+    int RESERVED_HEADER_BYTES = 8;
 
     public void createFile(FileReference fileRef) throws HyracksDataException;
 
@@ -52,13 +52,15 @@ public interface IBufferCache {
 
     public ICachedPage confiscatePage(long dpid) throws HyracksDataException;
 
+    public ICachedPage confiscateLargePage(long dpid, int multiplier, int extraBlockPageId) throws HyracksDataException;
+
     public void returnPage(ICachedPage page);
 
     public void returnPage(ICachedPage page, boolean reinsert);
 
     public void force(int fileId, boolean metadata) throws HyracksDataException;
 
-    public int getPageSize();
+    int getPageSize();
 
     public int getNumPages();
 
@@ -82,4 +84,6 @@ public interface IBufferCache {
 
     void purgeHandle(int fileId) throws HyracksDataException;
 
+    void resizePage(ICachedPage page, int multiplier, IExtraPageBlockHelper extraPageBlockHelper)
+            throws HyracksDataException;
 }

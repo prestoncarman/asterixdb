@@ -26,10 +26,12 @@ import org.apache.hyracks.storage.am.common.api.TreeIndexException;
 import org.apache.hyracks.storage.am.common.ophelpers.FindTupleMode;
 import org.apache.hyracks.storage.am.common.ophelpers.FindTupleNoExactMatchPolicy;
 import org.apache.hyracks.storage.am.common.ophelpers.MultiComparator;
+import org.apache.hyracks.storage.common.buffercache.IBufferCache;
+import org.apache.hyracks.storage.common.buffercache.IExtraPageBlockHelper;
 
 public interface IBTreeLeafFrame extends IBTreeFrame {
     public int findTupleIndex(ITupleReference searchKey, ITreeIndexTupleReference pageTuple, MultiComparator cmp,
-            FindTupleMode ftm, FindTupleNoExactMatchPolicy ftp) throws HyracksDataException;
+                              FindTupleMode ftm, FindTupleNoExactMatchPolicy ftp) throws HyracksDataException;
 
     public int findUpdateTupleIndex(ITupleReference tuple) throws TreeIndexException;
 
@@ -49,4 +51,7 @@ public interface IBTreeLeafFrame extends IBTreeFrame {
     public void setNextLeaf(int nextPage);
 
     public int getNextLeaf();
+
+    void ensureCapacity(IBufferCache bufferCache, ITupleReference tuple, IExtraPageBlockHelper extraPageBlockHelper)
+            throws HyracksDataException;
 }
