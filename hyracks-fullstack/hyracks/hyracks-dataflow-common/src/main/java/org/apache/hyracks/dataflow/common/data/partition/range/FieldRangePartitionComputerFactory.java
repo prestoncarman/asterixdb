@@ -105,6 +105,7 @@ public class FieldRangePartitionComputerFactory implements ITupleRangePartitionC
                         }
                         break;
                     }
+                    default:
                 }
             }
 

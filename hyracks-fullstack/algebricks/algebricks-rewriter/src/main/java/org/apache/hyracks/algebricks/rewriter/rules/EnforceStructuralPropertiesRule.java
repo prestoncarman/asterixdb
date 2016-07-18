@@ -164,7 +164,7 @@ public class EnforceStructuralPropertiesRule implements IAlgebraicRewriteRule {
             reqdProperties = pr.getRequiredProperties();
         }
 
-        List<IPartitioningProperty> deliveredPartitioningPropertiesFromChildren = new ArrayList<IPartitioningProperty>();
+        List<IPartitioningProperty> deliveredPartitioningPropertiesFromChildren = new ArrayList<>();
         for (Mutable<ILogicalOperator> childRef : op.getInputs()) {
             AbstractLogicalOperator child = (AbstractLogicalOperator) childRef.getValue();
             deliveredPartitioningPropertiesFromChildren
@@ -273,8 +273,7 @@ public class EnforceStructuralPropertiesRule implements IAlgebraicRewriteRule {
                 changed = true;
                 addEnforcers(op, childIndex, diff, rqd, delivered, childrenDomain, nestedPlan, context);
 
-                AbstractLogicalOperator newChild = ((AbstractLogicalOperator) op.getInputs().get(childIndex)
-                        .getValue());
+                AbstractLogicalOperator newChild = (AbstractLogicalOperator) op.getInputs().get(childIndex).getValue();
 
                 if (newChild != child) {
                     delivered = newChild.getDeliveredPhysicalProperties();
@@ -333,7 +332,7 @@ public class EnforceStructuralPropertiesRule implements IAlgebraicRewriteRule {
 
     private IPhysicalPropertiesVector newPropertiesDiff(AbstractLogicalOperator newChild,
             IPhysicalPropertiesVector required, boolean mayExpandPartitioningProperties, IOptimizationContext context)
-                    throws AlgebricksException {
+            throws AlgebricksException {
         IPhysicalPropertiesVector newDelivered = newChild.getDeliveredPhysicalProperties();
 
         Map<LogicalVariable, EquivalenceClass> newChildEqClasses = context.getEquivalenceClassMap(newChild);
@@ -378,9 +377,9 @@ public class EnforceStructuralPropertiesRule implements IAlgebraicRewriteRule {
 
     private List<OrderColumn> getOrderColumnsFromGroupingProperties(List<ILocalStructuralProperty> reqd,
             List<ILocalStructuralProperty> dlvd) {
-        List<OrderColumn> returnedProperties = new ArrayList<OrderColumn>();
-        List<LogicalVariable> rqdCols = new ArrayList<LogicalVariable>();
-        List<LogicalVariable> dlvdCols = new ArrayList<LogicalVariable>();
+        List<OrderColumn> returnedProperties = new ArrayList<>();
+        List<LogicalVariable> rqdCols = new ArrayList<>();
+        List<LogicalVariable> dlvdCols = new ArrayList<>();
         for (ILocalStructuralProperty r : reqd) {
             r.getVariables(rqdCols);
         }
@@ -478,7 +477,7 @@ public class EnforceStructuralPropertiesRule implements IAlgebraicRewriteRule {
                     LocalGroupingProperty g = (LocalGroupingProperty) prop;
                     Collection<LogicalVariable> vars = (g.getPreferredOrderEnforcer() != null)
                             ? g.getPreferredOrderEnforcer() : g.getColumnSet();
-                    List<OrderColumn> orderColumns = new ArrayList<OrderColumn>();
+                    List<OrderColumn> orderColumns = new ArrayList<>();
                     for (LogicalVariable v : vars) {
                         OrderColumn oc = new OrderColumn(v, OrderKind.ASC);
                         orderColumns.add(oc);
@@ -504,12 +503,12 @@ public class EnforceStructuralPropertiesRule implements IAlgebraicRewriteRule {
 
     private Mutable<ILogicalOperator> enforceOrderProperties(List<LocalOrderProperty> oList,
             Mutable<ILogicalOperator> topOp, boolean isMicroOp, IOptimizationContext context)
-                    throws AlgebricksException {
-        List<Pair<IOrder, Mutable<ILogicalExpression>>> oe = new LinkedList<Pair<IOrder, Mutable<ILogicalExpression>>>();
+            throws AlgebricksException {
+        List<Pair<IOrder, Mutable<ILogicalExpression>>> oe = new LinkedList<>();
         for (LocalOrderProperty orderProperty : oList) {
             for (OrderColumn oc : orderProperty.getOrderColumns()) {
                 IOrder ordType = (oc.getOrder() == OrderKind.ASC) ? OrderOperator.ASC_ORDER : OrderOperator.DESC_ORDER;
-                Pair<IOrder, Mutable<ILogicalExpression>> pair = new Pair<IOrder, Mutable<ILogicalExpression>>(ordType,
+                Pair<IOrder, Mutable<ILogicalExpression>> pair = new Pair<>(ordType,
                         new MutableObject<ILogicalExpression>(new VariableReferenceExpression(oc.getColumn())));
                 oe.add(pair);
             }
