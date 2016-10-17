@@ -147,7 +147,7 @@ class AQLParser extends ScopeChecker implements IParser {
     private static final String DATETIME_ADD_RAND_HOURS_HINT = "datetime-add-rand-hours";
     private static final String DATETIME_BETWEEN_YEARS_HINT = "datetime-between-years";
     private static final String HASH_GROUP_BY_HINT = "hash";
-    private static final String INDEXED_NESTED_LOOP_JOIN_HINT = "indexnl";
+    private static final String INDEXED_NESTED_LOOP_JOIN_HINT = IndexedNLJoinExpressionAnnotation.HINT_STRING;
     private static final String INMEMORY_HINT = "inmem";
     private static final String INSERT_RAND_INT_HINT = "insert-rand-int";
     private static final String INTERVAL_HINT = "interval";
@@ -2376,7 +2376,7 @@ Clause OrderbyClause()throws ParseException :
           }
           if (hint.startsWith(RANGE_HINT)) {
             try{
-              oc.setRangeMap(RangeMapBuilder.parseHint(hint.substring(RANGE_HINT.length())));
+              oc.setRangeMap(RangeMapBuilder.parseHint(hint.substring(RANGE_HINT.length(), hint.indexOf(']', 0) + 1)));
             } catch (AsterixException e) {
               throw new ParseException(e.getMessage());
             }

@@ -16,44 +16,26 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.hyracks.algebricks.core.algebra.base;
+package org.apache.hyracks.api.dataflow.value;
 
-public enum LogicalOperatorTag {
-    AGGREGATE,
-    ASSIGN,
-    DATASOURCESCAN,
-    DISTINCT,
-    DISTRIBUTE_RESULT,
-    EMPTYTUPLESOURCE,
-    EXCHANGE,
-    DELEGATE_OPERATOR,
-    EXTERNAL_LOOKUP,
-    GROUP,
-    INDEX_INSERT_DELETE_UPSERT,
-    INNERJOIN,
-    INSERT_DELETE_UPSERT,
-    LEFTOUTERJOIN,
-    LEFT_OUTER_UNNEST_MAP,
-    LIMIT,
-    MATERIALIZE,
-    NESTEDTUPLESOURCE,
-    ORDER,
-    PROJECT,
-    RANGE_FORWARD,
-    REPLICATE,
-    RUNNINGAGGREGATE,
-    SCRIPT,
-    SELECT,
-    SINK,
-    SPLIT,
-    SUBPLAN,
-    TOKENIZE,
-    UNIONALL,
-    UNNEST,
-    LEFT_OUTER_UNNEST,
-    UNNEST_MAP,
-    UPDATE,
-    WRITE,
-    WRITE_RESULT,
-    INTERSECT,
+public interface IRangePartitionType {
+    public enum RangePartitioningType {
+        /**
+         * Partitioning is determined by finding the range partition where the first data point lies.
+         */
+        PROJECT,
+        /**
+         * Partitioning is determined by finding the range partition where the last data point lies.
+         */
+        PROJECT_END,
+        /**
+         * Partitioning is determined by finding all the range partitions where the data has a point.
+         */
+        SPLIT,
+        /**
+         * Partitioning is determined by finding all the range partitions where the data has a point
+         * or comes after the data point.
+         */
+        REPLICATE
+    }
 }

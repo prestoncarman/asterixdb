@@ -18,42 +18,10 @@
  */
 package org.apache.hyracks.algebricks.core.algebra.base;
 
-public enum LogicalOperatorTag {
-    AGGREGATE,
-    ASSIGN,
-    DATASOURCESCAN,
-    DISTINCT,
-    DISTRIBUTE_RESULT,
-    EMPTYTUPLESOURCE,
-    EXCHANGE,
-    DELEGATE_OPERATOR,
-    EXTERNAL_LOOKUP,
-    GROUP,
-    INDEX_INSERT_DELETE_UPSERT,
-    INNERJOIN,
-    INSERT_DELETE_UPSERT,
-    LEFTOUTERJOIN,
-    LEFT_OUTER_UNNEST_MAP,
-    LIMIT,
-    MATERIALIZE,
-    NESTEDTUPLESOURCE,
-    ORDER,
-    PROJECT,
-    RANGE_FORWARD,
-    REPLICATE,
-    RUNNINGAGGREGATE,
-    SCRIPT,
-    SELECT,
-    SINK,
-    SPLIT,
-    SUBPLAN,
-    TOKENIZE,
-    UNIONALL,
-    UNNEST,
-    LEFT_OUTER_UNNEST,
-    UNNEST_MAP,
-    UPDATE,
-    WRITE,
-    WRITE_RESULT,
-    INTERSECT,
+import org.apache.hyracks.dataflow.std.base.RangeId;
+
+public interface IRangeContext {
+
+    public RangeId newRangeId();
+
 }

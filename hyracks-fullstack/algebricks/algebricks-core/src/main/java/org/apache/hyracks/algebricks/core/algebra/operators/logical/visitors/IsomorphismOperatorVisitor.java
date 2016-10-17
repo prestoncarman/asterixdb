@@ -56,6 +56,7 @@ import org.apache.hyracks.algebricks.core.algebra.operators.logical.NestedTupleS
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.ProjectOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.RangeForwardOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.ReplicateOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.RunningAggregateOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.ScriptOperator;
@@ -294,6 +295,15 @@ public class IsomorphismOperatorVisitor implements ILogicalOperatorVisitor<Boole
         SplitOperator sOpArg = (SplitOperator) copyAndSubstituteVar(op, arg);
         boolean isomorphic = op.getBranchingExpression().getValue().equals(sOpArg.getBranchingExpression().getValue());
         return isomorphic;
+    }
+
+    @Override
+    public Boolean visitRangeForwardOperator(RangeForwardOperator op, ILogicalOperator arg) throws AlgebricksException {
+        AbstractLogicalOperator aop = (AbstractLogicalOperator) arg;
+        if (aop.getOperatorTag() != LogicalOperatorTag.RANGE_FORWARD) {
+            return Boolean.FALSE;
+        }
+        return Boolean.TRUE;
     }
 
     @Override

@@ -43,6 +43,7 @@ import org.apache.hyracks.algebricks.core.algebra.properties.DefaultNodeGroupDom
 import org.apache.hyracks.algebricks.core.algebra.properties.FunctionalDependency;
 import org.apache.hyracks.algebricks.core.algebra.properties.ILogicalPropertiesVector;
 import org.apache.hyracks.algebricks.core.algebra.properties.INodeDomain;
+import org.apache.hyracks.dataflow.std.base.RangeId;
 
 /**
  * The Algebricks default implementation for IOptimizationContext.
@@ -51,6 +52,7 @@ import org.apache.hyracks.algebricks.core.algebra.properties.INodeDomain;
 public class AlgebricksOptimizationContext implements IOptimizationContext {
 
     private int varCounter;
+    private int rangeIdCounter;
     private final IExpressionEvalSizeComputer expressionEvalSizeComputer;
     private final IMergeAggregationExpressionFactory mergeAggregationExpressionFactory;
     private final PhysicalOptimizationConfig physicalOptimizationConfig;
@@ -104,6 +106,7 @@ public class AlgebricksOptimizationContext implements IOptimizationContext {
             IConflictingTypeResolver conflictingTypeResovler, PhysicalOptimizationConfig physicalOptimizationConfig,
             AlgebricksPartitionConstraint clusterLocations, LogicalOperatorPrettyPrintVisitor prettyPrintVisitor) {
         this.varCounter = varCounter;
+        this.rangeIdCounter = -1;
         this.expressionEvalSizeComputer = expressionEvalSizeComputer;
         this.mergeAggregationExpressionFactory = mergeAggregationExpressionFactory;
         this.expressionTypeComputer = expressionTypeComputer;
@@ -128,6 +131,13 @@ public class AlgebricksOptimizationContext implements IOptimizationContext {
     public LogicalVariable newVar() {
         varCounter++;
         return new LogicalVariable(varCounter);
+    }
+
+    @Override
+    public RangeId newRangeId() {
+        rangeIdCounter++;
+        RangeId id = new RangeId(rangeIdCounter);
+        return id;
     }
 
     @Override
@@ -209,7 +219,7 @@ public class AlgebricksOptimizationContext implements IOptimizationContext {
     @Override
     public List<LogicalVariable> findPrimaryKey(LogicalVariable recordVar) {
         FunctionalDependency fd = varToPrimaryKey.get(recordVar);
-        return fd == null ? null : new ArrayList<>(fd.getHead());
+        return fd == null ? new ArrayList<>() : new ArrayList<>(fd.getHead());
     }
 
     @Override

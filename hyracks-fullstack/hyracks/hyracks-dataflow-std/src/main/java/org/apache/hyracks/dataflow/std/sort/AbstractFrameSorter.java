@@ -157,6 +157,17 @@ public abstract class AbstractFrameSorter implements IFrameSorter {
         return getFrameCount() > 0;
     }
 
+    public int getTuple(int ptr, FrameTupleAccessor tupleAccessor) {
+        int i = tPointers[ptr * PTR_SIZE + ID_FRAMEID];
+        bufferManager.getFrame(i, info);
+        tupleAccessor.reset(info.getBuffer(), info.getStartOffset(), info.getLength());
+        return tPointers[ptr * PTR_SIZE + ID_TUPLE_START];
+    }
+
+    public int getTupleCount() {
+        return tupleCount;
+    }
+
     @Override
     public int flush(IFrameWriter writer) throws HyracksDataException {
         outputAppender.reset(outputFrame, true);

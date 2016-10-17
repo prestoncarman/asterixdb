@@ -62,10 +62,5 @@
       <artifactId>hyracks-api</artifactId>
       <version>${project.version}</version>
     </dependency>
-    <dependency>
-      <groupId>org.apache.hyracks</groupId>
-      <artifactId>hyracks-dataflow-common</artifactId>
-      <version>0.2.18-SNAPSHOT</version>
-    </dependency>
   </dependencies>
 </project>
