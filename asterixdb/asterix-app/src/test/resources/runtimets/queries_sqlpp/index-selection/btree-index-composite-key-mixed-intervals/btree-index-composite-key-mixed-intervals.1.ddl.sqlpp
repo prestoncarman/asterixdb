@@ -26,22 +26,22 @@
  * Date            : 5th Feb, 2013
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 
 use test;
 
 
 create type test.Emp as
  closed {
-  id : int64,
+  id : bigint,
   fname : string,
   lname : string,
-  age : int64,
+  age : bigint,
   dept : string
 }
 
-create  table employee(Emp) primary key id;
+create  dataset employee(Emp) primary key id;
 
 create  index idx_employee_f_l_name  on employee (fname,lname) type btree;
 

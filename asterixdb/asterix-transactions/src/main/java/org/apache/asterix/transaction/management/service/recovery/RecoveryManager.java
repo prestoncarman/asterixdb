@@ -51,6 +51,7 @@ import org.apache.asterix.common.api.IDatasetLifecycleManager;
 import org.apache.asterix.common.api.ILocalResourceMetadata;
 import org.apache.asterix.common.cluster.ClusterPartition;
 import org.apache.asterix.common.config.AsterixMetadataProperties;
+import org.apache.asterix.common.config.ClusterProperties;
 import org.apache.asterix.common.config.IAsterixPropertiesProvider;
 import org.apache.asterix.common.exceptions.ACIDException;
 import org.apache.asterix.common.ioopcallbacks.AbstractLSMIOOperationCallback;
@@ -92,7 +93,7 @@ public class RecoveryManager implements IRecoveryManager, ILifeCycleComponent {
     private final long SHARP_CHECKPOINT_LSN = -1;
     private final boolean replicationEnabled;
     public static final long NON_SHARP_CHECKPOINT_TARGET_LSN = -1;
-    private final static String RECOVERY_FILES_DIR_NAME = "recovery_temp";
+    private static final String RECOVERY_FILES_DIR_NAME = "recovery_temp";
     private Map<Integer, JobEntityCommits> jobId2WinnerEntitiesMap = null;
     private final long cachedEntityCommitsPerJobSize;
     private final PersistentLocalResourceRepository localResourceRepository;
@@ -108,9 +109,7 @@ public class RecoveryManager implements IRecoveryManager, ILifeCycleComponent {
         this.txnSubsystem = txnSubsystem;
         logMgr = (LogManager) txnSubsystem.getLogManager();
         checkpointHistory = txnSubsystem.getTransactionProperties().getCheckpointHistory();
-        IAsterixPropertiesProvider propertiesProvider = (IAsterixPropertiesProvider) txnSubsystem
-                .getAsterixAppRuntimeContextProvider().getAppContext();
-        replicationEnabled = propertiesProvider.getReplicationProperties().isReplicationEnabled();
+        replicationEnabled = ClusterProperties.INSTANCE.isReplicationEnabled();
         localResourceRepository = (PersistentLocalResourceRepository) txnSubsystem.getAsterixAppRuntimeContextProvider()
                 .getLocalResourceRepository();
         cachedEntityCommitsPerJobSize = txnSubsystem.getTransactionProperties().getJobRecoveryMemorySize();
@@ -271,6 +270,7 @@ public class RecoveryManager implements IRecoveryManager, ILifeCycleComponent {
                     break;
                 case LogType.FLUSH:
                 case LogType.WAIT:
+                case LogType.MARKER:
                     break;
                 default:
                     throw new ACIDException("Unsupported LogType: " + logRecord.getLogType());
@@ -361,12 +361,12 @@ public class RecoveryManager implements IRecoveryManager, ILifeCycleComponent {
                                 //if index is not registered into IndexLifeCycleManager,
                                 //create the index using LocalMetadata stored in LocalResourceRepository
                                 //get partition path in this node
-                                String partitionIODevicePath = localResourceRepository
-                                        .getPartitionPath(localResource.getPartition());
-                                String resourceAbsolutePath = partitionIODevicePath + File.separator
-                                        + localResource.getResourceName();
+                                String partitionIODevicePath =
+                                        localResourceRepository.getPartitionPath(localResource.getPartition());
+                                String resourceAbsolutePath =
+                                        partitionIODevicePath + File.separator + localResource.getResourceName();
                                 localResource.setResourcePath(resourceAbsolutePath);
-                                index = (ILSMIndex) datasetLifecycleManager.getIndex(resourceAbsolutePath);
+                                index = (ILSMIndex) datasetLifecycleManager.get(resourceAbsolutePath);
                                 if (index == null) {
                                     //#. create index instance and register to indexLifeCycleManager
                                     localResourceMetadata = (ILocalResourceMetadata) localResource.getResourceObject();
@@ -379,8 +379,8 @@ public class RecoveryManager implements IRecoveryManager, ILifeCycleComponent {
                                     //#. get maxDiskLastLSN
                                     ILSMIndex lsmIndex = index;
                                     try {
-                                        maxDiskLastLsn = ((AbstractLSMIOOperationCallback) lsmIndex
-                                                .getIOOperationCallback())
+                                        maxDiskLastLsn =
+                                                ((AbstractLSMIOOperationCallback) lsmIndex.getIOOperationCallback())
                                                         .getComponentLSN(lsmIndex.getImmutableComponents());
                                     } catch (HyracksDataException e) {
                                         datasetLifecycleManager.close(resourceAbsolutePath);
@@ -405,6 +405,7 @@ public class RecoveryManager implements IRecoveryManager, ILifeCycleComponent {
                     case LogType.ABORT:
                     case LogType.FLUSH:
                     case LogType.UPSERT_ENTITY_COMMIT:
+                    case LogType.MARKER:
                         //do nothing
                         break;
                     default:
@@ -443,8 +444,8 @@ public class RecoveryManager implements IRecoveryManager, ILifeCycleComponent {
         //right after the new checkpoint file is written.
         File[] prevCheckpointFiles = getPreviousCheckpointFiles();
 
-        IDatasetLifecycleManager datasetLifecycleManager = txnSubsystem.getAsterixAppRuntimeContextProvider()
-                .getDatasetLifecycleManager();
+        IDatasetLifecycleManager datasetLifecycleManager =
+                txnSubsystem.getAsterixAppRuntimeContextProvider().getDatasetLifecycleManager();
         //flush all in-memory components if it is the sharp checkpoint
         if (isSharpCheckpoint) {
             datasetLifecycleManager.flushAllDatasets();
@@ -467,8 +468,8 @@ public class RecoveryManager implements IRecoveryManager, ILifeCycleComponent {
                         Set<Integer> deadReplicasPartitions = new HashSet<>();
                         //get partitions of the dead replicas that are not active on this node
                         for (String deadReplicaId : deadReplicaIds) {
-                            ClusterPartition[] nodePartitons = metadataProperties.getNodePartitions()
-                                    .get(deadReplicaId);
+                            ClusterPartition[] nodePartitons =
+                                    metadataProperties.getNodePartitions().get(deadReplicaId);
                             for (ClusterPartition partition : nodePartitons) {
                                 if (!localResourceRepository.getActivePartitions()
                                         .contains(partition.getPartitionId())) {
@@ -492,8 +493,8 @@ public class RecoveryManager implements IRecoveryManager, ILifeCycleComponent {
                 datasetLifecycleManager.scheduleAsyncFlushForLaggingDatasets(nonSharpCheckpointTargetLSN);
                 if (replicationEnabled) {
                     //request remote replicas to flush lagging indexes
-                    IReplicationManager replicationManager = txnSubsystem.getAsterixAppRuntimeContextProvider()
-                            .getAppContext().getReplicationManager();
+                    IReplicationManager replicationManager =
+                            txnSubsystem.getAsterixAppRuntimeContextProvider().getAppContext().getReplicationManager();
                     try {
                         replicationManager.requestFlushLaggingReplicaIndexes(nonSharpCheckpointTargetLSN);
                     } catch (IOException e) {
@@ -564,16 +565,16 @@ public class RecoveryManager implements IRecoveryManager, ILifeCycleComponent {
 
     @Override
     public long getLocalMinFirstLSN() throws HyracksDataException {
-        IDatasetLifecycleManager datasetLifecycleManager = txnSubsystem.getAsterixAppRuntimeContextProvider()
-                .getDatasetLifecycleManager();
-        List<IIndex> openIndexList = datasetLifecycleManager.getOpenIndexes();
+        IDatasetLifecycleManager datasetLifecycleManager =
+                txnSubsystem.getAsterixAppRuntimeContextProvider().getDatasetLifecycleManager();
+        List<IIndex> openIndexList = datasetLifecycleManager.getOpenResources();
         long firstLSN;
         //the min first lsn can only be the current append or smaller
         long minFirstLSN = logMgr.getAppendLSN();
         if (openIndexList.size() > 0) {
             for (IIndex index : openIndexList) {
-                AbstractLSMIOOperationCallback ioCallback = (AbstractLSMIOOperationCallback) ((ILSMIndex) index)
-                        .getIOOperationCallback();
+                AbstractLSMIOOperationCallback ioCallback =
+                        (AbstractLSMIOOperationCallback) ((ILSMIndex) index).getIOOperationCallback();
 
                 if (!((AbstractLSMIndex) index).isCurrentMutableComponentEmpty() || ioCallback.hasPendingFlush()) {
                     firstLSN = ioCallback.getFirstLSN();
@@ -585,8 +586,8 @@ public class RecoveryManager implements IRecoveryManager, ILifeCycleComponent {
     }
 
     private long getRemoteMinFirstLSN() {
-        IReplicaResourcesManager remoteResourcesManager = txnSubsystem.getAsterixAppRuntimeContextProvider()
-                .getAppContext().getReplicaResourcesManager();
+        IReplicaResourcesManager remoteResourcesManager =
+                txnSubsystem.getAsterixAppRuntimeContextProvider().getAppContext().getReplicaResourcesManager();
         long minRemoteLSN = remoteResourcesManager.getPartitionsMinLSN(localResourceRepository.getInactivePartitions());
         return minRemoteLSN;
     }
@@ -783,6 +784,7 @@ public class RecoveryManager implements IRecoveryManager, ILifeCycleComponent {
                     case LogType.ABORT:
                     case LogType.FLUSH:
                     case LogType.WAIT:
+                    case LogType.MARKER:
                         //ignore
                         break;
                     default:
@@ -798,8 +800,8 @@ public class RecoveryManager implements IRecoveryManager, ILifeCycleComponent {
             //undo loserTxn's effect
             LOGGER.log(Level.INFO, "undoing loser transaction's effect");
 
-            IDatasetLifecycleManager datasetLifecycleManager = txnSubsystem.getAsterixAppRuntimeContextProvider()
-                    .getDatasetLifecycleManager();
+            IDatasetLifecycleManager datasetLifecycleManager =
+                    txnSubsystem.getAsterixAppRuntimeContextProvider().getDatasetLifecycleManager();
             //TODO sort loser entities by smallest LSN to undo in one pass.
             Iterator<Entry<TxnId, List<Long>>> iter = jobLoserEntity2LSNsMap.entrySet().iterator();
             int undoCount = 0;
@@ -855,10 +857,10 @@ public class RecoveryManager implements IRecoveryManager, ILifeCycleComponent {
 
     private static void undo(ILogRecord logRecord, IDatasetLifecycleManager datasetLifecycleManager) {
         try {
-            ILSMIndex index = (ILSMIndex) datasetLifecycleManager.getIndex(logRecord.getDatasetId(),
-                    logRecord.getResourceId());
-            ILSMIndexAccessor indexAccessor = index.createAccessor(NoOpOperationCallback.INSTANCE,
-                    NoOpOperationCallback.INSTANCE);
+            ILSMIndex index =
+                    (ILSMIndex) datasetLifecycleManager.getIndex(logRecord.getDatasetId(), logRecord.getResourceId());
+            ILSMIndexAccessor indexAccessor =
+                    index.createAccessor(NoOpOperationCallback.INSTANCE, NoOpOperationCallback.INSTANCE);
             if (logRecord.getNewOp() == IndexOperation.INSERT.ordinal()) {
                 indexAccessor.forceDelete(logRecord.getNewValue());
             } else if (logRecord.getNewOp() == IndexOperation.DELETE.ordinal()) {
@@ -873,10 +875,10 @@ public class RecoveryManager implements IRecoveryManager, ILifeCycleComponent {
 
     private static void redo(ILogRecord logRecord, IDatasetLifecycleManager datasetLifecycleManager) {
         try {
-            ILSMIndex index = (ILSMIndex) datasetLifecycleManager.getIndex(logRecord.getDatasetId(),
-                    logRecord.getResourceId());
-            ILSMIndexAccessor indexAccessor = index.createAccessor(NoOpOperationCallback.INSTANCE,
-                    NoOpOperationCallback.INSTANCE);
+            ILSMIndex index =
+                    (ILSMIndex) datasetLifecycleManager.getIndex(logRecord.getDatasetId(), logRecord.getResourceId());
+            ILSMIndexAccessor indexAccessor =
+                    index.createAccessor(NoOpOperationCallback.INSTANCE, NoOpOperationCallback.INSTANCE);
             if (logRecord.getNewOp() == IndexOperation.INSERT.ordinal()) {
                 indexAccessor.forceInsert(logRecord.getNewValue());
             } else if (logRecord.getNewOp() == IndexOperation.DELETE.ordinal()) {

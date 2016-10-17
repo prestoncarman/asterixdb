@@ -23,15 +23,15 @@
  * Date            : March 13 2014
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 
 use test;
 
 
 create type test.DBLPType as
  closed {
-  id : int64,
+  id : bigint,
   dblpid : string,
   title : string,
   authors : string,
@@ -40,13 +40,13 @@ create type test.DBLPType as
 
 create type test.DBLPOpenType as
 {
-  id : int64,
+  id : bigint,
   dblpid : string,
   authors : string,
   misc : string
 }
 
-create  table DBLP(DBLPType) primary key id;
+create  dataset DBLP(DBLPType) primary key id;
 
-create  table DBLPOpen(DBLPOpenType) primary key id;
+create  dataset DBLPOpen(DBLPOpenType) primary key id;
 

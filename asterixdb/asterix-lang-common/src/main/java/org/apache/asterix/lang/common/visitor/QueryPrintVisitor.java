@@ -21,6 +21,7 @@ package org.apache.asterix.lang.common.visitor;
 import java.io.PrintWriter;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map.Entry;
 
 import org.apache.asterix.common.config.DatasetConfig.DatasetType;
 import org.apache.asterix.common.exceptions.AsterixException;
@@ -251,10 +252,16 @@ public class QueryPrintVisitor extends AbstractQueryExpressionVisitor<Void, Inte
                 pair.getExpr().accept(this, step + 1);
             }
         }
-        if (gc.hasWithList()) {
+        if (gc.hasWithMap()) {
             out.println(skip(step + 1) + "With");
-            for (VariableExpr exp : gc.getWithVarList()) {
-                exp.accept(this, step + 1);
+            for (Entry<Expression, VariableExpr> entry : gc.getWithVarMap().entrySet()) {
+                Expression key = entry.getKey();
+                VariableExpr value = entry.getValue();
+                key.accept(this, step + 1);
+                if (!key.equals(value)) {
+                    out.println(skip(step + 1) + "AS");
+                    value.accept(this, step + 1);
+                }
             }
         }
         out.println();
@@ -326,7 +333,11 @@ public class QueryPrintVisitor extends AbstractQueryExpressionVisitor<Void, Inte
 
     @Override
     public Void visit(TypeReferenceExpression t, Integer arg) throws AsterixException {
-        out.print(t.getIdent());
+        if (t.getIdent().first != null && t.getIdent().first.getValue() != null) {
+            out.print(t.getIdent().first.getValue());
+            out.print('.');
+        }
+        out.print(t.getIdent().second.getValue());
         return null;
     }
 

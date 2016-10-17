@@ -22,6 +22,7 @@ package org.apache.hyracks.control.cc.work;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.apache.hyracks.control.cc.ClusterControllerService;
@@ -32,13 +33,16 @@ import org.apache.hyracks.control.common.work.SynchronizableWork;
 import org.apache.hyracks.ipc.exceptions.IPCException;
 
 public class ClusterShutdownWork extends SynchronizableWork {
+    private static final Logger LOGGER = Logger.getLogger(ClusterShutdownWork.class.getName());
 
-    private ClusterControllerService ccs;
-    private IResultCallback<Boolean> callback;
-    private static Logger LOGGER = Logger.getLogger(ClusterShutdownWork.class.getName());
+    private final ClusterControllerService ccs;
+    private final boolean terminateNCService;
+    private final IResultCallback<Boolean> callback;
 
-    public ClusterShutdownWork(ClusterControllerService ncs, IResultCallback<Boolean> callback) {
+    public ClusterShutdownWork(ClusterControllerService ncs, boolean terminateNCService,
+                               IResultCallback<Boolean> callback) {
         this.ccs = ncs;
+        this.terminateNCService = terminateNCService;
         this.callback = callback;
     }
 
@@ -46,10 +50,10 @@ public class ClusterShutdownWork extends SynchronizableWork {
     public void doRun() {
         try {
             if (ccs.getShutdownRun() != null) {
-                throw new IPCException("Shutdown in Progress");
+                throw new IPCException("Shutdown already in progress");
             }
             Map<String, NodeControllerState> nodeControllerStateMap = ccs.getNodeMap();
-            Set<String> nodeIds = new TreeSet<String>();
+            Set<String> nodeIds = new TreeSet<>();
             nodeIds.addAll(nodeControllerStateMap.keySet());
             /**
              * set up our listener for the node ACKs
@@ -60,40 +64,29 @@ public class ClusterShutdownWork extends SynchronizableWork {
             /**
              * Shutdown all the nodes...
              */
-            for (NodeControllerState ncs : nodeControllerStateMap.values()) {
-                ncs.getNodeController().shutDown();
-            }
+            nodeControllerStateMap.forEach(this::shutdownNode);
+
             ccs.getExecutor().execute(new Runnable() {
                 @Override
                 public void run() {
                     try {
-                        /**
+                        /*
                          * wait for all our acks
                          */
+                        LOGGER.info("Waiting for NCs to shutdown...");
                         boolean cleanShutdown = shutdownStatus.waitForCompletion();
-                        if (cleanShutdown) {
-                            callback.setValue(new Boolean(true));
-                            ccs.stop();
-                            LOGGER.info("JVM Exiting.. Bye!");
-                            Runtime rt = Runtime.getRuntime();
-                            rt.exit(0);
+                        if (!cleanShutdown) {
+                            /*
+                             * best effort - just exit, user will have to kill misbehaving NCs
+                             */
+                            LOGGER.severe("Clean shutdown of NCs timed out- giving up; unresponsive nodes: " +
+                                    shutdownStatus.getRemainingNodes());
                         }
-                        /**
-                         * best effort - just exit, user will have to kill misbehaving NCs
-                         */
-                        else {
-                            LOGGER.severe("Clean shutdown of NCs timed out- CC bailing out!");
-                            StringBuilder unresponsive = new StringBuilder();
-                            for (String s : shutdownStatus.getRemainingNodes()) {
-                                unresponsive.append(s + " ");
-                            }
-                            LOGGER.severe("Unresponsive Nodes: " + unresponsive);
-                            callback.setValue(new Boolean(false));
-                            ccs.stop();
-                            LOGGER.info("JVM Exiting.. Bye!");
-                            Runtime rt = Runtime.getRuntime();
-                            rt.exit(1);
-                        }
+                        callback.setValue(cleanShutdown);
+                        ccs.stop(terminateNCService);
+                        LOGGER.info("JVM Exiting.. Bye!");
+                        Runtime rt = Runtime.getRuntime();
+                        rt.exit(cleanShutdown ? 0 : 1);
                     } catch (Exception e) {
                         callback.setException(e);
                     }
@@ -101,6 +94,16 @@ public class ClusterShutdownWork extends SynchronizableWork {
             });
         } catch (Exception e) {
             callback.setException(e);
+        }
+    }
+
+    protected void shutdownNode(String nodeId, NodeControllerState ncState) {
+        try {
+            LOGGER.info("Notifying NC " + nodeId + " to shutdown...");
+            ncState.getNodeController().shutdown(terminateNCService);
+        } catch (Exception e) {
+            LOGGER.log(Level.INFO,
+                    "Exception shutting down NC " + nodeId + " (possibly dead?), continuing shutdown...", e);
         }
     }
 }

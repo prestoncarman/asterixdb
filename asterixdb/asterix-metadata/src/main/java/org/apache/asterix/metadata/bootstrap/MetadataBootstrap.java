@@ -19,12 +19,10 @@
 package org.apache.asterix.metadata.bootstrap;
 
 import java.io.File;
+import java.rmi.RemoteException;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -33,12 +31,13 @@ import org.apache.asterix.common.api.IDatasetLifecycleManager;
 import org.apache.asterix.common.api.ILocalResourceMetadata;
 import org.apache.asterix.common.cluster.ClusterPartition;
 import org.apache.asterix.common.config.AsterixMetadataProperties;
-import org.apache.asterix.common.config.DatasetConfig.DatasetType;
+import org.apache.asterix.common.config.ClusterProperties;
 import org.apache.asterix.common.config.GlobalConfig;
 import org.apache.asterix.common.config.IAsterixPropertiesProvider;
-import org.apache.asterix.common.config.MetadataConstants;
+import org.apache.asterix.common.config.DatasetConfig.DatasetType;
 import org.apache.asterix.common.context.BaseOperationTracker;
 import org.apache.asterix.common.context.CorrelatedPrefixMergePolicyFactory;
+import org.apache.asterix.common.exceptions.ACIDException;
 import org.apache.asterix.common.ioopcallbacks.LSMBTreeIOOperationCallbackFactory;
 import org.apache.asterix.common.utils.StoragePathUtil;
 import org.apache.asterix.external.adapter.factory.GenericAdapterFactory;
@@ -52,7 +51,7 @@ import org.apache.asterix.metadata.MetadataManager;
 import org.apache.asterix.metadata.MetadataTransactionContext;
 import org.apache.asterix.metadata.api.IMetadataEntity;
 import org.apache.asterix.metadata.api.IMetadataIndex;
-import org.apache.asterix.metadata.entities.AsterixBuiltinTypeMap;
+import org.apache.asterix.metadata.entities.BuiltinTypeMap;
 import org.apache.asterix.metadata.entities.CompactionPolicy;
 import org.apache.asterix.metadata.entities.Dataset;
 import org.apache.asterix.metadata.entities.DatasourceAdapter;
@@ -61,14 +60,13 @@ import org.apache.asterix.metadata.entities.Dataverse;
 import org.apache.asterix.metadata.entities.FeedPolicyEntity;
 import org.apache.asterix.metadata.entities.Index;
 import org.apache.asterix.metadata.entities.InternalDatasetDetails;
-import org.apache.asterix.metadata.entities.InternalDatasetDetails.FileStructure;
-import org.apache.asterix.metadata.entities.InternalDatasetDetails.PartitioningStrategy;
 import org.apache.asterix.metadata.entities.Node;
 import org.apache.asterix.metadata.entities.NodeGroup;
+import org.apache.asterix.metadata.entities.InternalDatasetDetails.FileStructure;
+import org.apache.asterix.metadata.entities.InternalDatasetDetails.PartitioningStrategy;
 import org.apache.asterix.metadata.feeds.BuiltinFeedPolicies;
-import org.apache.asterix.om.types.BuiltinType;
+import org.apache.asterix.metadata.utils.MetadataConstants;
 import org.apache.asterix.om.types.IAType;
-import org.apache.asterix.om.util.AsterixClusterProperties;
 import org.apache.asterix.runtime.formats.NonTaggedDataFormat;
 import org.apache.asterix.transaction.management.resource.LSMBTreeLocalResourceMetadata;
 import org.apache.asterix.transaction.management.resource.PersistentLocalResourceFactoryProvider;
@@ -76,8 +74,10 @@ import org.apache.asterix.transaction.management.service.transaction.Transaction
 import org.apache.hyracks.api.application.INCApplicationContext;
 import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import org.apache.hyracks.api.dataflow.value.ITypeTraits;
+import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.io.FileReference;
 import org.apache.hyracks.api.io.IIOManager;
+import org.apache.hyracks.storage.am.common.frames.LIFOMetaDataFrame;
 import org.apache.hyracks.storage.am.lsm.btree.impls.LSMBTree;
 import org.apache.hyracks.storage.am.lsm.btree.util.LSMBTreeUtils;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMMergePolicyFactory;
@@ -103,52 +103,53 @@ import org.apache.hyracks.storage.common.file.LocalResource;
  * stopUniverse() should be called upon application undeployment.
  */
 public class MetadataBootstrap {
+    public static final boolean IS_DEBUG_MODE = false;
     private static final Logger LOGGER = Logger.getLogger(MetadataBootstrap.class.getName());
-    public static final boolean IS_DEBUG_MODE = false;// true
-
     private static IAsterixAppRuntimeContext runtimeContext;
-
     private static IBufferCache bufferCache;
     private static IFileMapProvider fileMapProvider;
     private static IDatasetLifecycleManager dataLifecycleManager;
     private static ILocalResourceRepository localResourceRepository;
     private static IIOManager ioManager;
-
     private static String metadataNodeName;
     private static List<String> nodeNames;
     private static String outputDir;
-
-    private static IMetadataIndex[] primaryIndexes;
+    private static boolean isNewUniverse;
+    private static final IMetadataIndex[] PRIMARY_INDEXES =
+            new IMetadataIndex[] { MetadataPrimaryIndexes.DATAVERSE_DATASET, MetadataPrimaryIndexes.DATASET_DATASET,
+                    MetadataPrimaryIndexes.DATATYPE_DATASET, MetadataPrimaryIndexes.INDEX_DATASET,
+                    MetadataPrimaryIndexes.NODE_DATASET, MetadataPrimaryIndexes.NODEGROUP_DATASET,
+                    MetadataPrimaryIndexes.FUNCTION_DATASET, MetadataPrimaryIndexes.DATASOURCE_ADAPTER_DATASET,
+                    MetadataPrimaryIndexes.FEED_DATASET, MetadataPrimaryIndexes.FEED_POLICY_DATASET,
+                    MetadataPrimaryIndexes.LIBRARY_DATASET, MetadataPrimaryIndexes.COMPACTION_POLICY_DATASET,
+                    MetadataPrimaryIndexes.EXTERNAL_FILE_DATASET };
 
     private static IAsterixPropertiesProvider propertiesProvider;
 
-    private static void initLocalIndexArrays() {
-        primaryIndexes = new IMetadataIndex[] { MetadataPrimaryIndexes.DATAVERSE_DATASET,
-                MetadataPrimaryIndexes.DATASET_DATASET, MetadataPrimaryIndexes.DATATYPE_DATASET,
-                MetadataPrimaryIndexes.INDEX_DATASET, MetadataPrimaryIndexes.NODE_DATASET,
-                MetadataPrimaryIndexes.NODEGROUP_DATASET, MetadataPrimaryIndexes.FUNCTION_DATASET,
-                MetadataPrimaryIndexes.DATASOURCE_ADAPTER_DATASET, MetadataPrimaryIndexes.FEED_DATASET,
-                MetadataPrimaryIndexes.FEED_POLICY_DATASET, MetadataPrimaryIndexes.LIBRARY_DATASET,
-                MetadataPrimaryIndexes.COMPACTION_POLICY_DATASET, MetadataPrimaryIndexes.EXTERNAL_FILE_DATASET };
+    private MetadataBootstrap() {
     }
 
+    /**
+     * bootstrap metadata
+     *
+     * @param asterixPropertiesProvider
+     * @param ncApplicationContext
+     * @param isNewUniverse
+     * @throws ACIDException
+     * @throws RemoteException
+     * @throws MetadataException
+     * @throws Exception
+     */
     public static void startUniverse(IAsterixPropertiesProvider asterixPropertiesProvider,
-            INCApplicationContext ncApplicationContext, boolean isNewUniverse) throws Exception {
+            INCApplicationContext ncApplicationContext, boolean isNewUniverse)
+            throws RemoteException, ACIDException, MetadataException {
+        MetadataBootstrap.setNewUniverse(isNewUniverse);
         runtimeContext = (IAsterixAppRuntimeContext) ncApplicationContext.getApplicationObject();
         propertiesProvider = asterixPropertiesProvider;
-
-        // Initialize static metadata objects, such as record types and metadata
-        // index descriptors.
-        // The order of these calls is important because the index descriptors
-        // rely on the type type descriptors.
-        MetadataRecordTypes.init();
-        MetadataPrimaryIndexes.init();
-        initLocalIndexArrays();
 
         AsterixMetadataProperties metadataProperties = propertiesProvider.getMetadataProperties();
         metadataNodeName = metadataProperties.getMetadataNodeName();
         nodeNames = metadataProperties.getNodeNames();
-
         dataLifecycleManager = runtimeContext.getDatasetLifecycleManager();
         localResourceRepository = runtimeContext.getLocalResourceRepository();
         bufferCache = runtimeContext.getBufferCache();
@@ -161,142 +162,119 @@ public class MetadataBootstrap {
             // Lock the metadata in X mode.
             MetadataManager.INSTANCE.lock(mdTxnCtx, LockMode.X);
 
+            for (int i = 0; i < PRIMARY_INDEXES.length; i++) {
+                enlistMetadataDataset(PRIMARY_INDEXES[i]);
+            }
+            if (LOGGER.isLoggable(Level.INFO)) {
+                LOGGER.info(
+                        "Finished enlistment of metadata B-trees in " + (isNewUniverse ? "new" : "old") + " universe");
+            }
             if (isNewUniverse) {
-                for (int i = 0; i < primaryIndexes.length; i++) {
-                    enlistMetadataDataset(primaryIndexes[i], true, mdTxnCtx);
-                }
-
-                if (LOGGER.isLoggable(Level.INFO)) {
-                    LOGGER.info("Finished enlistment of metadata B-trees in  new universe");
-                }
-
                 insertInitialDataverses(mdTxnCtx);
-                insertInitialDatasets(mdTxnCtx);
-                insertInitialDatatypes(mdTxnCtx);
+                insertMetadataDatasets(mdTxnCtx, PRIMARY_INDEXES);
+                insertMetadataDatatypes(mdTxnCtx);
                 insertNodes(mdTxnCtx);
                 insertInitialGroups(mdTxnCtx);
                 insertInitialAdapters(mdTxnCtx);
                 insertInitialFeedPolicies(mdTxnCtx);
                 insertInitialCompactionPolicies(mdTxnCtx);
-
                 if (LOGGER.isLoggable(Level.INFO)) {
                     LOGGER.info("Finished creating metadata B-trees.");
                 }
-            } else {
-                for (int i = 0; i < primaryIndexes.length; i++) {
-                    enlistMetadataDataset(primaryIndexes[i], false, mdTxnCtx);
-                }
-
-                if (LOGGER.isLoggable(Level.INFO)) {
-                    LOGGER.info("Finished enlistment of metadata B-trees in old universe.");
-                }
             }
-
             // #. initialize datasetIdFactory
             MetadataManager.INSTANCE.initializeDatasetIdFactory(mdTxnCtx);
             MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
         } catch (Exception e) {
             try {
                 if (IS_DEBUG_MODE) {
-                    e.printStackTrace();
+                    LOGGER.log(Level.SEVERE, "Failure during metadata bootstrap", e);
                 }
                 MetadataManager.INSTANCE.abortTransaction(mdTxnCtx);
             } catch (Exception e2) {
                 e.addSuppressed(e2);
-                // TODO
-                // change the exception type to AbortFailureException
+                // TODO change the exception type to AbortFailureException
                 throw new MetadataException(e);
             }
-            throw e;
+            throw new MetadataException(e);
         }
     }
 
-    public static void stopUniverse() {
-        // Close all BTree files in BufferCache.
-        // metadata datasets will be closed when the dataset life cycle manger is closed
-    }
-
-    public static void insertInitialDataverses(MetadataTransactionContext mdTxnCtx) throws Exception {
-        String dataverseName = MetadataPrimaryIndexes.DATAVERSE_DATASET.getDataverseName();
+    private static void insertInitialDataverses(MetadataTransactionContext mdTxnCtx) throws MetadataException {
         String dataFormat = NonTaggedDataFormat.NON_TAGGED_DATA_FORMAT;
         MetadataManager.INSTANCE.addDataverse(mdTxnCtx,
-                new Dataverse(dataverseName, dataFormat, IMetadataEntity.PENDING_NO_OP));
+                new Dataverse(MetadataConstants.METADATA_DATAVERSE_NAME, dataFormat, IMetadataEntity.PENDING_NO_OP));
+        MetadataManager.INSTANCE.addDataverse(mdTxnCtx, MetadataBuiltinEntities.DEFAULT_DATAVERSE);
     }
 
-    public static void insertInitialDatasets(MetadataTransactionContext mdTxnCtx) throws Exception {
-        for (int i = 0; i < primaryIndexes.length; i++) {
+    /**
+     * Inserts a metadata dataset to the physical dataset index
+     * Should be performed on a bootstrap of a new universe
+     *
+     * @param mdTxnCtx
+     * @param indexes
+     * @throws MetadataException
+     */
+    public static void insertMetadataDatasets(MetadataTransactionContext mdTxnCtx, IMetadataIndex[] indexes)
+            throws MetadataException {
+        for (int i = 0; i < indexes.length; i++) {
             IDatasetDetails id = new InternalDatasetDetails(FileStructure.BTREE, PartitioningStrategy.HASH,
-                    primaryIndexes[i].getPartitioningExpr(), primaryIndexes[i].getPartitioningExpr(), null,
-                    primaryIndexes[i].getPartitioningExprType(), false, null, false);
-            MetadataManager.INSTANCE.addDataset(mdTxnCtx, new Dataset(primaryIndexes[i].getDataverseName(),
-                    primaryIndexes[i].getIndexedDatasetName(), primaryIndexes[i].getDataverseName(),
-                    primaryIndexes[i].getPayloadRecordType().getTypeName(), primaryIndexes[i].getNodeGroupName(),
-                    GlobalConfig.DEFAULT_COMPACTION_POLICY_NAME, GlobalConfig.DEFAULT_COMPACTION_POLICY_PROPERTIES, id,
-                    new HashMap<String, String>(), DatasetType.INTERNAL, primaryIndexes[i].getDatasetId().getId(),
-                    IMetadataEntity.PENDING_NO_OP));
+                    indexes[i].getPartitioningExpr(), indexes[i].getPartitioningExpr(), null,
+                    indexes[i].getPartitioningExprType(), false, null, false);
+            MetadataManager.INSTANCE.addDataset(mdTxnCtx,
+                    new Dataset(indexes[i].getDataverseName(), indexes[i].getIndexedDatasetName(),
+                            indexes[i].getDataverseName(), indexes[i].getPayloadRecordType().getTypeName(),
+                            indexes[i].getNodeGroupName(), GlobalConfig.DEFAULT_COMPACTION_POLICY_NAME,
+                            GlobalConfig.DEFAULT_COMPACTION_POLICY_PROPERTIES, id, new HashMap<String, String>(),
+                            DatasetType.INTERNAL, indexes[i].getDatasetId().getId(),
+                            IMetadataEntity.PENDING_NO_OP));
         }
         if (LOGGER.isLoggable(Level.INFO)) {
             LOGGER.info("Finished inserting initial datasets.");
         }
     }
 
-    public static void getBuiltinTypes(ArrayList<IAType> types) throws Exception {
-        Collection<BuiltinType> builtinTypes = AsterixBuiltinTypeMap.getBuiltinTypes().values();
-        Iterator<BuiltinType> iter = builtinTypes.iterator();
-        while (iter.hasNext()) {
-            types.add(iter.next());
+    private static void getMetadataTypes(ArrayList<IAType> types) {
+        for (int i = 0; i < PRIMARY_INDEXES.length; i++) {
+            types.add(PRIMARY_INDEXES[i].getPayloadRecordType());
         }
     }
 
-    public static void getMetadataTypes(ArrayList<IAType> types) throws Exception {
-        for (int i = 0; i < primaryIndexes.length; i++) {
-            types.add(primaryIndexes[i].getPayloadRecordType());
-        }
-    }
-
-    public static void insertInitialDatatypes(MetadataTransactionContext mdTxnCtx) throws Exception {
-        String dataverseName = MetadataPrimaryIndexes.DATAVERSE_DATASET.getDataverseName();
-        ArrayList<IAType> types = new ArrayList<IAType>();
-        getBuiltinTypes(types);
+    private static void insertMetadataDatatypes(MetadataTransactionContext mdTxnCtx) throws MetadataException {
+        ArrayList<IAType> types = new ArrayList<>();
+        types.addAll(BuiltinTypeMap.getAllBuiltinTypes());
         getMetadataTypes(types);
         for (int i = 0; i < types.size(); i++) {
             MetadataManager.INSTANCE.addDatatype(mdTxnCtx,
-                    new Datatype(dataverseName, types.get(i).getTypeName(), types.get(i), false));
+                    new Datatype(MetadataConstants.METADATA_DATAVERSE_NAME, types.get(i).getTypeName(), types.get(i),
+                            false));
         }
+        MetadataManager.INSTANCE.addDatatype(mdTxnCtx,
+                MetadataBuiltinEntities.ANY_OBJECT_DATATYPE);
         if (LOGGER.isLoggable(Level.INFO)) {
             LOGGER.info("Finished inserting initial datatypes.");
         }
     }
 
-    public static void insertNodes(MetadataTransactionContext mdTxnCtx) throws Exception {
-        Iterator<String> iter = nodeNames.iterator();
-        // Set<Entry<String, String[]>> set = nodeStores.entrySet();
-        // Iterator<Entry<String, String[]>> im = set.iterator();
-
-        while (iter.hasNext()) {
-            // Map.Entry<String, String[]> me = (Map.Entry<String,
-            // String[]>)im.next();
-            MetadataManager.INSTANCE.addNode(mdTxnCtx, new Node(iter.next(), 0, 0/*
-                                                                                  * , me . getValue ( )
-                                                                                  */));
+    private static void insertNodes(MetadataTransactionContext mdTxnCtx) throws MetadataException {
+        for (String nodesName : nodeNames) {
+            MetadataManager.INSTANCE.addNode(mdTxnCtx, new Node(nodesName, 0, 0));
         }
     }
 
-    public static void insertInitialGroups(MetadataTransactionContext mdTxnCtx) throws Exception {
-        String groupName = MetadataPrimaryIndexes.DATAVERSE_DATASET.getNodeGroupName();
-        List<String> metadataGroupNodeNames = new ArrayList<String>();
+    private static void insertInitialGroups(MetadataTransactionContext mdTxnCtx) throws MetadataException {
+        List<String> metadataGroupNodeNames = new ArrayList<>();
         metadataGroupNodeNames.add(metadataNodeName);
-        NodeGroup groupRecord = new NodeGroup(groupName, metadataGroupNodeNames);
+        NodeGroup groupRecord = new NodeGroup(MetadataConstants.METADATA_NODEGROUP_NAME, metadataGroupNodeNames);
         MetadataManager.INSTANCE.addNodegroup(mdTxnCtx, groupRecord);
-
-        List<String> nodes = new ArrayList<String>();
+        List<String> nodes = new ArrayList<>();
         nodes.addAll(nodeNames);
         NodeGroup defaultGroup = new NodeGroup(MetadataConstants.METADATA_DEFAULT_NODEGROUP_NAME, nodes);
         MetadataManager.INSTANCE.addNodegroup(mdTxnCtx, defaultGroup);
-
     }
 
-    private static void insertInitialAdapters(MetadataTransactionContext mdTxnCtx) throws Exception {
+    private static void insertInitialAdapters(MetadataTransactionContext mdTxnCtx)
+            throws MetadataException {
         String[] builtInAdapterClassNames = new String[] { GenericAdapterFactory.class.getName() };
         DatasourceAdapter adapter;
         for (String adapterClassName : builtInAdapterClassNames) {
@@ -308,7 +286,7 @@ public class MetadataBootstrap {
         }
     }
 
-    private static void insertInitialFeedPolicies(MetadataTransactionContext mdTxnCtx) throws Exception {
+    private static void insertInitialFeedPolicies(MetadataTransactionContext mdTxnCtx) throws MetadataException {
         for (FeedPolicyEntity feedPolicy : BuiltinFeedPolicies.policies) {
             MetadataManager.INSTANCE.addFeedPolicy(mdTxnCtx, feedPolicy);
         }
@@ -317,51 +295,69 @@ public class MetadataBootstrap {
         }
     }
 
-    private static void insertInitialCompactionPolicies(MetadataTransactionContext mdTxnCtx) throws Exception {
-        String[] builtInCompactionPolicyClassNames = new String[] { ConstantMergePolicyFactory.class.getName(),
-                PrefixMergePolicyFactory.class.getName(), NoMergePolicyFactory.class.getName(),
-                CorrelatedPrefixMergePolicyFactory.class.getName() };
-        CompactionPolicy compactionPolicy;
+    private static void insertInitialCompactionPolicies(MetadataTransactionContext mdTxnCtx) throws MetadataException {
+        String[] builtInCompactionPolicyClassNames =
+                new String[] { ConstantMergePolicyFactory.class.getName(), PrefixMergePolicyFactory.class.getName(),
+                        NoMergePolicyFactory.class.getName(), CorrelatedPrefixMergePolicyFactory.class.getName() };
         for (String policyClassName : builtInCompactionPolicyClassNames) {
-            compactionPolicy = getCompactionPolicyEntity(policyClassName);
+            CompactionPolicy compactionPolicy = getCompactionPolicyEntity(policyClassName);
             MetadataManager.INSTANCE.addCompactionPolicy(mdTxnCtx, compactionPolicy);
         }
     }
 
-    private static DatasourceAdapter getAdapter(String adapterFactoryClassName) throws Exception {
-        String adapterName = ((IAdapterFactory) (Class.forName(adapterFactoryClassName).newInstance())).getAlias();
-        return new DatasourceAdapter(new AdapterIdentifier(MetadataConstants.METADATA_DATAVERSE_NAME, adapterName),
-                adapterFactoryClassName, IDataSourceAdapter.AdapterType.INTERNAL);
+    private static DatasourceAdapter getAdapter(String adapterFactoryClassName)
+            throws MetadataException {
+        try {
+            String adapterName = ((IAdapterFactory) (Class.forName(adapterFactoryClassName).newInstance())).getAlias();
+            return new DatasourceAdapter(new AdapterIdentifier(MetadataConstants.METADATA_DATAVERSE_NAME, adapterName),
+                    adapterFactoryClassName, IDataSourceAdapter.AdapterType.INTERNAL);
+        } catch (InstantiationException | IllegalAccessException | ClassNotFoundException e) {
+            throw new MetadataException("Unable to instantiate builtin Adapter", e);
+        }
     }
 
-    private static CompactionPolicy getCompactionPolicyEntity(String compactionPolicyClassName) throws Exception {
-        String policyName = ((ILSMMergePolicyFactory) (Class.forName(compactionPolicyClassName).newInstance()))
-                .getName();
-        return new CompactionPolicy(MetadataConstants.METADATA_DATAVERSE_NAME, policyName, compactionPolicyClassName);
+    private static CompactionPolicy getCompactionPolicyEntity(String compactionPolicyClassName)
+            throws MetadataException {
+        try {
+            String policyName =
+                    ((ILSMMergePolicyFactory) (Class.forName(compactionPolicyClassName).newInstance())).getName();
+            return new CompactionPolicy(MetadataConstants.METADATA_DATAVERSE_NAME, policyName,
+                    compactionPolicyClassName);
+        } catch (InstantiationException | IllegalAccessException | ClassNotFoundException e) {
+            throw new MetadataException("Unable to instantiate builtin Merge Policy Factory", e);
+        }
     }
 
-    private static void enlistMetadataDataset(IMetadataIndex index, boolean create, MetadataTransactionContext mdTxnCtx)
-            throws Exception {
+    /**
+     * Enlist a metadata index so it is available for metadata operations
+     * should be performed upon bootstrapping
+     *
+     * @param index
+     * @throws HyracksDataException
+     */
+    public static void enlistMetadataDataset(IMetadataIndex index) throws HyracksDataException {
         ClusterPartition metadataPartition = propertiesProvider.getMetadataProperties().getMetadataPartition();
         int metadataDeviceId = metadataPartition.getIODeviceNum();
         String metadataPartitionPath = StoragePathUtil.prepareStoragePartitionPath(
-                AsterixClusterProperties.INSTANCE.getStorageDirectoryName(), metadataPartition.getPartitionId());
+                ClusterProperties.INSTANCE.getStorageDirectoryName(), metadataPartition.getPartitionId());
         String resourceName = metadataPartitionPath + File.separator + index.getFileNameRelativePath();
         FileReference file = ioManager.getAbsoluteFileRef(metadataDeviceId, resourceName);
 
+        // this should not be done this way. dataset lifecycle manager shouldn't return virtual buffer caches for
+        // a dataset that was not yet created
         List<IVirtualBufferCache> virtualBufferCaches = runtimeContext.getDatasetLifecycleManager()
                 .getVirtualBufferCaches(index.getDatasetId().getId(), metadataPartition.getIODeviceNum());
         ITypeTraits[] typeTraits = index.getTypeTraits();
         IBinaryComparatorFactory[] comparatorFactories = index.getKeyBinaryComparatorFactory();
         int[] bloomFilterKeyFields = index.getBloomFilterKeyFields();
-        LSMBTree lsmBtree = null;
-        long resourceID = -1;
-        ILSMOperationTracker opTracker = index.isPrimaryIndex()
-                ? runtimeContext.getLSMBTreeOperationTracker(index.getDatasetId().getId())
-                : new BaseOperationTracker(index.getDatasetId().getId(),
-                        dataLifecycleManager.getDatasetInfo(index.getDatasetId().getId()));
+        LSMBTree lsmBtree;
+        long resourceID;
+        ILSMOperationTracker opTracker =
+                index.isPrimaryIndex() ? runtimeContext.getLSMBTreeOperationTracker(index.getDatasetId().getId())
+                        : new BaseOperationTracker(index.getDatasetId().getId(),
+                                dataLifecycleManager.getDatasetInfo(index.getDatasetId().getId()));
         final String absolutePath = file.getFile().getPath();
-        if (create) {
+        if (isNewUniverse()) {
             lsmBtree = LSMBTreeUtils.createLSMTree(virtualBufferCaches, file, bufferCache, fileMapProvider, typeTraits,
                     comparatorFactories, bloomFilterKeyFields, runtimeContext.getBloomFilterFalsePositiveRate(),
                     runtimeContext.getMetadataMergePolicyFactory()
@@ -375,22 +371,22 @@ public class MetadataBootstrap {
                     comparatorFactories, bloomFilterKeyFields, index.isPrimaryIndex(), index.getDatasetId().getId(),
                     runtimeContext.getMetadataMergePolicyFactory(), GlobalConfig.DEFAULT_COMPACTION_POLICY_PROPERTIES,
                     null, null, null, null);
-            ILocalResourceFactoryProvider localResourceFactoryProvider = new PersistentLocalResourceFactoryProvider(
-                    localResourceMetadata, LocalResource.LSMBTreeResource);
+            ILocalResourceFactoryProvider localResourceFactoryProvider =
+                    new PersistentLocalResourceFactoryProvider(localResourceMetadata, LocalResource.LSMBTreeResource);
             ILocalResourceFactory localResourceFactory = localResourceFactoryProvider.getLocalResourceFactory();
             localResourceRepository.insert(localResourceFactory.createLocalResource(resourceID, resourceName,
-                    metadataPartition.getPartitionId(), absolutePath));
+                    metadataPartition.getPartitionId(), LIFOMetaDataFrame.VERSION, absolutePath));
             dataLifecycleManager.register(absolutePath, lsmBtree);
         } else {
             final LocalResource resource = localResourceRepository.getResourceByPath(absolutePath);
             if (resource == null) {
-                throw new Exception("Could not find required metadata indexes. Please delete "
+                throw new HyracksDataException("Could not find required metadata indexes. Please delete "
                         + propertiesProvider.getMetadataProperties().getTransactionLogDirs()
                                 .get(runtimeContext.getTransactionSubsystem().getId())
                         + " to intialize as a new instance. (WARNING: all data will be lost.)");
             }
             resourceID = resource.getResourceId();
-            lsmBtree = (LSMBTree) dataLifecycleManager.getIndex(absolutePath);
+            lsmBtree = (LSMBTree) dataLifecycleManager.get(absolutePath);
             if (lsmBtree == null) {
                 lsmBtree = LSMBTreeUtils.createLSMTree(virtualBufferCaches, file, bufferCache, fileMapProvider,
                         typeTraits, comparatorFactories, bloomFilterKeyFields,
@@ -403,7 +399,6 @@ public class MetadataBootstrap {
                 dataLifecycleManager.register(absolutePath, lsmBtree);
             }
         }
-
         index.setResourceID(resourceID);
         index.setFile(file);
     }
@@ -416,75 +411,23 @@ public class MetadataBootstrap {
         return metadataNodeName;
     }
 
+    /**
+     * Perform recovery of DDL operations metadata records
+     */
     public static void startDDLRecovery() throws MetadataException {
         // #. clean up any record which has pendingAdd/DelOp flag
         // as traversing all records from DATAVERSE_DATASET to DATASET_DATASET, and then to INDEX_DATASET.
-        String dataverseName = null;
-        String datasetName = null;
-        String indexName = null;
         MetadataTransactionContext mdTxnCtx = null;
-
         MetadataManager.INSTANCE.acquireWriteLatch();
-
         if (LOGGER.isLoggable(Level.INFO)) {
             LOGGER.info("Starting DDL recovery ...");
         }
 
         try {
             mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
-
             List<Dataverse> dataverses = MetadataManager.INSTANCE.getDataverses(mdTxnCtx);
             for (Dataverse dataverse : dataverses) {
-                dataverseName = dataverse.getDataverseName();
-                if (dataverse.getPendingOp() != IMetadataEntity.PENDING_NO_OP) {
-                    // drop pending dataverse
-                    MetadataManager.INSTANCE.dropDataverse(mdTxnCtx, dataverseName);
-                    if (LOGGER.isLoggable(Level.INFO)) {
-                        LOGGER.info("Dropped a pending dataverse: " + dataverseName);
-                    }
-                } else {
-                    List<Dataset> datasets = MetadataManager.INSTANCE.getDataverseDatasets(mdTxnCtx, dataverseName);
-                    for (Dataset dataset : datasets) {
-                        datasetName = dataset.getDatasetName();
-                        if (dataset.getPendingOp() != IMetadataEntity.PENDING_NO_OP) {
-                            // drop pending dataset
-                            MetadataManager.INSTANCE.dropDataset(mdTxnCtx, dataverseName, datasetName);
-                            if (LOGGER.isLoggable(Level.INFO)) {
-                                LOGGER.info("Dropped a pending dataset: " + dataverseName + "." + datasetName);
-                            }
-                        } else {
-                            List<Index> indexes = MetadataManager.INSTANCE.getDatasetIndexes(mdTxnCtx, dataverseName,
-                                    datasetName);
-                            for (Index index : indexes) {
-                                indexName = index.getIndexName();
-                                if (index.getPendingOp() != IMetadataEntity.PENDING_NO_OP) {
-                                    // drop pending index
-                                    MetadataManager.INSTANCE.dropIndex(mdTxnCtx, dataverseName, datasetName, indexName);
-                                    if (LOGGER.isLoggable(Level.INFO)) {
-                                        LOGGER.info("Dropped a pending index: " + dataverseName + "." + datasetName
-                                                + "." + indexName);
-                                    }
-                                }
-                            }
-                        }
-                        if (dataset.getDatasetType() == DatasetType.EXTERNAL) {
-                            // if the dataset has no indexes, delete all its files
-                            List<Index> indexes = MetadataManager.INSTANCE.getDatasetIndexes(mdTxnCtx, dataverseName,
-                                    datasetName);
-                            if (indexes.size() == 0) {
-                                List<ExternalFile> files = MetadataManager.INSTANCE.getDatasetExternalFiles(mdTxnCtx,
-                                        dataset);
-                                for (ExternalFile file : files) {
-                                    MetadataManager.INSTANCE.dropExternalFile(mdTxnCtx, file);
-                                    if (LOGGER.isLoggable(Level.INFO)) {
-                                        LOGGER.info("Dropped an external file: " + dataverseName + "." + datasetName
-                                                + "." + file.getFileNumber());
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                recoverDataverse(mdTxnCtx, dataverse);
             }
             // the commit wasn't there before. yet, everything was working correctly!!!!!!!!!!!
             MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
@@ -494,7 +437,7 @@ public class MetadataBootstrap {
         } catch (Exception e) {
             try {
                 if (IS_DEBUG_MODE) {
-                    e.printStackTrace();
+                    LOGGER.log(Level.SEVERE, "Failure during DDL recovery", e);
                 }
                 MetadataManager.INSTANCE.abortTransaction(mdTxnCtx);
             } catch (Exception e2) {
@@ -504,5 +447,75 @@ public class MetadataBootstrap {
         } finally {
             MetadataManager.INSTANCE.releaseWriteLatch();
         }
+    }
+
+    private static void recoverDataverse(MetadataTransactionContext mdTxnCtx, Dataverse dataverse)
+            throws MetadataException {
+        if (dataverse.getPendingOp() != IMetadataEntity.PENDING_NO_OP) {
+            // drop pending dataverse
+            MetadataManager.INSTANCE.dropDataverse(mdTxnCtx, dataverse.getDataverseName());
+            if (LOGGER.isLoggable(Level.INFO)) {
+                LOGGER.info("Dropped a pending dataverse: " + dataverse.getDataverseName());
+            }
+        } else {
+            List<Dataset> datasets =
+                    MetadataManager.INSTANCE.getDataverseDatasets(mdTxnCtx, dataverse.getDataverseName());
+            for (Dataset dataset : datasets) {
+                recoverDataset(mdTxnCtx, dataset);
+            }
+        }
+    }
+
+    private static void recoverDataset(MetadataTransactionContext mdTxnCtx, Dataset dataset) throws MetadataException {
+        if (dataset.getPendingOp() != IMetadataEntity.PENDING_NO_OP) {
+            // drop pending dataset
+            MetadataManager.INSTANCE.dropDataset(mdTxnCtx, dataset.getDataverseName(), dataset.getDatasetName());
+            if (LOGGER.isLoggable(Level.INFO)) {
+                LOGGER.info(
+                        "Dropped a pending dataset: " + dataset.getDataverseName() + "." + dataset.getDatasetName());
+            }
+        } else {
+            List<Index> indexes =
+                    MetadataManager.INSTANCE.getDatasetIndexes(mdTxnCtx, dataset.getDataverseName(),
+                            dataset.getDatasetName());
+            for (Index index : indexes) {
+                if (index.getPendingOp() != IMetadataEntity.PENDING_NO_OP) {
+                    // drop pending index
+                    MetadataManager.INSTANCE.dropIndex(mdTxnCtx, dataset.getDataverseName(), dataset.getDatasetName(),
+                            index.getIndexName());
+                    if (LOGGER.isLoggable(Level.INFO)) {
+                        LOGGER.info("Dropped a pending index: " + dataset.getDataverseName() + "."
+                                + dataset.getDatasetName()
+                                + "." + index.getIndexName());
+                    }
+                }
+            }
+        }
+        if (dataset.getDatasetType() == DatasetType.EXTERNAL) {
+            // if the dataset has no indexes, delete all its files
+            List<Index> indexes =
+                    MetadataManager.INSTANCE.getDatasetIndexes(mdTxnCtx, dataset.getDataverseName(),
+                            dataset.getDatasetName());
+            if (indexes.isEmpty()) {
+                List<ExternalFile> files =
+                        MetadataManager.INSTANCE.getDatasetExternalFiles(mdTxnCtx, dataset);
+                for (ExternalFile file : files) {
+                    MetadataManager.INSTANCE.dropExternalFile(mdTxnCtx, file);
+                    if (LOGGER.isLoggable(Level.INFO)) {
+                        LOGGER.info("Dropped an external file: " + dataset.getDataverseName() + "."
+                                + dataset.getDatasetName()
+                                + "." + file.getFileNumber());
+                    }
+                }
+            }
+        }
+    }
+
+    public static boolean isNewUniverse() {
+        return isNewUniverse;
+    }
+
+    public static void setNewUniverse(boolean isNewUniverse) {
+        MetadataBootstrap.isNewUniverse = isNewUniverse;
     }
 }

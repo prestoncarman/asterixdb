@@ -18,17 +18,17 @@
  */
 
 
-DROP DATABASE test IF EXISTS;
-CREATE DATABASE test;
+DROP DATAVERSE test IF EXISTS;
+CREATE DATAVERSE test;
 USE test;
 
 
 CREATE TYPE OrderType AS {
-  o_orderkey: int32
+  o_orderkey: integer
 }
 
 CREATE TYPE CustomerType AS {
-  c_custkey: int32
+  c_custkey: integer
 }
 
 

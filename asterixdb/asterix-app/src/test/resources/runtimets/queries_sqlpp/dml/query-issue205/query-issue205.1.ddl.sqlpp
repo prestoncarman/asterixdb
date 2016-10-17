@@ -23,24 +23,24 @@
  * Date         : 26th November 2012
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 
 use test;
 
 
 create type test.EmployeeStat as
 {
-  age : int64,
-  salary : int64
+  age : bigint,
+  salary : bigint
 }
 
 create type test.EmployeeType as
  closed {
   id : string,
   stat : EmployeeStat,
-  deptCode : int64
+  deptCode : bigint
 }
 
-create  table Employees(EmployeeType) primary key id;
+create  dataset Employees(EmployeeType) primary key id;
 

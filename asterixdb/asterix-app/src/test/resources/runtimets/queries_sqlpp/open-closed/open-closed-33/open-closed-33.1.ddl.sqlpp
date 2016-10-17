@@ -25,8 +25,8 @@
  * Date           : 31st May 2012
  */
 
-drop  database testdv2 if exists;
-create  database testdv2;
+drop  dataverse testdv2 if exists;
+create  dataverse testdv2;
 
 use testdv2;
 
@@ -42,11 +42,11 @@ create type testdv2.testtype02 as
   name : string,
   sex : string,
   dept : string,
-  salary : int32,
+  salary : integer,
   interests : {{string}}?
 }
 
-create  table testds01(testtype01) primary key id;
+create  dataset testds01(testtype01) primary key id;
 
-create  table testds02(testtype02) primary key id;
+create  dataset testds02(testtype02) primary key id;
 

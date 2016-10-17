@@ -53,6 +53,7 @@ import java.util.logging.Logger;
 
 import org.apache.asterix.common.cluster.ClusterPartition;
 import org.apache.asterix.common.config.AsterixReplicationProperties;
+import org.apache.asterix.common.config.ClusterProperties;
 import org.apache.asterix.common.config.IAsterixPropertiesProvider;
 import org.apache.asterix.common.dataflow.AsterixLSMIndexUtil;
 import org.apache.asterix.common.replication.AsterixReplicationJob;
@@ -441,7 +442,7 @@ public class ReplicationManager implements IReplicationManager {
 
     @Override
     public boolean isReplicationEnabled() {
-        return replicationProperties.isReplicationEnabled();
+        return ClusterProperties.INSTANCE.isReplicationEnabled();
     }
 
     @Override

@@ -22,17 +22,17 @@
  * Author: zheilbron
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 
 use test;
 
 
 create type test.opentype as
 {
-  id : int32,
+  id : integer,
   fname : string
 }
 
-create  table testds(opentype) primary key id;
+create  dataset testds(opentype) primary key id;
 

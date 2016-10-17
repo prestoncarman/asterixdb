@@ -23,18 +23,18 @@
  * Date         : 10th Oct 2014
  */
 
-drop  database tpch if exists;
-create  database tpch;
+drop  dataverse tpch if exists;
+create  dataverse tpch;
 
 use tpch;
 
 
 create type tpch.LineItemType as
  closed {
-  l_orderkey : int64,
-  l_partkey : int64,
-  l_suppkey : int64,
-  l_linenumber : int64,
+  l_orderkey : bigint,
+  l_partkey : bigint,
+  l_suppkey : bigint,
+  l_linenumber : bigint,
   l_quantity : double,
   l_extendedprice : double,
   l_discount : double,
@@ -49,5 +49,5 @@ create type tpch.LineItemType as
   l_comment : string
 }
 
-create  table LineItem(LineItemType) primary key l_orderkey,l_linenumber;
+create  dataset LineItem(LineItemType) primary key l_orderkey,l_linenumber;
 

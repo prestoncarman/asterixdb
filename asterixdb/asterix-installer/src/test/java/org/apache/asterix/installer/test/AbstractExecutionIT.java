@@ -24,11 +24,12 @@ import java.util.logging.Logger;
 import org.apache.asterix.external.util.ExternalDataConstants;
 import org.apache.asterix.external.util.IdentitiyResolverFactory;
 import org.apache.asterix.test.aql.TestExecutor;
-import org.apache.asterix.test.base.AsterixTestHelper;
+import org.apache.asterix.test.base.RetainLogsRule;
 import org.apache.asterix.test.runtime.HDFSCluster;
 import org.apache.asterix.testframework.context.TestCaseContext;
 import org.apache.asterix.testframework.context.TestFileContext;
 import org.apache.asterix.testframework.xml.TestCase.CompilationUnit;
+import org.apache.asterix.testframework.xml.TestGroup;
 import org.apache.commons.lang3.StringUtils;
 import org.codehaus.plexus.util.FileUtils;
 import org.junit.AfterClass;
@@ -48,7 +49,7 @@ public abstract class AbstractExecutionIT {
 
     protected static final Logger LOGGER = Logger.getLogger(AbstractExecutionIT.class.getName());
 
-    protected static final String PATH_ACTUAL = "ittest" + File.separator;
+    protected static final String PATH_ACTUAL = "target" + File.separator + "ittest" + File.separator;
     protected static final String PATH_BASE = StringUtils
             .join(new String[] { "..", "asterix-app", "src", "test", "resources", "runtimets" }, File.separator);
 
@@ -58,11 +59,13 @@ public abstract class AbstractExecutionIT {
 
     private static final String EXTERNAL_LIBRARY_TEST_GROUP = "lib";
 
+    private static final List<String> badTestCases = new ArrayList<>();
+
     private static String reportPath =
             new File(StringUtils.join(new String[] { "target", "failsafe-reports" }, File.separator)).getAbsolutePath();
 
     @Rule
-    public TestRule retainLogs = new AsterixTestHelper.RetainLogsRule(
+    public TestRule retainLogs = new RetainLogsRule(
             AsterixInstallerIntegrationUtil.getManagixHome(), reportPath);
 
     @BeforeClass
@@ -87,15 +90,14 @@ public abstract class AbstractExecutionIT {
         AsterixLifecycleIT.setUp();
 
         File externalTestsJar = new File(StringUtils.join(
-                new String[] { "..", "asterix-external-data", "target" } , File.separator)).listFiles(
-                (dir, name) -> name.matches("asterix-external-data-.*-tests.jar"))[0];
+                new String[] { "..", "asterix-external-data", "target" }, File.separator)).listFiles(
+                        (dir, name) -> name.matches("asterix-external-data-.*-tests.jar"))[0];
 
         FileUtils.copyFile(externalTestsJar, new File(
                 AsterixInstallerIntegrationUtil.getManagixHome() + "/clusters/local/working_dir/asterix/repo/",
                 externalTestsJar.getName()));
 
         AsterixLifecycleIT.restartInstance();
-
 
         FileUtils.copyDirectoryStructure(
                 new File(StringUtils.join(new String[] { "..", "asterix-app", "data" }, File.separator)),
@@ -114,7 +116,7 @@ public abstract class AbstractExecutionIT {
         System.setProperty(ExternalDataConstants.NODE_RESOLVER_FACTORY_PROPERTY,
                 IdentitiyResolverFactory.class.getName());
 
-        reportPath = new File(StringUtils.join(new String[]{"target", "failsafe-reports"}, File.separator))
+        reportPath = new File(StringUtils.join(new String[] { "target", "failsafe-reports" }, File.separator))
                 .getAbsolutePath();
     }
 
@@ -126,8 +128,13 @@ public abstract class AbstractExecutionIT {
             outdir.delete();
         }
         AsterixLifecycleIT.tearDown();
-
         HDFSCluster.getInstance().cleanup();
+        if (!badTestCases.isEmpty()) {
+            System.out.println("The following test cases left some data");
+            for (String testCase : badTestCases) {
+                System.out.println(testCase);
+            }
+        }
     }
 
     @Parameters
@@ -152,6 +159,7 @@ public abstract class AbstractExecutionIT {
             return;
         }
         testExecutor.executeTest(PATH_ACTUAL, tcCtx, null, false);
+        testExecutor.cleanup(tcCtx.toString(), badTestCases);
     }
 
     protected boolean skip() {
@@ -163,6 +171,13 @@ public abstract class AbstractExecutionIT {
                 if (ctx.getType().equals(EXTERNAL_LIBRARY_TEST_GROUP)) {
                     return true;
                 }
+            }
+        }
+        // For now we skip api tests.
+        for (TestGroup group : tcCtx.getTestGroups()) {
+            if (group != null && "api".equals(group.getName())) {
+                LOGGER.info("Skipping test: " + tcCtx.toString());
+                return true;
             }
         }
         return false;

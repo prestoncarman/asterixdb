@@ -18,7 +18,7 @@
  */
 /*
  * Description     : Test that BTree enforced open index is used in query plan
- *                 : define the BTree enforced open index on a composite key (fname,lanme)
+ *                 : define the BTree enforced open index on a composite key (fname?,lanme?)
  *                 : predicate => where $l.fname > "Julio" and $l.lname > "Mattocks" and
  *                     $l.fname <= "Micco" and $l.lname < "Vangieson"
  * Expected Result : Success
@@ -26,29 +26,29 @@
  * Date            : 27th March, 2014
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 
 use test;
 
 
 create type test.Emp as
  closed {
-  id : int64,
+  id : bigint,
   fname : string,
   lname : string,
-  age : int64,
+  age : bigint,
   dept : string
 }
 
 create type test.EmpOpen as
 {
-  id : int64,
-  age : int64,
+  id : bigint,
+  age : bigint,
   dept : string
 }
 
-create  table employee(Emp) primary key id;
+create  dataset employee(Emp) primary key id;
 
-create  table employeeOpen(EmpOpen) primary key id;
+create  dataset employeeOpen(EmpOpen) primary key id;
 

@@ -1,7 +1,7 @@
 DataverseUse fuzzyjoin_078
 TypeDecl DBLPType [
   open RecordType {
-    id : int32,
+    id : integer,
     dblpid : string,
     title : string,
     authors : string,
@@ -73,10 +73,8 @@ Let Variable [ Name=$tokensDBLP ]
           Variable [ Name=$token ]
           GROUP AS Variable [ Name=#1 ]
           (
-            token:=Variable [ Name=$token ]
             paper:=Variable [ Name=$paper ]
-            unrankedTokensDBLP:=Variable [ Name=$unrankedTokensDBLP ]
-            paperDBLP:=Variable [ Name=$paperDBLP ]
+            token:=Variable [ Name=$token ]
           )
 
         Orderby

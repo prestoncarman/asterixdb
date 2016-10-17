@@ -24,19 +24,19 @@
  */
 
 
-drop database test if exists;
-create database test;
+drop dataverse test if exists;
+create dataverse test;
 
 use test;
 
 create type TypeA as open {
-    id : int64,
+    id : bigint,
     name : string
 }
 
-create table t1(TypeA) primary key id;
+create dataset t1(TypeA) primary key id;
 
-create table t2(TypeA) primary key id;
+create dataset t2(TypeA) primary key id;
 
 create function f1(){
 (from t1 as m select element m)

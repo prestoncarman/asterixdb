@@ -17,27 +17,27 @@
  * under the License.
  */
 
-drop  database custlimit if exists;
-create  database custlimit;
+drop  dataverse custlimit if exists;
+create  dataverse custlimit;
 
 use custlimit;
 
 
 create type custlimit.AddressType as
  closed {
-  number : int32,
+  number : integer,
   street : string,
   city : string
 }
 
 create type custlimit.CustomerType as
  closed {
-  cid : int32,
+  cid : integer,
   name : string,
-  age : int32?,
+  age : integer?,
   address : AddressType?,
   lastorder : {
-      oid : int32,
+      oid : integer,
       total : float
   }
 
@@ -47,7 +47,7 @@ create  nodegroup group1 if not exists  on
     asterix_nc1,
     asterix_nc2
 ;
-create  table Customers(CustomerType) primary key cid on group1;
+create  dataset Customers(CustomerType) primary key cid on group1;
 
 write output to asterix_nc1:"/tmp/custlimit.adm"
 select element {'custname':c.name,'custage':c.age}

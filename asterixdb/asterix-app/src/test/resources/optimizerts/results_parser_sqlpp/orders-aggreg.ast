@@ -1,8 +1,8 @@
 DataverseUse orders-aggreg
 TypeDecl OrderType [
   closed RecordType {
-    oid : int32,
-    cid : int32,
+    oid : integer,
+    cid : integer,
     orderstatus : string,
     orderpriority : string,
     clerk : string,
@@ -23,17 +23,7 @@ RecordConstructor [
     LiteralExpr [STRING] [ordpercust]
     :
     FunctionCall orders-aggreg.count@1[
-      (
-        SELECT ELEMENT [
-        FieldAccessor [
-          Variable [ Name=#2 ]
-          Field=o
-        ]
-        ]
-        FROM [          Variable [ Name=#1 ]
-          AS Variable [ Name=#2 ]
-        ]
-      )
+      Variable [ Name=$o ]
     ]
   )
   (

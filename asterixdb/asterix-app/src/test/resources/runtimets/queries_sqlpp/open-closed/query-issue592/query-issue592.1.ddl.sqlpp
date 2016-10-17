@@ -23,22 +23,22 @@
  * Notes           : This test was written to verify the fix for issue592.
  */
 
-drop  database fooverse if exists;
-create  database fooverse;
+drop  dataverse fooverse if exists;
+create  dataverse fooverse;
 
 use fooverse;
 
 
 create type fooverse.bartype as
 {
-  baz : int64
+  baz : bigint
 }
 
 create type fooverse.footype as
 {
-  id : int64,
+  id : bigint,
   bars : [bartype]?
 }
 
-create  table fooset(footype) primary key id;
+create  dataset fooset(footype) primary key id;
 

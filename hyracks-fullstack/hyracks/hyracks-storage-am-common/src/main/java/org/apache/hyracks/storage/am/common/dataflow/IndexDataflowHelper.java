@@ -26,7 +26,8 @@ import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.io.FileReference;
 import org.apache.hyracks.storage.am.common.api.IIndex;
 import org.apache.hyracks.storage.am.common.api.IIndexDataflowHelper;
-import org.apache.hyracks.storage.am.common.api.IIndexLifecycleManager;
+import org.apache.hyracks.storage.am.common.api.IResourceLifecycleManager;
+import org.apache.hyracks.storage.am.common.frames.LIFOMetaDataFrame;
 import org.apache.hyracks.storage.am.common.util.IndexFileNameUtil;
 import org.apache.hyracks.storage.common.file.ILocalResourceFactory;
 import org.apache.hyracks.storage.common.file.ILocalResourceRepository;
@@ -37,7 +38,7 @@ public abstract class IndexDataflowHelper implements IIndexDataflowHelper {
 
     protected final IIndexOperatorDescriptor opDesc;
     protected final IHyracksTaskContext ctx;
-    protected final IIndexLifecycleManager lcManager;
+    protected final IResourceLifecycleManager<IIndex> lcManager;
     protected final ILocalResourceRepository localResourceRepository;
     protected final IResourceIdFactory resourceIdFactory;
     protected final FileReference file;
@@ -71,8 +72,9 @@ public abstract class IndexDataflowHelper implements IIndexDataflowHelper {
     @Override
     public void create() throws HyracksDataException {
         synchronized (lcManager) {
-            index = lcManager.getIndex(resourcePath);
+            index = lcManager.get(resourcePath);
             if (index != null) {
+                //how is this right?????????? <needs to be fixed>
                 lcManager.unregister(resourcePath);
             } else {
                 index = createIndexInstance();
@@ -93,7 +95,7 @@ public abstract class IndexDataflowHelper implements IIndexDataflowHelper {
                 String resourceName = opDesc.getFileSplitProvider().getFileSplits()[partition].getLocalFile().getFile()
                         .getPath();
                 localResourceRepository.insert(localResourceFactory.createLocalResource(resourceID, resourceName,
-                        resourcePartition, resourcePath));
+                        resourcePartition, LIFOMetaDataFrame.VERSION, resourcePath));
             } catch (IOException e) {
                 throw new HyracksDataException(e);
             }
@@ -108,7 +110,7 @@ public abstract class IndexDataflowHelper implements IIndexDataflowHelper {
                 throw new HyracksDataException("Index does not have a valid resource ID. Has it been created yet?");
             }
 
-            index = lcManager.getIndex(resourcePath);
+            index = lcManager.get(resourcePath);
             if (index == null) {
                 index = createIndexInstance();
                 lcManager.register(resourcePath, index);
@@ -127,7 +129,7 @@ public abstract class IndexDataflowHelper implements IIndexDataflowHelper {
     @Override
     public void destroy() throws HyracksDataException {
         synchronized (lcManager) {
-            index = lcManager.getIndex(resourcePath);
+            index = lcManager.get(resourcePath);
             if (index != null) {
                 lcManager.unregister(resourcePath);
             } else {

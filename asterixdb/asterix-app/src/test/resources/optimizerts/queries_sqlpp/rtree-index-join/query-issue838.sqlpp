@@ -23,30 +23,30 @@
  * Date         : 18 Dec. 2014
  */
 
-drop  database twitter if exists;
-create  database twitter;
+drop  dataverse twitter if exists;
+create  dataverse twitter;
 
 use twitter;
 
 
 create type twitter.TweetMessageType as
  closed {
-  tweetid : int64,
+  tweetid : bigint,
   `sender-location` : point,
   text : string
 }
 
 create type twitter.TweetHistorySubscription as
 {
-  `subscription-id` : int32,
+  `subscription-id` : integer,
   location : point
 }
 
-create  table TweetHistorySubscriptions(TweetHistorySubscription) primary key `subscription-id`;
+create  dataset TweetHistorySubscriptions(TweetHistorySubscription) primary key `subscription-id`;
 
 create  index testa  on TweetHistorySubscriptions (location) type rtree;
 
-create  table TweetMessages(TweetMessageType) primary key tweetid;
+create  dataset TweetMessages(TweetMessageType) primary key tweetid;
 
 create  index locationIdx  on TweetMessages (`sender-location`) type rtree;
 

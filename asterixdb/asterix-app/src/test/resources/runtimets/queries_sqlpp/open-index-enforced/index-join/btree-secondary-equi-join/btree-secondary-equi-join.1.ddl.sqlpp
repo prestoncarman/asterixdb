@@ -18,20 +18,20 @@
  */
 /*
  * Description    : Equi joins two datasets, DBLP and CSX, based on their title.
- *                  DBLP has a secondary btree open enforced index on authors, and given the 'indexnl' hint
+ *                  DBLP has a secondary btree open enforced index on authors?, and given the 'indexnl' hint
  *                  we expect the join to be transformed into an indexed nested-loop join.
  * Success        : Yes
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 
 use test;
 
 
 create type test.DBLPType as
  closed {
-  id : int64,
+  id : bigint,
   dblpid : string,
   title : string,
   authors : string,
@@ -40,7 +40,7 @@ create type test.DBLPType as
 
 create type test.DBLPOpenType as
 {
-  id : int64,
+  id : bigint,
   dblpid : string,
   title : string,
   misc : string
@@ -48,16 +48,16 @@ create type test.DBLPOpenType as
 
 create type test.CSXType as
  closed {
-  id : int64,
+  id : bigint,
   csxid : string,
   title : string,
   authors : string,
   misc : string
 }
 
-create  table DBLP(DBLPType) primary key id;
+create  dataset DBLP(DBLPType) primary key id;
 
-create  table DBLPOpen(DBLPOpenType) primary key id;
+create  dataset DBLPOpen(DBLPOpenType) primary key id;
 
-create  table CSX(CSXType) primary key id;
+create  dataset CSX(CSXType) primary key id;
 

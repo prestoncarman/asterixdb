@@ -26,6 +26,8 @@ public class AOrderedListType extends AbstractCollectionType {
 
     private static final long serialVersionUID = 1L;
 
+    public static final AOrderedListType FULL_OPEN_ORDEREDLIST_TYPE = new AOrderedListType(BuiltinType.ANY, "");
+
     /**
      * @param itemType
      *            if null, the list is untyped

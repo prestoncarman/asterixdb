@@ -17,20 +17,20 @@
  * under the License.
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 
 use test;
 
 
 create type test.Tweet as
  closed {
-  id : int64,
-  tweetid : int64,
+  id : bigint,
+  tweetid : bigint,
   loc : point,
   time : datetime,
   text : string
 }
 
-create  table TwitterData(Tweet) primary key id;
+create  dataset TwitterData(Tweet) primary key id;
 

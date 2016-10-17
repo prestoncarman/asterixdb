@@ -24,8 +24,8 @@
  *                 : this is another variant of the test in query-proposal.aql
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 
 use test;
 
@@ -36,10 +36,10 @@ create type test.TweetMessageType as
   user : {
       `screen-name` : string,
       lang : string,
-      friends_count : int64,
-      statuses_count : int64,
+      friends_count : bigint,
+      statuses_count : bigint,
       name : string,
-      followers_count : int64
+      followers_count : bigint
   }
 ,
   `sender-location` : point?,
@@ -48,5 +48,5 @@ create type test.TweetMessageType as
   `message-text` : string
 }
 
-create  table TweetMessages(TweetMessageType) primary key tweetid;
+create  dataset TweetMessages(TweetMessageType) primary key tweetid;
 

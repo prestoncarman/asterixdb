@@ -25,12 +25,14 @@ import java.io.Serializable;
 import org.apache.hyracks.api.application.IApplicationConfig;
 import org.apache.hyracks.api.application.INCApplicationContext;
 import org.apache.hyracks.api.application.IStateDumpHandler;
+import org.apache.hyracks.api.comm.IChannelInterfaceFactory;
 import org.apache.hyracks.api.context.IHyracksRootContext;
 import org.apache.hyracks.api.lifecycle.ILifeCycleComponentManager;
 import org.apache.hyracks.api.resources.memory.IMemoryManager;
 import org.apache.hyracks.api.service.IControllerService;
 import org.apache.hyracks.control.common.application.ApplicationContext;
 import org.apache.hyracks.control.common.context.ServerContext;
+import org.apache.hyracks.control.common.utils.HyracksThreadFactory;
 import org.apache.hyracks.control.nc.NodeControllerService;
 import org.apache.hyracks.control.nc.resources.memory.MemoryManager;
 
@@ -42,11 +44,12 @@ public class NCApplicationContext extends ApplicationContext implements INCAppli
     private Object appObject;
     private IStateDumpHandler sdh;
     private final NodeControllerService ncs;
+    private IChannelInterfaceFactory messagingChannelInterfaceFactory;
 
-    public NCApplicationContext(NodeControllerService ncs, ServerContext serverCtx, IHyracksRootContext rootCtx, String nodeId,
-                                MemoryManager memoryManager, ILifeCycleComponentManager lifeCyclecomponentManager,
-                                IApplicationConfig appConfig) throws IOException {
-        super(serverCtx, appConfig);
+    public NCApplicationContext(NodeControllerService ncs, ServerContext serverCtx, IHyracksRootContext rootCtx,
+            String nodeId, MemoryManager memoryManager, ILifeCycleComponentManager lifeCyclecomponentManager,
+            IApplicationConfig appConfig) throws IOException {
+        super(serverCtx, appConfig, new HyracksThreadFactory(nodeId));
         this.lccm = lifeCyclecomponentManager;
         this.nodeId = nodeId;
         this.rootCtx = rootCtx;
@@ -107,5 +110,15 @@ public class NCApplicationContext extends ApplicationContext implements INCAppli
     @Override
     public IControllerService getControllerService() {
         return ncs;
+    }
+
+    @Override
+    public IChannelInterfaceFactory getMessagingChannelInterfaceFactory() {
+        return messagingChannelInterfaceFactory;
+    }
+
+    @Override
+    public void setMessagingChannelInterfaceFactory(IChannelInterfaceFactory interfaceFactory) {
+        this.messagingChannelInterfaceFactory = interfaceFactory;
     }
 }

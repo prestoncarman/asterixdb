@@ -18,40 +18,15 @@
  */
 package org.apache.asterix.common.messaging.api;
 
+import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.messages.IMessage;
+import org.apache.hyracks.api.service.IControllerService;
 
+@FunctionalInterface
 public interface IApplicationMessage extends IMessage {
 
-    public enum ApplicationMessageType {
-        RESOURCE_ID_REQUEST,
-        RESOURCE_ID_RESPONSE,
-        REPORT_MAX_RESOURCE_ID_REQUEST,
-        REPORT_MAX_RESOURCE_ID_RESPONSE,
-        TAKEOVER_PARTITIONS_REQUEST,
-        TAKEOVER_PARTITIONS_RESPONSE,
-        TAKEOVER_METADATA_NODE_REQUEST,
-        TAKEOVER_METADATA_NODE_RESPONSE,
-        PREPARE_PARTITIONS_FAILBACK_REQUEST,
-        PREPARE_PARTITIONS_FAILBACK_RESPONSE,
-        COMPLETE_FAILBACK_REQUEST,
-        COMPLETE_FAILBACK_RESPONSE,
-        REPLICA_EVENT,
-        FEED_PROVIDER_READY
-    }
-
-    public abstract ApplicationMessageType getMessageType();
-
     /**
-     * Sets a unique message id that identifies this message within an NC.
-     * This id is set by {@link INCMessageBroker#sendMessage(IApplicationMessage, IApplicationMessageCallback)}
-     * when the callback is not null to notify the sender when the response to that message is received.
-     *
-     * @param messageId
+     * handle the message upon delivery
      */
-    public void setId(long messageId);
-
-    /**
-     * @return The unique message id if it has been set, otherwise 0.
-     */
-    public long getId();
+    void handle(IControllerService cs) throws HyracksDataException, InterruptedException;
 }

@@ -23,17 +23,17 @@
  * Date         : 30th May 2013
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 
 use test;
 
 
 create type test.EmpType as
 {
-  id : int32,
+  id : integer,
   name : string
 }
 
-create  table Employee(EmpType) primary key id;
+create  dataset Employee(EmpType) primary key id;
 

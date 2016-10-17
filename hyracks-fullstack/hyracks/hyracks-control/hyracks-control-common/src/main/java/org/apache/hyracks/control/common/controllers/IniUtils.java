@@ -18,11 +18,13 @@
  */
 package org.apache.hyracks.control.common.controllers;
 
-import org.ini4j.Ini;
-
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.lang.reflect.Array;
+
+import org.ini4j.Ini;
+import org.ini4j.Profile.Section;
 
 /**
  * Some utility functions for reading Ini4j objects with default values.
@@ -33,7 +35,11 @@ import java.io.IOException;
  * the section "nc/red", but if it is not found, will look in the section "nc".
  */
 public class IniUtils {
-    private static <T> T getIniValue(Ini ini, String section, String key, T default_value, Class<T> clazz) {
+
+    private IniUtils() {
+    }
+
+    private static <T> T getIniValue(Ini ini, String section, String key, T defaultValue, Class<T> clazz) {
         T value;
         while (true) {
             value = ini.get(section, key, clazz);
@@ -46,11 +52,28 @@ public class IniUtils {
             }
             break;
         }
-        return (value != null) ? value : default_value;
+        return (value != null) ? value : defaultValue;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> T getIniArray(Ini ini, String section, String key, Class<T> clazz) {
+        Section sec = ini.get(section);
+        if (clazz.getComponentType() == null) {
+            return null;
+        }
+        if (sec == null) {
+            return (T) Array.newInstance(clazz.getComponentType(), 0);
+        } else {
+            return sec.getAll(key, clazz);
+        }
     }
 
     public static String getString(Ini ini, String section, String key, String defaultValue) {
         return getIniValue(ini, section, key, defaultValue, String.class);
+    }
+
+    public static String[] getStringArray(Ini ini, String section, String key) {
+        return getIniArray(ini, section, key, String[].class);
     }
 
     public static int getInt(Ini ini, String section, String key, int defaultValue) {

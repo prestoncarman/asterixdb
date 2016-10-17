@@ -21,7 +21,6 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>org.apache.hyracks.examples.btree</groupId>
   <artifactId>btreeserver</artifactId>
-  <version>0.2.18-SNAPSHOT</version>
   <name>btreeserver</name>
 
   <parent>
@@ -72,26 +71,4 @@
       </plugin>
     </plugins>
   </build>
-  <dependencies>
-    <dependency>
-      <groupId>org.apache.hyracks.examples.btree</groupId>
-      <artifactId>btreehelper</artifactId>
-      <version>0.2.18-SNAPSHOT</version>
-      <scope>compile</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hyracks</groupId>
-      <artifactId>hyracks-control-cc</artifactId>
-      <version>0.2.18-SNAPSHOT</version>
-      <type>jar</type>
-      <scope>compile</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hyracks</groupId>
-      <artifactId>hyracks-control-nc</artifactId>
-      <version>0.2.18-SNAPSHOT</version>
-      <type>jar</type>
-      <scope>compile</scope>
-    </dependency>
-  </dependencies>
 </project>

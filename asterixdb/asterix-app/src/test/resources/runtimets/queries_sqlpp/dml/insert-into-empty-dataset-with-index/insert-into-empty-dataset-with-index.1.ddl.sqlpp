@@ -23,20 +23,20 @@
  * Date            : May 2 2012
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 
 use test;
 
 
 create type test.LineIDType as
  closed {
-  l_orderkey : int64,
-  l_linenumber : int64,
-  l_suppkey : int64
+  l_orderkey : bigint,
+  l_linenumber : bigint,
+  l_suppkey : bigint
 }
 
-create  table LineID(LineIDType) primary key l_orderkey,l_linenumber;
+create  dataset LineID(LineIDType) primary key l_orderkey,l_linenumber;
 
 create  index idx_LineID_partkey  on LineID (l_linenumber) type btree;
 

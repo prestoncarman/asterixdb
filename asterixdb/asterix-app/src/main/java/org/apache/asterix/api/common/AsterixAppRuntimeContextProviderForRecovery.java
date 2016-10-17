@@ -18,6 +18,7 @@
  */
 package org.apache.asterix.api.common;
 
+import org.apache.asterix.app.nc.AsterixNCAppRuntimeContext;
 import org.apache.asterix.common.api.AsterixThreadExecutor;
 import org.apache.asterix.common.api.IAsterixAppRuntimeContext;
 import org.apache.asterix.common.api.IDatasetLifecycleManager;
@@ -29,13 +30,12 @@ import org.apache.hyracks.storage.am.lsm.common.api.ILSMOperationTracker;
 import org.apache.hyracks.storage.common.buffercache.IBufferCache;
 import org.apache.hyracks.storage.common.file.IFileMapProvider;
 import org.apache.hyracks.storage.common.file.ILocalResourceRepository;
-import org.apache.hyracks.storage.common.file.IResourceIdFactory;
 
 public class AsterixAppRuntimeContextProviderForRecovery implements IAsterixAppRuntimeContextProvider {
 
-    private final AsterixAppRuntimeContext asterixAppRuntimeContext;
+    private final AsterixNCAppRuntimeContext asterixAppRuntimeContext;
 
-    public AsterixAppRuntimeContextProviderForRecovery(AsterixAppRuntimeContext asterixAppRuntimeContext) {
+    public AsterixAppRuntimeContextProviderForRecovery(AsterixNCAppRuntimeContext asterixAppRuntimeContext) {
         this.asterixAppRuntimeContext = asterixAppRuntimeContext;
     }
 
@@ -72,11 +72,6 @@ public class AsterixAppRuntimeContextProviderForRecovery implements IAsterixAppR
     @Override
     public ILocalResourceRepository getLocalResourceRepository() {
         return asterixAppRuntimeContext.getLocalResourceRepository();
-    }
-
-    @Override
-    public IResourceIdFactory getResourceIdFactory() {
-        return asterixAppRuntimeContext.getResourceIdFactory();
     }
 
     @Override

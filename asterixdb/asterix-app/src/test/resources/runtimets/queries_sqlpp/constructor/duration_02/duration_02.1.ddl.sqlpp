@@ -17,12 +17,12 @@
  * under the License.
  */
 /*
- * Description  : test sub type duration (year-month-duration and day-time-duration) constructors
+ * Description  : test sub type duration (year_month_duration and day_time_duration) constructors
  * Expected Res : Success
  * Date         : 7 May 2013
  * issue        : 363
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 

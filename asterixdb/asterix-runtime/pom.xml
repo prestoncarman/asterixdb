@@ -39,13 +39,13 @@
     <dependency>
       <groupId>org.apache.asterix</groupId>
       <artifactId>asterix-om</artifactId>
-      <version>0.8.9-SNAPSHOT</version>
+      <version>${project.version}</version>
       <scope>compile</scope>
     </dependency>
     <dependency>
       <groupId>org.apache.asterix</groupId>
       <artifactId>asterix-fuzzyjoin</artifactId>
-      <version>0.8.9-SNAPSHOT</version>
+      <version>${project.version}</version>
       <scope>compile</scope>
     </dependency>
     <dependency>
@@ -59,20 +59,8 @@
     <dependency>
       <groupId>org.apache.asterix</groupId>
       <artifactId>asterix-transactions</artifactId>
-      <version>0.8.9-SNAPSHOT</version>
+      <version>${project.version}</version>
       <scope>compile</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-client</artifactId>
-      <type>jar</type>
-      <scope>compile</scope>
-      <exclusions>
-        <exclusion>
-          <groupId>asm</groupId>
-          <artifactId>asm</artifactId>
-        </exclusion>
-      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.ow2.asm</groupId>

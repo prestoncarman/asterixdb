@@ -23,20 +23,20 @@
  * Issue        : 188
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 
 use test;
 
 
 create type test.footype as
 {
-  bar : int32?
+  bar : integer?
 }
 
 drop type test.footype;
 create type test.footype as
 {
-  bar : int32?
+  bar : integer?
 }
 

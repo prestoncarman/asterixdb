@@ -35,17 +35,20 @@ public class ServletUtil {
         CONNECTOR("/connector"),
         SHUTDOWN("/admin/shutdown"),
         VERSION("/admin/version"),
-        CLUSTER_STATE("/admin/cluster");
+        CLUSTER_STATE("/admin/cluster"),
+        CLUSTER_STATE_NODE_DETAIL("/admin/cluster/node/*"),
+        CLUSTER_STATE_CC_DETAIL("/admin/cluster/cc/*");
 
         private final String path;
 
-        private Servlets(String path) {
+        Servlets(String path) {
             this.path = path;
         }
 
         public String getPath() {
             return path;
         }
+
     }
 
     private ServletUtil() {

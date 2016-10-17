@@ -23,8 +23,8 @@
  * Date         : 8th May 2014
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 
 use test;
 
@@ -33,26 +33,26 @@ create type test.TwitterUserType as
  closed {
   `screen-name` : string,
   lang : string,
-  `friends-count` : int32,
-  `statuses-count` : int32,
+  `friends-count` : integer,
+  `statuses-count` : integer,
   name : string,
-  `followers-count` : int32
+  `followers-count` : integer
 }
 
 create type test.TweetMessageType as
 {
-  tweetid : int64,
+  tweetid : bigint,
   user : TwitterUserType,
   `sender-location` : point,
   `send-time` : datetime,
   `referred-topics` : {{string}},
-  countA : int32,
-  countB : int32
+  countA : integer,
+  countB : integer
 }
 
-create  table TweetMessages(TweetMessageType) primary key tweetid;
+create  dataset TweetMessages(TweetMessageType) primary key tweetid;
 
-create  index msgNgramIx  on TweetMessages (`message-text`:string) type ngram (3) enforced;
+create  index msgNgramIx  on TweetMessages (`message-text`:string?) type ngram (3) enforced;
 
 write output to asterix_nc1:"rttest/inverted-index-join_leftouterjoin-probe-pidx-with-join-edit-distance-check_idx_01.adm"
 select element {'tweet':{'id':t1.tweetid,'topics':t1.`message-text`},'similar-tweets':(
@@ -63,6 +63,6 @@ select element {'tweet':{'id':t1.tweetid,'topics':t1.`message-text`},'similar-tw
         order by t2.tweetid
     )}
 from  TweetMessages as t1
-where (t1.tweetid > test.int64('240'))
+where (t1.tweetid > test.bigint('240'))
 order by t1.tweetid
 ;

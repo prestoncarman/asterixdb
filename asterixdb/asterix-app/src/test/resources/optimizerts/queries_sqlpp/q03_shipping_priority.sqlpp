@@ -17,18 +17,18 @@
  * under the License.
  */
 
-drop  database q3_shipping_priority if exists;
-create  database q3_shipping_priority;
+drop  dataverse q3_shipping_priority if exists;
+create  dataverse q3_shipping_priority;
 
 use q3_shipping_priority;
 
 
 create type q3_shipping_priority.LineItemType as
  closed {
-  l_orderkey : int32,
-  l_partkey : int32,
-  l_suppkey : int32,
-  l_linenumber : int32,
+  l_orderkey : integer,
+  l_partkey : integer,
+  l_suppkey : integer,
+  l_linenumber : integer,
   l_quantity : double,
   l_extendedprice : double,
   l_discount : double,
@@ -45,23 +45,23 @@ create type q3_shipping_priority.LineItemType as
 
 create type q3_shipping_priority.OrderType as
  closed {
-  o_orderkey : int32,
-  o_custkey : int32,
+  o_orderkey : integer,
+  o_custkey : integer,
   o_orderstatus : string,
   o_totalprice : double,
   o_orderdate : string,
   o_orderpriority : string,
   o_clerk : string,
-  o_shippriority : int32,
+  o_shippriority : integer,
   o_comment : string
 }
 
 create type q3_shipping_priority.CustomerType as
  closed {
-  c_custkey : int32,
+  c_custkey : integer,
   c_name : string,
   c_address : string,
-  c_nationkey : int32,
+  c_nationkey : integer,
   c_phone : string,
   c_acctbal : double,
   c_mktsegment : string,
@@ -72,11 +72,11 @@ create  nodegroup group1 if not exists  on
     asterix_nc1,
     asterix_nc2
 ;
-create  table LineItems(LineItemType) primary key l_orderkey,l_linenumber on group1;
+create  dataset LineItems(LineItemType) primary key l_orderkey,l_linenumber on group1;
 
-create  table Orders(OrderType) primary key o_orderkey on group1;
+create  dataset Orders(OrderType) primary key o_orderkey on group1;
 
-create  table Customers(CustomerType) primary key c_custkey on group1;
+create  dataset Customers(CustomerType) primary key c_custkey on group1;
 
 write output to asterix_nc1:"/tmp/q3_shipping_priority.adm"
 select element {'l_orderkey':l_orderkey,'revenue':revenue,'o_orderdate':o_orderdate,'o_shippriority':o_shippriority}

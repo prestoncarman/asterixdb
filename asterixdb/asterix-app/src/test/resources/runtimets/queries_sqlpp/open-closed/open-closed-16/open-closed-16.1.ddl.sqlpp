@@ -25,18 +25,18 @@
  * Date           : March 30th 2012
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 
 use test;
 
 
 create type test.Schema as
 {
-  id_8 : int8,
-  id_16 : int16,
-  id_32 : int32,
-  id_64 : int64,
+  id_8 : tinyint,
+  id_16 : smallint,
+  id_32 : integer,
+  id_64 : bigint,
   fp : float,
   name : string,
   dt : date,
@@ -45,5 +45,5 @@ create type test.Schema as
   lat_lon : point
 }
 
-create  table tdtst(Schema) primary key id_32;
+create  dataset tdtst(Schema) primary key id_32;
 

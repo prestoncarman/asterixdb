@@ -17,8 +17,8 @@
  * under the License.
  */
 
-drop  database fuzzyjoin if exists;
-create  database fuzzyjoin;
+drop  dataverse fuzzyjoin if exists;
+create  dataverse fuzzyjoin;
 
 use fuzzyjoin;
 
@@ -37,12 +37,12 @@ create type fuzzyjoin.UserType as
   interests : {{string}},
   address : AddressType,
   member_of : {{{
-          sig_id : int64,
+          sig_id : bigint,
           chapter_name : string,
           member_since : date
       }
 }}
 }
 
-create  table User(UserType) primary key name;
+create  dataset User(UserType) primary key name;
 

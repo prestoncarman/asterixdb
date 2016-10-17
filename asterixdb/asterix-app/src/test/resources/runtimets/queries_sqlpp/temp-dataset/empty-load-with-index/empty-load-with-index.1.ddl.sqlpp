@@ -22,18 +22,18 @@
  * Date            : March 27 2015
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 
 use test;
 
 
 create type test.LineItemType as
  closed {
-  l_orderkey : int64,
-  l_partkey : int64,
-  l_suppkey : int64,
-  l_linenumber : int64,
+  l_orderkey : bigint,
+  l_partkey : bigint,
+  l_suppkey : bigint,
+  l_linenumber : bigint,
   l_quantity : double,
   l_extendedprice : double,
   l_discount : double,
@@ -48,7 +48,7 @@ create type test.LineItemType as
   l_comment : string
 }
 
-create temporary table LineItem(LineItemType) primary key l_orderkey,l_linenumber;
+create temporary dataset LineItem(LineItemType) primary key l_orderkey,l_linenumber;
 
 create  index part_index  on LineItem (l_partkey) type btree;
 

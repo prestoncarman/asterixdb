@@ -23,15 +23,15 @@
  * Date            : May 12 2012
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 
 use test;
 
 
 create type test.MyRecordtmp as
  closed {
-  id : int64,
+  id : bigint,
   point : point?,
   kwds : string,
   line1 : line,
@@ -43,7 +43,7 @@ create type test.MyRecordtmp as
 
 create type test.MyMiniRecordtmp as
  closed {
-  id : int64,
+  id : bigint,
   point : point?
 }
 
@@ -52,5 +52,5 @@ create type test.MyMiniRecord as
   nested : MyMiniRecordtmp
 }
 
-create  table MyDatatmp(MyRecordtmp) primary key id;
+create  dataset MyDatatmp(MyRecordtmp) primary key id;
 

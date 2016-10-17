@@ -22,18 +22,18 @@
  * Date         : 5 Apr 2013
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 
 use test;
 
 
 create type test.Schema as
  closed {
-  id : int32,
-  age : int32,
+  id : integer,
+  age : integer,
   name : string
 }
 
-create  table onektup(Schema) primary key id;
+create  dataset onektup(Schema) primary key id;
 

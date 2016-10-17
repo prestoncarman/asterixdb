@@ -17,15 +17,15 @@
  * under the License.
  */
 
-drop  database fuzzyjoin if exists;
-create  database fuzzyjoin;
+drop  dataverse fuzzyjoin if exists;
+create  dataverse fuzzyjoin;
 
 use fuzzyjoin;
 
 
 create type fuzzyjoin.DBLPType as
  closed {
-  id : int64,
+  id : bigint,
   dblpid : string,
   title : string,
   authors : string,
@@ -34,14 +34,14 @@ create type fuzzyjoin.DBLPType as
 
 create type fuzzyjoin.CSXType as
  closed {
-  id : int64,
+  id : bigint,
   csxid : string,
   title : string,
   authors : string,
   misc : string
 }
 
-create  table DBLP(DBLPType) primary key id;
+create  dataset DBLP(DBLPType) primary key id;
 
-create  table CSX(CSXType) primary key id;
+create  dataset CSX(CSXType) primary key id;
 

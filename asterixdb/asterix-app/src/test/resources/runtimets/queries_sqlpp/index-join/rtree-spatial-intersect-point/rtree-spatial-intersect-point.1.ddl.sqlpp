@@ -23,15 +23,15 @@
  * Success        : Yes
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 
 use test;
 
 
 create type test.MyRecord as
  closed {
-  id : int64,
+  id : bigint,
   point : point,
   kwds : string,
   line1 : line,
@@ -42,7 +42,7 @@ create type test.MyRecord as
   circle : circle
 }
 
-create  table MyData1(MyRecord) primary key id;
+create  dataset MyData1(MyRecord) primary key id;
 
-create  table MyData2(MyRecord) primary key id;
+create  dataset MyData2(MyRecord) primary key id;
 

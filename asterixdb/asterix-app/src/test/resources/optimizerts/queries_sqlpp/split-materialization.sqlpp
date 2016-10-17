@@ -17,8 +17,8 @@
  * under the License.
  */
 
-drop  database TinySocial if exists;
-create  database TinySocial;
+drop  dataverse TinySocial if exists;
+create  dataverse TinySocial;
 
 use TinySocial;
 
@@ -32,15 +32,15 @@ create type TinySocial.EmploymentType as
 
 create type TinySocial.FacebookUserType as
  closed {
-  id : int32,
+  id : integer,
   alias : string,
   name : string,
   `user-since` : datetime,
-  `friend-ids` : {{int32}},
+  `friend-ids` : {{integer}},
   employment : [EmploymentType]
 }
 
-create  table FacebookUsers(FacebookUserType) primary key id;
+create  dataset FacebookUsers(FacebookUserType) primary key id;
 
 with  lonelyusers as (
       select element d

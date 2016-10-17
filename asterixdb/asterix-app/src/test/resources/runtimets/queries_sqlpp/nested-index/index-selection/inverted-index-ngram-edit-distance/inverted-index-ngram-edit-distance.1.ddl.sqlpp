@@ -17,15 +17,15 @@
  * under the License.
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 
 use test;
 
 
 create type test.DBLPTypetmp as
  closed {
-  id : int64,
+  id : bigint,
   dblpid : string,
   title : string,
   authors : string,
@@ -41,7 +41,7 @@ create  nodegroup group1 if not exists  on
     asterix_nc1,
     asterix_nc2
 ;
-create  table DBLPtmp(DBLPTypetmp) primary key id on group1;
+create  dataset DBLPtmp(DBLPTypetmp) primary key id on group1;
 
-create  table DBLP(DBLPType) primary key nested.id on group1;
+create  dataset DBLP(DBLPType) primary key nested.id on group1;
 

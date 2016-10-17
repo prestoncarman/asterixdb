@@ -17,29 +17,29 @@
  * under the License.
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 
 use test;
 
 
 create type test.AddressType as
 {
-  number : int64,
+  number : bigint,
   street : string,
   city : string
 }
 
 create type test.CustomerTypetmp as
 {
-  cid : int64,
+  cid : bigint,
   name : string,
-  age : int64?,
+  age : bigint?,
   address : AddressType?,
   interests : {{string}},
   children : [{
           name : string,
-          age : int64?
+          age : bigint?
       }
 ]
 }
@@ -49,7 +49,7 @@ create type test.CustomerType as
   nested : CustomerTypetmp
 }
 
-create  table Customerstmp(CustomerTypetmp) primary key cid;
+create  dataset Customerstmp(CustomerTypetmp) primary key cid;
 
-create  table Customers(CustomerType) primary key nested.cid;
+create  dataset Customers(CustomerType) primary key nested.cid;
 

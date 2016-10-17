@@ -23,20 +23,20 @@
  * Date            : May 2 2012
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 
 use test;
 
 
 create type test.LineIDType as
  closed {
-  l_orderkey : int32,
-  l_linenumber : int32,
-  l_suppkey : int32
+  l_orderkey : integer,
+  l_linenumber : integer,
+  l_suppkey : integer
 }
 
-create  table LineID(LineIDType) primary key l_orderkey,l_linenumber;
+create  dataset LineID(LineIDType) primary key l_orderkey,l_linenumber;
 
-create  table LineID2(LineIDType) primary key l_orderkey,l_linenumber;
+create  dataset LineID2(LineIDType) primary key l_orderkey,l_linenumber;
 

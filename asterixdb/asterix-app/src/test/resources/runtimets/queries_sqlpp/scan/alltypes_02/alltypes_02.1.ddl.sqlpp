@@ -23,30 +23,30 @@
  * Date         : 6th March 2013
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 
 use test;
 
 
 create type test.AddressType as
 {
-  number : int64,
+  number : bigint,
   street : string,
   city : string
 }
 
 create type test.AllType as
 {
-  id : int64,
+  id : bigint,
   string : string,
   float : float,
   double : double,
   boolean : boolean,
-  int8 : int8,
-  int16 : int16,
-  int32 : int32,
-  int64 : int64,
+  int8 : tinyint,
+  int16 : smallint,
+  int32 : integer,
+  int64 : bigint,
   unorderedList : {{string}},
   orderedList : [string],
   record : AddressType,
@@ -64,5 +64,5 @@ create type test.AllType as
   uuid : uuid
 }
 
-create external  table `All`(AllType) using localfs((`path`=`asterix_nc1://data/nontagged/allData.adm`),(`format`=`adm`));
+create external  dataset `All`(AllType) using localfs((`path`=`asterix_nc1://data/nontagged/allData.adm`),(`format`=`adm`));
 

@@ -21,19 +21,19 @@
  * Expected result: success
  **/
 
-drop  database multitask if exists;
-create  database multitask;
+drop  dataverse multitask if exists;
+create  dataverse multitask;
 
 use multitask;
 
 
 create type multitask.LogType as
  closed {
-  row_id : int32,
+  row_id : integer,
   time : time,
-  duration : int32,
+  duration : integer,
   app : string
 }
 
-create  table logs(LogType) primary key row_id;
+create  dataset logs(LogType) primary key row_id;
 

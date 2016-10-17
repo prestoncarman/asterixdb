@@ -23,15 +23,15 @@
  * Date            : Feb 13 2014
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 
 use test;
 
 
 create type test.MyRecord as
  closed {
-  id : int64,
+  id : bigint,
   point : point,
   kwds : string,
   line1 : line,
@@ -44,10 +44,10 @@ create type test.MyRecord as
 
 create type test.MyOpenRecord as
 {
-  id : int64
+  id : bigint
 }
 
-create  table MyData(MyRecord) primary key id;
+create  dataset MyData(MyRecord) primary key id;
 
-create  table MyOpenData(MyOpenRecord) primary key id;
+create  dataset MyOpenData(MyOpenRecord) primary key id;
 

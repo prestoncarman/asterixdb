@@ -17,8 +17,8 @@
  * under the License.
  */
 
-drop  database Pregelix if exists;
-create  database Pregelix;
+drop  dataverse Pregelix if exists;
+create  dataverse Pregelix;
 
 use Pregelix;
 
@@ -27,42 +27,42 @@ create type Pregelix.TwitterUserType as
 {
   `screen-name` : string,
   lang : string,
-  friends_count : int32,
-  statuses_count : int32,
+  friends_count : integer,
+  statuses_count : integer,
   name : string,
-  followers_count : int32
+  followers_count : integer
 }
 
 create type Pregelix.TweetMessageType as
 {
-  tweetid : int64,
+  tweetid : bigint,
   user : TwitterUserType,
   `sender-location` : point?,
   `send-time` : datetime,
   `referred-topics` : {{string}},
   `message-text` : string,
-  `retweeted-from` : int64,
-  `forwarded-from` : int64
+  `retweeted-from` : bigint,
+  `forwarded-from` : bigint
 }
 
-create  table TwitterMsgs(TweetMessageType) primary key tweetid;
+create  dataset TwitterMsgs(TweetMessageType) primary key tweetid;
 
-create  table TwitterUsers(TwitterUserType) primary key `screen-name`;
+create  dataset TwitterUsers(TwitterUserType) primary key `screen-name`;
 
 create type Pregelix.TMEdge as
 {
-  tweetid : int64,
+  tweetid : bigint,
   `value` : float?
 }
 
 create type Pregelix.TMGraph as
 {
-  tweetid : int64,
+  tweetid : bigint,
   `rank-value` : double?,
   `populated-by` : {{TMEdge}}
 }
 
-create  table MyInputGraph(TMGraph) primary key tweetid;
+create  dataset MyInputGraph(TMGraph) primary key tweetid;
 
-create  table MyOutputGraph(TMGraph) primary key tweetid;
+create  dataset MyOutputGraph(TMGraph) primary key tweetid;
 

@@ -17,22 +17,22 @@
  * under the License.
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 
 use test;
 
 
 create type test.NumericType as
 {
-  id : int64,
-  int8Field : int8?,
-  int16Field : int16?,
-  int32Field : int32?,
-  int64Field : int64?,
+  id : bigint,
+  int8Field : tinyint?,
+  int16Field : smallint?,
+  int32Field : integer?,
+  int64Field : bigint?,
   floatField : float?,
   doubleField : double?
 }
 
-create external  table Numeric(NumericType) using localfs((`path`=`asterix_nc1://data/nontagged/numericData.json`),(`format`=`adm`));
+create external  dataset Numeric(NumericType) using localfs((`path`=`asterix_nc1://data/nontagged/numericData.json`),(`format`=`adm`));
 

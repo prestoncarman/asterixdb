@@ -23,18 +23,18 @@
  * Date         : 21 May 2013
  */
 
-drop  database test if exists;
-create  database test if not exists ;
+drop  dataverse test if exists;
+create  dataverse test if not exists ;
 
 use test;
 
 
 create type test.t1 as
  closed {
-  id : int64
+  id : bigint
 }
 
-create  table ds1(t1) primary key id;
+create  dataset ds1(t1) primary key id;
 
-create  table ds2(t1) primary key id;
+create  dataset ds2(t1) primary key id;
 

@@ -23,7 +23,8 @@
  * Date         : 3th April 2013
  */
 
-create  database insertIssue;
+drop dataverse insertIssue if exists;
+create  dataverse insertIssue;
 
 use insertIssue;
 
@@ -31,15 +32,15 @@ use insertIssue;
 create type insertIssue.subElem as
  closed {
   n : string,
-  e : int64?
+  e : bigint?
 }
 
 create type insertIssue.elem as
  closed {
-  id : int64,
+  id : bigint,
   name : string,
   sub : [subElem]
 }
 
-create  table myDataset(elem) primary key id;
+create  dataset myDataset(elem) primary key id;
 

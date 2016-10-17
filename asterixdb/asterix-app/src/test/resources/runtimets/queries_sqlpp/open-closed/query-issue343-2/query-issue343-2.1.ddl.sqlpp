@@ -23,22 +23,22 @@
  * Date         : 30th April 2013
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 
 use test;
 
 
 create type test.AddressType as
 {
-  number : int64,
+  number : bigint,
   street : string,
   city : string
 }
 
 create type test.AllType as
 {
-  id : int64,
+  id : bigint,
   name : string,
   age : float,
   salary : double,
@@ -59,11 +59,11 @@ create type test.AllType as
 
 create type test.MyListType as
 {
-  id : int64,
+  id : bigint,
   mylist : [string]
 }
 
-create  table `All`(AllType) primary key id;
+create  dataset `All`(AllType) primary key id;
 
-create  table MyList(MyListType) primary key id;
+create  dataset MyList(MyListType) primary key id;
 

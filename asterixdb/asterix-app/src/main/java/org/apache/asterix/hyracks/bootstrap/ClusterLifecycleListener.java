@@ -31,6 +31,7 @@ import org.apache.asterix.common.api.IClusterEventsSubscriber;
 import org.apache.asterix.common.api.IClusterManagementWork;
 import org.apache.asterix.common.api.IClusterManagementWorkResponse;
 import org.apache.asterix.common.api.IClusterManagementWorkResponse.Status;
+import org.apache.asterix.common.config.ClusterProperties;
 import org.apache.asterix.common.exceptions.AsterixException;
 import org.apache.asterix.event.schema.cluster.Node;
 import org.apache.asterix.metadata.MetadataManager;
@@ -39,8 +40,9 @@ import org.apache.asterix.metadata.cluster.AddNodeWorkResponse;
 import org.apache.asterix.metadata.cluster.ClusterManager;
 import org.apache.asterix.metadata.cluster.RemoveNodeWork;
 import org.apache.asterix.metadata.cluster.RemoveNodeWorkResponse;
-import org.apache.asterix.om.util.AsterixClusterProperties;
+import org.apache.asterix.runtime.util.ClusterStateManager;
 import org.apache.hyracks.api.application.IClusterLifecycleListener;
+import org.apache.hyracks.api.exceptions.HyracksException;
 
 public class ClusterLifecycleListener implements IClusterLifecycleListener {
 
@@ -63,13 +65,16 @@ public class ClusterLifecycleListener implements IClusterLifecycleListener {
     }
 
     @Override
-    public void notifyNodeJoin(String nodeId, Map<String, String> ncConfiguration) {
+    public void notifyNodeJoin(String nodeId, Map<String, String> ncConfiguration) throws HyracksException {
         if (LOGGER.isLoggable(Level.INFO)) {
             LOGGER.info("NC: " + nodeId + " joined");
         }
-        AsterixClusterProperties.INSTANCE.addNCConfiguration(nodeId, ncConfiguration);
+        ClusterStateManager.INSTANCE.addNCConfiguration(nodeId, ncConfiguration);
+
         //if metadata node rejoining, we need to rebind the proxy connection when it is active again.
-        MetadataManager.INSTANCE.rebindMetadataNode = !AsterixClusterProperties.INSTANCE.isMetadataNodeActive();
+        if (!ClusterStateManager.INSTANCE.isMetadataNodeActive()) {
+            MetadataManager.INSTANCE.rebindMetadataNode();
+        }
 
         Set<String> nodeAddition = new HashSet<String>();
         nodeAddition.add(nodeId);
@@ -87,15 +92,17 @@ public class ClusterLifecycleListener implements IClusterLifecycleListener {
     }
 
     @Override
-    public void notifyNodeFailure(Set<String> deadNodeIds) {
+    public void notifyNodeFailure(Set<String> deadNodeIds) throws HyracksException {
         for (String deadNode : deadNodeIds) {
             if (LOGGER.isLoggable(Level.INFO)) {
                 LOGGER.info("NC: " + deadNode + " left");
             }
-            AsterixClusterProperties.INSTANCE.removeNCConfiguration(deadNode);
+            ClusterStateManager.INSTANCE.removeNCConfiguration(deadNode);
 
             //if metadata node failed, we need to rebind the proxy connection when it is active again
-            MetadataManager.INSTANCE.rebindMetadataNode = !AsterixClusterProperties.INSTANCE.isMetadataNodeActive();
+            if (!ClusterStateManager.INSTANCE.isMetadataNodeActive()) {
+                MetadataManager.INSTANCE.rebindMetadataNode();
+            }
         }
         updateProgress(ClusterEventType.NODE_FAILURE, deadNodeIds);
         Set<IClusterEventsSubscriber> subscribers = ClusterManager.INSTANCE.getRegisteredClusterEventSubscribers();
@@ -160,9 +167,9 @@ public class ClusterLifecycleListener implements IClusterLifecycleListener {
         }
 
         List<String> addedNodes = new ArrayList<String>();
-        String asterixInstanceName = AsterixClusterProperties.INSTANCE.getCluster().getInstanceName();
+        String asterixInstanceName = ClusterProperties.INSTANCE.getCluster().getInstanceName();
         for (int i = 0; i < nodesToAdd; i++) {
-            Node node = AsterixClusterProperties.INSTANCE.getAvailableSubstitutionNode();
+            Node node = ClusterStateManager.INSTANCE.getAvailableSubstitutionNode();
             if (node != null) {
                 try {
                     ClusterManager.INSTANCE.addNode(node);

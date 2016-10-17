@@ -22,16 +22,16 @@
  * Date         : 04 July 2013
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 
 use test;
 
 
 create type test.Schema as
  closed {
-  id : int32
+  id : integer
 }
 
-create  table mydataset(Schema) primary key id;
+create  dataset mydataset(Schema) primary key id;
 

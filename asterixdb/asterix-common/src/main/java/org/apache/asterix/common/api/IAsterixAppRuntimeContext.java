@@ -74,7 +74,7 @@ public interface IAsterixAppRuntimeContext {
 
     public double getBloomFilterFalsePositiveRate();
 
-    public Object getFeedManager();
+    public Object getActiveManager();
 
     public IRemoteRecoveryManager getRemoteRecoveryManager();
 
@@ -85,8 +85,6 @@ public interface IAsterixAppRuntimeContext {
     public IReplicationChannel getReplicationChannel();
 
     public ILibraryManager getLibraryManager();
-
-    public void initializeResourceIdFactory() throws HyracksDataException;
 
     /**
      * Exports the metadata node to the metadata RMI port.

@@ -1,8 +1,8 @@
 DataverseUse twitter
 TypeDecl Tweet [
   open RecordType {
-    id : int32,
-    tweetid : int64,
+    id : integer,
+    tweetid : bigint,
     loc : point,
     time : datetime,
     text : string
@@ -61,8 +61,7 @@ Groupby
   Variable [ Name=$token ]
   GROUP AS Variable [ Name=#1 ]
   (
-    tokens:=Variable [ Name=$tokens ]
-    token:=Variable [ Name=$token ]
     t:=Variable [ Name=$t ]
+    token:=Variable [ Name=$token ]
   )
 

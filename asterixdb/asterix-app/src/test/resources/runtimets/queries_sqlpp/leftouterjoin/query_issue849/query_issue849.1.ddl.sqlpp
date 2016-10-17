@@ -23,16 +23,16 @@
  * Date         : 2nd Feb. 2015
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 
 use test;
 
 
 create type test.sType as
  closed {
-  b : int64
+  b : bigint
 }
 
-create  table s(sType) primary key b;
+create  dataset s(sType) primary key b;
 

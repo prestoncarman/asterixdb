@@ -17,20 +17,20 @@
  * under the License.
  */
 
-drop  database fuzzyjoin if exists;
-create  database fuzzyjoin;
+drop  dataverse fuzzyjoin if exists;
+create  dataverse fuzzyjoin;
 
 use fuzzyjoin;
 
 
 create type fuzzyjoin.DBLPType as
 {
-  id : int32,
+  id : integer,
   dblpid : string,
   title : string,
   authors : string,
   misc : string
 }
 
-create  table DBLP(DBLPType) primary key id;
+create  dataset DBLP(DBLPType) primary key id;
 

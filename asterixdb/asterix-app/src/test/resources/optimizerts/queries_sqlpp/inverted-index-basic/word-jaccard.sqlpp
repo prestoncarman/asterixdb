@@ -22,22 +22,22 @@
  * Success        : Yes
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 
 use test;
 
 
 create type test.DBLPType as
  closed {
-  id : int32,
+  id : integer,
   dblpid : string,
   title : string,
   authors : string,
   misc : string
 }
 
-create  table DBLP(DBLPType) primary key id;
+create  dataset DBLP(DBLPType) primary key id;
 
 create  index keyword_index  on DBLP (title) type keyword;
 

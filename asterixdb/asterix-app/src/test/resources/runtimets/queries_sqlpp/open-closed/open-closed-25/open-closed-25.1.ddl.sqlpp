@@ -23,18 +23,18 @@
  * Date          : 29th May 2012
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 
 use test;
 
 
 create type test.testType as
 {
-  id : int64,
+  id : bigint,
   name : string,
   opt_tag : {{string}}?
 }
 
-create  table testds(testType) primary key id;
+create  dataset testds(testType) primary key id;
 

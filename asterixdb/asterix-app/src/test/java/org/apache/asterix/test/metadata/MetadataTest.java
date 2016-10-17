@@ -42,24 +42,25 @@ public class MetadataTest {
 
     private TestCaseContext tcCtx;
 
-    private static final String PATH_ACTUAL = "mdtest" + File.separator;
+    private static final String PATH_ACTUAL = "target" + File.separator + "mdtest" + File.separator;
     private static final String PATH_BASE = StringUtils
             .join(new String[] { "src", "test", "resources", "metadata" + File.separator }, File.separator);
     private static final String TEST_CONFIG_FILE_NAME = "asterix-build-configuration.xml";
 
     private static final TestExecutor testExecutor = new TestExecutor();
+    private static AsterixHyracksIntegrationUtil integrationUtil = new AsterixHyracksIntegrationUtil();
 
     @BeforeClass
     public static void setUp() throws Exception {
         System.setProperty(GlobalConfig.CONFIG_FILE_PROPERTY, TEST_CONFIG_FILE_NAME);
         File outdir = new File(PATH_ACTUAL);
         outdir.mkdirs();
-        AsterixHyracksIntegrationUtil.init(true);
+        integrationUtil.init(true);
     }
 
     @AfterClass
     public static void tearDown() throws Exception {
-        AsterixHyracksIntegrationUtil.deinit(true);
+        integrationUtil.deinit(true);
         File outdir = new File(PATH_ACTUAL);
         File[] files = outdir.listFiles();
         if (files == null || files.length == 0) {

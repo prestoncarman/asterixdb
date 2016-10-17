@@ -17,15 +17,15 @@
  * under the License.
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 
 use test;
 
 
 create type test.MyRecord as
  closed {
-  id : int64,
+  id : bigint,
   point : point,
   kwds : string,
   line1 : line,
@@ -38,7 +38,7 @@ create type test.MyRecord as
 
 create type test.MyRecordOpen as
 {
-  id : int64,
+  id : bigint,
   kwds : string,
   line1 : line,
   line2 : line,
@@ -48,9 +48,9 @@ create type test.MyRecordOpen as
   circle : circle
 }
 
-create  table MyData(MyRecord) primary key id;
+create  dataset MyData(MyRecord) primary key id;
 
-create  table MyDataOpen(MyRecordOpen) primary key id;
+create  dataset MyDataOpen(MyRecordOpen) primary key id;
 
-create  index rtree_index_point  on MyDataOpen (point:point) type rtree enforced;
+create  index rtree_index_point  on MyDataOpen (point:point?) type rtree enforced;
 

@@ -16,39 +16,41 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-/*
- * Description  : Create a feed using the synthetic feed simulator adapter.
 
-drop  database feeds if exists;
-create  database feeds;
+drop dataverse feeds if exists;
+create dataverse feeds;
 
 use feeds;
 
-
 create type feeds.TwitterUserType as
  closed {
-  `screen-name` : string,
-  lang : string,
-  friends_count : int32,
-  statuses_count : int32,
-  name : string,
-  followers_count : int32
+  `screen_name`: string,
+  language: string,
+  friends_count: integer,
+  status_count: integer,
+  name: string,
+  followers_count: integer
 }
 
 create type feeds.TweetMessageType as
  closed {
-  id : int64,
+  id : bigint,
   user : TwitterUserType,
   latitude : double,
   longitude : double,
-  `send-time` : datetime,
   message_text : string,
   created_at : string,
   country : string
 }
 
-create  table SyntheticTweets(TweetMessageType) primary key id;
+create  dataset SyntheticTweets(TweetMessageType) primary key id;
 
-create  index locationIdx  on SyntheticTweets (`sender-location`) type rtree;
-
-create  primary feed SyntheticTweetFeed using twitter_firehose ((`duration`=`5`),(`tps`=`50`),(`type-name`=`TweetMessageType`),(`tput-duration`=`5`),(`dataverse-dataset`=`feeds:SyntheticTweets`),(`mode`=`controlled`));
+create  primary feed SyntheticTweetFeed using stream(
+(`duration`=`5`),
+(`tps`=`50`),
+(`type-name`=`TweetMessageType`),
+(`format`=`adm`),
+(`stream-source`=`org.apache.asterix.external.input.stream.TwitterFirehoseStreamFactory`),
+(`tput-duration`=`5`),
+(`dataverse-dataset`=`feeds:SyntheticTweets`),
+(`mode`=`controlled`));

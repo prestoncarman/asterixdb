@@ -296,6 +296,10 @@ public class ExternalDataUtils {
         return Boolean.parseBoolean(configuration.get(ExternalDataConstants.KEY_IS_CHANGE_FEED));
     }
 
+    public static boolean isUpsertFeed(Map<String, String> configuration) {
+        return Boolean.parseBoolean(configuration.get(ExternalDataConstants.KEY_IS_UPSERT_FEED));
+    }
+
     public static int getNumberOfKeys(Map<String, String> configuration) throws AsterixException {
         String keyIndexes = configuration.get(ExternalDataConstants.KEY_KEY_INDEXES);
         if (keyIndexes == null) {
@@ -331,5 +335,9 @@ public class ExternalDataUtils {
             intIndicators[i] = Integer.parseInt(stringIndicators[i]);
         }
         return intIndicators;
+    }
+
+    public static boolean isSendMarker(Map<String, String> configuration) {
+        return Boolean.parseBoolean(configuration.get(ExternalDataConstants.KEY_SEND_MARKER));
     }
 }

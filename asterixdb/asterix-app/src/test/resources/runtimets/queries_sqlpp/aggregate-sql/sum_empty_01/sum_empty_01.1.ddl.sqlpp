@@ -17,11 +17,11 @@
  * under the License.
  */
 /*
- * Description    : Tests that coll_sql-sum aggregation correctly returns null for an empty stream,
+ * Description    : Tests that array_sum aggregation correctly returns null for an empty stream,
  *                  without an aggregate combiner.
  * Success        : Yes
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 

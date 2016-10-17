@@ -17,21 +17,21 @@
  * under the License.
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 
 use test;
 
 
 create type test.OrderType as
 {
-  oid : int64,
-  cid : int64,
+  oid : bigint,
+  cid : bigint,
   orderstatus : string,
   orderpriority : string,
   clerk : string,
   total : float
 }
 
-create external  table Orders(OrderType) using localfs((`path`=`asterix_nc1://data/semistructured/tiny01/orders.adm`),(`format`=`adm`));
+create external  dataset Orders(OrderType) using localfs((`path`=`asterix_nc1://data/semistructured/tiny01/orders.adm`),(`format`=`adm`));
 

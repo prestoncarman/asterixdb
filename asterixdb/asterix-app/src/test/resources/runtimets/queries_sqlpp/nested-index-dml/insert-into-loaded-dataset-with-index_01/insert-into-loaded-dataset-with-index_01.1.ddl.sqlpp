@@ -17,8 +17,8 @@
  * under the License.
  */
 
-drop  database TinySocial if exists;
-create  database TinySocial;
+drop  dataverse TinySocial if exists;
+create  dataverse TinySocial;
 
 use TinySocial;
 
@@ -27,10 +27,10 @@ create type TinySocial.TwitterUserType as
 {
   `screen-name` : string,
   lang : string,
-  friends_count : int64,
-  statuses_count : int64,
+  friends_count : bigint,
+  statuses_count : bigint,
   name : string,
-  followers_count : int64
+  followers_count : bigint
 }
 
 create type TinySocial.TweetMessageType as
@@ -43,5 +43,5 @@ create type TinySocial.TweetMessageType as
   `message-text` : string
 }
 
-create  table TweetMessages(TweetMessageType) primary key tweetid;
+create  dataset TweetMessages(TweetMessageType) primary key tweetid;
 

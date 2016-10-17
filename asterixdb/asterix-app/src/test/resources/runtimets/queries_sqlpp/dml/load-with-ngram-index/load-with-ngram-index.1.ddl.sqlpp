@@ -17,24 +17,24 @@
  * under the License.
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 
 use test;
 
 
 create type test.DBLPType as
  closed {
-  id : int64,
+  id : bigint,
   dblpid : string,
   title : string,
   authors : string,
   misc : string
 }
 
-create  table DBLP(DBLPType) primary key id;
+create  dataset DBLP(DBLPType) primary key id;
 
-create  table DBLP1(DBLPType) primary key id;
+create  dataset DBLP1(DBLPType) primary key id;
 
 create  index ngram_index  on DBLP (title) type ngram (3);
 

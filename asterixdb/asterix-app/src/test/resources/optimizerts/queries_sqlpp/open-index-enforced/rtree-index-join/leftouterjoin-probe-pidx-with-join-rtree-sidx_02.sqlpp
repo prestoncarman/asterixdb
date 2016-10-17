@@ -23,8 +23,8 @@
  * Date         : 8th May 2014
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 
 use test;
 
@@ -33,26 +33,26 @@ create type test.TwitterUserType as
  closed {
   `screen-name` : string,
   lang : string,
-  `friends-count` : int32,
-  `statuses-count` : int32,
+  `friends-count` : integer,
+  `statuses-count` : integer,
   name : string,
-  `followers-count` : int32
+  `followers-count` : integer
 }
 
 create type test.TweetMessageType as
 {
-  tweetid : int64,
+  tweetid : bigint,
   user : TwitterUserType,
   `send-time` : datetime,
   `referred-topics` : {{string}},
   `message-text` : string,
-  countA : int32,
-  countB : int32
+  countA : integer,
+  countB : integer
 }
 
-create  table TweetMessages(TweetMessageType) primary key tweetid;
+create  dataset TweetMessages(TweetMessageType) primary key tweetid;
 
-create  index twmSndLocIx  on TweetMessages (`sender-location`:point) type rtree enforced;
+create  index twmSndLocIx  on TweetMessages (`sender-location`:point?) type rtree enforced;
 
 create  index msgCountAIx  on TweetMessages (countA) type btree;
 
@@ -69,6 +69,6 @@ select element {'tweetid1':t1.tweetid,'loc1':t1.`sender-location`,'nearby-messag
     )}
 from  TweetMessages as t1
 with  n as test.`create-circle`(t1.`sender-location`,0.5)
-where (t1.tweetid < test.int64('10'))
+where (t1.tweetid < test.bigint('10'))
 order by t1.tweetid
 ;

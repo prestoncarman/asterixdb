@@ -36,7 +36,6 @@ import org.apache.asterix.lang.common.base.IParserFactory;
 import org.apache.asterix.lang.common.base.IQueryRewriter;
 import org.apache.asterix.lang.common.base.IRewriterFactory;
 import org.apache.asterix.lang.common.base.Statement;
-import org.apache.asterix.lang.common.base.Statement.Kind;
 import org.apache.asterix.lang.common.rewrites.LangRewritingContext;
 import org.apache.asterix.lang.common.statement.DataverseDecl;
 import org.apache.asterix.lang.common.statement.FunctionDecl;
@@ -49,6 +48,7 @@ import org.apache.asterix.lang.sqlpp.util.SqlppRewriteUtil;
 import org.apache.asterix.metadata.declared.AqlMetadataProvider;
 import org.apache.asterix.metadata.entities.Dataset;
 import org.apache.asterix.test.aql.TestExecutor;
+import org.apache.asterix.test.base.ComparisonException;
 import org.apache.asterix.testframework.context.TestCaseContext;
 import org.apache.asterix.testframework.context.TestFileContext;
 import org.apache.asterix.testframework.xml.TestCase.CompilationUnit;
@@ -75,8 +75,9 @@ public class ParserTestExecutor extends TestExecutor {
             for (TestFileContext ctx : testFileCtxs) {
                 File testFile = ctx.getFile();
                 try {
-                    if (queryCount >= expectedResultFileCtxs.size()) {
-                        throw new IllegalStateException("no result file for " + testFile.toString() + "; queryCount: "
+                    if (queryCount >= expectedResultFileCtxs.size()
+                            && !cUnit.getOutputDir().getValue().equals("none")) {
+                        throw new ComparisonException("no result file for " + testFile.toString() + "; queryCount: "
                                 + queryCount + ", filectxs.size: " + expectedResultFileCtxs.size());
                     }
 
@@ -99,6 +100,10 @@ public class ParserTestExecutor extends TestExecutor {
                         }
                         throw new Exception("Test \"" + testFile + "\" FAILED!", e);
                     } else {
+                        // must compare with the expected failure message
+                        if (e instanceof ComparisonException) {
+                            throw e;
+                        }
                         LOGGER.info("[TEST]: " + testCaseCtx.getTestCase().getFilePath() + "/" + cUnit.getName()
                                 + " failed as expected: " + e.getMessage());
                         System.err.println("...but that was expected.");
@@ -106,7 +111,6 @@ public class ParserTestExecutor extends TestExecutor {
                 }
             }
         }
-
     }
 
     // Tests the SQL++ parser.
@@ -129,7 +133,7 @@ public class ParserTestExecutor extends TestExecutor {
             when(aqlMetadataProvider.findDataset(anyString(), anyString())).thenReturn(mock(Dataset.class));
 
             for (Statement st : statements) {
-                if (st.getKind() == Kind.QUERY) {
+                if (st.getKind() == Statement.Kind.QUERY) {
                     Query query = (Query) st;
                     IQueryRewriter rewriter = sqlppRewriterFactory.createQueryRewriter();
                     rewrite(rewriter, functions, query, aqlMetadataProvider,
@@ -157,7 +161,7 @@ public class ParserTestExecutor extends TestExecutor {
     private List<FunctionDecl> getDeclaredFunctions(List<Statement> statements) {
         List<FunctionDecl> functionDecls = new ArrayList<FunctionDecl>();
         for (Statement st : statements) {
-            if (st.getKind().equals(Statement.Kind.FUNCTION_DECL)) {
+            if (st.getKind() == Statement.Kind.FUNCTION_DECL) {
                 functionDecls.add((FunctionDecl) st);
             }
         }
@@ -167,7 +171,7 @@ public class ParserTestExecutor extends TestExecutor {
     // Gets the default dataverse for the input statements.
     private String getDefaultDataverse(List<Statement> statements) {
         for (Statement st : statements) {
-            if (st.getKind().equals(Statement.Kind.DATAVERSE_DECL)) {
+            if (st.getKind() == Statement.Kind.DATAVERSE_DECL) {
                 DataverseDecl dv = (DataverseDecl) st;
                 return dv.getDataverseName().getValue();
             }

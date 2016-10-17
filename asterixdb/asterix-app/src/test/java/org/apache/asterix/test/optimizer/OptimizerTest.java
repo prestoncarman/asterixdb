@@ -30,6 +30,8 @@ import java.util.logging.Logger;
 
 import org.apache.asterix.api.common.AsterixHyracksIntegrationUtil;
 import org.apache.asterix.api.java.AsterixJavaClient;
+import org.apache.asterix.app.cc.CompilerExtensionManager;
+import org.apache.asterix.app.translator.DefaultStatementExecutorFactory;
 import org.apache.asterix.common.config.GlobalConfig;
 import org.apache.asterix.common.exceptions.AsterixException;
 import org.apache.asterix.compiler.provider.AqlCompilationProvider;
@@ -37,6 +39,7 @@ import org.apache.asterix.compiler.provider.ILangCompilationProvider;
 import org.apache.asterix.compiler.provider.SqlppCompilationProvider;
 import org.apache.asterix.external.util.ExternalDataConstants;
 import org.apache.asterix.external.util.IdentitiyResolverFactory;
+import org.apache.asterix.runtime.util.AsterixAppContextInfo;
 import org.apache.asterix.test.base.AsterixTestHelper;
 import org.apache.asterix.test.common.TestHelper;
 import org.apache.asterix.test.runtime.HDFSCluster;
@@ -65,13 +68,16 @@ public class OptimizerTest {
             + "optimizerts" + SEPARATOR;
     private static final String PATH_QUERIES = PATH_BASE + "queries" + SEPARATOR;
     private static final String PATH_EXPECTED = PATH_BASE + "results" + SEPARATOR;
-    private static final String PATH_ACTUAL = "opttest" + SEPARATOR;
+    protected static final String PATH_ACTUAL = "target" + File.separator + "opttest" + SEPARATOR;
 
     private static final ArrayList<String> ignore = AsterixTestHelper.readFile(FILENAME_IGNORE, PATH_BASE);
     private static final ArrayList<String> only = AsterixTestHelper.readFile(FILENAME_ONLY, PATH_BASE);
-    private static final String TEST_CONFIG_FILE_NAME = "asterix-build-configuration.xml";
+    protected static String TEST_CONFIG_FILE_NAME = "asterix-build-configuration.xml";
     private static final ILangCompilationProvider aqlCompilationProvider = new AqlCompilationProvider();
     private static final ILangCompilationProvider sqlppCompilationProvider = new SqlppCompilationProvider();
+    protected static ILangCompilationProvider extensionLangCompilationProvider = null;
+
+    protected static AsterixHyracksIntegrationUtil integrationUtil = new AsterixHyracksIntegrationUtil();
 
     @BeforeClass
     public static void setUp() throws Exception {
@@ -81,7 +87,7 @@ public class OptimizerTest {
 
         HDFSCluster.getInstance().setup();
 
-        AsterixHyracksIntegrationUtil.init(true);
+        integrationUtil.init(true);
         // Set the node resolver to be the identity resolver that expects node names
         // to be node controller ids; a valid assumption in test environment.
         System.setProperty(ExternalDataConstants.NODE_RESOLVER_FACTORY_PROPERTY,
@@ -98,7 +104,7 @@ public class OptimizerTest {
 
         HDFSCluster.getInstance().cleanup();
 
-        AsterixHyracksIntegrationUtil.deinit(true);
+        integrationUtil.deinit(true);
     }
 
     private static void suiteBuildPerFile(File file, Collection<Object[]> testArgs, String path) {
@@ -168,8 +174,13 @@ public class OptimizerTest {
             PrintWriter plan = new PrintWriter(actualFile);
             ILangCompilationProvider provider = queryFile.getName().endsWith("aql") ? aqlCompilationProvider
                     : sqlppCompilationProvider;
-            IHyracksClientConnection hcc = AsterixHyracksIntegrationUtil.getHyracksClientConnection();
-            AsterixJavaClient asterix = new AsterixJavaClient(hcc, query, plan, provider);
+            if (extensionLangCompilationProvider != null) {
+                provider = extensionLangCompilationProvider;
+            }
+            IHyracksClientConnection hcc = integrationUtil.getHyracksClientConnection();
+            AsterixJavaClient asterix = new AsterixJavaClient(hcc, query, plan, provider,
+                    new DefaultStatementExecutorFactory(
+                            (CompilerExtensionManager) AsterixAppContextInfo.INSTANCE.getExtensionManager()));
             try {
                 asterix.compile(true, false, false, true, true, false, false);
             } catch (AsterixException e) {

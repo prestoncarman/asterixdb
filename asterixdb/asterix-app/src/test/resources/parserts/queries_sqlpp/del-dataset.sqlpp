@@ -17,26 +17,26 @@
  * under the License.
  */
 
-drop  database demo0927 if exists;
-create  database demo0927;
+drop  dataverse demo0927 if exists;
+create  dataverse demo0927;
 
 use demo0927;
 
 create type demo0927.AddressType as
  closed {
-  number : int32,
+  number : integer,
   street : string,
   city : string
 }
 
 create type demo0927.CustomerType as
  closed {
-  cid : int32,
+  cid : integer,
   name : string,
-  age : int32?,
+  age : integer?,
   address : AddressType?,
   lastorder : {
-      oid : int32,
+      oid : integer,
       total : float
   }
 
@@ -46,6 +46,6 @@ create  nodegroup group1 if not exists  on
     asterix_nc1,
     asterix_nc2
 ;
-create  table Customers(CustomerType) primary key cid on group1;
+create  dataset Customers(CustomerType) primary key cid on group1;
 
-drop  table Customers;
+drop  dataset Customers;

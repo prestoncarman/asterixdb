@@ -17,10 +17,10 @@
  * under the License.
  */
 /*
- * Description    : Tests the scalar version of coll_sql-min with an empty list.
+ * Description    : Tests the scalar version of array_min with an empty list.
  * Success        : Yes
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 

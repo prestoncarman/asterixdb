@@ -157,7 +157,7 @@ public class RecordBuilder implements IARecordBuilder {
                 // the null bit is 1, which means the field is not a null,
                 // the missing bit is 0, means the field is missing (by default).
                 Arrays.fill(nullBitMap, 0, nullBitMapSize, (byte) 0xAA);
-                headerSize += nullBitMap.length;
+                headerSize += nullBitMapSize;
             }
         }
     }
@@ -170,14 +170,6 @@ public class RecordBuilder implements IARecordBuilder {
         closedPartOutputStream.write(value.getByteArray(), value.getStartOffset() + 1, len);
         numberOfClosedFields++;
         addNullOrMissingField(fid, value.getByteArray(), value.getStartOffset());
-    }
-
-    public void addField(int fid, byte[] value) {
-        closedPartOffsets[fid] = closedPartOutputStream.size();
-        // We assume the tag is not included (closed field)
-        closedPartOutputStream.write(value, 0, value.length);
-        numberOfClosedFields++;
-        addNullOrMissingField(fid, value, 0);
     }
 
     private void addNullOrMissingField(int fid, byte[] data, int offset) {

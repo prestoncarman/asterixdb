@@ -16,12 +16,12 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 package org.apache.asterix.dataflow.data.nontagged.serde;
 
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.util.List;
 
 import org.apache.asterix.builders.IARecordBuilder;
 import org.apache.asterix.builders.RecordBuilder;
@@ -32,13 +32,15 @@ import org.apache.asterix.formats.nontagged.AqlSerializerDeserializerProvider;
 import org.apache.asterix.om.base.AMissing;
 import org.apache.asterix.om.base.ANull;
 import org.apache.asterix.om.base.ARecord;
+import org.apache.asterix.om.base.AString;
 import org.apache.asterix.om.base.IAObject;
 import org.apache.asterix.om.types.ARecordType;
 import org.apache.asterix.om.types.ATypeTag;
 import org.apache.asterix.om.types.AUnionType;
+import org.apache.asterix.om.types.BuiltinType;
 import org.apache.asterix.om.types.IAType;
 import org.apache.asterix.om.util.NonTaggedFormatUtil;
-import org.apache.hyracks.algebricks.common.exceptions.NotImplementedException;
+import org.apache.hyracks.algebricks.common.utils.Pair;
 import org.apache.hyracks.api.dataflow.value.IBinaryComparator;
 import org.apache.hyracks.api.dataflow.value.IBinaryHashFunction;
 import org.apache.hyracks.api.dataflow.value.ISerializerDeserializer;
@@ -153,7 +155,7 @@ public class ARecordSerializerDeserializer implements ISerializerDeserializer<AR
                     IAObject[] mergedFields = mergeFields(closedFields, openFields);
                     return new ARecord(mergedRecordType, mergedFields);
                 } else {
-                    return new ARecord(this.recordType, openFields);
+                    return new ARecord(openPartRecType, openFields);
                 }
             } else {
                 return new ARecord(this.recordType, closedFields);
@@ -184,8 +186,49 @@ public class ARecordSerializerDeserializer implements ISerializerDeserializer<AR
             }
             recordBuilder.write(out, writeTypeTag);
         } else {
-            throw new NotImplementedException("Serializer for schemaless records is not implemented.");
+            serializeSchemalessRecord(instance, out, writeTypeTag);
         }
+    }
+
+    @SuppressWarnings({ "unchecked", "rawtypes" })
+    public static void serializeSchemalessRecord(ARecord record, DataOutput dataOutput, boolean writeTypeTag)
+            throws HyracksDataException {
+        ISerializerDeserializer<AString> stringSerde = AqlSerializerDeserializerProvider.INSTANCE
+                .getSerializerDeserializer(BuiltinType.ASTRING);
+        RecordBuilder confRecordBuilder = new RecordBuilder();
+        confRecordBuilder.reset(ARecordType.FULLY_OPEN_RECORD_TYPE);
+        ArrayBackedValueStorage fieldNameBytes = new ArrayBackedValueStorage();
+        ArrayBackedValueStorage fieldValueBytes = new ArrayBackedValueStorage();
+        for (int i = 0; i < record.getType().getFieldNames().length; i++) {
+            String fieldName = record.getType().getFieldNames()[i];
+            fieldValueBytes.reset();
+            fieldNameBytes.reset();
+            stringSerde.serialize(new AString(fieldName), fieldNameBytes.getDataOutput());
+            ISerializerDeserializer valueSerde = AqlSerializerDeserializerProvider.INSTANCE
+                    .getSerializerDeserializer(record.getType().getFieldTypes()[i]);
+            valueSerde.serialize(record.getValueByPos(i), fieldValueBytes.getDataOutput());
+            confRecordBuilder.addField(fieldNameBytes, fieldValueBytes);
+        }
+        confRecordBuilder.write(dataOutput, writeTypeTag);
+    }
+
+    @SuppressWarnings("unchecked")
+    public static void serializeSimpleSchemalessRecord(List<Pair<String, String>> record, DataOutput dataOutput,
+            boolean writeTypeTag) throws HyracksDataException {
+        ISerializerDeserializer<AString> stringSerde = AqlSerializerDeserializerProvider.INSTANCE
+                .getSerializerDeserializer(BuiltinType.ASTRING);
+        RecordBuilder confRecordBuilder = new RecordBuilder();
+        confRecordBuilder.reset(ARecordType.FULLY_OPEN_RECORD_TYPE);
+        ArrayBackedValueStorage fieldNameBytes = new ArrayBackedValueStorage();
+        ArrayBackedValueStorage fieldValueBytes = new ArrayBackedValueStorage();
+        for (int i = 0; i < record.size(); i++) {
+            fieldValueBytes.reset();
+            fieldNameBytes.reset();
+            stringSerde.serialize(new AString(record.get(i).first), fieldNameBytes.getDataOutput());
+            stringSerde.serialize(new AString(record.get(i).second), fieldValueBytes.getDataOutput());
+            confRecordBuilder.addField(fieldNameBytes, fieldValueBytes);
+        }
+        confRecordBuilder.write(dataOutput, writeTypeTag);
     }
 
     private IAObject[] mergeFields(IAObject[] closedFields, IAObject[] openFields) {
@@ -224,67 +267,39 @@ public class ARecordSerializerDeserializer implements ISerializerDeserializer<AR
 
     public static final int getFieldOffsetById(byte[] serRecord, int offset, int fieldId, int nullBitmapSize,
             boolean isOpen) {
-        byte nullTestCode = (byte) (1 << (7 - 2 * (fieldId % 4)));
-        byte missingTestCode = (byte) (1 << (7 - 2 * (fieldId % 4) - 1));
+        final byte nullTestCode = (byte) (1 << (7 - 2 * (fieldId % 4)));
+        final byte missingTestCode = (byte) (1 << (7 - 2 * (fieldId % 4) - 1));
+
+        //early exit if not Record
+        if (serRecord[offset] != ATypeTag.SERIALIZED_RECORD_TYPE_TAG) {
+            return -1;
+        }
+
+        //advance to isExpanded or numberOfSchemaFields
+        int pointer = offset + 5;
+
         if (isOpen) {
-            if (serRecord[0 + offset] == ATypeTag.RECORD.serialize()) {
-                // 5 is the index of the byte that determines whether the record
-                // is expanded or not, i.e. it has an open part.
-                if (serRecord[5 + offset] == 1) { // true
-                    if (nullBitmapSize > 0) {
-                        // 14 = tag (1) + record Size (4) + isExpanded (1) +
-                        // offset of openPart (4) + number of closed fields (4)
-                        int pos = 14 + offset + fieldId / 4;
-                        if ((serRecord[pos] & nullTestCode) == 0) {
-                            // the field value is null
-                            return 0;
-                        }
-                        if ((serRecord[pos] & missingTestCode) == 0) {
-                            // the field value is missing
-                            return -1;
-                        }
-                    }
-                    return offset + AInt32SerializerDeserializer.getInt(serRecord,
-                            14 + offset + nullBitmapSize + (4 * fieldId));
-                } else {
-                    if (nullBitmapSize > 0) {
-                        // 9 = tag (1) + record Size (4) + isExpanded (1) +
-                        // number of closed fields (4)
-                        int pos = 10 + offset + fieldId / 4;
-                        if ((serRecord[pos] & nullTestCode) == 0) {
-                            // the field value is null
-                            return 0;
-                        }
-                        if ((serRecord[pos] & missingTestCode) == 0) {
-                            // the field value is missing
-                            return -1;
-                        }
-                    }
-                    return offset + AInt32SerializerDeserializer.getInt(serRecord,
-                            10 + offset + nullBitmapSize + (4 * fieldId));
-                }
-            } else {
+            final boolean isExpanded = serRecord[pointer] == 1;
+            //if isExpanded, advance to numberOfSchemaFields
+            pointer += 1 + (isExpanded ? 4 : 0);
+        }
+
+        //advance to nullBitmap
+        pointer += 4;
+
+        if (nullBitmapSize > 0) {
+            final int pos = pointer + fieldId / 4;
+            if ((serRecord[pos] & nullTestCode) == 0) {
+                // the field value is null
+                return 0;
+            }
+            if ((serRecord[pos] & missingTestCode) == 0) {
+                // the field value is missing
                 return -1;
             }
-        } else {
-            if (serRecord[offset] != ATypeTag.SERIALIZED_RECORD_TYPE_TAG) {
-                return Integer.MIN_VALUE;
-            }
-            if (nullBitmapSize > 0) {
-                // 9 = tag (1) + record Size (4) + number of closed fields
-                // (4)
-                int pos = 9 + offset + fieldId / 4;
-                if ((serRecord[pos] & nullTestCode) == 0) {
-                    // the field value is null
-                    return 0;
-                }
-                if ((serRecord[pos] & missingTestCode) == 0) {
-                    // the field value is missing
-                    return -1;
-                }
-            }
-            return offset + AInt32SerializerDeserializer.getInt(serRecord, 9 + offset + nullBitmapSize + (4 * fieldId));
         }
+
+        return offset + AInt32SerializerDeserializer.getInt(serRecord, pointer + nullBitmapSize + (4 * fieldId));
     }
 
     public static final int getFieldOffsetByName(byte[] serRecord, int start, int len, byte[] fieldName, int nstart)

@@ -17,20 +17,20 @@
  * under the License.
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 
 use test;
 
 
 create type test.TempType as
  closed {
-  id : int32,
+  id : integer,
   date : date,
   time : time,
   datetime : datetime,
   duration : duration
 }
 
-create  table Temp2(TempType) primary key id;
+create  dataset Temp2(TempType) primary key id;
 

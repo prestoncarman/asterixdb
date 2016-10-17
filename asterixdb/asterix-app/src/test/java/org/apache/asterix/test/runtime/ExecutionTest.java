@@ -45,16 +45,18 @@ public class ExecutionTest {
 
     protected static final Logger LOGGER = Logger.getLogger(ExecutionTest.class.getName());
 
-    protected static final String PATH_ACTUAL = "rttest" + File.separator;
+    protected static final String PATH_ACTUAL = "target" + File.separator + "rttest" + File.separator;
     protected static final String PATH_BASE = StringUtils.join(new String[] { "src", "test", "resources", "runtimets" },
             File.separator);
 
     protected static final String TEST_CONFIG_FILE_NAME = "asterix-build-configuration.xml";
+    protected static final List<String> badTestCases = new ArrayList<>();
     protected static AsterixTransactionProperties txnProperties;
     protected static final TestExecutor testExecutor = new TestExecutor();
     private static final boolean cleanupOnStart = true;
     private static final boolean cleanupOnStop = true;
     private static TestLibrarian librarian;
+    private static final int repeat = Integer.getInteger("test.repeat", 1);
 
     @BeforeClass
     public static void setUp() throws Exception {
@@ -66,6 +68,9 @@ public class ExecutionTest {
             List<ILibraryManager> libraryManagers = ExecutionTestUtil.setUp(cleanupOnStart);
             librarian = new TestLibrarian(libraryManagers);
             testExecutor.setLibrarian(librarian);
+            if (repeat != 1) {
+                System.out.println("FYI: each test will be run " + repeat + " times.");
+            }
         } catch (Throwable th) {
             th.printStackTrace();
             throw th;
@@ -77,6 +82,12 @@ public class ExecutionTest {
         // remove library directory
         TestLibrarian.removeLibraryDir();
         ExecutionTestUtil.tearDown(cleanupOnStop);
+        if (!badTestCases.isEmpty()) {
+            System.out.println("The following test cases left some data");
+            for (String testCase : badTestCases) {
+                System.out.println(testCase);
+            }
+        }
     }
 
     @Parameters(name = "ExecutionTest {index}: {0}")
@@ -106,7 +117,22 @@ public class ExecutionTest {
 
     @Test
     public void test() throws Exception {
-        librarian.cleanup();
-        testExecutor.executeTest(PATH_ACTUAL, tcCtx, null, false, ExecutionTestUtil.FailedGroup);
+        try {
+            for (int i = 1; i <= repeat; i++) {
+                if (repeat > 1) {
+                    System.err.print("[" + i + "/" + repeat + "] ");
+                }
+                librarian.cleanup();
+                testExecutor.executeTest(PATH_ACTUAL, tcCtx, null, false, ExecutionTestUtil.FailedGroup);
+                try {
+                    testExecutor.cleanup(tcCtx.toString(), badTestCases);
+                } catch (Throwable th) {
+                    th.printStackTrace();
+                    throw th;
+                }
+            }
+        } finally {
+            System.err.flush();
+        }
     }
 }

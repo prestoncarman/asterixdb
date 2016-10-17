@@ -23,8 +23,8 @@
  * Date         : 8th May 2014
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 
 use test;
 
@@ -33,21 +33,21 @@ create type test.TwitterUserType as
  closed {
   `screen-name` : string,
   lang : string,
-  `friends-count` : int64,
-  `statuses-count` : int64,
+  `friends-count` : bigint,
+  `statuses-count` : bigint,
   name : string,
-  `followers-count` : int64
+  `followers-count` : bigint
 }
 
 create type test.TweetMessageNestedType as
 {
-  tweetid : int64,
+  tweetid : bigint,
   user : TwitterUserType,
   `sender-location` : point,
   `send-time` : datetime,
   `referred-topics` : {{string}},
-  countA : int64,
-  countB : int64
+  countA : bigint,
+  countB : bigint
 }
 
 create type test.TweetMessageType as
@@ -55,9 +55,9 @@ create type test.TweetMessageType as
   nested : TweetMessageNestedType
 }
 
-create  table TweetMessages(TweetMessageType) primary key nested.tweetid;
+create  dataset TweetMessages(TweetMessageType) primary key nested.tweetid;
 
-create  table TweetMessagesTmp(TweetMessageNestedType) primary key tweetid;
+create  dataset TweetMessagesTmp(TweetMessageNestedType) primary key tweetid;
 
-create  index msgNgramIx  on TweetMessages (nested.`message-text`:string) type ngram (3) enforced;
+create  index msgNgramIx  on TweetMessages (nested.`message-text`:string?) type ngram (3) enforced;
 

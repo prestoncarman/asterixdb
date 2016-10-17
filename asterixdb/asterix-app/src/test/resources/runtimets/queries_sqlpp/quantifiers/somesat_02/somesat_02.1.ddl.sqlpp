@@ -17,27 +17,27 @@
  * under the License.
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 
 use test;
 
 
 create type test.AddressType as
 {
-  number : int64,
+  number : bigint,
   street : string,
   city : string
 }
 
 create type test.CustomerType as
 {
-  cid : int64,
+  cid : bigint,
   name : string,
-  age : int64?,
+  age : bigint?,
   address : AddressType?,
   lastorder : {
-      oid : int64,
+      oid : bigint,
       total : float
   }
 
@@ -45,15 +45,15 @@ create type test.CustomerType as
 
 create type test.OrderType as
 {
-  oid : int64,
-  cid : int64,
+  oid : bigint,
+  cid : bigint,
   orderstatus : string,
   orderpriority : string,
   clerk : string,
   total : float
 }
 
-create  table CustomerSomeSat02(CustomerType) primary key cid;
+create  dataset CustomerSomeSat02(CustomerType) primary key cid;
 
-create  table OrdersSomeSat02(OrderType) primary key oid;
+create  dataset OrdersSomeSat02(OrderType) primary key oid;
 

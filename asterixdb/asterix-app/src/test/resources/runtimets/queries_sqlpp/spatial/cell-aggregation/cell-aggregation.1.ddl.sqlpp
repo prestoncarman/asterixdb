@@ -17,17 +17,17 @@
  * under the License.
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 
 use test;
 
 
 create type test.MyRecord as
 {
-  id : int64,
+  id : bigint,
   loc : point
 }
 
-create external  table MyData(MyRecord) using localfs((`path`=`asterix_nc1://data/spatial/spatialDataAggregation.json`),(`format`=`adm`));
+create external  dataset MyData(MyRecord) using localfs((`path`=`asterix_nc1://data/spatial/spatialDataAggregation.json`),(`format`=`adm`));
 

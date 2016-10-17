@@ -25,16 +25,16 @@
  * Success        : Yes
  */
 
-drop  database fuzzyjoin if exists;
-create  database fuzzyjoin;
+drop  dataverse fuzzyjoin if exists;
+create  dataverse fuzzyjoin;
 
 use fuzzyjoin;
 
 
 create type fuzzyjoin.DBLPType as
 {
-  id : int64
+  id : bigint
 }
 
-create  table DBLP(DBLPType) primary key id;
+create  dataset DBLP(DBLPType) primary key id;
 

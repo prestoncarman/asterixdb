@@ -21,15 +21,15 @@
  * Success        : Yes
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 
 use test;
 
 
 create type test.SpatialType as
 {
-  id : int64,
+  id : bigint,
   point : point,
   line1 : line,
   poly1 : polygon,
@@ -37,7 +37,7 @@ create type test.SpatialType as
   circle : circle
 }
 
-create  table MyData(SpatialType) primary key id;
+create  dataset MyData(SpatialType) primary key id;
 
 create  index rtree_index1  on MyData (point) type rtree;
 

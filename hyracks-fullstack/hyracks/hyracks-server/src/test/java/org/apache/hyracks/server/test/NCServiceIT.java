@@ -18,11 +18,19 @@
  */
 package org.apache.hyracks.server.test;
 
+import java.io.File;
+import java.io.IOException;
+import java.net.InetAddress;
+import java.util.logging.Logger;
+
 import junit.framework.Assert;
-import org.apache.commons.httpclient.HttpClient;
-import org.apache.commons.httpclient.HttpStatus;
-import org.apache.commons.httpclient.methods.GetMethod;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.http.HttpResponse;
+import org.apache.http.HttpStatus;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.util.EntityUtils;
 import org.apache.hyracks.server.process.HyracksVirtualCluster;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -30,15 +38,10 @@ import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import java.io.File;
-import java.io.IOException;
-import java.net.InetAddress;
-import java.util.logging.Logger;
-
 public class NCServiceIT {
 
     private static final String TARGET_DIR = StringUtils
-            .join(new String[] { System.getProperty("basedir"), "target" }, File.separator);
+            .join(new String[] { ".", "target" }, File.separator);
     private static final String LOG_DIR = StringUtils
             .join(new String[] { TARGET_DIR, "failsafe-reports" }, File.separator);
     private static final String RESOURCE_DIR = StringUtils
@@ -86,16 +89,18 @@ public class NCServiceIT {
     }
 
     private static String getHttp(String url) throws Exception {
-        HttpClient client = new HttpClient();
-        GetMethod get = new GetMethod(url);
+        HttpClient client = HttpClients.createDefault();
+        HttpGet get = new HttpGet(url);
         int statusCode;
+        final HttpResponse httpResponse;
         try {
-            statusCode = client.executeMethod(get);
+            httpResponse = client.execute(get);
+            statusCode = httpResponse.getStatusLine().getStatusCode();
         } catch (Exception e) {
             e.printStackTrace();
             throw e;
         }
-        String response = get.getResponseBodyAsString();
+        String response = EntityUtils.toString(httpResponse.getEntity());
         if (statusCode == HttpStatus.SC_OK) {
             return response;
         } else {

@@ -24,20 +24,20 @@
 * Date         : 3rd Jan 2014
 */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 
 use test;
 
 
 create type test.EmployeeType as
  closed {
-  id : int64,
+  id : bigint,
   name : string,
-  age : int64
+  age : bigint
 }
 
-create external  table EmployeeDataset(EmployeeType) using `hdfs`((`hdfs`=`hdfs://127.0.0.1:31888`),(`path`=`/asterix/external-indexing-test.txt`),(`input-format`=`text-input-format`),(`format`=`delimited-text`),(`delimiter`=`|`));
+create external  dataset EmployeeDataset(EmployeeType) using `hdfs`((`hdfs`=`hdfs://127.0.0.1:31888`),(`path`=`/asterix/external-indexing-test.txt`),(`input-format`=`text-input-format`),(`format`=`delimited-text`),(`delimiter`=`|`));
 
 create  index EmployeeAgeIdx  on EmployeeDataset (age) type btree;
 

@@ -22,8 +22,8 @@
  * Date             :  07/27/2013
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 
 use test;
 
@@ -37,24 +37,24 @@ create type test.EmploymentType as
 
 create type test.FacebookUserType as
  closed {
-  id : int64,
+  id : bigint,
   alias : string,
   name : string,
   `user-since` : datetime,
-  `friend-ids` : {{int64}},
+  `friend-ids` : {{bigint}},
   employment : [EmploymentType]
 }
 
 create type test.FacebookMessageType as
  closed {
-  `message-id` : int64,
-  `author-id` : int64,
-  `in-response-to` : int64?,
+  `message-id` : bigint,
+  `author-id` : bigint,
+  `in-response-to` : bigint?,
   `sender-location` : point?,
   message : string
 }
 
-create  table FacebookUsers(FacebookUserType) primary key id;
+create  dataset FacebookUsers(FacebookUserType) primary key id;
 
-create  table FacebookMessages(FacebookMessageType) primary key `message-id`;
+create  dataset FacebookMessages(FacebookMessageType) primary key `message-id`;
 

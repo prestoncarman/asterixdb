@@ -18,20 +18,20 @@
  */
 /* scan and print a delimited text file */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 
 use test;
 
 
 create type test.DBLPType as
 {
-  id : int64,
+  id : bigint,
   dblpid : string,
   title : string,
   authors : string,
   misc : string
 }
 
-create  table DBLP1(DBLPType) primary key id;
+create  dataset DBLP1(DBLPType) primary key id;
 

@@ -17,10 +17,10 @@
  * under the License.
  */
 /*
- * Description    : Tests the scalar version of coll_sql-sum with nulls.
+ * Description    : Tests the scalar version of array_sum with nulls.
  * Success        : Yes
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 

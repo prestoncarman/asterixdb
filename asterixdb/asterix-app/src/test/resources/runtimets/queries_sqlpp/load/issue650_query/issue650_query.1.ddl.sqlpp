@@ -22,22 +22,22 @@
  * Date         : 17 Oct 2013
  */
 
-drop  database fuzzyjoin if exists;
-create  database fuzzyjoin;
+drop  dataverse fuzzyjoin if exists;
+create  dataverse fuzzyjoin;
 
 use fuzzyjoin;
 
 
 create type fuzzyjoin.UserType as
 {
-  uid : int32,
+  uid : integer,
   name : string,
-  lottery_numbers : [int32],
+  lottery_numbers : [integer],
   interests : {{string}}
 }
 
-create  table Users(UserType) primary key uid;
+create  dataset Users(UserType) primary key uid;
 
-drop  database fuzzyjoin if exists;
-create  database fuzzyjoin;
+drop  dataverse fuzzyjoin if exists;
+create  dataverse fuzzyjoin;
 

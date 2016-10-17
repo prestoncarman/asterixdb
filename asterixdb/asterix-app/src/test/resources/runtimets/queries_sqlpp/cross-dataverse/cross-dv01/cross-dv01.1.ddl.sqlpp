@@ -24,38 +24,38 @@
  * Date         : 29th Aug 2012
  */
 
-drop  database student if exists;
-drop  database teacher if exists;
-create  database student;
+drop  dataverse student if exists;
+drop  dataverse teacher if exists;
+create  dataverse student;
 
-create  database teacher;
+create  dataverse teacher;
 
 use teacher;
 
 
 create type student.stdType as
 {
-  id : int64,
+  id : bigint,
   name : string,
-  age : int64,
+  age : bigint,
   sex : string,
   dept : string
 }
 
 create type teacher.tchrType as
 {
-  id : int64,
+  id : bigint,
   name : string,
-  age : int64,
+  age : bigint,
   sex : string,
   dept : string
 }
 
-create  table student.ugdstd(student.stdType) primary key id;
+create  dataset student.ugdstd(student.stdType) primary key id;
 
-create  table student.gdstd(student.stdType) primary key id;
+create  dataset student.gdstd(student.stdType) primary key id;
 
-create  table teacher.prof(tchrType) primary key id;
+create  dataset teacher.prof(tchrType) primary key id;
 
-create  table teacher.pstdoc(tchrType) primary key id;
+create  dataset teacher.pstdoc(tchrType) primary key id;
 

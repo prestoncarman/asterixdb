@@ -25,25 +25,25 @@
  * Date            : 7th August 2012
  */
 
-drop  database test if exists;
-create  database test;
+drop  dataverse test if exists;
+create  dataverse test;
 
 use test;
 
 
 create type test.EmpTmp as
  closed {
-  id : int64,
+  id : bigint,
   fname : string,
   lname : string,
-  age : int64,
+  age : bigint,
   dept : string
 }
 
 create type test.Nested as
 {
-  id : int64,
-  age : int64,
+  id : bigint,
+  age : bigint,
   dept : string
 }
 
@@ -52,7 +52,7 @@ create type test.Emp as
   nested : Nested
 }
 
-create  table employeeTmp(EmpTmp) primary key id;
+create  dataset employeeTmp(EmpTmp) primary key id;
 
-create  table employee(Emp) primary key nested.id;
+create  dataset employee(Emp) primary key nested.id;
 
