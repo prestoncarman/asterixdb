@@ -17,7 +17,38 @@
  ! specific language governing permissions and limitations
  ! under the License.
  !-->
+<!DOCTYPE test-suite [
+
+             <!ENTITY APIQueries SYSTEM "queries/api/APIQueries.xml">
+             <!ENTITY ComparisonQueries SYSTEM "queries/comparison/ComparisonQueries.xml">
+             <!ENTITY DeepEqualQueries SYSTEM "queries/comparison/deep_equal/DeepEqualQueries.xml">
+             <!ENTITY APIQueries SYSTEM "queries/api/APIQueries.xml">
+             <!ENTITY RecordsQueries SYSTEM "queries/records/RecordsQueries.xml">
+             <!ENTITY TemporalQueries SYSTEM "queries/temporal/TemporalQueries.xml">
+
+             ]>
 <test-suite xmlns="urn:xml.testframework.asterix.apache.org" ResultOffsetPath="results" QueryOffsetPath="queries">
   <test-group name="failed">
-  </test-group>
+        <!-- &TemporalQueries; -->
+        <test-case FilePath="temporal/interval_joins">
+            <compilation-unit name="interval_overlapping">
+                <output-dir compare="Text">interval_overlapping</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="temporal/interval_joins_with_spilling">
+            <compilation-unit name="interval_overlapping">
+                <output-dir compare="Text">interval_overlapping</output-dir>
+            </compilation-unit>
+        </test-case>
+        <test-case FilePath="temporal/interval_joins_alternate_return">
+            <compilation-unit name="interval_overlapping">
+                <output-dir compare="Text">interval_overlapping</output-dir>
+            </compilation-unit>
+        </test-case>
+         <test-case FilePath="temporal/interval_joins_with_spilling">
+            <compilation-unit name="interval_overlapping_disjoint_case">
+                <output-dir compare="Text">interval_overlapping_disjoint_case</output-dir>
+            </compilation-unit>
+        </test-case>
+    </test-group>
 </test-suite>

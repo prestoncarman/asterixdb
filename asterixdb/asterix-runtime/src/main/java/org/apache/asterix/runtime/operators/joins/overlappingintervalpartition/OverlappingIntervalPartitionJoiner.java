@@ -61,11 +61,9 @@ public class OverlappingIntervalPartitionJoiner extends AbstractMergeJoiner {
 
     private final int k;
     private final int numOfPartitions;
-    private long buildSize = 0;
-    private long probeSize = 0;
     private long[] buildPartitionSizes;
     private long[] probePartitionSizes;
-    private final long[][] joinPartitionSizes;
+    //    private final long[][] joinPartitionSizes;
     private final TreeMap<RunFilePointer, Integer> probeRunFilePointers;
 
     private final VPartitionTupleBufferManager buildBufferManager;
@@ -105,7 +103,7 @@ public class OverlappingIntervalPartitionJoiner extends AbstractMergeJoiner {
         buildPartitionSizes = new long[numOfPartitions];
         probePartitionSizes = new long[numOfPartitions];
 
-        joinPartitionSizes = new long[numOfPartitions][numOfPartitions];
+        //        joinPartitionSizes = new long[numOfPartitions][numOfPartitions];
 
         // TODO fix available memory size
         buildBufferManager = new VPartitionTupleBufferManager(ctx, VPartitionTupleBufferManager.NO_CONSTRAIN,
@@ -138,7 +136,6 @@ public class OverlappingIntervalPartitionJoiner extends AbstractMergeJoiner {
                 probeRunFilePid = pid;
             }
             inputAccessor[LEFT_PARTITION].next();
-            probeSize++;
             probePartitionSizes[pid]++;
         }
         inputBuffer[LEFT_PARTITION].getBuffer().rewind();
@@ -146,6 +143,7 @@ public class OverlappingIntervalPartitionJoiner extends AbstractMergeJoiner {
         spillWriteCount++;
     }
 
+    @SuppressWarnings("unused")
     @Override
     public void processLeftClose(IFrameWriter writer) throws HyracksDataException {
         joinLoopOnMemory(writer);
@@ -158,40 +156,52 @@ public class OverlappingIntervalPartitionJoiner extends AbstractMergeJoiner {
                     + memorySize + ",memory," + joinResultCount + ",results," + joinComparisonCount + ",CPU," + ioCost
                     + ",IO," + k + ",k," + spillWriteCount + ",frames_written," + spillReadCount + ",frames_read");
         }
+        // printPartitionStatus();
+        //        long ioCost = spillWriteCount + spillReadCount;
+        //        System.err.println(",OverlappingIntervalPartitionJoiner Statistics Log," + partition + ",partition,"
+        //                + memorySize + ",memory," + joinResultCount + ",results," + joinComparisonCount + ",CPU," + ioCost
+        //                + ",IO," + k + ",k," + spillWriteCount + ",frames_written," + spillReadCount + ",frames_read");
         probeRunFileWriter.close();
-        //printPartitionStatus();
     }
 
     private void printPartitionStatus() {
+        System.err.println("k=" + k + " numOfPartitions:" + numOfPartitions);
+        System.err.println("left:" + frameCounts[LEFT_PARTITION] + " right:" + frameCounts[RIGHT_PARTITION]);
         System.err.println("build[");
+        int count = 0;
         for (int i = 0; i < buildPartitionSizes.length; i++) {
             if (buildPartitionSizes[i] > 0) {
                 System.err.println("  (" + OverlappingIntervalPartitionUtil.getIntervalPartition(i, k) + ") "
                         + buildPartitionSizes[i] + " ");
+                count++;
             }
         }
         System.err.println("]");
+        System.err.println("Used Partitions:" + count);
 
         System.err.println("probe[");
+        count = 0;
         for (int i = 0; i < probePartitionSizes.length; i++) {
             if (probePartitionSizes[i] > 0) {
                 System.err.println("  (" + OverlappingIntervalPartitionUtil.getIntervalPartition(i, k) + ") "
                         + probePartitionSizes[i] + " ");
+                count++;
             }
         }
         System.err.println("]");
+        System.err.println("Used Partitions:" + count);
 
-        System.err.println("join[");
-        for (int i = 0; i < joinPartitionSizes.length; i++) {
-            for (int j = 0; j < joinPartitionSizes[i].length; j++) {
-                if (joinPartitionSizes[i][j] > 0) {
-                    System.err.println("  (" + OverlappingIntervalPartitionUtil.getIntervalPartition(i, k) + ") ("
-                            + OverlappingIntervalPartitionUtil.getIntervalPartition(j, k) + ") "
-                            + joinPartitionSizes[i][j] + " ");
-                }
-            }
-        }
-        System.err.println("]");
+        //        System.err.println("join[");
+        //        for (int i = 0; i < joinPartitionSizes.length; i++) {
+        //            for (int j = 0; j < joinPartitionSizes[i].length; j++) {
+        //                if (joinPartitionSizes[i][j] > 0) {
+        //                    System.err.println("  (" + OverlappingIntervalPartitionUtil.getIntervalPartition(i, k) + ") ("
+        //                            + OverlappingIntervalPartitionUtil.getIntervalPartition(j, k) + ") "
+        //                            + joinPartitionSizes[i][j] + " ");
+        //                }
+        //            }
+        //        }
+        //        System.err.println("]");
     }
 
     private void joinLoopOnMemory(IFrameWriter writer) throws HyracksDataException {
@@ -216,14 +226,15 @@ public class OverlappingIntervalPartitionJoiner extends AbstractMergeJoiner {
     private void joinMemoryBlockWithRunFile(IFrameWriter writer, RunFileReader pReader) throws HyracksDataException {
         // Join Disk partitions with Memory partitions
         for (RunFilePointer probeId : probeRunFilePointers.navigableKeySet()) {
-            Pair<Integer, Integer> probe = OverlappingIntervalPartitionUtil
-                    .getIntervalPartition(probeRunFilePointers.get(probeId), k);
+            Pair<Integer, Integer> probe =
+                    OverlappingIntervalPartitionUtil.getIntervalPartition(probeRunFilePointers.get(probeId), k);
             //            System.err.print("join " + probe + " (" + probePartitionSizes[probeRunFilePointers.get(probeId)]
             //                    + ") with ");
 
             for (int buildId : buildInMemoryPartitions) {
                 Pair<Integer, Integer> build = OverlappingIntervalPartitionUtil.getIntervalPartition(buildId, k);
-                if (imjc.compareIntervalPartition(probe.first, probe.second, build.first, build.second)) {
+                if (!(probe.first == 0 && build.first == 0)
+                        && imjc.compareIntervalPartition(probe.first, probe.second, build.first, build.second)) {
                     fbms.add(buildBufferManager.getPartitionFrameBufferManager(buildId));
                     //                    System.err.print(build + " (" + buildPartitionSizes[buildId] + "), ");
                 }
@@ -286,15 +297,15 @@ public class OverlappingIntervalPartitionJoiner extends AbstractMergeJoiner {
             fbm.getFrame(frameIndex, bufferInfo);
             accessorBuild.reset(bufferInfo.getBuffer());
             for (int buildTupleIndex = 0; buildTupleIndex < accessorBuild.getTupleCount(); ++buildTupleIndex) {
-                if (imjc.checkToSaveInResult(accessorBuild, buildTupleIndex, accessorProbe, probeTupleIndex, false)) {
+                if (imjc.checkToSaveInResult(accessorProbe, probeTupleIndex, accessorBuild, buildTupleIndex, false)) {
                     appendToResult(accessorBuild, buildTupleIndex, accessorProbe, probeTupleIndex, writer);
                 }
                 joinComparisonCount++;
 
-                int pidProbe = probeHpc.partition(accessorProbe, probeTupleIndex, k);
-                int pidBuild = buildHpc.partition(accessorBuild, buildTupleIndex, k);
+                //                int pidProbe = probeHpc.partition(accessorProbe, probeTupleIndex, k);
+                //                int pidBuild = buildHpc.partition(accessorBuild, buildTupleIndex, k);
 
-                joinPartitionSizes[pidProbe][pidBuild]++;
+                //                joinPartitionSizes[pidProbe][pidBuild]++;
             }
             frameIndex = fbm.next();
         }
@@ -312,14 +323,16 @@ public class OverlappingIntervalPartitionJoiner extends AbstractMergeJoiner {
         int buildPid = -1;
         TupleStatus ts;
         for (ts = loadRightTuple(); ts.isLoaded(); ts = loadRightTuple()) {
-            int pid = buildHpc.partition(inputAccessor[RIGHT_PARTITION], inputAccessor[RIGHT_PARTITION].getTupleId(),
-                    k);
+            int pid =
+                    buildHpc.partition(inputAccessor[RIGHT_PARTITION], inputAccessor[RIGHT_PARTITION].getTupleId(), k);
 
             if (buildPid > 0 && buildPid != pid) {
                 // Only add one partition
                 return;
             }
 
+            //            System.err.println("Tuple count:" + inputAccessor[RIGHT_PARTITION].getTupleCount() + " Tuple size:"
+            //                    + inputAccessor[RIGHT_PARTITION].getTupleLength());
             if (!buildBufferManager.insertTuple(pid, inputAccessor[RIGHT_PARTITION],
                     inputAccessor[RIGHT_PARTITION].getTupleId(), tempPtr)) {
                 return;
@@ -332,7 +345,6 @@ public class OverlappingIntervalPartitionJoiner extends AbstractMergeJoiner {
                 buildPid = pid;
             }
             inputAccessor[RIGHT_PARTITION].next();
-            buildSize++;
         }
         if (ts.isEmpty()) {
             moreBuildProcessing = false;

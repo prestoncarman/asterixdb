@@ -29,10 +29,19 @@ public interface IIntervalMergeJoinChecker extends IMergeJoinChecker {
 
     public boolean checkToRemoveRightActive();
 
-    public boolean checkToIncrementMerge(ITupleAccessor accessorLeft, ITupleAccessor accessorRight) throws HyracksDataException;
+    public boolean checkToIncrementMerge(ITupleAccessor accessorLeft, ITupleAccessor accessorRight)
+            throws HyracksDataException;
 
     public boolean compareInterval(AIntervalPointable ipLeft, AIntervalPointable ipRight) throws HyracksDataException;
 
     public boolean compareIntervalPartition(int s1, int e1, int s2, int e2);
+
+    public boolean checkToSaveInResult(long start0, long end0, long start1, long end1, boolean reversed);
+
+    public boolean checkToSaveInMemory(long start0, long end0, long start1, long end1, boolean reversed);
+
+    public boolean checkToRemoveFromMemory(long start0, long end0, long start1, long end1, boolean reversed);
+
+    boolean compareInterval(long start0, long end0, long start1, long end1) throws HyracksDataException;
 
 }
