@@ -24,7 +24,7 @@
 
 use TinyCollege;
 
-select element { "staff" : f.name, "student" : d.name } 
+select element { "staff" : f.name, "student" : d.name }
 from Students as d, Staff as f
 where `interval-met-by`(d.attendance, f.employment)
 order by f.name, d.name;
