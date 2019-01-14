@@ -20,7 +20,6 @@
  * Description      :   Check temporal join functionality for interval
  * Expected Result  :   Success
  * Date             :   26th Jun, 2015
- * Modified 		: 	23rd Dec, 2018
  */
 
 drop dataverse TinyCollege if exists;

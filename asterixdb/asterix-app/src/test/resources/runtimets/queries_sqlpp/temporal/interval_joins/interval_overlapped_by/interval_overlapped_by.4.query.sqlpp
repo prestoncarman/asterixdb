@@ -24,7 +24,7 @@
 
 use TinyCollege;
 
-select element { "staff" : f.name, "student" : d.name } 
+select element { "staff" : f.name, "student" : d.name }
 from Staff as f, Students as d
 where `interval-overlapped-by`(d.attendance, f.employment)
 order by f.name, d.name;
