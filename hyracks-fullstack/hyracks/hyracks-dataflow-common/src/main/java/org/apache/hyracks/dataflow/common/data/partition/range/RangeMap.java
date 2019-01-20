@@ -18,6 +18,9 @@
  */
 package org.apache.hyracks.dataflow.common.data.partition.range;
 
+import java.io.Serializable;
+import java.util.Arrays;
+
 import org.apache.hyracks.api.dataflow.value.IRangeMap;
 
 /**
@@ -51,45 +54,65 @@ public class RangeMap implements IRangeMap {
     }
 
     @Override
-    public byte[] getByteArray(int columnIndex, int splitIndex) {
+    public byte[] getByteArray(int fieldIndex, int splitIndex) {
         return bytes;
     }
 
     @Override
-    public byte getTag(int columnIndex, int splitIndex) {
-        return getSplitValueTag(getFieldIndex(columnIndex, splitIndex + 1));
+    public byte getTag(int fieldIndex, int splitIndex) {
+        return getSplitValueTag(getSplitValueIndex(fieldIndex, splitIndex + 1));
     }
 
     @Override
-    public int getStartOffset(int columnIndex, int splitIndex) {
-        return getFieldStart(getFieldIndex(columnIndex, splitIndex + 1));
+    public int getStartOffset(int fieldIndex, int splitIndex) {
+        return getSplitValueStart(getSplitValueIndex(fieldIndex, splitIndex + 1));
     }
 
+    // NOTE: (Stephen Ermshar) I don't think Java uses named parameters like python's keyword arguments, so I changed columnIndex to fieldIndex to make the diffs match.
     @Override
-    public int getLength(int columnIndex, int splitIndex) {
-        return getFieldLength(getFieldIndex(columnIndex, splitIndex + 1));
+    public int getLength(int fieldIndex, int splitIndex) {
+        return getSplitValueLength(getSplitValueIndex(fieldIndex, splitIndex + 1));
     }
 
-    private int getFieldIndex(int columnIndex, int splitIndex) {
-        return columnIndex + splitIndex * numFields;
+    /** Translates fieldIndex & splitIndex into an index which is used to find information about that split value.
+     * The combination of a fieldIndex & splitIndex uniquely identifies a split value of interest.
+     * @param fieldIndex the field index within the splitIndex of interest (0 <= fieldIndex < numFields)
+     * @param splitIndex starts with 0,1,2,.. etc
+     * @return the index of the desired split value that could be used with {@code bytes} & {@code endOffsets}.
+     */
+    private int getSplitValueIndex(int fieldIndex, int splitIndex) {
+        return splitIndex * numFields + fieldIndex;
     }
 
-    private byte getSplitValueTag(int index) {
-        return bytes[getFieldStart(index)];
+    /**
+     * @param splitValueIndex is the combination of the split index + the field index within that split index
+     * @return the type tag of a specific field in a specific split point
+     */
+    // NOTE: (Stephen Ermshar) different return type, copied RangeMap returns int here
+    private byte getSplitValueTag(int splitValueIndex) {
+        return bytes[getSplitValueStart(splitValueIndex)];
     }
 
-    private int getFieldStart(int index) {
+    /**
+     * @param splitValueIndex is the combination of the split index + the field index within that split index
+     * @return the location of a split value in the byte array {@code bytes}
+     */
+    private int getSplitValueStart(int splitValueIndex) {
         int start = 0;
-        if (index != 0) {
-            start = endOffsets[index - 1];
+        if (splitValueIndex != 0) {
+            start = endOffsets[splitValueIndex - 1];
         }
         return start;
     }
 
-    private int getFieldLength(int index) {
-        int length = endOffsets[index];
-        if (index != 0) {
-            length -= endOffsets[index - 1];
+    /**
+     * @param splitValueIndex is the combination of the split index + the field index within that split index
+     * @return the length of a split value
+     */
+    private int getSplitValueLength(int splitValueIndex) {
+        int length = endOffsets[splitValueIndex];
+        if (splitValueIndex != 0) {
+            length -= endOffsets[splitValueIndex - 1];
         }
         return length;
     }
@@ -101,17 +124,17 @@ public class RangeMap implements IRangeMap {
 
     @Override
     public int getMinStartOffset(int columnIndex) {
-        return getFieldStart(getFieldIndex(columnIndex, getMinIndex()));
+        return getSplitValueStart(getSplitValueIndex(columnIndex, getMinIndex()));
     }
 
     @Override
     public int getMinLength(int columnIndex) {
-        return getFieldLength(getFieldIndex(columnIndex, getMinIndex()));
+        return getSplitValueLength(getSplitValueIndex(columnIndex, getMinIndex()));
     }
 
     @Override
     public byte getMinTag(int columnIndex) {
-        return getSplitValueTag(getFieldIndex(columnIndex, getMinIndex()));
+        return getSplitValueTag(getSplitValueIndex(columnIndex, getMinIndex()));
     }
 
     @Override
@@ -121,17 +144,17 @@ public class RangeMap implements IRangeMap {
 
     @Override
     public int getMaxStartOffset(int columnIndex) {
-        return getFieldStart(getFieldIndex(columnIndex, getMaxIndex()));
+        return getSplitValueStart(getSplitValueIndex(columnIndex, getMaxIndex()));
     }
 
     @Override
     public int getMaxLength(int columnIndex) {
-        return getFieldLength(getFieldIndex(columnIndex, getMaxIndex()));
+        return getSplitValueLength(getSplitValueIndex(columnIndex, getMaxIndex()));
     }
 
     @Override
     public byte getMaxTag(int columnIndex) {
-        return getSplitValueTag(getFieldIndex(columnIndex, getMaxIndex()));
+        return getSplitValueTag(getSplitValueIndex(columnIndex, getMaxIndex()));
     }
 
     private int getMaxIndex() {
@@ -167,5 +190,23 @@ public class RangeMap implements IRangeMap {
             rangesPerPart = ((double) getSplitCount() + 1) / nPartitions;
         }
         return (int) Math.floor(slot / rangesPerPart);
+    }
+    
+    @Override
+    public int hashCode() {
+        return numFields + Arrays.hashCode(bytes) + Arrays.hashCode(endOffsets);
+    }
+
+    @Override
+    public boolean equals(Object object) {
+        if (this == object) {
+            return true;
+        }
+        if (!(object instanceof RangeMap)) {
+            return false;
+        }
+        RangeMap other = (RangeMap) object;
+        return numFields == other.numFields && Arrays.equals(endOffsets, other.endOffsets)
+                && Arrays.equals(bytes, other.bytes);
     }
 }
