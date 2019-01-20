@@ -18,9 +18,7 @@
  */
 package org.apache.hyracks.dataflow.common.data.partition.range;
 
-import java.io.Serializable;
-import java.util.Arrays;
-import java.util.Objects;
+import org.apache.hyracks.api.dataflow.value.IRangeMap;
 
 /**
  * <pre>
@@ -35,7 +33,8 @@ import java.util.Objects;
  * endOffsets.length would be = 15
  * </pre>
  */
-public class RangeMap implements Serializable {
+public class RangeMap implements IRangeMap {
+    private static final long serialVersionUID = 1L;
     private final int numFields;
     private final byte[] bytes;
     private final int[] endOffsets;
@@ -46,83 +45,127 @@ public class RangeMap implements Serializable {
         this.endOffsets = endOffsets;
     }
 
+    @Override
     public int getSplitCount() {
-        return endOffsets.length / numFields;
+        return endOffsets.length / numFields - 2;
     }
 
-    public byte[] getByteArray() {
+    @Override
+    public byte[] getByteArray(int columnIndex, int splitIndex) {
         return bytes;
     }
 
-    public int getTag(int fieldIndex, int splitIndex) {
-        return getSplitValueTag(getSplitValueIndex(fieldIndex, splitIndex));
+    @Override
+    public byte getTag(int columnIndex, int splitIndex) {
+        return getSplitValueTag(getFieldIndex(columnIndex, splitIndex + 1));
     }
 
-    public int getStartOffset(int fieldIndex, int splitIndex) {
-        return getSplitValueStart(getSplitValueIndex(fieldIndex, splitIndex));
+    @Override
+    public int getStartOffset(int columnIndex, int splitIndex) {
+        return getFieldStart(getFieldIndex(columnIndex, splitIndex + 1));
     }
 
-    public int getLength(int fieldIndex, int splitIndex) {
-        return getSplitValueLength(getSplitValueIndex(fieldIndex, splitIndex));
+    @Override
+    public int getLength(int columnIndex, int splitIndex) {
+        return getFieldLength(getFieldIndex(columnIndex, splitIndex + 1));
     }
 
-    /** Translates fieldIndex & splitIndex into an index which is used to find information about that split value.
-     * The combination of a fieldIndex & splitIndex uniquely identifies a split value of interest.
-     * @param fieldIndex the field index within the splitIndex of interest (0 <= fieldIndex < numFields)
-     * @param splitIndex starts with 0,1,2,.. etc
-     * @return the index of the desired split value that could be used with {@code bytes} & {@code endOffsets}.
-     */
-    private int getSplitValueIndex(int fieldIndex, int splitIndex) {
-        return splitIndex * numFields + fieldIndex;
+    private int getFieldIndex(int columnIndex, int splitIndex) {
+        return columnIndex + splitIndex * numFields;
     }
 
-    /**
-     * @param splitValueIndex is the combination of the split index + the field index within that split index
-     * @return the type tag of a specific field in a specific split point
-     */
-    private int getSplitValueTag(int splitValueIndex) {
-        return bytes[getSplitValueStart(splitValueIndex)];
+    private byte getSplitValueTag(int index) {
+        return bytes[getFieldStart(index)];
     }
 
-    /**
-     * @param splitValueIndex is the combination of the split index + the field index within that split index
-     * @return the location of a split value in the byte array {@code bytes}
-     */
-    private int getSplitValueStart(int splitValueIndex) {
+    private int getFieldStart(int index) {
         int start = 0;
-        if (splitValueIndex != 0) {
-            start = endOffsets[splitValueIndex - 1];
+        if (index != 0) {
+            start = endOffsets[index - 1];
         }
         return start;
     }
 
-    /**
-     * @param splitValueIndex is the combination of the split index + the field index within that split index
-     * @return the length of a split value
-     */
-    private int getSplitValueLength(int splitValueIndex) {
-        int length = endOffsets[splitValueIndex];
-        if (splitValueIndex != 0) {
-            length -= endOffsets[splitValueIndex - 1];
+    private int getFieldLength(int index) {
+        int length = endOffsets[index];
+        if (index != 0) {
+            length -= endOffsets[index - 1];
         }
         return length;
     }
 
     @Override
-    public int hashCode() {
-        return numFields + Arrays.hashCode(bytes) + Arrays.hashCode(endOffsets);
+    public byte[] getMinByteArray(int columnIndex) {
+        return bytes;
     }
 
     @Override
-    public boolean equals(Object object) {
-        if (this == object) {
-            return true;
+    public int getMinStartOffset(int columnIndex) {
+        return getFieldStart(getFieldIndex(columnIndex, getMinIndex()));
+    }
+
+    @Override
+    public int getMinLength(int columnIndex) {
+        return getFieldLength(getFieldIndex(columnIndex, getMinIndex()));
+    }
+
+    @Override
+    public byte getMinTag(int columnIndex) {
+        return getSplitValueTag(getFieldIndex(columnIndex, getMinIndex()));
+    }
+
+    @Override
+    public byte[] getMaxByteArray(int columnIndex) {
+        return bytes;
+    }
+
+    @Override
+    public int getMaxStartOffset(int columnIndex) {
+        return getFieldStart(getFieldIndex(columnIndex, getMaxIndex()));
+    }
+
+    @Override
+    public int getMaxLength(int columnIndex) {
+        return getFieldLength(getFieldIndex(columnIndex, getMaxIndex()));
+    }
+
+    @Override
+    public byte getMaxTag(int columnIndex) {
+        return getSplitValueTag(getFieldIndex(columnIndex, getMaxIndex()));
+    }
+
+    private int getMaxIndex() {
+        return endOffsets.length / numFields - 1;
+    }
+
+    private int getMinIndex() {
+        return 0;
+    }
+
+    @Override
+    public int getMaxSlotFromPartition(int partition, int nPartitions) {
+        double rangesPerPart = 1.0;
+        if (getSplitCount() + 1 > nPartitions) {
+            rangesPerPart = ((double) getSplitCount() + 1) / nPartitions;
         }
-        if (!(object instanceof RangeMap)) {
-            return false;
+        return (int) Math.ceil((partition + 1) * rangesPerPart) - 1;
+    }
+
+    @Override
+    public int getMinSlotFromPartition(int partition, int nPartitions) {
+        double rangesPerPart = 1.0;
+        if (getSplitCount() + 1 > nPartitions) {
+            rangesPerPart = ((double) getSplitCount() + 1) / nPartitions;
         }
-        RangeMap other = (RangeMap) object;
-        return numFields == other.numFields && Arrays.equals(endOffsets, other.endOffsets)
-                && Arrays.equals(bytes, other.bytes);
+        return (int) Math.ceil(partition * rangesPerPart) - 1;
+    }
+
+    @Override
+    public int getPartitionFromSlot(int slot, int nPartitions) {
+        double rangesPerPart = 1.0;
+        if (getSplitCount() + 1 > nPartitions) {
+            rangesPerPart = ((double) getSplitCount() + 1) / nPartitions;
+        }
+        return (int) Math.floor(slot / rangesPerPart);
     }
 }
