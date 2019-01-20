@@ -18,7 +18,6 @@
  */
 package org.apache.hyracks.dataflow.common.data.partition.range;
 
-import java.io.Serializable;
 import java.util.Arrays;
 
 import org.apache.hyracks.api.dataflow.value.IRangeMap;
@@ -68,7 +67,6 @@ public class RangeMap implements IRangeMap {
         return getSplitValueStart(getSplitValueIndex(fieldIndex, splitIndex + 1));
     }
 
-    // NOTE: (Stephen Ermshar) I don't think Java uses named parameters like python's keyword arguments, so I changed columnIndex to fieldIndex to make the diffs match.
     @Override
     public int getLength(int fieldIndex, int splitIndex) {
         return getSplitValueLength(getSplitValueIndex(fieldIndex, splitIndex + 1));
@@ -88,7 +86,6 @@ public class RangeMap implements IRangeMap {
      * @param splitValueIndex is the combination of the split index + the field index within that split index
      * @return the type tag of a specific field in a specific split point
      */
-    // NOTE: (Stephen Ermshar) different return type, copied RangeMap returns int here
     private byte getSplitValueTag(int splitValueIndex) {
         return bytes[getSplitValueStart(splitValueIndex)];
     }
