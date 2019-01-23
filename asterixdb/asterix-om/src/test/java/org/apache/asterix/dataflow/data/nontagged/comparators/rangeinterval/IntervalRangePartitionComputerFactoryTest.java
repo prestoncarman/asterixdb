@@ -33,14 +33,14 @@ import org.apache.hyracks.api.comm.IFrameTupleAccessor;
 import org.apache.hyracks.api.comm.VSizeFrame;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.dataflow.value.IBinaryRangeComparatorFactory;
-import org.apache.hyracks.api.dataflow.value.IRangeMap; //one or both of these were different
-import org.apache.hyracks.api.dataflow.value.IRangePartitionType.RangePartitioningType; //one or both of these were different
+import org.apache.hyracks.api.dataflow.value.IRangeMap;
+import org.apache.hyracks.api.dataflow.value.IRangePartitionType.RangePartitioningType;
 import org.apache.hyracks.api.dataflow.value.ISerializerDeserializer;
 import org.apache.hyracks.api.dataflow.value.ITupleRangePartitionComputer;
 import org.apache.hyracks.api.dataflow.value.ITupleRangePartitionComputerFactory;
 import org.apache.hyracks.api.dataflow.value.RecordDescriptor;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
-import org.apache.hyracks.api.storage.IGrowableIntArray; // this was a different one 
+import org.apache.hyracks.api.storage.IGrowableIntArray; 
 import org.apache.hyracks.dataflow.common.comm.io.FrameFixedFieldTupleAppender;
 import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAccessor;
 import org.apache.hyracks.dataflow.common.data.marshalling.Integer64SerializerDeserializer;
@@ -48,9 +48,6 @@ import org.apache.hyracks.dataflow.common.data.partition.range.FieldRangePartiti
 import org.apache.hyracks.dataflow.common.data.partition.range.RangeMap;
 import org.apache.hyracks.storage.common.arraylist.IntArrayList;
 import org.apache.hyracks.test.support.TestUtils;
-// ^ at >incubator-asterixdb/hyracks-fullstack/hyracks/hyracks-test-support/src/main/java/org/apache/hyracks/test/support/TestUtils.java
-// incubator-asterixdb-existing seems to have the same file structure, but its TestUtils class is less developed
-// there is no test/ folder in hyracks-fullstack/hyracks/
 import org.junit.Assert;
 import org.junit.Test;
 
