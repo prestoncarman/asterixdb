@@ -26,5 +26,5 @@ use TinyCollege;
 
 select f.name as staff, d.name as student
 from Students as d, Staff as f
-where `interval-ended-by`(d.attendance, f.employment)
+where interval_ended_by(d.attendance, f.employment)
 order by f.name, d.name;
