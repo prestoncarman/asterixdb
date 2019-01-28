@@ -20,9 +20,11 @@
   <!ENTITY ObjectsQueries SYSTEM "queries_sqlpp/objects/ObjectsQueries.xml">
   <!ENTITY AsyncDeferredQueries SYSTEM "queries_sqlpp/async-deferred/AsyncDeferredQueries.xml">
   <!ENTITY GeoQueries SYSTEM "queries_sqlpp/geojson/GeoJSONQueries.xml">
+  <!ENTITY TemporalQueries SYSTEM "queries_sqlpp/temporal/TemporalQueries.xml">
 ]>
 <test-suite xmlns="urn:xml.testframework.asterix.apache.org" ResultOffsetPath="results" QueryOffsetPath="queries_sqlpp" QueryFileExtension=".sqlpp" SourceLocation="true">
   &AsyncDeferredQueries;
+  &TemporalQueries;
   <test-group name="flwor">
     <test-case FilePath="flwor">
       <compilation-unit name="at00">
@@ -8074,6 +8076,11 @@
       </compilation-unit>
     </test-case>
     <test-case FilePath="tpcds">
+      <compilation-unit name="q01">
+        <output-dir compare="Text">q01</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
       <compilation-unit name="q03">
         <output-dir compare="Text">q03</output-dir>
       </compilation-unit>
@@ -8084,6 +8091,16 @@
       </compilation-unit>
     </test-case>
     <test-case FilePath="tpcds">
+      <compilation-unit name="q09">
+        <output-dir compare="Text">q09</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="q12">
+        <output-dir compare="Text">q12</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
       <compilation-unit name="q15">
         <output-dir compare="Text">q15</output-dir>
       </compilation-unit>
@@ -8091,6 +8108,11 @@
     <test-case FilePath="tpcds">
       <compilation-unit name="q19">
         <output-dir compare="Text">q19</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="q20">
+        <output-dir compare="Text">q20</output-dir>
       </compilation-unit>
     </test-case>
     <test-case FilePath="tpcds">
@@ -8169,6 +8191,11 @@
       </compilation-unit>
     </test-case>
     <test-case FilePath="tpcds">
+      <compilation-unit name="q49">
+        <output-dir compare="Text">q49</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
       <compilation-unit name="q50">
         <output-dir compare="Text">q50</output-dir>
       </compilation-unit>
@@ -8184,6 +8211,11 @@
       </compilation-unit>
     </test-case>
     <test-case FilePath="tpcds">
+      <compilation-unit name="q57">
+        <output-dir compare="Text">q57</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
       <compilation-unit name="q59">
         <output-dir compare="Text">q59</output-dir>
       </compilation-unit>
@@ -8191,6 +8223,11 @@
     <test-case FilePath="tpcds">
       <compilation-unit name="q62">
         <output-dir compare="Text">q62</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="q63">
+        <output-dir compare="Text">q63</output-dir>
       </compilation-unit>
     </test-case>
     <test-case FilePath="tpcds">
@@ -8219,13 +8256,33 @@
       </compilation-unit>
     </test-case>
     <test-case FilePath="tpcds">
+      <compilation-unit name="q85">
+        <output-dir compare="Text">q85</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
       <compilation-unit name="q88">
         <output-dir compare="Text">q88</output-dir>
       </compilation-unit>
     </test-case>
     <test-case FilePath="tpcds">
+      <compilation-unit name="q89">
+        <output-dir compare="Text">q89</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="q90">
+        <output-dir compare="Text">q90</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
       <compilation-unit name="q91">
         <output-dir compare="Text">q91</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="tpcds">
+      <compilation-unit name="q92">
+        <output-dir compare="Text">q92</output-dir>
       </compilation-unit>
     </test-case>
     <test-case FilePath="tpcds">
@@ -8238,7 +8295,7 @@
         <output-dir compare="Text">q95</output-dir>
       </compilation-unit>
     </test-case>
-     <test-case FilePath="tpcds">
+    <test-case FilePath="tpcds">
       <compilation-unit name="q96">
         <output-dir compare="Text">q96</output-dir>
       </compilation-unit>
@@ -8246,31 +8303,6 @@
     <test-case FilePath="tpcds">
       <compilation-unit name="q98">
         <output-dir compare="Text">q98</output-dir>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="tpcds">
-      <compilation-unit name="q01">
-        <output-dir compare="Text">q01</output-dir>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="tpcds">
-      <compilation-unit name="q09">
-        <output-dir compare="Text">q09</output-dir>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="tpcds">
-      <compilation-unit name="q92">
-        <output-dir compare="Text">q92</output-dir>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="tpcds">
-      <compilation-unit name="q90">
-        <output-dir compare="Text">q90</output-dir>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="tpcds">
-      <compilation-unit name="q85">
-        <output-dir compare="Text">q85</output-dir>
       </compilation-unit>
     </test-case>
   </test-group>
@@ -9943,6 +9975,7 @@
     <test-case FilePath="feeds">
       <compilation-unit name="change-feed-with-meta-with-mixed-index">
         <output-dir compare="Text">change-feed-with-meta-with-mixed-index</output-dir>
+        <expected-error>Compilation error: Cannot create index on meta fields (in line 61, at column 1)</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="feeds">
@@ -9958,7 +9991,7 @@
     <test-case FilePath="feeds">
       <compilation-unit name="change-feed-with-meta-open-index-in-meta">
         <output-dir compare="Text">change-feed-with-meta-open-index-in-meta</output-dir>
-        <expected-error>Typed open index can only be created on the record part</expected-error>
+        <expected-error>Compilation error: Cannot create index on meta fields (in line 60, at column 1)</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="feeds">
@@ -9969,11 +10002,13 @@
     <test-case FilePath="feeds">
       <compilation-unit name="change-feed-with-meta-pk-in-meta-index-after-ingest">
         <output-dir compare="Text">change-feed-with-meta-pk-in-meta-index-after-ingest</output-dir>
+        <expected-error>Compilation error: Cannot create index on meta fields (in line 27, at column 1)</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="feeds">
       <compilation-unit name="change-feed-with-meta-pk-in-meta-index-in-meta">
         <output-dir compare="Text">change-feed-with-meta-pk-in-meta-index-in-meta</output-dir>
+        <expected-error>Compilation error: Cannot create index on meta fields (in line 60, at column 1)</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="feeds">
@@ -10166,145 +10201,7 @@
       </compilation-unit>
     </test-case>
   </test-group>
-  <test-group name="temporal">
-    <test-case FilePath="temporal">
-      <compilation-unit name="overlap_bins_gby_3">
-        <output-dir compare="Text">overlap_bins_gby_3</output-dir>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="temporal">
-      <compilation-unit name="agg_min">
-        <output-dir compare="Text">agg_min</output-dir>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="temporal">
-      <compilation-unit name="agg_max">
-        <output-dir compare="Text">agg_max</output-dir>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="temporal">
-      <compilation-unit name="overlap_bins_gby_1">
-        <output-dir compare="Text">overlap_bins_gby_1</output-dir>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="temporal">
-      <compilation-unit name="duration_functions">
-        <output-dir compare="Text">duration_functions</output-dir>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="temporal">
-      <compilation-unit name="overlap_bins_gby_0">
-        <output-dir compare="Text">overlap_bins_gby_0</output-dir>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="temporal">
-      <compilation-unit name="get_overlapping_interval">
-        <output-dir compare="Text">get_overlapping_interval</output-dir>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="temporal">
-      <compilation-unit name="overlap_bins">
-        <output-dir compare="Text">overlap_bins</output-dir>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="temporal">
-      <compilation-unit name="parse_02">
-        <output-dir compare="Text">parse_02</output-dir>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="temporal">
-      <compilation-unit name="parse_01">
-        <output-dir compare="Text">parse_01</output-dir>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="temporal">
-      <compilation-unit name="day_of_week_01">
-        <output-dir compare="Text">day_of_week_01</output-dir>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="temporal">
-      <compilation-unit name="interval_bin">
-        <output-dir compare="Text">interval_bin</output-dir>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="temporal">
-      <compilation-unit name="interval_bin_gby_0">
-        <output-dir compare="Text">interval_bin_gby_0</output-dir>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="temporal">
-      <compilation-unit name="interval_bin_gby_1">
-        <output-dir compare="Text">interval_bin_gby_1</output-dir>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="temporal">
-      <compilation-unit name="accessors">
-        <output-dir compare="Text">accessors</output-dir>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="temporal">
-      <compilation-unit name="accessors_interval">
-        <output-dir compare="Text">accessors_interval</output-dir>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="temporal">
-      <compilation-unit name="accessors_interval_null">
-        <output-dir compare="Text">accessors_interval_null</output-dir>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="temporal">
-      <compilation-unit name="adjust_timezone">
-        <output-dir compare="Text">adjust_timezone</output-dir>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="temporal">
-      <compilation-unit name="calendar_duration">
-        <output-dir compare="Text">calendar_duration</output-dir>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="temporal">
-      <compilation-unit name="date_functions">
-        <output-dir compare="Text">date_functions</output-dir>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="temporal">
-      <compilation-unit name="datetime_functions">
-        <output-dir compare="Text">datetime_functions</output-dir>
-      </compilation-unit>
-    </test-case>
-    <!--
-       <test-case FilePath="temporal">
-           <compilation-unit name="insert_from_delimited_ds">
-              <output-dir compare="Text">insert_from_delimited_ds</output-dir>
-           </compilation-unit>
-      </test-case>
-        -->
-    <test-case FilePath="temporal">
-      <compilation-unit name="insert_from_ext_ds">
-        <output-dir compare="Text">insert_from_ext_ds</output-dir>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="temporal">
-      <compilation-unit name="insert_from_ext_ds_2">
-        <output-dir compare="Text">insert_from_ext_ds_2</output-dir>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="temporal">
-      <compilation-unit name="interval_functions">
-        <output-dir compare="Text">interval_functions</output-dir>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="temporal">
-      <compilation-unit name="time_functions">
-        <output-dir compare="Text">time_functions</output-dir>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="temporal">
-      <compilation-unit name="duration_comps">
-        <output-dir compare="Text">duration_comps</output-dir>
-      </compilation-unit>
-    </test-case>
-  </test-group>
+  
   <test-group name="leftouterjoin">
     <test-case FilePath="leftouterjoin">
       <compilation-unit name="loj-01-core">
@@ -10398,8 +10295,6 @@
         <output-dir compare="Text">probe-sidx-btree-non-idxonly-join-btree-sidx1-idxonly</output-dir>
       </compilation-unit>
     </test-case>
-
-
   </test-group>
   <test-group name="distinct">
     <test-case FilePath="distinct">
