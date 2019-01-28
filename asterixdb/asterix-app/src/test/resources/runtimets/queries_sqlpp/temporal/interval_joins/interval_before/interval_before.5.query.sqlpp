@@ -24,7 +24,7 @@
 
 use TinyCollege;
 
-select element { "staff" : f.name, "student" : d.name }
+select f.name as staff, d.name as student
 from Students as d, Staff as f
 where `interval-before`(f.employment, d.attendance)
 order by f.name, d.name;
