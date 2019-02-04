@@ -157,16 +157,16 @@
 
         year_month_duration("P1Y")
 
-### months_from_year_month_duration/milliseconds_from_day_time_duration ###
+### months_from_year_month_duration/ms_from_day_time_duration ###
 * Syntax:
 
-        months_from_year_month_duration/milliseconds_from_day_time_duration(duration_value)
+        months_from_year_month_duration/ms_from_day_time_duration(duration_value)
 
 * Extracts the number of months or the number of milliseconds from the `duration` subtype.
 * Arguments:
     * `duration_value` : a `duration` of the correct subtype.
 * Return Value:
-    * an `bigint` representing the number or months/milliseconds,
+    * a `bigint` representing the number or months/milliseconds,
     * `missing` if the argument is a `missing` value,
     * `null` if the argument is a `null` value,
     * any other non-duration input value will cause a type error.
