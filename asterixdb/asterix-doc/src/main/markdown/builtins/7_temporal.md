@@ -173,13 +173,14 @@
 
 * Example:
 
-        months_from_year_month_duration(get_year_month_duration(duration("P5Y7MT50M")));
-        ms_from_day_time_duration(get_day_time_duration(duration("P5Y7MT50M")));
+        {
+            "months": months_from_year_month_duration(get_year_month_duration(duration("P5Y7MT50M"))),
+            "milliseconds": ms_from_day_time_duration(get_day_time_duration(duration("P5Y7MT50M")))
+        };
 
 * The expected result is:
 
-        67
-        3000000
+        {"months": 67, "milliseconds": 3000000}
 
 
 ### duration_from_months/duration_from_ms ###
