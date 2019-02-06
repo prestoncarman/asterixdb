@@ -166,7 +166,7 @@
 * Arguments:
     * `duration_value` : a `duration` of the correct subtype.
 * Return Value:
-    * a `bigint` representing the number or months/milliseconds,
+    * a `bigint` representing the number of months/milliseconds,
     * `missing` if the argument is a `missing` value,
     * `null` if the argument is a `null` value,
     * any other non-duration input value will cause a type error.
