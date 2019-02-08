@@ -20,6 +20,7 @@ package org.apache.hyracks.api.dataflow.value;
 
 import org.apache.hyracks.api.comm.IFrameTupleAccessor;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
+import org.apache.hyracks.api.storage.IGrowableIntArray;
 
 public interface ITupleMultiPartitionComputer {
     /**
@@ -28,10 +29,11 @@ public interface ITupleMultiPartitionComputer {
      * @param accessor The accessor of the frame to access tuples
      * @param tIndex The index of the tuple in consideration
      * @param nParts The number of target partitions
-     * @return The chosen target partition number as dictated by the logic of the partition computer
+     * @param map The chosen target partition numbers as dictated by the logic of the partition computer
      * @throws HyracksDataException
      */
-    public int[] partition(IFrameTupleAccessor accessor, int tIndex, int nParts) throws HyracksDataException;
+    public void partition(IFrameTupleAccessor accessor, int tIndex, int nParts, IGrowableIntArray map)
+            throws HyracksDataException;
 
     /**
      * Gives the data partitioner a chance to set up its environment before it starts partitioning tuples. This method
