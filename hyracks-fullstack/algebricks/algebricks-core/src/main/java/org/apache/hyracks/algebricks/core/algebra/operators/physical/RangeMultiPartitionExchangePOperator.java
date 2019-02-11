@@ -47,11 +47,14 @@ import org.apache.hyracks.dataflow.common.data.partition.range.RangeMap;
 import org.apache.hyracks.dataflow.common.data.partition.range.StaticFieldRangePartitionComputerFactory;
 import org.apache.hyracks.dataflow.std.base.RangeId;
 import org.apache.hyracks.dataflow.std.connectors.MToNMultiPartitioningConnectorDescriptor;
+import org.apache.hyracks.dataflow.common.data.partition.range.DynamicFieldRangeMultiPartitionComputerFactory;
+import org.apache.hyracks.dataflow.common.data.partition.range.StaticFieldRangeMultiPartitionComputerFactory;
+import org.apache.hyracks.dataflow.common.data.partition.range.FieldRangeMultiPartitionComputerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public class RangeReplicatingPartitionExchangePOperator extends AbstractExchangePOperator {
+public class RangeMultiPartitionExchangePOperator extends AbstractExchangePOperator {
 
     private List<OrderColumn> partitioningFields;
     private INodeDomain domain;
@@ -61,9 +64,9 @@ public class RangeReplicatingPartitionExchangePOperator extends AbstractExchange
     private RangePartitioningType rangeType;
     private RangeId rangeId;
 
-    public RangeReplicatingPartitionExchangePOperator(List<OrderColumn> partitioningFields, INodeDomain domain, RangeId rangeId, RangeMap rangeMap,
-                                                      boolean rangeMapIsComputedAtRunTime, String rangeMapKeyInContext,
-                                                      RangePartitioningType rangeType) {
+    public RangeMultiPartitionExchangePOperator(List<OrderColumn> partitioningFields, INodeDomain domain, RangeId rangeId, RangeMap rangeMap,
+                                                boolean rangeMapIsComputedAtRunTime, String rangeMapKeyInContext,
+                                                RangePartitioningType rangeType) {
         this.partitioningFields = partitioningFields;
         this.domain = domain;
         this.rangeId = rangeId;
@@ -154,12 +157,12 @@ public class RangeReplicatingPartitionExchangePOperator extends AbstractExchange
             i++;
         }
 
-        FieldRangePartitionComputerFactory partitionerFactory;
+        FieldRangeMultiPartitionComputerFactory partitionerFactory;
         if (rangeMapIsComputedAtRunTime) {
-            partitionerFactory = new DynamicFieldMultiRangePartitionComputerFactory(sortFields, rangeComps, rangeMapKeyInContext,
+            partitionerFactory = new DynamicFieldRangeMultiPartitionComputerFactory(sortFields, rangeComps, rangeMapKeyInContext,
                     op.getSourceLocation(), rangeType);
         } else {
-            partitionerFactory = new StaticFieldMultiRangePartitionComputerFactory(sortFields, rangeComps, rangeMap, rangeType);
+            partitionerFactory = new StaticFieldRangeMultiPartitionComputerFactory(sortFields, rangeComps, rangeMap, rangeType);
         }
 
         IConnectorDescriptor conn = new MToNMultiPartitioningConnectorDescriptor(spec, tpcf, rangeId, sortFields,

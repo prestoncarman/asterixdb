@@ -49,15 +49,15 @@ import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 
-public class RangeReplicatingPartitionMergeExchangePOperator extends AbstractExchangePOperator {
+public class RangeMultiPartitionMergeExchangePOperator extends AbstractExchangePOperator {
 
     private List<OrderColumn> partitioningFields;
     private INodeDomain domain;
     private RangeId rangeId;
     private RangePartitioningType rangeType;
 
-    public RangeReplicatingPartitionMergeExchangePOperator(List<OrderColumn> partitioningFields, INodeDomain domain,
-                                                           RangeId rangeId, RangePartitioningType rangeType) {
+    public RangeMultiPartitionMergeExchangePOperator(List<OrderColumn> partitioningFields, INodeDomain domain,
+                                                     RangeId rangeId, RangePartitioningType rangeType) {
         this.partitioningFields = partitioningFields;
         this.domain = domain;
         this.rangeId = rangeId;
