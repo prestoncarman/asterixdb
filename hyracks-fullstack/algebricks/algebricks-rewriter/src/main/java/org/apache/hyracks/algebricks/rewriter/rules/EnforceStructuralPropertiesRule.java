@@ -700,6 +700,7 @@ public class EnforceStructuralPropertiesRule implements IAlgebraicRewriteRule {
             throws AlgebricksException {
         // options for range partitioning: 1. static range map, 2. dynamic range map computed at run time
         List<OrderColumn> partitioningColumns = ((OrderedPartitionedProperty) requiredPartitioning).getOrderColumns();
+        // List<OrderColumn> partitioningColumns = ((OrderedPartitionedProperty) requiredPartitioning).getRangePartitioningType();
         if (parentOp.getAnnotations().containsKey(OperatorAnnotations.USE_STATIC_RANGE)) {
             // TODO(ali): static range map implementation should be fixed to require ORDERED_PARTITION and come here.
             RangeMap rangeMap = (RangeMap) parentOp.getAnnotations().get(OperatorAnnotations.USE_STATIC_RANGE);
