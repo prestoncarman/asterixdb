@@ -19,26 +19,29 @@
 package org.apache.hyracks.dataflow.common.data.partition.range;
 
 import org.apache.hyracks.api.comm.IFrameTupleAccessor;
+import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.dataflow.value.*;
 import org.apache.hyracks.api.dataflow.value.IRangePartitionType.RangePartitioningType;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.storage.IGrowableIntArray;
 
-public class FieldMultiPartitionComputerFactory implements ITupleRangePartitionComputerFactory {
+public abstract class FieldMultiRangePartitionComputerFactory implements ITupleMultiPartitionComputerFactory {
     private static final long serialVersionUID = 1L;
     private final int[] rangeFields;
     private IBinaryRangeComparatorFactory[] comparatorFactories;
     private RangePartitioningType rangeType;
 
-    public FieldMultiPartitionComputerFactory(int[] rangeFields, IBinaryRangeComparatorFactory[] comparatorFactories,
-                                              RangePartitioningType rangeType) {
+    public FieldMultiRangePartitionComputerFactory(int[] rangeFields, IBinaryRangeComparatorFactory[] comparatorFactories,
+                                                   RangePartitioningType rangeType) {
         this.rangeFields = rangeFields;
         this.comparatorFactories = comparatorFactories;
         this.rangeType = rangeType;
     }
 
+    protected abstract RangeMap getRangeMap(IHyracksTaskContext hyracksTaskContext) throws HyracksDataException;
+
     @Override
-    public ITupleRangePartitionComputer createPartitioner(IRangeMap rangeMap) {
+    public ITupleMultiPartitionComputer createPartitioner(IHyracksTaskContext hyracksTaskContext) {
         final IBinaryComparator[] minComparators = new IBinaryComparator[comparatorFactories.length];
         for (int i = 0; i < comparatorFactories.length; ++i) {
             minComparators[i] = comparatorFactories[i].createMinBinaryComparator();
@@ -47,11 +50,18 @@ public class FieldMultiPartitionComputerFactory implements ITupleRangePartitionC
         for (int i = 0; i < comparatorFactories.length; ++i) {
             maxComparators[i] = comparatorFactories[i].createMaxBinaryComparator();
         }
-        final int splitCount = rangeMap.getSplitCount();
 
-        return new ITupleRangePartitionComputer() {
+        return new ITupleMultiPartitionComputer() {
             private int partitionCount;
             private double rangesPerPart = 1;
+            private int splitCount;
+            private RangeMap rangeMap;
+
+            @Override
+            public void initialize() throws HyracksDataException {
+                rangeMap = getRangeMap(hyracksTaskContext);
+                splitCount = rangeMap.getSplitCount();
+            }
 
             @Override
             public void partition(IFrameTupleAccessor accessor, int tIndex, int nParts, IGrowableIntArray map)
