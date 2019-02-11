@@ -25,13 +25,13 @@ import org.apache.hyracks.api.dataflow.value.IRangePartitionType.RangePartitioni
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.storage.IGrowableIntArray;
 
-public abstract class FieldMultiRangePartitionComputerFactory implements ITupleMultiPartitionComputerFactory {
+public abstract class FieldRangeMultiPartitionComputerFactory implements ITupleMultiPartitionComputerFactory {
     private static final long serialVersionUID = 1L;
     private final int[] rangeFields;
     private IBinaryRangeComparatorFactory[] comparatorFactories;
     private RangePartitioningType rangeType;
 
-    public FieldMultiRangePartitionComputerFactory(int[] rangeFields, IBinaryRangeComparatorFactory[] comparatorFactories,
+    public FieldRangeMultiPartitionComputerFactory(int[] rangeFields, IBinaryRangeComparatorFactory[] comparatorFactories,
                                                    RangePartitioningType rangeType) {
         this.rangeFields = rangeFields;
         this.comparatorFactories = comparatorFactories;
