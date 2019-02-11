@@ -39,12 +39,8 @@ import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import org.apache.hyracks.api.dataflow.value.IBinaryRangeComparatorFactory;
 import org.apache.hyracks.api.dataflow.value.INormalizedKeyComputerFactory;
 import org.apache.hyracks.api.dataflow.value.IRangePartitionType.RangePartitioningType;
-import org.apache.hyracks.api.dataflow.value.ITupleMultiPartitionComputerFactory;
 import org.apache.hyracks.api.job.IConnectorDescriptorRegistry;
-import org.apache.hyracks.dataflow.common.data.partition.range.DynamicFieldRangePartitionComputerFactory;
-import org.apache.hyracks.dataflow.common.data.partition.range.FieldRangePartitionComputerFactory;
 import org.apache.hyracks.dataflow.common.data.partition.range.RangeMap;
-import org.apache.hyracks.dataflow.common.data.partition.range.StaticFieldRangePartitionComputerFactory;
 import org.apache.hyracks.dataflow.std.base.RangeId;
 import org.apache.hyracks.dataflow.std.connectors.MToNMultiPartitioningConnectorDescriptor;
 import org.apache.hyracks.dataflow.common.data.partition.range.DynamicFieldRangeMultiPartitionComputerFactory;
@@ -76,19 +72,19 @@ public class RangeMultiPartitionExchangePOperator extends AbstractExchangePOpera
         this.rangeType = rangeType;
     }
 
-    public RangePartitionExchangePOperator(List<OrderColumn> partitioningFields, String rangeMapKeyInContext,
+    public RangeMultiPartitionExchangePOperator(List<OrderColumn> partitioningFields, String rangeMapKeyInContext,
                                            INodeDomain domain, RangeId rangeId, RangePartitioningType rangeType) {
         this(partitioningFields, domain, rangeId, null, true, rangeMapKeyInContext, rangeType);
     }
 
-    public RangePartitionExchangePOperator(List<OrderColumn> partitioningFields, INodeDomain domain, RangeId rangeId,
+    public RangeMultiPartitionExchangePOperator(List<OrderColumn> partitioningFields, INodeDomain domain, RangeId rangeId,
                                            RangeMap rangeMap, RangePartitioningType rangeType) {
         this(partitioningFields, domain, rangeId, rangeMap, false, "", rangeType);
     }
 
     @Override
     public PhysicalOperatorTag getOperatorTag() {
-        return PhysicalOperatorTag.RANGE_PARTITION_EXCHANGE;
+        return PhysicalOperatorTag.RANGE_MULTI_PARTITION_EXCHANGE;
     }
 
     public List<OrderColumn> getPartitioningFields() {
@@ -165,7 +161,7 @@ public class RangeMultiPartitionExchangePOperator extends AbstractExchangePOpera
             partitionerFactory = new StaticFieldRangeMultiPartitionComputerFactory(sortFields, rangeComps, rangeMap, rangeType);
         }
 
-        IConnectorDescriptor conn = new MToNMultiPartitioningConnectorDescriptor(spec, tpcf, rangeId, sortFields,
+        IConnectorDescriptor conn = new MToNMultiPartitioningConnectorDescriptor(spec, partitionerFactory, rangeId, sortFields,
                 binaryComps, nkcf);
         return new Pair<>(conn, null);
     }
