@@ -45,14 +45,14 @@ import org.apache.hyracks.dataflow.std.collectors.SortMergeFrameReader;
 public class MToNMultiPartitioningConnectorDescriptor extends AbstractMToNConnectorDescriptor {
     private static final long serialVersionUID = 1L;
 
-    private final ITupleMultiPartitionComputerFactory trpcf;
+    private final ITupleMultiPartitionComputerFactory tmpcf;
     private final RangeId rangeId;
 
     public MToNMultiPartitioningConnectorDescriptor(IConnectorDescriptorRegistry spec,
-                                                    ITupleMultiPartitionComputerFactory trpcf, RangeId rangeId, int[] sortFields,
+                                                    ITupleMultiPartitionComputerFactory tmpcf, RangeId rangeId, int[] sortFields,
                                                     IBinaryComparatorFactory[] comparatorFactories, INormalizedKeyComputerFactory nkcFactory) {
         super(spec);
-        this.trpcf = trpcf;
+        this.tmpcf = tmpcf;
         this.rangeId = rangeId;
     }
 
@@ -60,7 +60,7 @@ public class MToNMultiPartitioningConnectorDescriptor extends AbstractMToNConnec
     public IFrameWriter createPartitioner(IHyracksTaskContext ctx, RecordDescriptor recordDesc,
                                           IPartitionWriterFactory edwFactory, int index, int nProducerPartitions, int nConsumerPartitions)
             throws HyracksDataException {
-        return new MultiPartitionDataWriter(ctx, nConsumerPartitions, edwFactory, recordDesc, trpcf, rangeId);
+        return new MultiPartitionDataWriter(ctx, nConsumerPartitions, edwFactory, recordDesc, tmpcf, rangeId);
     }
 
     @Override
