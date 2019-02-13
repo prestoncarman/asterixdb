@@ -75,6 +75,8 @@ import org.apache.hyracks.algebricks.core.algebra.operators.physical.RandomMerge
 import org.apache.hyracks.algebricks.core.algebra.operators.physical.RandomPartitionExchangePOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.physical.RangePartitionExchangePOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.physical.RangePartitionMergeExchangePOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.physical.RangeMultiPartitionExchangePOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.physical.RangeMultiPartitionMergeExchangePOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.physical.ReplicatePOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.physical.SequentialMergeExchangePOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.physical.SortMergeExchangePOperator;
@@ -104,6 +106,8 @@ import org.apache.hyracks.algebricks.core.config.AlgebricksConfig;
 import org.apache.hyracks.algebricks.core.rewriter.base.IAlgebraicRewriteRule;
 import org.apache.hyracks.algebricks.core.rewriter.base.PhysicalOptimizationConfig;
 import org.apache.hyracks.algebricks.rewriter.util.PhysicalOptimizationsUtil;
+import org.apache.hyracks.api.dataflow.value.IRangePartitionType;
+import org.apache.hyracks.api.dataflow.value.IRangePartitionType.RangePartitioningType;
 import org.apache.hyracks.api.exceptions.SourceLocation;
 import org.apache.hyracks.dataflow.common.data.partition.range.RangeMap;
 import org.apache.hyracks.util.LogRedactionUtil;
@@ -700,11 +704,19 @@ public class EnforceStructuralPropertiesRule implements IAlgebraicRewriteRule {
             throws AlgebricksException {
         // options for range partitioning: 1. static range map, 2. dynamic range map computed at run time
         List<OrderColumn> partitioningColumns = ((OrderedPartitionedProperty) requiredPartitioning).getOrderColumns();
-        // List<OrderColumn> partitioningColumns = ((OrderedPartitionedProperty) requiredPartitioning).getRangePartitioningType();
+        RangePartitioningType rangePartitioningType = ((OrderedPartitionedProperty) requiredPartitioning).getRangePartitioningType();
         if (parentOp.getAnnotations().containsKey(OperatorAnnotations.USE_STATIC_RANGE)) {
             // TODO(ali): static range map implementation should be fixed to require ORDERED_PARTITION and come here.
             RangeMap rangeMap = (RangeMap) parentOp.getAnnotations().get(OperatorAnnotations.USE_STATIC_RANGE);
-            return new RangePartitionExchangePOperator(partitioningColumns, domain, rangeMap);
+            if (rangePartitioningType == RangePartitioningType.PROJECT) {
+                return new RangePartitionExchangePOperator(partitioningColumns, domain, rangeMap);
+            } else {
+                return new RangeMultiPartitionExchangePOperator(partitioningColumns, domain, rangeMap, rangePartitioningType);
+            }
+
+
+
+
         } else {
             return createDynamicRangePartitionExchangePOperator(parentOp, ctx, domain, partitioningColumns, childIndex);
         }

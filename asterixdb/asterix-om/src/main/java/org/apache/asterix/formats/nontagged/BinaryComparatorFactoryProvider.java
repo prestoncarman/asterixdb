@@ -40,6 +40,10 @@ import org.apache.hyracks.data.std.primitive.ShortPointable;
 import org.apache.hyracks.data.std.primitive.UTF8StringLowercasePointable;
 import org.apache.hyracks.data.std.primitive.UTF8StringLowercaseTokenPointable;
 import org.apache.hyracks.data.std.primitive.UTF8StringPointable;
+import org.apache.asterix.dataflow.data.nontagged.comparators.AObjectAscRangeBinaryComparatorFactory;
+import org.apache.asterix.dataflow.data.nontagged.comparators.AObjectDescRangeBinaryComparatorFactory;
+import org.apache.asterix.dataflow.data.nontagged.comparators.rangeinterval.IntervalAscRangeBinaryComparatorFactory;
+import org.apache.asterix.dataflow.data.nontagged.comparators.rangeinterval.IntervalDescRangeBinaryComparatorFactory;
 
 public class BinaryComparatorFactoryProvider implements IBinaryComparatorFactoryProvider, Serializable {
 
