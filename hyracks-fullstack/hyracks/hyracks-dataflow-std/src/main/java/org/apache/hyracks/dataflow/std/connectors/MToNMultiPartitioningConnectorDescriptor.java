@@ -34,7 +34,6 @@ import org.apache.hyracks.api.dataflow.value.RecordDescriptor;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.job.IConnectorDescriptorRegistry;
 import org.apache.hyracks.dataflow.std.base.AbstractMToNConnectorDescriptor;
-import org.apache.hyracks.dataflow.std.base.RangeId;
 import org.apache.hyracks.dataflow.std.collectors.IPartitionBatchManager;
 import org.apache.hyracks.dataflow.std.collectors.NonDeterministicChannelReader;
 import org.apache.hyracks.dataflow.std.collectors.NonDeterministicFrameReader;
@@ -46,21 +45,19 @@ public class MToNMultiPartitioningConnectorDescriptor extends AbstractMToNConnec
     private static final long serialVersionUID = 1L;
 
     private final ITupleMultiPartitionComputerFactory tmpcf;
-    private final RangeId rangeId;
 
     public MToNMultiPartitioningConnectorDescriptor(IConnectorDescriptorRegistry spec,
-                                                    ITupleMultiPartitionComputerFactory tmpcf, RangeId rangeId, int[] sortFields,
+                                                    ITupleMultiPartitionComputerFactory tmpcf, int[] sortFields,
                                                     IBinaryComparatorFactory[] comparatorFactories, INormalizedKeyComputerFactory nkcFactory) {
         super(spec);
         this.tmpcf = tmpcf;
-        this.rangeId = rangeId;
     }
 
     @Override
     public IFrameWriter createPartitioner(IHyracksTaskContext ctx, RecordDescriptor recordDesc,
                                           IPartitionWriterFactory edwFactory, int index, int nProducerPartitions, int nConsumerPartitions)
             throws HyracksDataException {
-        return new MultiPartitionDataWriter(ctx, nConsumerPartitions, edwFactory, recordDesc, tmpcf, rangeId);
+        return new MultiPartitionDataWriter(ctx, nConsumerPartitions, edwFactory, recordDesc, tmpcf);
     }
 
     @Override

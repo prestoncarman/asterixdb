@@ -30,8 +30,6 @@ import org.apache.hyracks.api.storage.IGrowableIntArray;
 import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAccessor;
 import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAppender;
 import org.apache.hyracks.dataflow.common.comm.util.FrameUtils;
-import org.apache.hyracks.dataflow.std.base.RangeId;
-import org.apache.hyracks.dataflow.std.misc.RangeForwardOperatorDescriptor.RangeForwardTaskState;
 import org.apache.hyracks.storage.common.arraylist.IntArrayList;
 
 import java.io.IOException;
@@ -46,13 +44,12 @@ public class MultiPartitionDataWriter implements IFrameWriter {
     private boolean allocatedFrame = false;
     private final boolean[] isOpen;
     private final ITupleMultiPartitionComputerFactory trpcf;
-    private final RangeId rangeId;
     private final IGrowableIntArray map;
     private ITupleMultiPartitionComputer tpc;
 
     public MultiPartitionDataWriter(IHyracksTaskContext ctx, int consumerPartitionCount,
                                     IPartitionWriterFactory pwFactory, RecordDescriptor recordDescriptor,
-                                    ITupleMultiPartitionComputerFactory trpcf, RangeId rangeId) throws HyracksDataException {
+                                    ITupleMultiPartitionComputerFactory trpcf) throws HyracksDataException {
         this.consumerPartitionCount = consumerPartitionCount;
         pWriters = new IFrameWriter[consumerPartitionCount];
         isOpen = new boolean[consumerPartitionCount];
@@ -68,7 +65,6 @@ public class MultiPartitionDataWriter implements IFrameWriter {
         tupleAccessor = new FrameTupleAccessor(recordDescriptor);
         this.ctx = ctx;
         this.trpcf = trpcf;
-        this.rangeId = rangeId;
         this.map = new IntArrayList(8, 8);
     }
 
@@ -117,8 +113,7 @@ public class MultiPartitionDataWriter implements IFrameWriter {
         if (!allocatedFrame) {
             allocateFrames();
         }
-        RangeForwardTaskState rangeState = RangeForwardTaskState.getRangeState(rangeId.getId(), ctx);
-        tpc = trpcf.createPartitioner(rangeState.getRangeMap());
+        tpc = trpcf.createPartitioner(ctx);
     }
 
     @Override

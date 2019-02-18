@@ -713,10 +713,6 @@ public class EnforceStructuralPropertiesRule implements IAlgebraicRewriteRule {
             } else {
                 return new RangeMultiPartitionExchangePOperator(partitioningColumns, domain, rangeMap, rangePartitioningType);
             }
-
-
-
-
         } else {
             return createDynamicRangePartitionExchangePOperator(parentOp, ctx, domain, partitioningColumns, childIndex);
         }
