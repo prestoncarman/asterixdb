@@ -40,12 +40,11 @@ import org.apache.hyracks.api.dataflow.value.IBinaryRangeComparatorFactory;
 import org.apache.hyracks.api.dataflow.value.INormalizedKeyComputerFactory;
 import org.apache.hyracks.api.dataflow.value.IRangePartitionType.RangePartitioningType;
 import org.apache.hyracks.api.job.IConnectorDescriptorRegistry;
-import org.apache.hyracks.dataflow.common.data.partition.range.RangeMap;
-import org.apache.hyracks.dataflow.std.base.RangeId;
-import org.apache.hyracks.dataflow.std.connectors.MToNMultiPartitioningConnectorDescriptor;
 import org.apache.hyracks.dataflow.common.data.partition.range.DynamicFieldRangeMultiPartitionComputerFactory;
-import org.apache.hyracks.dataflow.common.data.partition.range.StaticFieldRangeMultiPartitionComputerFactory;
 import org.apache.hyracks.dataflow.common.data.partition.range.FieldRangeMultiPartitionComputerFactory;
+import org.apache.hyracks.dataflow.common.data.partition.range.RangeMap;
+import org.apache.hyracks.dataflow.common.data.partition.range.StaticFieldRangeMultiPartitionComputerFactory;
+import org.apache.hyracks.dataflow.std.connectors.MToNMultiPartitioningConnectorDescriptor;
 
 import java.util.ArrayList;
 import java.util.List;
