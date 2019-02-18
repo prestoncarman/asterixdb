@@ -638,8 +638,8 @@ public class EnforceStructuralPropertiesRule implements IAlgebraicRewriteRule {
             IPhysicalPropertiesVector deliveredByChild) {
         IPhysicalOperator mergingConnector;
         List<OrderColumn> ordCols = computeOrderColumns(deliveredByChild);
+        IPartitioningProperty partitioningDeliveredByChild = deliveredByChild.getPartitioningProperty();
         if (ordCols.isEmpty()) {
-            IPartitioningProperty partitioningDeliveredByChild = deliveredByChild.getPartitioningProperty();
             if (partitioningDeliveredByChild.getPartitioningType() == PartitioningType.ORDERED_PARTITIONED) {
                 mergingConnector = new SequentialMergeExchangePOperator();
             } else {
@@ -648,7 +648,13 @@ public class EnforceStructuralPropertiesRule implements IAlgebraicRewriteRule {
         } else {
             if (parentOp.getAnnotations().containsKey(OperatorAnnotations.USE_STATIC_RANGE)) {
                 RangeMap rangeMap = (RangeMap) parentOp.getAnnotations().get(OperatorAnnotations.USE_STATIC_RANGE);
-                mergingConnector = new RangePartitionMergeExchangePOperator(ordCols, domain, rangeMap);
+                RangePartitioningType rangePartitioningType = ((OrderedPartitionedProperty) partitioningDeliveredByChild).getRangePartitioningType();
+                if (rangePartitioningType == RangePartitioningType.PROJECT) {
+                    mergingConnector = new RangePartitionMergeExchangePOperator(ordCols, domain, rangeMap);
+                } else {
+                    mergingConnector = new RangeMultiPartitionMergeExchangePOperator(ordCols, domain, rangePartitioningType, rangeMap);
+                }
+
             } else {
                 OrderColumn[] sortColumns = new OrderColumn[ordCols.size()];
                 sortColumns = ordCols.toArray(sortColumns);
