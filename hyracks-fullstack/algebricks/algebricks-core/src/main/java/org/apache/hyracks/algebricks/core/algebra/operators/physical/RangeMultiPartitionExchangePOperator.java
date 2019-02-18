@@ -57,15 +57,13 @@ public class RangeMultiPartitionExchangePOperator extends AbstractExchangePOpera
     private RangeMap rangeMap;
     private final boolean rangeMapIsComputedAtRunTime;
     private final String rangeMapKeyInContext;
-    private RangePartitioningType rangeType;
-    private RangeId rangeId;
+    private final RangePartitioningType rangeType;
 
-    public RangeMultiPartitionExchangePOperator(List<OrderColumn> partitioningFields, INodeDomain domain, RangeId rangeId, RangeMap rangeMap,
+    public RangeMultiPartitionExchangePOperator(List<OrderColumn> partitioningFields, INodeDomain domain, RangeMap rangeMap,
                                                 boolean rangeMapIsComputedAtRunTime, String rangeMapKeyInContext,
                                                 RangePartitioningType rangeType) {
         this.partitioningFields = partitioningFields;
         this.domain = domain;
-        this.rangeId = rangeId;
         this.rangeMap = rangeMap;
         this.rangeMapIsComputedAtRunTime = rangeMapIsComputedAtRunTime;
         this.rangeMapKeyInContext = rangeMapKeyInContext;
@@ -73,13 +71,13 @@ public class RangeMultiPartitionExchangePOperator extends AbstractExchangePOpera
     }
 
     public RangeMultiPartitionExchangePOperator(List<OrderColumn> partitioningFields, String rangeMapKeyInContext,
-                                           INodeDomain domain, RangeId rangeId, RangePartitioningType rangeType) {
-        this(partitioningFields, domain, rangeId, null, true, rangeMapKeyInContext, rangeType);
+                                           INodeDomain domain, RangePartitioningType rangeType) {
+        this(partitioningFields, domain, null, true, rangeMapKeyInContext, rangeType);
     }
 
-    public RangeMultiPartitionExchangePOperator(List<OrderColumn> partitioningFields, INodeDomain domain, RangeId rangeId,
+    public RangeMultiPartitionExchangePOperator(List<OrderColumn> partitioningFields, INodeDomain domain,
                                            RangeMap rangeMap, RangePartitioningType rangeType) {
-        this(partitioningFields, domain, rangeId, rangeMap, false, "", rangeType);
+        this(partitioningFields, domain, rangeMap, false, "", rangeType);
     }
 
     @Override
@@ -95,18 +93,13 @@ public class RangeMultiPartitionExchangePOperator extends AbstractExchangePOpera
         return rangeType;
     }
 
-    public RangeId getRangeId() {
-        return rangeId;
-    }
-
     public INodeDomain getDomain() {
         return domain;
     }
 
     @Override
     public void computeDeliveredProperties(ILogicalOperator op, IOptimizationContext context) {
-        IPartitioningProperty p = new OrderedPartitionedProperty(new ArrayList<OrderColumn>(partitioningFields), domain,
-                rangeId, rangeType, null);
+        IPartitioningProperty p = new OrderedPartitionedProperty(new ArrayList<OrderColumn>(partitioningFields), domain, rangeType);
         AbstractLogicalOperator op2 = (AbstractLogicalOperator) op.getInputs().get(0).getValue();
         List<ILocalStructuralProperty> op2Locals = op2.getDeliveredPhysicalProperties().getLocalProperties();
         List<ILocalStructuralProperty> locals = new ArrayList<>();
@@ -161,14 +154,14 @@ public class RangeMultiPartitionExchangePOperator extends AbstractExchangePOpera
             partitionerFactory = new StaticFieldRangeMultiPartitionComputerFactory(sortFields, rangeComps, rangeMap, rangeType);
         }
 
-        IConnectorDescriptor conn = new MToNMultiPartitioningConnectorDescriptor(spec, partitionerFactory, rangeId, sortFields,
+        IConnectorDescriptor conn = new MToNMultiPartitioningConnectorDescriptor(spec, partitionerFactory, sortFields,
                 binaryComps, nkcf);
         return new Pair<>(conn, null);
     }
 
     @Override
     public String toString() {
-        return getOperatorTag().toString() + " " + partitioningFields + " " + rangeType + " " + rangeId;
+        return getOperatorTag().toString() + " " + partitioningFields + " " + rangeType;
     }
 
 }

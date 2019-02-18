@@ -33,26 +33,17 @@ public class OrderedPartitionedProperty implements IPartitioningProperty {
 
     private final List<OrderColumn> orderColumns;
     private INodeDomain domain;
-    private RangeId rangeId;
     private RangePartitioningType rangeType;
-    private IRangeMap rangeMapHint;
+
+    public OrderedPartitionedProperty(List<OrderColumn> orderColumns, INodeDomain domain,
+                                      RangePartitioningType rangeType) {
+        this.domain = domain;
+        this.orderColumns = orderColumns;
+        this.rangeType = rangeType;
+    }
 
     public OrderedPartitionedProperty(List<OrderColumn> orderColumns, INodeDomain domain) {
-        this.domain = domain;
-        this.orderColumns = orderColumns;
-    }
-
-    public OrderedPartitionedProperty(List<OrderColumn> orderColumns, INodeDomain domain, RangeId rangeId,
-                                      RangePartitioningType rangeType, IRangeMap rangeMapHint) {
-        this.domain = domain;
-        this.orderColumns = orderColumns;
-        this.rangeId = rangeId;
-        this.rangeType = rangeType;
-        this.rangeMapHint = rangeMapHint;
-    }
-
-    public OrderedPartitionedProperty(List<OrderColumn> orderColumns, INodeDomain domain, RangeId rangeId) {
-        this(orderColumns, domain, rangeId, RangePartitioningType.PROJECT, null);
+        this(orderColumns, domain, RangePartitioningType.PROJECT);
     }
 
     public List<OrderColumn> getOrderColumns() {
@@ -86,7 +77,7 @@ public class OrderedPartitionedProperty implements IPartitioningProperty {
                                            List<FunctionalDependency> fds) {
         List<OrderColumn> columns = PropertiesUtil.replaceOrderColumnsByEqClasses(orderColumns, equivalenceClasses);
         columns = PropertiesUtil.applyFDsToOrderColumns(columns, fds);
-        return new OrderedPartitionedProperty(columns, domain, rangeId);
+        return new OrderedPartitionedProperty(columns, domain, rangeType);
     }
 
     @Override
@@ -94,14 +85,6 @@ public class OrderedPartitionedProperty implements IPartitioningProperty {
         for (OrderColumn oc : orderColumns) {
             columns.add(oc.getColumn());
         }
-    }
-
-    public RangeId getRangeId() {
-        return rangeId;
-    }
-
-    public IRangeMap getRangeMapHint() {
-        return rangeMapHint;
     }
 
     @Override
