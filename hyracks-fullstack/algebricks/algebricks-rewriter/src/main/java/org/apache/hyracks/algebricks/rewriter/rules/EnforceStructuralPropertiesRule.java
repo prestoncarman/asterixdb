@@ -714,12 +714,12 @@ public class EnforceStructuralPropertiesRule implements IAlgebraicRewriteRule {
                 return new RangeMultiPartitionExchangePOperator(partitioningColumns, domain, rangeMap, rangePartitioningType);
             }
         } else {
-            return createDynamicRangePartitionExchangePOperator(parentOp, ctx, domain, partitioningColumns, childIndex);
+            return createDynamicRangePartitionExchangePOperator(parentOp, ctx, domain, partitioningColumns, childIndex, rangePartitioningType);
         }
     }
 
     private IPhysicalOperator createDynamicRangePartitionExchangePOperator(AbstractLogicalOperator parentOp,
-            IOptimizationContext ctx, INodeDomain targetDomain, List<OrderColumn> partitioningColumns, int childIndex)
+            IOptimizationContext ctx, INodeDomain targetDomain, List<OrderColumn> partitioningColumns, int childIndex, RangePartitioningType rangePartitioningType)
             throws AlgebricksException {
         SourceLocation sourceLoc = parentOp.getSourceLocation();
         // #1. create the replicate operator and add it above the source op feeding parent operator
@@ -768,7 +768,11 @@ public class EnforceStructuralPropertiesRule implements IAlgebraicRewriteRule {
         parentOp.recomputeSchema();
         ctx.computeAndSetTypeEnvironmentForOperator(parentOp);
 
-        return new RangePartitionExchangePOperator(partitioningColumns, rangeMapKey, targetDomain);
+        if (rangePartitioningType == RangePartitioningType.PROJECT) {
+            return new RangePartitionExchangePOperator(partitioningColumns, rangeMapKey, targetDomain);
+        } else {
+            return new RangeMultiPartitionExchangePOperator(partitioningColumns, rangeMapKey, targetDomain, rangePartitioningType);
+        }
     }
 
     private static ReplicateOperator createReplicateOperator(Mutable<ILogicalOperator> inputOperator,
