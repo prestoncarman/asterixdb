@@ -18,55 +18,54 @@
  */
 package org.apache.hyracks.dataflow.std.connectors;
 
+import java.util.BitSet;
+
 import org.apache.hyracks.api.comm.IFrameReader;
 import org.apache.hyracks.api.comm.IFrameWriter;
 import org.apache.hyracks.api.comm.IPartitionCollector;
 import org.apache.hyracks.api.comm.IPartitionWriterFactory;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
-import org.apache.hyracks.api.dataflow.value.*;
+import org.apache.hyracks.api.dataflow.value.IBinaryComparator;
+import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
+import org.apache.hyracks.api.dataflow.value.INormalizedKeyComputer;
+import org.apache.hyracks.api.dataflow.value.INormalizedKeyComputerFactory;
+import org.apache.hyracks.api.dataflow.value.ITupleMultiPartitionComputerFactory;
+import org.apache.hyracks.api.dataflow.value.RecordDescriptor;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.job.IConnectorDescriptorRegistry;
 import org.apache.hyracks.dataflow.std.base.AbstractMToNConnectorDescriptor;
+import org.apache.hyracks.dataflow.std.base.RangeId;
 import org.apache.hyracks.dataflow.std.collectors.IPartitionBatchManager;
 import org.apache.hyracks.dataflow.std.collectors.NonDeterministicPartitionBatchManager;
 import org.apache.hyracks.dataflow.std.collectors.PartitionCollector;
 import org.apache.hyracks.dataflow.std.collectors.SortMergeFrameReader;
-
-import java.util.BitSet;
+import org.apache.hyracks.dataflow.std.misc.RangeForwardOperatorDescriptor.RangeForwardTaskState;
 
 public class MToNMultiPartitioningMergingConnectorDescriptor extends AbstractMToNConnectorDescriptor {
     private static final long serialVersionUID = 1L;
 
-    private final ITuplePartitionComputerFactory tpcf;
+    private final ITupleMultiPartitionComputerFactory tprcf;
+    private final RangeId rangeId;
     private final int[] sortFields;
     private final IBinaryComparatorFactory[] comparatorFactories;
     private final INormalizedKeyComputerFactory nkcFactory;
-    private final boolean stable;
 
     public MToNMultiPartitioningMergingConnectorDescriptor(IConnectorDescriptorRegistry spec,
-            ITuplePartitionComputerFactory tpcf, int[] sortFields, IBinaryComparatorFactory[] comparatorFactories,
-            INormalizedKeyComputerFactory nkcFactory) {
-        this(spec, tpcf, sortFields, comparatorFactories, nkcFactory, false);
-    }
-
-    public MToNMultiPartitioningMergingConnectorDescriptor(IConnectorDescriptorRegistry spec,
-            ITuplePartitionComputerFactory tpcf, int[] sortFields, IBinaryComparatorFactory[] comparatorFactories,
-            INormalizedKeyComputerFactory nkcFactory, boolean stable) {
+            ITupleMultiPartitionComputerFactory tprcf, RangeId rangeId, int[] sortFields,
+            IBinaryComparatorFactory[] comparatorFactories, INormalizedKeyComputerFactory nkcFactory) {
         super(spec);
-        this.tpcf = tpcf;
+        this.tprcf = tprcf;
+        this.rangeId = rangeId;
         this.sortFields = sortFields;
         this.comparatorFactories = comparatorFactories;
         this.nkcFactory = nkcFactory;
-        this.stable = stable;
     }
 
     @Override
     public IFrameWriter createPartitioner(IHyracksTaskContext ctx, RecordDescriptor recordDesc,
             IPartitionWriterFactory edwFactory, int index, int nProducerPartitions, int nConsumerPartitions)
             throws HyracksDataException {
-        final PartitionDataWriter hashWriter =
-                new PartitionDataWriter(ctx, nConsumerPartitions, edwFactory, recordDesc, tpcf.createPartitioner(ctx));
-        return hashWriter;
+        return new PartitionRangeDataWriter(ctx, nConsumerPartitions, edwFactory, recordDesc, tprcf, rangeId);
     }
 
     @Override
