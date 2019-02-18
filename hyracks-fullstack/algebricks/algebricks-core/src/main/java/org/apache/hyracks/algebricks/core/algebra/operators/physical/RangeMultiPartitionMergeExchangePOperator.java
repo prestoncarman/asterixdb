@@ -39,11 +39,13 @@ import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import org.apache.hyracks.api.dataflow.value.IBinaryRangeComparatorFactory;
 import org.apache.hyracks.api.dataflow.value.INormalizedKeyComputerFactory;
 import org.apache.hyracks.api.dataflow.value.IRangePartitionType.RangePartitioningType;
-import org.apache.hyracks.api.dataflow.value.ITupleRangePartitionComputerFactory;
+import org.apache.hyracks.api.dataflow.value.ITupleMultiPartitionComputerFactory;
 import org.apache.hyracks.api.job.IConnectorDescriptorRegistry;
 import org.apache.hyracks.dataflow.common.data.partition.range.FieldRangePartitionComputerFactory;
+import org.apache.hyracks.dataflow.common.data.partition.range.StaticFieldRangeMultiPartitionComputerFactory;
 import org.apache.hyracks.dataflow.std.base.RangeId;
-import org.apache.hyracks.dataflow.std.connectors.MToNRangePartitionMergingConnectorDescriptor;
+import org.apache.hyracks.dataflow.std.connectors.MToNMultiPartitioningMergingConnectorDescriptor;
+import org.apache.hyracks.dataflow.common.data.partition.range.RangeMap;
 
 import java.util.ArrayList;
 import java.util.LinkedList;
@@ -53,15 +55,15 @@ public class RangeMultiPartitionMergeExchangePOperator extends AbstractExchangeP
 
     private List<OrderColumn> partitioningFields;
     private INodeDomain domain;
-    private RangeId rangeId;
     private RangePartitioningType rangeType;
+    private RangeMap rangeMap;
 
     public RangeMultiPartitionMergeExchangePOperator(List<OrderColumn> partitioningFields, INodeDomain domain,
-                                                     RangeId rangeId, RangePartitioningType rangeType) {
+                                                     RangePartitioningType rangeType, RangeMap rangeMap) {
         this.partitioningFields = partitioningFields;
         this.domain = domain;
-        this.rangeId = rangeId;
         this.rangeType = rangeType;
+        this.rangeMap = rangeMap;
     }
 
     @Override
@@ -77,17 +79,13 @@ public class RangeMultiPartitionMergeExchangePOperator extends AbstractExchangeP
         return rangeType;
     }
 
-    public RangeId getRangeId() {
-        return rangeId;
-    }
-
     public INodeDomain getDomain() {
         return domain;
     }
 
     @Override
     public void computeDeliveredProperties(ILogicalOperator op, IOptimizationContext context) {
-        IPartitioningProperty p = new OrderedPartitionedProperty(partitioningFields, domain, rangeId, rangeType, null);
+        IPartitioningProperty p = new OrderedPartitionedProperty(partitioningFields, domain, rangeType);
         AbstractLogicalOperator op2 = (AbstractLogicalOperator) op.getInputs().get(0).getValue();
         List<ILocalStructuralProperty> op2Locals = op2.getDeliveredPhysicalProperties().getLocalProperties();
         List<ILocalStructuralProperty> locals = new ArrayList<>();
@@ -142,16 +140,15 @@ public class RangeMultiPartitionMergeExchangePOperator extends AbstractExchangeP
             binaryComps[i] = bcfp.getBinaryComparatorFactory(type, oc.getOrder() == OrderKind.ASC);
             i++;
         }
-        ITupleRangePartitionComputerFactory tpcf = new FieldRangePartitionComputerFactory(sortFields, rangeComps,
-                rangeType);
-        IConnectorDescriptor conn = new MToNRangePartitionMergingConnectorDescriptor(spec, tpcf, rangeId, sortFields,
+        ITupleMultiPartitionComputerFactory tpcf = new StaticFieldRangeMultiPartitionComputerFactory(sortFields, rangeComps, rangeMap, rangeType);
+        IConnectorDescriptor conn = new MToNMultiPartitioningMergingConnectorDescriptor(spec, tpcf, sortFields,
                 binaryComps, nkcf);
         return new Pair<>(conn, null);
     }
 
     @Override
     public String toString() {
-        return getOperatorTag().toString() + " " + partitioningFields + " " + rangeType + " " + rangeId;
+        return getOperatorTag().toString() + " " + partitioningFields + " SPLIT COUNT:" + rangeMap.getSplitCount() + " " + rangeType;
     }
 
 }
