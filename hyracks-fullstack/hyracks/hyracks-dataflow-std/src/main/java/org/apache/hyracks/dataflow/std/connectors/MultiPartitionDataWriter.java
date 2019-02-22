@@ -147,17 +147,14 @@ public class MultiPartitionDataWriter implements IFrameWriter {
 
     @Override
     public void fail() throws HyracksDataException {
+        failed = true;
         HyracksDataException failException = null;
         for (int i = 0; i < appenders.length; ++i) {
             if (isOpen[i]) {
                 try {
                     pWriters[i].fail();
-                } catch (Throwable th) {
-                    if (failException == null) {
-                        failException = new HyracksDataException(th);
-                    } else {
-                        failException.addSuppressed(th);
-                    }
+                } catch (Exception e) {
+                    failException = wrapException(failException, e);
                 }
             }
         }
