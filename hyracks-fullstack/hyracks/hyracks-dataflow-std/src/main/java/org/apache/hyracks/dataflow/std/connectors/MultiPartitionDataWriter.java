@@ -134,6 +134,9 @@ public class MultiPartitionDataWriter implements IFrameWriter {
         for (int i = 0; i < tupleCount; ++i) {
             tmpc.partition(tupleAccessor, i, consumerPartitionCount, map);
             for (int h = 0; h < map.size(); ++h) {
+                if (!allocatedFrames[h]) {
+                    allocateFrames(h);
+                }
                 FrameUtils.appendToWriter(pWriters[map.get(h)], appenders[map.get(h)], tupleAccessor, i);
             }
             map.clear();
