@@ -120,14 +120,11 @@ public class MultiPartitionDataWriter implements IFrameWriter {
 
     @Override
     public void open() throws HyracksDataException {
+        tmpc.initialize();
         for (int i = 0; i < pWriters.length; ++i) {
             isOpen[i] = true;
             pWriters[i].open();
         }
-        if (!allocatedFrame) {
-            allocateFrames();
-        }
-        tmpc = tmpcf.createPartitioner(ctx);
     }
 
     @Override
