@@ -140,11 +140,9 @@ public class MultiPartitionDataWriter implements IFrameWriter {
         }
     }
 
-    protected void allocateFrames() throws HyracksDataException {
-        for (int i = 0; i < appenders.length; ++i) {
-            appenders[i].reset(new VSizeFrame(ctx), true);
-        }
-        allocatedFrame = true;
+    protected void allocateFrames(int i) throws HyracksDataException {
+        appenders[i].reset(new VSizeFrame(ctx), true);
+        allocatedFrames[i] = true;
     }
 
     @Override
