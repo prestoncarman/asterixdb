@@ -44,29 +44,35 @@ public class MultiPartitionDataWriter implements IFrameWriter {
     private final FrameTupleAccessor tupleAccessor;
     private ITupleMultiPartitionComputer tmpc;
     private final IHyracksTaskContext ctx;
-    private boolean allocatedFrame = false;
+    private boolean[] allocatedFrames;
     private final ITupleMultiPartitionComputerFactory tmpcf;
     private final IGrowableIntArray map;
+    private boolean failed = false;
 
     public MultiPartitionDataWriter(IHyracksTaskContext ctx, int consumerPartitionCount,
                                     IPartitionWriterFactory pwFactory, RecordDescriptor recordDescriptor,
-                                    ITupleMultiPartitionComputerFactory trpcf) throws HyracksDataException {
+                                    ITupleMultiPartitionComputerFactory tmpcf) throws HyracksDataException {
+        this.ctx = ctx;
+        this.tmpcf = tmpcf;
         this.consumerPartitionCount = consumerPartitionCount;
         pWriters = new IFrameWriter[consumerPartitionCount];
         isOpen = new boolean[consumerPartitionCount];
+        allocatedFrames = new boolean[consumerPartitionCount];
         appenders = new FrameTupleAppender[consumerPartitionCount];
+        tupleAccessor = new FrameTupleAccessor(recordDescriptor);
+        this.map = new IntArrayList(8, 8);
+        initializeAppenders(pwFactory);
+    }
+
+    protected void initializeAppenders(IPartitionWriterFactory pwFactory) throws HyracksDataException {
         for (int i = 0; i < consumerPartitionCount; ++i) {
             try {
                 pWriters[i] = pwFactory.createFrameWriter(i);
-                appenders[i] = new FrameTupleAppender();
+                appenders[i] = createTupleAppender(ctx);
             } catch (IOException e) {
                 throw HyracksDataException.create(e);
             }
         }
-        tupleAccessor = new FrameTupleAccessor(recordDescriptor);
-        this.ctx = ctx;
-        this.tmpcf = trpcf;
-        this.map = new IntArrayList(8, 8);
     }
 
     protected FrameTupleAppender createTupleAppender(IHyracksTaskContext ctx) {
