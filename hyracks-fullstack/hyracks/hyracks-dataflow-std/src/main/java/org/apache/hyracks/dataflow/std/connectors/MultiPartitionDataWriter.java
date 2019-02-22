@@ -26,7 +26,6 @@ import org.apache.hyracks.api.comm.IPartitionWriterFactory;
 import org.apache.hyracks.api.comm.VSizeFrame;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.dataflow.value.ITupleMultiPartitionComputer;
-import org.apache.hyracks.api.dataflow.value.ITupleMultiPartitionComputerFactory;
 import org.apache.hyracks.api.dataflow.value.RecordDescriptor;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.storage.IGrowableIntArray;
@@ -45,15 +44,14 @@ public class MultiPartitionDataWriter implements IFrameWriter {
     private ITupleMultiPartitionComputer tmpc;
     private final IHyracksTaskContext ctx;
     private boolean[] allocatedFrames;
-    private final ITupleMultiPartitionComputerFactory tmpcf;
     private final IGrowableIntArray map;
     private boolean failed = false;
 
     public MultiPartitionDataWriter(IHyracksTaskContext ctx, int consumerPartitionCount,
                                     IPartitionWriterFactory pwFactory, RecordDescriptor recordDescriptor,
-                                    ITupleMultiPartitionComputerFactory tmpcf) throws HyracksDataException {
+                                    ITupleMultiPartitionComputer tmpc) throws HyracksDataException {
         this.ctx = ctx;
-        this.tmpcf = tmpcf;
+        this.tmpc = tmpc;
         this.consumerPartitionCount = consumerPartitionCount;
         pWriters = new IFrameWriter[consumerPartitionCount];
         isOpen = new boolean[consumerPartitionCount];
