@@ -82,27 +82,34 @@ public class MultiPartitionDataWriter implements IFrameWriter {
     @Override
     public void close() throws HyracksDataException {
         HyracksDataException closeException = null;
+        if (!failed) {
+            boolean newFailure = false;
+            for (int i = 0; i < pWriters.length; ++i) {
+                try {
+                    if (isOpen[i] && allocatedFrames[i] && appenders[i].getTupleCount() > 0) {
+                        appenders[i].write(pWriters[i], true);
+                    }
+                } catch (Exception e) {
+                    newFailure = true;
+                    closeException = wrapException(closeException, e);
+                    break;
+                }
+            }
+            if (newFailure) {
+                try {
+                    fail(); // Fail all writers if any new failure happens.
+                } catch (Exception e) {
+                    closeException = wrapException(closeException, e);
+                }
+            }
+        }
         for (int i = 0; i < pWriters.length; ++i) {
             if (isOpen[i]) {
-                if (allocatedFrame) {
-                    try {
-                        appenders[i].write(pWriters[i], true);
-                    } catch (Throwable th) {
-                        if (closeException == null) {
-                            closeException = new HyracksDataException(th);
-                        } else {
-                            closeException.addSuppressed(th);
-                        }
-                    }
-                }
+                // The try-block make sures that every writer is closed.
                 try {
                     pWriters[i].close();
-                } catch (Throwable th) {
-                    if (closeException == null) {
-                        closeException = new HyracksDataException(th);
-                    } else {
-                        closeException.addSuppressed(th);
-                    }
+                } catch (Exception e) {
+                    closeException = wrapException(closeException, e);
                 }
             }
         }
