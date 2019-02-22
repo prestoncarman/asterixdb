@@ -18,6 +18,9 @@
  */
 package org.apache.hyracks.dataflow.std.connectors;
 
+import java.io.IOException;
+import java.nio.ByteBuffer;
+
 import org.apache.hyracks.api.comm.IFrameWriter;
 import org.apache.hyracks.api.comm.IPartitionWriterFactory;
 import org.apache.hyracks.api.comm.VSizeFrame;
@@ -31,21 +34,19 @@ import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAccessor;
 import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAppender;
 import org.apache.hyracks.dataflow.common.comm.util.FrameUtils;
 import org.apache.hyracks.storage.common.arraylist.IntArrayList;
-
-import java.io.IOException;
-import java.nio.ByteBuffer;
+import org.apache.hyracks.util.trace.ITracer;
 
 public class MultiPartitionDataWriter implements IFrameWriter {
     private final int consumerPartitionCount;
     private final IFrameWriter[] pWriters;
+    private final boolean[] isOpen;
     private final FrameTupleAppender[] appenders;
     private final FrameTupleAccessor tupleAccessor;
+    private ITupleMultiPartitionComputer tmpc;
     private final IHyracksTaskContext ctx;
     private boolean allocatedFrame = false;
-    private final boolean[] isOpen;
-    private final ITupleMultiPartitionComputerFactory trpcf;
+    private final ITupleMultiPartitionComputerFactory tmpcf;
     private final IGrowableIntArray map;
-    private ITupleMultiPartitionComputer tpc;
 
     public MultiPartitionDataWriter(IHyracksTaskContext ctx, int consumerPartitionCount,
                                     IPartitionWriterFactory pwFactory, RecordDescriptor recordDescriptor,
@@ -59,12 +60,12 @@ public class MultiPartitionDataWriter implements IFrameWriter {
                 pWriters[i] = pwFactory.createFrameWriter(i);
                 appenders[i] = new FrameTupleAppender();
             } catch (IOException e) {
-                throw new HyracksDataException(e);
+                throw HyracksDataException.create(e);
             }
         }
         tupleAccessor = new FrameTupleAccessor(recordDescriptor);
         this.ctx = ctx;
-        this.trpcf = trpcf;
+        this.tmpcf = trpcf;
         this.map = new IntArrayList(8, 8);
     }
 
@@ -113,7 +114,7 @@ public class MultiPartitionDataWriter implements IFrameWriter {
         if (!allocatedFrame) {
             allocateFrames();
         }
-        tpc = trpcf.createPartitioner(ctx);
+        tmpc = tmpcf.createPartitioner(ctx);
     }
 
     @Override
@@ -121,7 +122,7 @@ public class MultiPartitionDataWriter implements IFrameWriter {
         tupleAccessor.reset(buffer);
         int tupleCount = tupleAccessor.getTupleCount();
         for (int i = 0; i < tupleCount; ++i) {
-            tpc.partition(tupleAccessor, i, consumerPartitionCount, map);
+            tmpc.partition(tupleAccessor, i, consumerPartitionCount, map);
             for (int h = 0; h < map.size(); ++h) {
                 FrameUtils.appendToWriter(pWriters[map.get(h)], appenders[map.get(h)], tupleAccessor, i);
             }
@@ -164,4 +165,20 @@ public class MultiPartitionDataWriter implements IFrameWriter {
         }
     }
 
+    public void flush(ITracer tracer, String name, long cat, String args) throws HyracksDataException {
+        for (int i = 0; i < consumerPartitionCount; i++) {
+            if (allocatedFrames[i]) {
+                appenders[i].flush(pWriters[i], tracer, name, cat, args);
+            }
+        }
+    }
+
+    // Wraps the current encountered exception into the final exception.
+    private HyracksDataException wrapException(HyracksDataException finalException, Exception currentException) {
+        if (finalException == null) {
+            return HyracksDataException.create(currentException);
+        }
+        finalException.addSuppressed(currentException);
+        return finalException;
+    }
 }
