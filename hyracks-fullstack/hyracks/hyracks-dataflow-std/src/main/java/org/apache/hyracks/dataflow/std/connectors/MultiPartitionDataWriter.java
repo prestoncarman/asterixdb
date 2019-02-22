@@ -166,7 +166,9 @@ public class MultiPartitionDataWriter implements IFrameWriter {
     @Override
     public void flush() throws HyracksDataException {
         for (int i = 0; i < consumerPartitionCount; i++) {
-            appenders[i].flush(pWriters[i]);
+            if (allocatedFrames[i]) {
+                appenders[i].flush(pWriters[i]);
+            }
         }
     }
 
