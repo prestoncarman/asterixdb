@@ -41,26 +41,27 @@ public class MToNMultiPartitioningConnectorDescriptor extends AbstractMToNConnec
     private final ITupleMultiPartitionComputerFactory tmpcf;
 
     public MToNMultiPartitioningConnectorDescriptor(IConnectorDescriptorRegistry spec,
-                                                    ITupleMultiPartitionComputerFactory tmpcf, int[] sortFields,
-                                                    IBinaryComparatorFactory[] comparatorFactories, INormalizedKeyComputerFactory nkcFactory) {
+            ITupleMultiPartitionComputerFactory tmpcf, int[] sortFields, IBinaryComparatorFactory[] comparatorFactories,
+            INormalizedKeyComputerFactory nkcFactory) {
         super(spec);
         this.tmpcf = tmpcf;
     }
 
     @Override
     public IFrameWriter createPartitioner(IHyracksTaskContext ctx, RecordDescriptor recordDesc,
-                                          IPartitionWriterFactory edwFactory, int index, int nProducerPartitions, int nConsumerPartitions)
+            IPartitionWriterFactory edwFactory, int index, int nProducerPartitions, int nConsumerPartitions)
             throws HyracksDataException {
-        return new MultiPartitionDataWriter(ctx, nConsumerPartitions, edwFactory, recordDesc, tmpcf.createPartitioner(ctx));
+        return new MultiPartitionDataWriter(ctx, nConsumerPartitions, edwFactory, recordDesc,
+                tmpcf.createPartitioner(ctx));
     }
 
     @Override
     public IPartitionCollector createPartitionCollector(IHyracksTaskContext ctx, RecordDescriptor recordDesc, int index,
-                                                        int nProducerPartitions, int nConsumerPartitions) throws HyracksDataException {
+            int nProducerPartitions, int nConsumerPartitions) throws HyracksDataException {
         BitSet expectedPartitions = new BitSet(nProducerPartitions);
         expectedPartitions.set(0, nProducerPartitions);
-        NonDeterministicChannelReader channelReader = new NonDeterministicChannelReader(nProducerPartitions,
-                expectedPartitions);
+        NonDeterministicChannelReader channelReader =
+                new NonDeterministicChannelReader(nProducerPartitions, expectedPartitions);
         NonDeterministicFrameReader frameReader = new NonDeterministicFrameReader(channelReader);
         return new PartitionCollector(ctx, getConnectorId(), index, expectedPartitions, frameReader, channelReader);
     }

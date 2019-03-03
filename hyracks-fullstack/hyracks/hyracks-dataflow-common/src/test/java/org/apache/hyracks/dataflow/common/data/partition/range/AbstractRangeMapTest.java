@@ -28,8 +28,8 @@ import static org.junit.Assert.assertTrue;
 
 public abstract class AbstractRangeMapTest {
 
-    protected void testMapNumeric(LinkedList<Byte> tags, LinkedList<Long> values, IRangeMap rangeMap) throws
-            HyracksDataException {
+    protected void testMapNumeric(LinkedList<Byte> tags, LinkedList<Long> values, IRangeMap rangeMap)
+            throws HyracksDataException {
         LongPointable lp = (LongPointable) LongPointable.FACTORY.createPointable();
         int columnIndex = 0;
 

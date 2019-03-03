@@ -48,8 +48,8 @@ public class MToNMultiPartitioningMergingConnectorDescriptor extends AbstractMTo
     private final INormalizedKeyComputerFactory nkcFactory;
 
     public MToNMultiPartitioningMergingConnectorDescriptor(IConnectorDescriptorRegistry spec,
-            ITupleMultiPartitionComputerFactory tprcf, int[] sortFields,
-            IBinaryComparatorFactory[] comparatorFactories, INormalizedKeyComputerFactory nkcFactory) {
+            ITupleMultiPartitionComputerFactory tprcf, int[] sortFields, IBinaryComparatorFactory[] comparatorFactories,
+            INormalizedKeyComputerFactory nkcFactory) {
         super(spec);
         this.tprcf = tprcf;
         this.sortFields = sortFields;
@@ -61,7 +61,8 @@ public class MToNMultiPartitioningMergingConnectorDescriptor extends AbstractMTo
     public IFrameWriter createPartitioner(IHyracksTaskContext ctx, RecordDescriptor recordDesc,
             IPartitionWriterFactory edwFactory, int index, int nProducerPartitions, int nConsumerPartitions)
             throws HyracksDataException {
-        return new MultiPartitionDataWriter(ctx, nConsumerPartitions, edwFactory, recordDesc, tprcf.createPartitioner(ctx));
+        return new MultiPartitionDataWriter(ctx, nConsumerPartitions, edwFactory, recordDesc,
+                tprcf.createPartitioner(ctx));
     }
 
     @Override

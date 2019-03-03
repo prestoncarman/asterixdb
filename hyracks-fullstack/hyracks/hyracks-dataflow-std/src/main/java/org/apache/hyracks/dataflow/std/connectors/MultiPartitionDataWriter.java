@@ -48,8 +48,8 @@ public class MultiPartitionDataWriter implements IFrameWriter {
     private boolean failed = false;
 
     public MultiPartitionDataWriter(IHyracksTaskContext ctx, int consumerPartitionCount,
-                                    IPartitionWriterFactory pwFactory, RecordDescriptor recordDescriptor,
-                                    ITupleMultiPartitionComputer tmpc) throws HyracksDataException {
+            IPartitionWriterFactory pwFactory, RecordDescriptor recordDescriptor, ITupleMultiPartitionComputer tmpc)
+            throws HyracksDataException {
         this.ctx = ctx;
         this.tmpc = tmpc;
         this.consumerPartitionCount = consumerPartitionCount;

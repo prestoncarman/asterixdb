@@ -31,8 +31,8 @@ public abstract class FieldRangeMultiPartitionComputerFactory implements ITupleM
     private IBinaryRangeComparatorFactory[] comparatorFactories;
     private RangePartitioningType rangeType;
 
-    public FieldRangeMultiPartitionComputerFactory(int[] rangeFields, IBinaryRangeComparatorFactory[] comparatorFactories,
-                                                   RangePartitioningType rangeType) {
+    public FieldRangeMultiPartitionComputerFactory(int[] rangeFields,
+            IBinaryRangeComparatorFactory[] comparatorFactories, RangePartitioningType rangeType) {
         this.rangeFields = rangeFields;
         this.comparatorFactories = comparatorFactories;
         this.rangeType = rangeType;
@@ -135,7 +135,7 @@ public abstract class FieldRangeMultiPartitionComputerFactory implements ITupleM
              * Return first match or suggested index.
              */
             private int binarySearchRangePartition(IFrameTupleAccessor accessor, int tIndex,
-                                                   IBinaryComparator[] comparators) throws HyracksDataException {
+                    IBinaryComparator[] comparators) throws HyracksDataException {
                 int searchIndex = 0;
                 int left = 0;
                 int right = splitCount;
@@ -156,7 +156,7 @@ public abstract class FieldRangeMultiPartitionComputerFactory implements ITupleM
             }
 
             private int compareSlotAndFields(IFrameTupleAccessor accessor, int tIndex, int mapIndex,
-                                             IBinaryComparator[] comparators) throws HyracksDataException {
+                    IBinaryComparator[] comparators) throws HyracksDataException {
                 int c = 0;
                 int startOffset = accessor.getTupleStartOffset(tIndex);
                 int slotLength = accessor.getFieldSlotsLength();

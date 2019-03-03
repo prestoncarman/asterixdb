@@ -26,8 +26,9 @@ public class StaticFieldRangeMultiPartitionComputerFactory extends FieldRangeMul
     private static final long serialVersionUID = 1L;
     private RangeMap rangeMap;
 
-    public StaticFieldRangeMultiPartitionComputerFactory(int[] rangeFields, IBinaryRangeComparatorFactory[] comparatorFactories,
-                                                         RangeMap rangeMap, IRangePartitionType.RangePartitioningType rangeType) {
+    public StaticFieldRangeMultiPartitionComputerFactory(int[] rangeFields,
+            IBinaryRangeComparatorFactory[] comparatorFactories, RangeMap rangeMap,
+            IRangePartitionType.RangePartitioningType rangeType) {
         super(rangeFields, comparatorFactories, rangeType);
         this.rangeMap = rangeMap;
     }

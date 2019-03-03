@@ -58,7 +58,7 @@ public class RangeMap implements IRangeMap {
     public int getSplitCount() {
         return endOffsets.length / fields - 2;
     }
-    
+
     public byte[] getByteArray() {
         return bytes;
     }
@@ -199,7 +199,7 @@ public class RangeMap implements IRangeMap {
         }
         return (int) Math.floor(slot / rangesPerPart);
     }
-    
+
     @Override
     public int hashCode() {
         return fields + Arrays.hashCode(bytes) + Arrays.hashCode(endOffsets);
