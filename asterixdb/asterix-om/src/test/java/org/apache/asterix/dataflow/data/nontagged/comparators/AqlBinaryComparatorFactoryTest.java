@@ -62,7 +62,7 @@ public class AqlBinaryComparatorFactoryTest extends TestCase {
             bos.close();
             return bos.toByteArray();
         } catch (IOException e) {
-            throw new HyracksDataException(e);
+            throw HyracksDataException.create(e);
         }
     }
 
@@ -76,7 +76,7 @@ public class AqlBinaryComparatorFactoryTest extends TestCase {
             bos.close();
             return bos.toByteArray();
         } catch (IOException e) {
-            throw new HyracksDataException(e);
+            throw HyracksDataException.create(e);
         }
     }
 

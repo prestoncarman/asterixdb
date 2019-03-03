@@ -36,6 +36,7 @@ import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAccessor;
 import org.apache.hyracks.dataflow.common.data.marshalling.Integer64SerializerDeserializer;
 import org.apache.hyracks.dataflow.common.data.partition.range.FieldRangePartitionComputerFactory;
 import org.apache.hyracks.dataflow.common.data.partition.range.RangeMap;
+import org.apache.hyracks.dataflow.common.data.partition.range.StaticFieldRangeMultiPartitionComputerFactory;
 import org.apache.hyracks.storage.common.arraylist.IntArrayList;
 import org.apache.hyracks.test.support.TestUtils;
 import org.junit.Assert;
@@ -95,7 +96,7 @@ public class IntervalRangePartitionComputerFactoryTest extends TestCase {
             bos.close();
             return bos.toByteArray();
         } catch (IOException e) {
-            throw new HyracksDataException(e);
+            throw HyracksDataException.create(e);
         }
     }
 
@@ -109,11 +110,11 @@ public class IntervalRangePartitionComputerFactoryTest extends TestCase {
             bos.close();
             return bos.toByteArray();
         } catch (IOException e) {
-            throw new HyracksDataException(e);
+            throw HyracksDataException.create(e);
         }
     }
 
-    private IRangeMap getRangeMap(Long[] integers) throws HyracksDataException {
+    private RangeMap getRangeMap(Long[] integers) throws HyracksDataException {
         int offsets[] = new int[integers.length];
         for (int i = 0; i < integers.length; ++i) {
             offsets[i] = (i + 1) * INTEGER_LENGTH;
@@ -134,14 +135,14 @@ public class IntervalRangePartitionComputerFactoryTest extends TestCase {
         return frame.getBuffer();
     }
 
-    private void executeFieldRangePartitionTests(AInterval[] intervals, IRangeMap rangeMap,
+    private void executeFieldRangePartitionTests(AInterval[] intervals, RangeMap rangeMap,
             IBinaryRangeComparatorFactory[] comparatorFactories, RangePartitioningType rangeType, int nParts,
             int[][] results) throws HyracksDataException {
         IHyracksTaskContext ctx = TestUtils.create(FRAME_SIZE);
         int[] rangeFields = new int[] { 0 };
-        ITupleRangePartitionComputerFactory frpcf = new FieldRangePartitionComputerFactory(rangeFields,
-                comparatorFactories, rangeType);
-        ITupleRangePartitionComputer partitioner = frpcf.createPartitioner(rangeMap);
+        ITupleMultiPartitionComputerFactory frpcf = new StaticFieldRangeMultiPartitionComputerFactory(rangeFields, comparatorFactories, rangeMap, rangeType);
+        ITupleMultiPartitionComputer partitioner = frpcf.createPartitioner(ctx);
+        partitioner.initialize();
 
         IFrameTupleAccessor accessor = new FrameTupleAccessor(RecordDesc);
         ByteBuffer buffer = prepareData(ctx, intervals);
@@ -208,7 +209,7 @@ public class IntervalRangePartitionComputerFactoryTest extends TestCase {
         results[1] = new int[] { 1 };
         results[2] = new int[] { 1 };
 
-        IRangeMap rangeMap = getRangeMap(MAP_POINTS);
+        RangeMap rangeMap = getRangeMap(MAP_POINTS);
 
         executeFieldRangePartitionTests(INTERVALS, rangeMap, BINARY_ASC_COMPARATOR_FACTORIES,
                 RangePartitioningType.PROJECT, 4, results);
@@ -223,7 +224,7 @@ public class IntervalRangePartitionComputerFactoryTest extends TestCase {
 
         Long[] map = MAP_POINTS.clone();
         ArrayUtils.reverse(map);
-        IRangeMap rangeMap = getRangeMap(map);
+        RangeMap rangeMap = getRangeMap(map);
 
         executeFieldRangePartitionTests(INTERVALS, rangeMap, BINARY_DESC_COMPARATOR_FACTORIES,
                 RangePartitioningType.PROJECT, 4, results);
@@ -236,7 +237,7 @@ public class IntervalRangePartitionComputerFactoryTest extends TestCase {
         results[1] = new int[] { 3 };
         results[2] = new int[] { 2 };
 
-        IRangeMap rangeMap = getRangeMap(MAP_POINTS);
+        RangeMap rangeMap = getRangeMap(MAP_POINTS);
 
         executeFieldRangePartitionTests(INTERVALS, rangeMap, BINARY_ASC_COMPARATOR_FACTORIES,
                 RangePartitioningType.PROJECT_END, 4, results);
@@ -251,7 +252,7 @@ public class IntervalRangePartitionComputerFactoryTest extends TestCase {
 
         Long[] map = MAP_POINTS.clone();
         ArrayUtils.reverse(map);
-        IRangeMap rangeMap = getRangeMap(map);
+        RangeMap rangeMap = getRangeMap(map);
 
         executeFieldRangePartitionTests(INTERVALS, rangeMap, BINARY_DESC_COMPARATOR_FACTORIES,
                 RangePartitioningType.PROJECT_END, 4, results);
@@ -264,7 +265,7 @@ public class IntervalRangePartitionComputerFactoryTest extends TestCase {
         results[1] = new int[] { 1, 2, 3 };
         results[2] = new int[] { 1, 2 };
 
-        IRangeMap rangeMap = getRangeMap(MAP_POINTS);
+        RangeMap rangeMap = getRangeMap(MAP_POINTS);
 
         executeFieldRangePartitionTests(INTERVALS, rangeMap, BINARY_ASC_COMPARATOR_FACTORIES,
                 RangePartitioningType.SPLIT, 4, results);
@@ -279,7 +280,7 @@ public class IntervalRangePartitionComputerFactoryTest extends TestCase {
 
         Long[] map = MAP_POINTS.clone();
         ArrayUtils.reverse(map);
-        IRangeMap rangeMap = getRangeMap(map);
+        RangeMap rangeMap = getRangeMap(map);
 
         executeFieldRangePartitionTests(INTERVALS, rangeMap, BINARY_DESC_COMPARATOR_FACTORIES,
                 RangePartitioningType.SPLIT, 4, results);
@@ -292,7 +293,7 @@ public class IntervalRangePartitionComputerFactoryTest extends TestCase {
         results[1] = new int[] { 1, 2, 3 };
         results[2] = new int[] { 1, 2, 3 };
 
-        IRangeMap rangeMap = getRangeMap(MAP_POINTS);
+        RangeMap rangeMap = getRangeMap(MAP_POINTS);
 
         executeFieldRangePartitionTests(INTERVALS, rangeMap, BINARY_ASC_COMPARATOR_FACTORIES,
                 RangePartitioningType.REPLICATE, 4, results);
@@ -307,7 +308,7 @@ public class IntervalRangePartitionComputerFactoryTest extends TestCase {
 
         Long[] map = MAP_POINTS.clone();
         ArrayUtils.reverse(map);
-        IRangeMap rangeMap = getRangeMap(map);
+        RangeMap rangeMap = getRangeMap(map);
 
         executeFieldRangePartitionTests(INTERVALS, rangeMap, BINARY_DESC_COMPARATOR_FACTORIES,
                 RangePartitioningType.REPLICATE, 4, results);
@@ -320,7 +321,7 @@ public class IntervalRangePartitionComputerFactoryTest extends TestCase {
         results[1] = new int[] { 4 };
         results[2] = new int[] { 4 };
 
-        IRangeMap rangeMap = getRangeMap(MAP_POINTS);
+        RangeMap rangeMap = getRangeMap(MAP_POINTS);
 
         executeFieldRangePartitionTests(INTERVALS, rangeMap, BINARY_ASC_COMPARATOR_FACTORIES,
                 RangePartitioningType.PROJECT, 16, results);
@@ -335,7 +336,7 @@ public class IntervalRangePartitionComputerFactoryTest extends TestCase {
 
         Long[] map = MAP_POINTS.clone();
         ArrayUtils.reverse(map);
-        IRangeMap rangeMap = getRangeMap(map);
+        RangeMap rangeMap = getRangeMap(map);
 
         executeFieldRangePartitionTests(INTERVALS, rangeMap, BINARY_DESC_COMPARATOR_FACTORIES,
                 RangePartitioningType.PROJECT, 16, results);
@@ -348,7 +349,7 @@ public class IntervalRangePartitionComputerFactoryTest extends TestCase {
         results[1] = new int[] { 12 };
         results[2] = new int[] { 11 };
 
-        IRangeMap rangeMap = getRangeMap(MAP_POINTS);
+        RangeMap rangeMap = getRangeMap(MAP_POINTS);
 
         executeFieldRangePartitionTests(INTERVALS, rangeMap, BINARY_ASC_COMPARATOR_FACTORIES,
                 RangePartitioningType.PROJECT_END, 16, results);
@@ -363,7 +364,7 @@ public class IntervalRangePartitionComputerFactoryTest extends TestCase {
 
         Long[] map = MAP_POINTS.clone();
         ArrayUtils.reverse(map);
-        IRangeMap rangeMap = getRangeMap(map);
+        RangeMap rangeMap = getRangeMap(map);
 
         executeFieldRangePartitionTests(INTERVALS, rangeMap, BINARY_DESC_COMPARATOR_FACTORIES,
                 RangePartitioningType.PROJECT_END, 16, results);
@@ -376,7 +377,7 @@ public class IntervalRangePartitionComputerFactoryTest extends TestCase {
         results[1] = new int[] { 4, 5, 6, 7, 8, 9, 10, 11, 12 };
         results[2] = new int[] { 4, 5, 6, 7, 8, 9, 10, 11 };
 
-        IRangeMap rangeMap = getRangeMap(MAP_POINTS);
+        RangeMap rangeMap = getRangeMap(MAP_POINTS);
 
         executeFieldRangePartitionTests(INTERVALS, rangeMap, BINARY_ASC_COMPARATOR_FACTORIES,
                 RangePartitioningType.SPLIT, 16, results);
@@ -391,7 +392,7 @@ public class IntervalRangePartitionComputerFactoryTest extends TestCase {
 
         Long[] map = MAP_POINTS.clone();
         ArrayUtils.reverse(map);
-        IRangeMap rangeMap = getRangeMap(map);
+        RangeMap rangeMap = getRangeMap(map);
 
         executeFieldRangePartitionTests(INTERVALS, rangeMap, BINARY_DESC_COMPARATOR_FACTORIES,
                 RangePartitioningType.SPLIT, 16, results);
@@ -404,7 +405,7 @@ public class IntervalRangePartitionComputerFactoryTest extends TestCase {
         results[1] = new int[] { 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
         results[2] = new int[] { 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
 
-        IRangeMap rangeMap = getRangeMap(MAP_POINTS);
+        RangeMap rangeMap = getRangeMap(MAP_POINTS);
 
         executeFieldRangePartitionTests(INTERVALS, rangeMap, BINARY_ASC_COMPARATOR_FACTORIES,
                 RangePartitioningType.REPLICATE, 16, results);
@@ -419,7 +420,7 @@ public class IntervalRangePartitionComputerFactoryTest extends TestCase {
 
         Long[] map = MAP_POINTS.clone();
         ArrayUtils.reverse(map);
-        IRangeMap rangeMap = getRangeMap(map);
+        RangeMap rangeMap = getRangeMap(map);
 
         executeFieldRangePartitionTests(INTERVALS, rangeMap, BINARY_DESC_COMPARATOR_FACTORIES,
                 RangePartitioningType.REPLICATE, 16, results);
