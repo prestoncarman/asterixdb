@@ -44,7 +44,7 @@ public class MultiPartitionDataWriter implements IFrameWriter {
     private ITupleMultiPartitionComputer tmpc;
     private final IHyracksTaskContext ctx;
     private boolean[] allocatedFrames;
-    private final IGrowableIntArray map;
+    private final IGrowableIntArray partitionList;
     private boolean failed = false;
 
     public MultiPartitionDataWriter(IHyracksTaskContext ctx, int consumerPartitionCount,
@@ -58,7 +58,7 @@ public class MultiPartitionDataWriter implements IFrameWriter {
         allocatedFrames = new boolean[consumerPartitionCount];
         appenders = new FrameTupleAppender[consumerPartitionCount];
         tupleAccessor = new FrameTupleAccessor(recordDescriptor);
-        this.map = new IntArrayList(8, 8);
+        this.partitionList = new IntArrayList(8, 8);
         initializeAppenders(pwFactory);
     }
 
@@ -130,14 +130,14 @@ public class MultiPartitionDataWriter implements IFrameWriter {
         tupleAccessor.reset(buffer);
         int tupleCount = tupleAccessor.getTupleCount();
         for (int i = 0; i < tupleCount; ++i) {
-            tmpc.partition(tupleAccessor, i, consumerPartitionCount, map);
-            for (int h = 0; h < map.size(); ++h) {
+            tmpc.partition(tupleAccessor, i, consumerPartitionCount, partitionList);
+            for (int h = 0; h < partitionList.size(); ++h) {
                 if (!allocatedFrames[h]) {
                     allocateFrames(h);
                 }
-                FrameUtils.appendToWriter(pWriters[map.get(h)], appenders[map.get(h)], tupleAccessor, i);
+                FrameUtils.appendToWriter(pWriters[partitionList.get(h)], appenders[partitionList.get(h)], tupleAccessor, i);
             }
-            map.clear();
+            partitionList.clear();
         }
     }
 
