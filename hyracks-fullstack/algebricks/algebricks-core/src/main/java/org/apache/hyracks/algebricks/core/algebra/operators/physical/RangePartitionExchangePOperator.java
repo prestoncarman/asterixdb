@@ -68,23 +68,11 @@ public class RangePartitionExchangePOperator extends AbstractExchangePOperator {
         this.rangeMapKeyInContext = rangeMapKeyInContext;
     }
 
-    /**
-     * Used for determining the range dynamically
-     * @param partitioningFields
-     * @param rangeMapKeyInContext
-     * @param domain
-     */
     public RangePartitionExchangePOperator(List<OrderColumn> partitioningFields, String rangeMapKeyInContext,
             INodeDomain domain) {
         this(partitioningFields, domain, null, true, rangeMapKeyInContext);
     }
 
-    /**
-     * Used for determining the range statically
-     * @param partitioningFields
-     * @param domain
-     * @param rangeMap
-     */
     public RangePartitionExchangePOperator(List<OrderColumn> partitioningFields, INodeDomain domain,
             RangeMap rangeMap) {
         this(partitioningFields, domain, rangeMap, false, "");
