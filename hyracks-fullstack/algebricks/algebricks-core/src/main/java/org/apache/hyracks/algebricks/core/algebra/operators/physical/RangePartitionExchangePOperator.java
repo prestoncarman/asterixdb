@@ -133,7 +133,8 @@ public class RangePartitionExchangePOperator extends AbstractExchangePOperator {
 
     @Override
     public String toString() {
+        String staticOrDynamic = rangeMapIsComputedAtRunTime ? " Dynamic" : " Static";
         final String splitCount = rangeMap == null ? "" : " SPLIT COUNT:" + Integer.toString(rangeMap.getSplitCount());
-        return getOperatorTag().toString() + " " + partitioningFields + splitCount;
+        return getOperatorTag().toString() + " " + partitioningFields + splitCount + staticOrDynamic;
     }
 }
