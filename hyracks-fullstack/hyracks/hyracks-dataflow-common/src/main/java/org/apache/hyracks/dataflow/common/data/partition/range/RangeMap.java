@@ -24,10 +24,10 @@ import org.apache.hyracks.api.dataflow.value.IRangeMap;
 /**
  * <pre>
  * The range map stores the fields split values and their min and max values in a byte array.
- * The min value for each field followed by the first split value for each field followed by 
- * the second split value for each field, etc. and ending with the max value for each field 
+ * The min value for each field followed by the first split value for each field followed by
+ * the second split value for each field, etc. and ending with the max value for each field
  * For example:
- *                  min         split_point_idx0    split_point_idx1    split_point_idx2    split_point_idx3    split_point_idx4    max     
+ *                  min         split_point_idx0    split_point_idx1    split_point_idx2    split_point_idx3    split_point_idx4    max
  * in the byte[]:   f0,f1,f2    f0,f1,f2            f0,f1,f2            f0,f1,f2            f0,f1,f2            f0,f1,f2            f0,f1,f2
  * fields would be = 3
  * we have 5 split points and the min and max, which gives us 6 partitions:
@@ -50,7 +50,7 @@ public class RangeMap implements IRangeMap {
     }
 
     /**
-     * Divides the number of end offsets by the number of fields to get the number of 
+     * Divides the number of end offsets by the number of fields to get the number of
      * points (?) in the byte array; -2 so as to not count the min and max points.
      * @return the number of split points in this range map
      */
