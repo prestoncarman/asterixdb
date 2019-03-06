@@ -61,8 +61,9 @@ public class MToNMultiPartitioningMergingConnectorDescriptor extends AbstractMTo
     public IFrameWriter createPartitioner(IHyracksTaskContext ctx, RecordDescriptor recordDesc,
             IPartitionWriterFactory edwFactory, int index, int nProducerPartitions, int nConsumerPartitions)
             throws HyracksDataException {
-        return new MultiPartitionDataWriter(ctx, nConsumerPartitions, edwFactory, recordDesc,
-                tprcf.createPartitioner(ctx));
+        final MultiPartitionDataWriter rangeWriter =
+                new MultiPartitionDataWriter(ctx, nConsumerPartitions, edwFactory, recordDesc, tprcf.createPartitioner(ctx));
+        return rangeWriter;
     }
 
     @Override
