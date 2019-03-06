@@ -27,13 +27,13 @@ import org.apache.hyracks.api.dataflow.value.IRangeMap;
  * The min value for each field followed by the first split value for each field followed by
  * the second split value for each field, etc. and ending with the max value for each field
  * For example:
- *                  min         split_point_idx0    split_point_idx1    split_point_idx2    split_point_idx3    split_point_idx4    max
- * in the byte[]:   f0,f1,f2    f0,f1,f2            f0,f1,f2            f0,f1,f2            f0,f1,f2            f0,f1,f2            f0,f1,f2
+ *                  min         split_point_idx0    split_point_idx1    split_point_idx2    split_point_idx3    max
+ * in the byte[]:   f0,f1,f2    f0,f1,f2            f0,f1,f2            f0,f1,f2            f0,f1,f2            f0,f1,f2
  * fields would be = 3
- * we have 5 split points and the min and max, which gives us 6 partitions:
- *   |      p1      |      p2      |      p3      |      p4      |      p5      |      p6      |
- *  min            sp0            sp1            sp2            sp3            sp4            max
- * endOffsets.length would be = 15 (21 with min and max (?))
+ * we have 4 split points and the min and max, which gives us 5 partitions:
+ *   |      p0      |      p1      |      p2      |      p3      |      p4      |
+ *  min            sp0            sp1            sp2            sp3            max
+ * endOffsets.length would be = 18 (min and max fields plus 12 for split points)
  * </pre>
  */
 public class RangeMap implements IRangeMap {
