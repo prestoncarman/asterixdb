@@ -51,7 +51,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-public class FieldRangePartitionComputerFactoryTest extends TestCase {
+public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
 
     private final Integer64SerializerDeserializer int64Serde = Integer64SerializerDeserializer.INSTANCE;
     @SuppressWarnings("rawtypes")
@@ -130,7 +130,7 @@ public class FieldRangePartitionComputerFactoryTest extends TestCase {
         return frame.getBuffer();
     }
 
-    private void executeFieldRangePartitionTests(Long[] integers, RangeMap rangeMap,
+    private void executeFieldRangeMultiPartitionTests(Long[] integers, RangeMap rangeMap,
             IBinaryRangeComparatorFactory[] comparatorFactories, RangePartitioningType rangeType, int nParts,
             int[][] results) throws HyracksDataException {
         IHyracksTaskContext ctx = TestUtils.create(FRAME_SIZE);
@@ -199,7 +199,7 @@ public class FieldRangePartitionComputerFactoryTest extends TestCase {
     }
 
     @Test
-    public void testFieldRangePartitionAscProject4AllPartitions() throws HyracksDataException {
+    public void testFieldRangeMultiPartitionAscProject4AllPartitions() throws HyracksDataException {
         int[][] results = new int[16][];
         results[0] = new int[] { 0 };
         results[1] = new int[] { 0 };
@@ -220,12 +220,12 @@ public class FieldRangePartitionComputerFactoryTest extends TestCase {
 
         RangeMap rangeMap = getRangeMap(MAP_POINTS);
 
-        executeFieldRangePartitionTests(EACH_PARTITION, rangeMap, BINARY_ASC_COMPARATOR_FACTORIES,
+        executeFieldRangeMultiPartitionTests(EACH_PARTITION, rangeMap, BINARY_ASC_COMPARATOR_FACTORIES,
                 RangePartitioningType.PROJECT, 4, results);
     }
 
     @Test
-    public void testFieldRangePartitionDescProject4AllPartitions() throws HyracksDataException {
+    public void testFieldRangeMultiPartitionDescProject4AllPartitions() throws HyracksDataException {
         int[][] results = new int[16][];
         results[0] = new int[] { 3 };
         results[1] = new int[] { 3 };
@@ -248,12 +248,12 @@ public class FieldRangePartitionComputerFactoryTest extends TestCase {
         ArrayUtils.reverse(map);
         RangeMap rangeMap = getRangeMap(map);
 
-        executeFieldRangePartitionTests(EACH_PARTITION, rangeMap, BINARY_DESC_COMPARATOR_FACTORIES,
+        executeFieldRangeMultiPartitionTests(EACH_PARTITION, rangeMap, BINARY_DESC_COMPARATOR_FACTORIES,
                 RangePartitioningType.PROJECT, 4, results);
     }
 
     @Test
-    public void testFieldRangePartitionAscProject16AllPartitions() throws HyracksDataException {
+    public void testFieldRangeMultiPartitionAscProject16AllPartitions() throws HyracksDataException {
         int[][] results = new int[16][];
         results[0] = new int[] { 0 };
         results[1] = new int[] { 1 };
@@ -274,12 +274,12 @@ public class FieldRangePartitionComputerFactoryTest extends TestCase {
 
         RangeMap rangeMap = getRangeMap(MAP_POINTS);
 
-        executeFieldRangePartitionTests(EACH_PARTITION, rangeMap, BINARY_ASC_COMPARATOR_FACTORIES,
+        executeFieldRangeMultiPartitionTests(EACH_PARTITION, rangeMap, BINARY_ASC_COMPARATOR_FACTORIES,
                 RangePartitioningType.PROJECT, 16, results);
     }
 
     @Test
-    public void testFieldRangePartitionDescProject16AllPartitions() throws HyracksDataException {
+    public void testFieldRangeMultiPartitionDescProject16AllPartitions() throws HyracksDataException {
         int[][] results = new int[16][];
         results[0] = new int[] { 15 };
         results[1] = new int[] { 14 };
@@ -302,12 +302,12 @@ public class FieldRangePartitionComputerFactoryTest extends TestCase {
         ArrayUtils.reverse(map);
         RangeMap rangeMap = getRangeMap(map);
 
-        executeFieldRangePartitionTests(EACH_PARTITION, rangeMap, BINARY_DESC_COMPARATOR_FACTORIES,
+        executeFieldRangeMultiPartitionTests(EACH_PARTITION, rangeMap, BINARY_DESC_COMPARATOR_FACTORIES,
                 RangePartitioningType.PROJECT, 16, results);
     }
 
     @Test
-    public void testFieldRangePartitionAscProject16Partitions() throws HyracksDataException {
+    public void testFieldRangeMultiPartitionAscProject16Partitions() throws HyracksDataException {
         int[][] results = new int[15][];
         results[0] = new int[] { 0 };
         results[1] = new int[] { 2 };
@@ -327,12 +327,12 @@ public class FieldRangePartitionComputerFactoryTest extends TestCase {
 
         RangeMap rangeMap = getRangeMap(MAP_POINTS);
 
-        executeFieldRangePartitionTests(PARTITION_BOUNDRIES, rangeMap, BINARY_ASC_COMPARATOR_FACTORIES,
+        executeFieldRangeMultiPartitionTests(PARTITION_BOUNDRIES, rangeMap, BINARY_ASC_COMPARATOR_FACTORIES,
                 RangePartitioningType.PROJECT, 16, results);
     }
 
     @Test
-    public void testFieldRangePartitionAscProject4Partitions() throws HyracksDataException {
+    public void testFieldRangeMultiPartitionAscProject4Partitions() throws HyracksDataException {
         int[][] results = new int[15][];
         results[0] = new int[] { 0 };
         results[1] = new int[] { 0 };
@@ -352,12 +352,12 @@ public class FieldRangePartitionComputerFactoryTest extends TestCase {
 
         RangeMap rangeMap = getRangeMap(MAP_POINTS);
 
-        executeFieldRangePartitionTests(PARTITION_BOUNDRIES, rangeMap, BINARY_ASC_COMPARATOR_FACTORIES,
+        executeFieldRangeMultiPartitionTests(PARTITION_BOUNDRIES, rangeMap, BINARY_ASC_COMPARATOR_FACTORIES,
                 RangePartitioningType.PROJECT, 4, results);
     }
 
     @Test
-    public void testFieldRangePartitionAscReplicate4Partitions() throws HyracksDataException {
+    public void testFieldRangeMultiPartitionAscReplicate4Partitions() throws HyracksDataException {
         int[][] results = new int[15][];
         results[0] = new int[] { 0, 1, 2, 3 };
         results[1] = new int[] { 0, 1, 2, 3 };
@@ -377,12 +377,12 @@ public class FieldRangePartitionComputerFactoryTest extends TestCase {
 
         RangeMap rangeMap = getRangeMap(MAP_POINTS);
 
-        executeFieldRangePartitionTests(PARTITION_BOUNDRIES, rangeMap, BINARY_REPLICATE_COMPARATOR_FACTORIES,
+        executeFieldRangeMultiPartitionTests(PARTITION_BOUNDRIES, rangeMap, BINARY_REPLICATE_COMPARATOR_FACTORIES,
                 RangePartitioningType.REPLICATE, 4, results);
     }
 
     @Test
-    public void testFieldRangePartitionAscReplicate16Partitions() throws HyracksDataException {
+    public void testFieldRangeMultiPartitionAscReplicate16Partitions() throws HyracksDataException {
         int[][] results = new int[15][];
         results[0] = new int[] { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
         results[1] = new int[] { 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
@@ -402,7 +402,7 @@ public class FieldRangePartitionComputerFactoryTest extends TestCase {
 
         RangeMap rangeMap = getRangeMap(MAP_POINTS);
 
-        executeFieldRangePartitionTests(PARTITION_BOUNDRIES, rangeMap, BINARY_REPLICATE_COMPARATOR_FACTORIES,
+        executeFieldRangeMultiPartitionTests(PARTITION_BOUNDRIES, rangeMap, BINARY_REPLICATE_COMPARATOR_FACTORIES,
                 RangePartitioningType.REPLICATE, 16, results);
     }
 

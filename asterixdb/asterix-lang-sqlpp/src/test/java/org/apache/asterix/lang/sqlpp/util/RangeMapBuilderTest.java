@@ -21,6 +21,7 @@ package org.apache.asterix.lang.sqlpp.util;
 import org.apache.asterix.lang.common.base.IParser;
 import org.apache.asterix.lang.common.base.IParserFactory;
 import org.apache.asterix.lang.common.util.RangeMapBuilder;
+import org.apache.asterix.lang.sqlpp.parser.SqlppParserFactory;
 import org.apache.hyracks.api.dataflow.value.IRangeMap;
 import org.apache.hyracks.dataflow.common.data.partition.range.AbstractRangeMapTest;
 import org.junit.Test;
@@ -50,7 +51,7 @@ public class RangeMapBuilderTest extends AbstractRangeMapTest {
         tags.add(Byte.valueOf((byte) 4));
         values.add(Long.valueOf(10000000));
 
-        IParserFactory parserFactory = new SQLPPParserFactory();
+        IParserFactory parserFactory = new SqlppParserFactory();
 
         IParser parser = parserFactory.createParser(hint);
 

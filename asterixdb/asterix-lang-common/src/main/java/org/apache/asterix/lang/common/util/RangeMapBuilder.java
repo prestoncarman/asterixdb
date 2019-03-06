@@ -25,11 +25,8 @@ import org.apache.asterix.common.exceptions.CompilationException;
 import org.apache.asterix.common.exceptions.ErrorCode;
 import org.apache.asterix.formats.nontagged.BinaryComparatorFactoryProvider;
 import org.apache.asterix.formats.nontagged.SerializerDeserializerProvider;
-import org.apache.asterix.lang.common.base.Expression;
+import org.apache.asterix.lang.common.base.*;
 import org.apache.asterix.lang.common.base.Expression.Kind;
-import org.apache.asterix.lang.common.base.IParser;
-import org.apache.asterix.lang.common.base.Literal;
-import org.apache.asterix.lang.common.base.Statement;
 import org.apache.asterix.lang.common.expression.ListConstructor;
 import org.apache.asterix.lang.common.expression.LiteralExpr;
 import org.apache.asterix.lang.common.literal.DoubleLiteral;
@@ -48,6 +45,7 @@ import org.apache.asterix.om.types.BuiltinType;
 import org.apache.hyracks.algebricks.common.exceptions.NotImplementedException;
 import org.apache.hyracks.api.dataflow.value.IBinaryComparator;
 import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
+import org.apache.hyracks.api.dataflow.value.IRangeMap;
 import org.apache.hyracks.api.dataflow.value.ISerializerDeserializer;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.data.std.util.ArrayBackedValueStorage;
@@ -64,7 +62,9 @@ public class RangeMapBuilder {
         abvs.reset();
 
         List<Statement> hintStatements = parser.parse();
-        if (hintStatements.size() != 1) {
+        if (hintStatements.isEmpty()) {
+            throw new CompilationException("No range hint was supplied to the RangeMapBuilder.");
+        } else if (hintStatements.size() != 1) {
             throw new CompilationException("Only one range statement is allowed for the range hint.");
         }
 
