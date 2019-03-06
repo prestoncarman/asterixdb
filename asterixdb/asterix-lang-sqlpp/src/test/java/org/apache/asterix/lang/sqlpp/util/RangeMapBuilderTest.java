@@ -16,13 +16,16 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.asterix.lang.common.util;
+package org.apache.asterix.lang.sqlpp.util;
 
-import java.util.LinkedList;
-
+import org.apache.asterix.lang.common.base.IParser;
+import org.apache.asterix.lang.common.base.IParserFactory;
+import org.apache.asterix.lang.common.util.RangeMapBuilder;
 import org.apache.hyracks.api.dataflow.value.IRangeMap;
 import org.apache.hyracks.dataflow.common.data.partition.range.AbstractRangeMapTest;
 import org.junit.Test;
+
+import java.util.LinkedList;
 
 public class RangeMapBuilderTest extends AbstractRangeMapTest {
 
@@ -47,7 +50,11 @@ public class RangeMapBuilderTest extends AbstractRangeMapTest {
         tags.add(Byte.valueOf((byte) 4));
         values.add(Long.valueOf(10000000));
 
-        IRangeMap rm = RangeMapBuilder.parseHint(hint);
+        IParserFactory parserFactory = new SQLPPParserFactory();
+
+        IParser parser = parserFactory.createParser(hint);
+
+        IRangeMap rm = RangeMapBuilder.parseHint(parser);
 
         testMapNumeric(tags, values, rm);
     }
