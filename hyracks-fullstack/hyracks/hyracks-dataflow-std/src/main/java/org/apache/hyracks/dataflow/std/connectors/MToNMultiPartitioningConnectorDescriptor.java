@@ -37,12 +37,10 @@ import org.apache.hyracks.dataflow.std.collectors.PartitionCollector;
 
 public class MToNMultiPartitioningConnectorDescriptor extends AbstractMToNConnectorDescriptor {
     private static final long serialVersionUID = 1L;
-
     private final ITupleMultiPartitionComputerFactory tmpcf;
 
     public MToNMultiPartitioningConnectorDescriptor(IConnectorDescriptorRegistry spec,
-            ITupleMultiPartitionComputerFactory tmpcf, int[] sortFields, IBinaryComparatorFactory[] comparatorFactories,
-            INormalizedKeyComputerFactory nkcFactory) {
+            ITupleMultiPartitionComputerFactory tmpcf) {
         super(spec);
         this.tmpcf = tmpcf;
     }
@@ -53,6 +51,10 @@ public class MToNMultiPartitioningConnectorDescriptor extends AbstractMToNConnec
             throws HyracksDataException {
         return new MultiPartitionDataWriter(ctx, nConsumerPartitions, edwFactory, recordDesc,
                 tmpcf.createPartitioner(ctx));
+    }
+
+    public ITupleMultiPartitionComputerFactory getTupleMultiPartitionComputerFactory() {
+        return tmpcf;
     }
 
     @Override

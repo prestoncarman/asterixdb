@@ -160,13 +160,13 @@ public abstract class FieldRangeMultiPartitionComputerFactory implements ITupleM
                 int c = 0;
                 int startOffset = accessor.getTupleStartOffset(tIndex);
                 int slotLength = accessor.getFieldSlotsLength();
-                for (int f = 0; f < comparators.length; ++f) {
-                    int fIdx = rangeFields[f];
+                for (int fieldNum = 0; fieldNum < comparators.length; ++fieldNum) {
+                    int fIdx = rangeFields[fieldNum];
                     int fStart = accessor.getFieldStartOffset(tIndex, fIdx);
                     int fEnd = accessor.getFieldEndOffset(tIndex, fIdx);
-                    c = comparators[f].compare(accessor.getBuffer().array(), startOffset + slotLength + fStart,
-                            fEnd - fStart, rangeMap.getByteArray(f, mapIndex), rangeMap.getStartOffset(f, mapIndex),
-                            rangeMap.getLength(f, mapIndex));
+                    c = comparators[fieldNum].compare(accessor.getBuffer().array(), startOffset + slotLength + fStart,
+                            fEnd - fStart, rangeMap.getByteArray(fieldNum, mapIndex), rangeMap.getStartOffset(fieldNum, mapIndex),
+                            rangeMap.getLength(fieldNum, mapIndex));
                     if (c != 0) {
                         return c;
                     }

@@ -18,9 +18,9 @@
  */
 package org.apache.hyracks.api.dataflow.value;
 
-import org.apache.hyracks.api.context.IHyracksTaskContext;
-
 import java.io.Serializable;
+
+import org.apache.hyracks.api.context.IHyracksTaskContext;
 
 public interface ITupleMultiPartitionComputerFactory extends Serializable {
     public ITupleMultiPartitionComputer createPartitioner(IHyracksTaskContext hyracksTaskContext);
