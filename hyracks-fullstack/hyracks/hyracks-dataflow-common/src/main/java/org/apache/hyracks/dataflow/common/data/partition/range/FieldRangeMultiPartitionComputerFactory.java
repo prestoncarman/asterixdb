@@ -155,7 +155,7 @@ public abstract class FieldRangeMultiPartitionComputerFactory implements ITupleM
                 return searchIndex;
             }
 
-            private int compareSlotAndFields(IFrameTupleAccessor accessor, int tIndex, int mapIndex,
+            private int compareSlotAndFields(IFrameTupleAccessor accessor, int tIndex, int slotNumber,
                     IBinaryComparator[] comparators) throws HyracksDataException {
                 int c = 0;
                 int startOffset = accessor.getTupleStartOffset(tIndex);
@@ -165,8 +165,8 @@ public abstract class FieldRangeMultiPartitionComputerFactory implements ITupleM
                     int fStart = accessor.getFieldStartOffset(tIndex, fIdx);
                     int fEnd = accessor.getFieldEndOffset(tIndex, fIdx);
                     c = comparators[fieldNum].compare(accessor.getBuffer().array(), startOffset + slotLength + fStart,
-                            fEnd - fStart, rangeMap.getByteArray(fieldNum, mapIndex), rangeMap.getStartOffset(fieldNum, mapIndex),
-                            rangeMap.getLength(fieldNum, mapIndex));
+                            fEnd - fStart, rangeMap.getByteArray(fieldNum, slotNumber), rangeMap.getStartOffset(fieldNum, slotNumber),
+                            rangeMap.getLength(fieldNum, slotNumber));
                     if (c != 0) {
                         return c;
                     }
