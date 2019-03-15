@@ -22,5 +22,6 @@ import java.io.Serializable;
 
 public interface IBinaryRangeComparatorFactory extends Serializable {
     public IBinaryComparator createMinBinaryComparator();
+
     public IBinaryComparator createMaxBinaryComparator();
 }
