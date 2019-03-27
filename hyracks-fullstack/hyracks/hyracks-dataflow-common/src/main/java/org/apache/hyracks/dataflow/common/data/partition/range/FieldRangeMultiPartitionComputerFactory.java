@@ -165,8 +165,8 @@ public abstract class FieldRangeMultiPartitionComputerFactory implements ITupleM
                     int fStart = accessor.getFieldStartOffset(tIndex, fIdx);
                     int fEnd = accessor.getFieldEndOffset(tIndex, fIdx);
                     c = comparators[fieldNum].compare(accessor.getBuffer().array(), startOffset + slotLength + fStart,
-                            fEnd - fStart, rangeMap.getByteArray(fieldNum, slotNumber), rangeMap.getStartOffset(fieldNum, slotNumber),
-                            rangeMap.getLength(fieldNum, slotNumber));
+                            fEnd - fStart, rangeMap.getByteArray(fieldNum, slotNumber),
+                            rangeMap.getStartOffset(fieldNum, slotNumber), rangeMap.getLength(fieldNum, slotNumber));
                     if (c != 0) {
                         return c;
                     }
