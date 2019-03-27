@@ -66,14 +66,14 @@ public class MultiPartitionDataWriter implements IFrameWriter {
         for (int i = 0; i < consumerPartitionCount; ++i) {
             try {
                 pWriters[i] = pwFactory.createFrameWriter(i);
-                appenders[i] = createTupleAppender(ctx);
+                appenders[i] = createTupleAppender();
             } catch (IOException e) {
                 throw HyracksDataException.create(e);
             }
         }
     }
 
-    protected FrameTupleAppender createTupleAppender(IHyracksTaskContext ctx) {
+    protected FrameTupleAppender createTupleAppender() {
         return new FrameTupleAppender();
     }
 
