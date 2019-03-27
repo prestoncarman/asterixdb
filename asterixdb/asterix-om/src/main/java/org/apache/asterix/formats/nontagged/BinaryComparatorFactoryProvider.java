@@ -80,7 +80,7 @@ public class BinaryComparatorFactoryProvider implements IBinaryComparatorFactory
     // This method adds the option of range range
     @Override
     public IBinaryRangeComparatorFactory getRangeBinaryComparatorFactory(Object type, boolean ascending,
-                                                                         IRangePartitionType.RangePartitioningType rangeType) {
+            IRangePartitionType.RangePartitioningType rangeType) {
         if (type == null) {
             return anyBinaryRangeComparatorFactory(ascending);
         }
@@ -101,7 +101,7 @@ public class BinaryComparatorFactoryProvider implements IBinaryComparatorFactory
     }
 
     private IBinaryRangeComparatorFactory addOffsetForRange(final IBinaryRangeComparatorFactory inst,
-                                                            final boolean ascending) {
+            final boolean ascending) {
         return new IBinaryRangeComparatorFactory() {
 
             private static final long serialVersionUID = 1L;

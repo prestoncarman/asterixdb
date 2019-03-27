@@ -135,8 +135,8 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
             int[][] results) throws HyracksDataException {
         IHyracksTaskContext ctx = TestUtils.create(FRAME_SIZE);
         int[] rangeFields = new int[] { 0 };
-        ITupleMultiPartitionComputerFactory frpcf =
-                new StaticFieldRangeMultiPartitionComputerFactory(rangeFields, comparatorFactories, rangeMap, rangeType);
+        ITupleMultiPartitionComputerFactory frpcf = new StaticFieldRangeMultiPartitionComputerFactory(rangeFields,
+                comparatorFactories, rangeMap, rangeType);
         ITupleMultiPartitionComputer partitioner = frpcf.createPartitioner(ctx);
         partitioner.initialize();
 

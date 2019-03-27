@@ -34,7 +34,7 @@ public class OrderedPartitionedProperty implements IPartitioningProperty {
     private RangePartitioningType rangeType;
 
     public OrderedPartitionedProperty(List<OrderColumn> orderColumns, INodeDomain domain,
-                                      RangePartitioningType rangeType) {
+            RangePartitioningType rangeType) {
         this.domain = domain;
         this.orderColumns = orderColumns;
         this.rangeType = rangeType;
@@ -72,7 +72,7 @@ public class OrderedPartitionedProperty implements IPartitioningProperty {
 
     @Override
     public IPartitioningProperty normalize(Map<LogicalVariable, EquivalenceClass> equivalenceClasses,
-                                           List<FunctionalDependency> fds) {
+            List<FunctionalDependency> fds) {
         List<OrderColumn> columns = PropertiesUtil.replaceOrderColumnsByEqClasses(orderColumns, equivalenceClasses);
         columns = PropertiesUtil.applyFDsToOrderColumns(columns, fds);
         return new OrderedPartitionedProperty(columns, domain, rangeType);

@@ -25,7 +25,8 @@ public class AObjectDescRangeBinaryComparatorFactory implements IBinaryRangeComp
 
     private static final long serialVersionUID = 1L;
 
-    public static final AObjectDescRangeBinaryComparatorFactory INSTANCE = new AObjectDescRangeBinaryComparatorFactory();
+    public static final AObjectDescRangeBinaryComparatorFactory INSTANCE =
+            new AObjectDescRangeBinaryComparatorFactory();
 
     private AObjectDescRangeBinaryComparatorFactory() {
     }

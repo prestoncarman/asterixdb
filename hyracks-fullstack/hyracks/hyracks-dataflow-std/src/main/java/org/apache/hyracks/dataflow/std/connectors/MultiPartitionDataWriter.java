@@ -135,7 +135,8 @@ public class MultiPartitionDataWriter implements IFrameWriter {
                 if (!allocatedFrames[h]) {
                     allocateFrames(h);
                 }
-                FrameUtils.appendToWriter(pWriters[partitionList.get(h)], appenders[partitionList.get(h)], tupleAccessor, i);
+                FrameUtils.appendToWriter(pWriters[partitionList.get(h)], appenders[partitionList.get(h)],
+                        tupleAccessor, i);
             }
             partitionList.clear();
         }

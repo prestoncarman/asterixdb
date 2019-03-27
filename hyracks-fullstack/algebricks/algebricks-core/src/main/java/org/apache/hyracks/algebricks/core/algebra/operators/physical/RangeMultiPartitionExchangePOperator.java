@@ -65,9 +65,9 @@ public class RangeMultiPartitionExchangePOperator extends AbstractExchangePOpera
     private final String rangeMapKeyInContext;
     private final RangePartitioningType rangeType;
 
-    public RangeMultiPartitionExchangePOperator(List<OrderColumn> partitioningFields, INodeDomain domain, RangeMap rangeMap,
-                                                boolean rangeMapIsComputedAtRunTime, String rangeMapKeyInContext,
-                                                RangePartitioningType rangeType) {
+    public RangeMultiPartitionExchangePOperator(List<OrderColumn> partitioningFields, INodeDomain domain,
+            RangeMap rangeMap, boolean rangeMapIsComputedAtRunTime, String rangeMapKeyInContext,
+            RangePartitioningType rangeType) {
         this.partitioningFields = partitioningFields;
         this.domain = domain;
         this.rangeMap = rangeMap;
@@ -77,12 +77,12 @@ public class RangeMultiPartitionExchangePOperator extends AbstractExchangePOpera
     }
 
     public RangeMultiPartitionExchangePOperator(List<OrderColumn> partitioningFields, String rangeMapKeyInContext,
-                                           INodeDomain domain, RangePartitioningType rangeType) {
+            INodeDomain domain, RangePartitioningType rangeType) {
         this(partitioningFields, domain, null, true, rangeMapKeyInContext, rangeType);
     }
 
     public RangeMultiPartitionExchangePOperator(List<OrderColumn> partitioningFields, INodeDomain domain,
-                                           RangeMap rangeMap, RangePartitioningType rangeType) {
+            RangeMap rangeMap, RangePartitioningType rangeType) {
         this(partitioningFields, domain, rangeMap, false, "", rangeType);
     }
 
@@ -105,7 +105,8 @@ public class RangeMultiPartitionExchangePOperator extends AbstractExchangePOpera
 
     @Override
     public void computeDeliveredProperties(ILogicalOperator op, IOptimizationContext context) {
-        IPartitioningProperty p = new OrderedPartitionedProperty(new ArrayList<OrderColumn>(partitioningFields), domain, rangeType);
+        IPartitioningProperty p =
+                new OrderedPartitionedProperty(new ArrayList<OrderColumn>(partitioningFields), domain, rangeType);
         AbstractLogicalOperator op2 = (AbstractLogicalOperator) op.getInputs().get(0).getValue();
         List<ILocalStructuralProperty> op2Locals = op2.getDeliveredPhysicalProperties().getLocalProperties();
         List<ILocalStructuralProperty> locals = new ArrayList<>();
@@ -121,20 +122,16 @@ public class RangeMultiPartitionExchangePOperator extends AbstractExchangePOpera
 
     @Override
     public PhysicalRequirements getRequiredPropertiesForChildren(ILogicalOperator op,
-                                                                 IPhysicalPropertiesVector reqdByParent, IOptimizationContext context) {
+            IPhysicalPropertiesVector reqdByParent, IOptimizationContext context) {
         return emptyUnaryRequirements();
     }
 
     @Override
     public Pair<IConnectorDescriptor, TargetConstraint> createConnectorDescriptor(IConnectorDescriptorRegistry spec,
-                                                                                  ILogicalOperator op, IOperatorSchema opSchema, JobGenContext context) throws AlgebricksException {
+            ILogicalOperator op, IOperatorSchema opSchema, JobGenContext context) throws AlgebricksException {
         int n = partitioningFields.size();
         int[] sortFields = new int[n];
         IBinaryRangeComparatorFactory[] rangeComps = new IBinaryRangeComparatorFactory[n];
-        IBinaryComparatorFactory[] binaryComps = new IBinaryComparatorFactory[n];
-
-        INormalizedKeyComputerFactoryProvider nkcfProvider = context.getNormalizedKeyComputerFactoryProvider();
-        INormalizedKeyComputerFactory nkcf = null;
 
         IVariableTypeEnvironment env = context.getTypeEnvironment(op);
         int i = 0;
@@ -142,22 +139,18 @@ public class RangeMultiPartitionExchangePOperator extends AbstractExchangePOpera
             LogicalVariable var = oc.getColumn();
             sortFields[i] = opSchema.findVariable(var);
             Object type = env.getVarType(var);
-            OrderKind order = oc.getOrder();
-            if (i == 0 && nkcfProvider != null && type != null) {
-                nkcf = nkcfProvider.getNormalizedKeyComputerFactory(type, order == OrderKind.ASC);
-            }
             IBinaryComparatorFactoryProvider bcfp = context.getBinaryComparatorFactoryProvider();
             rangeComps[i] = bcfp.getRangeBinaryComparatorFactory(type, oc.getOrder() == OrderKind.ASC, rangeType);
-            binaryComps[i] = bcfp.getBinaryComparatorFactory(type, oc.getOrder() == OrderKind.ASC);
             i++;
         }
 
         FieldRangeMultiPartitionComputerFactory partitionerFactory;
         if (rangeMapIsComputedAtRunTime) {
-            partitionerFactory = new DynamicFieldRangeMultiPartitionComputerFactory(sortFields, rangeComps, rangeMapKeyInContext,
-                    op.getSourceLocation(), rangeType);
+            partitionerFactory = new DynamicFieldRangeMultiPartitionComputerFactory(sortFields, rangeComps,
+                    rangeMapKeyInContext, op.getSourceLocation(), rangeType);
         } else {
-            partitionerFactory = new StaticFieldRangeMultiPartitionComputerFactory(sortFields, rangeComps, rangeMap, rangeType);
+            partitionerFactory =
+                    new StaticFieldRangeMultiPartitionComputerFactory(sortFields, rangeComps, rangeMap, rangeType);
         }
 
         IConnectorDescriptor conn = new MToNMultiPartitioningConnectorDescriptor(spec, partitionerFactory);

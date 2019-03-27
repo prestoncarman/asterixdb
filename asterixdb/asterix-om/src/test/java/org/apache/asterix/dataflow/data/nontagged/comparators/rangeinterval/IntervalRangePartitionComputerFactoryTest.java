@@ -53,14 +53,14 @@ public class IntervalRangePartitionComputerFactoryTest extends TestCase {
     private final ISerializerDeserializer<AInterval> intervalSerde = AIntervalSerializerDeserializer.INSTANCE;
     private final Integer64SerializerDeserializer int64Serde = Integer64SerializerDeserializer.INSTANCE;
     @SuppressWarnings("rawtypes")
-    private final ISerializerDeserializer[] SerDers = new ISerializerDeserializer[] {
-            AIntervalSerializerDeserializer.INSTANCE };
+    private final ISerializerDeserializer[] SerDers =
+            new ISerializerDeserializer[] { AIntervalSerializerDeserializer.INSTANCE };
     private final RecordDescriptor RecordDesc = new RecordDescriptor(SerDers);
 
-    IBinaryRangeComparatorFactory[] BINARY_ASC_COMPARATOR_FACTORIES = new IBinaryRangeComparatorFactory[] {
-            IntervalAscRangeBinaryComparatorFactory.INSTANCE };
-    IBinaryRangeComparatorFactory[] BINARY_DESC_COMPARATOR_FACTORIES = new IBinaryRangeComparatorFactory[] {
-            IntervalDescRangeBinaryComparatorFactory.INSTANCE };
+    IBinaryRangeComparatorFactory[] BINARY_ASC_COMPARATOR_FACTORIES =
+            new IBinaryRangeComparatorFactory[] { IntervalAscRangeBinaryComparatorFactory.INSTANCE };
+    IBinaryRangeComparatorFactory[] BINARY_DESC_COMPARATOR_FACTORIES =
+            new IBinaryRangeComparatorFactory[] { IntervalDescRangeBinaryComparatorFactory.INSTANCE };
     /*
      * The following three intervals (+++) will be tested for these 4 and 16 partitions.
      *
@@ -140,7 +140,8 @@ public class IntervalRangePartitionComputerFactoryTest extends TestCase {
             int[][] results) throws HyracksDataException {
         IHyracksTaskContext ctx = TestUtils.create(FRAME_SIZE);
         int[] rangeFields = new int[] { 0 };
-        ITupleMultiPartitionComputerFactory frpcf = new StaticFieldRangeMultiPartitionComputerFactory(rangeFields, comparatorFactories, rangeMap, rangeType);
+        ITupleMultiPartitionComputerFactory frpcf = new StaticFieldRangeMultiPartitionComputerFactory(rangeFields,
+                comparatorFactories, rangeMap, rangeType);
         ITupleMultiPartitionComputer partitioner = frpcf.createPartitioner(ctx);
         partitioner.initialize();
 

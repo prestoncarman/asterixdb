@@ -648,11 +648,13 @@ public class EnforceStructuralPropertiesRule implements IAlgebraicRewriteRule {
         } else {
             if (parentOp.getAnnotations().containsKey(OperatorAnnotations.USE_STATIC_RANGE)) {
                 RangeMap rangeMap = (RangeMap) parentOp.getAnnotations().get(OperatorAnnotations.USE_STATIC_RANGE);
-                RangePartitioningType rangePartitioningType = ((OrderedPartitionedProperty) partitioningDeliveredByChild).getRangePartitioningType();
+                RangePartitioningType rangePartitioningType =
+                        ((OrderedPartitionedProperty) partitioningDeliveredByChild).getRangePartitioningType();
                 if (rangePartitioningType == RangePartitioningType.PROJECT) {
                     mergingConnector = new RangePartitionMergeExchangePOperator(ordCols, domain, rangeMap);
                 } else {
-                    mergingConnector = new RangeMultiPartitionMergeExchangePOperator(ordCols, domain, rangePartitioningType, rangeMap);
+                    mergingConnector = new RangeMultiPartitionMergeExchangePOperator(ordCols, domain,
+                            rangePartitioningType, rangeMap);
                 }
 
             } else {
@@ -709,23 +711,26 @@ public class EnforceStructuralPropertiesRule implements IAlgebraicRewriteRule {
             throws AlgebricksException {
         // options for range partitioning: 1. static range map, 2. dynamic range map computed at run time
         List<OrderColumn> partitioningColumns = ((OrderedPartitionedProperty) requiredPartitioning).getOrderColumns();
-        RangePartitioningType rangePartitioningType = ((OrderedPartitionedProperty) requiredPartitioning).getRangePartitioningType();
+        RangePartitioningType rangePartitioningType =
+                ((OrderedPartitionedProperty) requiredPartitioning).getRangePartitioningType();
         if (parentOp.getAnnotations().containsKey(OperatorAnnotations.USE_STATIC_RANGE)) {
             // TODO(ali): static range map implementation should be fixed to require ORDERED_PARTITION and come here.
             RangeMap rangeMap = (RangeMap) parentOp.getAnnotations().get(OperatorAnnotations.USE_STATIC_RANGE);
             if (rangePartitioningType == RangePartitioningType.PROJECT) {
                 return new RangePartitionExchangePOperator(partitioningColumns, domain, rangeMap);
             } else {
-                return new RangeMultiPartitionExchangePOperator(partitioningColumns, domain, rangeMap, rangePartitioningType);
+                return new RangeMultiPartitionExchangePOperator(partitioningColumns, domain, rangeMap,
+                        rangePartitioningType);
             }
         } else {
-            return createDynamicRangePartitionExchangePOperator(parentOp, ctx, domain, partitioningColumns, childIndex, rangePartitioningType);
+            return createDynamicRangePartitionExchangePOperator(parentOp, ctx, domain, partitioningColumns, childIndex,
+                    rangePartitioningType);
         }
     }
 
     private IPhysicalOperator createDynamicRangePartitionExchangePOperator(AbstractLogicalOperator parentOp,
-            IOptimizationContext ctx, INodeDomain targetDomain, List<OrderColumn> partitioningColumns, int childIndex, RangePartitioningType rangePartitioningType)
-            throws AlgebricksException {
+            IOptimizationContext ctx, INodeDomain targetDomain, List<OrderColumn> partitioningColumns, int childIndex,
+            RangePartitioningType rangePartitioningType) throws AlgebricksException {
         SourceLocation sourceLoc = parentOp.getSourceLocation();
         // #1. create the replicate operator and add it above the source op feeding parent operator
         ReplicateOperator replicateOp = createReplicateOperator(parentOp.getInputs().get(childIndex), ctx, sourceLoc);
@@ -776,7 +781,8 @@ public class EnforceStructuralPropertiesRule implements IAlgebraicRewriteRule {
         if (rangePartitioningType == RangePartitioningType.PROJECT) {
             return new RangePartitionExchangePOperator(partitioningColumns, rangeMapKey, targetDomain);
         } else {
-            return new RangeMultiPartitionExchangePOperator(partitioningColumns, rangeMapKey, targetDomain, rangePartitioningType);
+            return new RangeMultiPartitionExchangePOperator(partitioningColumns, rangeMapKey, targetDomain,
+                    rangePartitioningType);
         }
     }
 

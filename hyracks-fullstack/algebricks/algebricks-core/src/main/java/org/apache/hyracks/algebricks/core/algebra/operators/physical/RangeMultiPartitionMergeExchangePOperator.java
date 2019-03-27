@@ -66,7 +66,7 @@ public class RangeMultiPartitionMergeExchangePOperator extends AbstractExchangeP
     private RangeMap rangeMap;
 
     public RangeMultiPartitionMergeExchangePOperator(List<OrderColumn> partitioningFields, INodeDomain domain,
-                                                     RangePartitioningType rangeType, RangeMap rangeMap) {
+            RangePartitioningType rangeType, RangeMap rangeMap) {
         this.partitioningFields = partitioningFields;
         this.domain = domain;
         this.rangeType = rangeType;
@@ -108,7 +108,7 @@ public class RangeMultiPartitionMergeExchangePOperator extends AbstractExchangeP
 
     @Override
     public PhysicalRequirements getRequiredPropertiesForChildren(ILogicalOperator op,
-                                                                 IPhysicalPropertiesVector reqdByParent, IOptimizationContext context) {
+            IPhysicalPropertiesVector reqdByParent, IOptimizationContext context) {
         List<ILocalStructuralProperty> orderProps = new LinkedList<>();
         List<OrderColumn> columns = new ArrayList<>();
         for (OrderColumn oc : partitioningFields) {
@@ -116,14 +116,14 @@ public class RangeMultiPartitionMergeExchangePOperator extends AbstractExchangeP
             columns.add(new OrderColumn(var, oc.getOrder()));
         }
         orderProps.add(new LocalOrderProperty(columns));
-        StructuralPropertiesVector[] r = new StructuralPropertiesVector[] {
-                new StructuralPropertiesVector(null, orderProps) };
+        StructuralPropertiesVector[] r =
+                new StructuralPropertiesVector[] { new StructuralPropertiesVector(null, orderProps) };
         return new PhysicalRequirements(r, IPartitioningRequirementsCoordinator.NO_COORDINATION);
     }
 
     @Override
     public Pair<IConnectorDescriptor, TargetConstraint> createConnectorDescriptor(IConnectorDescriptorRegistry spec,
-                                                                                  ILogicalOperator op, IOperatorSchema opSchema, JobGenContext context) throws AlgebricksException {
+            ILogicalOperator op, IOperatorSchema opSchema, JobGenContext context) throws AlgebricksException {
         int n = partitioningFields.size();
         int[] sortFields = new int[n];
         IBinaryRangeComparatorFactory[] rangeComps = new IBinaryRangeComparatorFactory[n];
@@ -147,15 +147,17 @@ public class RangeMultiPartitionMergeExchangePOperator extends AbstractExchangeP
             binaryComps[i] = bcfp.getBinaryComparatorFactory(type, oc.getOrder() == OrderKind.ASC);
             i++;
         }
-        ITupleMultiPartitionComputerFactory tpcf = new StaticFieldRangeMultiPartitionComputerFactory(sortFields, rangeComps, rangeMap, rangeType);
-        IConnectorDescriptor conn = new MToNMultiPartitioningMergingConnectorDescriptor(spec, tpcf, sortFields,
-                binaryComps, nkcf);
+        ITupleMultiPartitionComputerFactory tpcf =
+                new StaticFieldRangeMultiPartitionComputerFactory(sortFields, rangeComps, rangeMap, rangeType);
+        IConnectorDescriptor conn =
+                new MToNMultiPartitioningMergingConnectorDescriptor(spec, tpcf, sortFields, binaryComps, nkcf);
         return new Pair<>(conn, null);
     }
 
     @Override
     public String toString() {
-        return getOperatorTag().toString() + " " + partitioningFields + " SPLIT COUNT:" + rangeMap.getSplitCount() + " " + rangeType;
+        return getOperatorTag().toString() + " " + partitioningFields + " SPLIT COUNT:" + rangeMap.getSplitCount() + " "
+                + rangeType;
     }
 
 }
