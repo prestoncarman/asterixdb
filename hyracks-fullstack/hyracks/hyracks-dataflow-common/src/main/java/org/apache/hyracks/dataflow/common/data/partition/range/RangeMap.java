@@ -42,6 +42,7 @@ public class RangeMap implements IRangeMap {
     private final int fields;
     private final byte[] bytes;
     private final int[] endOffsets;
+    public static final int MININDEX = 0;
 
     public RangeMap(int numFields, byte[] bytes, int[] endOffsets) {
         this.fields = numFields;
@@ -132,17 +133,17 @@ public class RangeMap implements IRangeMap {
 
     @Override
     public int getMinStartOffset(int columnIndex) {
-        return getSplitValueStart(getSplitValueIndex(columnIndex, getMinIndex()));
+        return getSplitValueStart(getSplitValueIndex(columnIndex, MININDEX));
     }
 
     @Override
     public int getMinLength(int columnIndex) {
-        return getSplitValueLength(getSplitValueIndex(columnIndex, getMinIndex()));
+        return getSplitValueLength(getSplitValueIndex(columnIndex, MININDEX));
     }
 
     @Override
     public byte getMinTag(int columnIndex) {
-        return getSplitValueTag(getSplitValueIndex(columnIndex, getMinIndex()));
+        return getSplitValueTag(getSplitValueIndex(columnIndex, MININDEX));
     }
 
     @Override
@@ -167,10 +168,6 @@ public class RangeMap implements IRangeMap {
 
     private int getMaxIndex() {
         return endOffsets.length / fields - 1;
-    }
-
-    private int getMinIndex() {
-        return 0;
     }
 
     @Override
