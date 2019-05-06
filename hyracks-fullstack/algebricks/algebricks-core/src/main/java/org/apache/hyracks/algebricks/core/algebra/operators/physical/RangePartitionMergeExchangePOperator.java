@@ -34,40 +34,44 @@ import org.apache.hyracks.algebricks.core.algebra.expressions.IVariableTypeEnvir
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.IOperatorSchema;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder.OrderKind;
-import org.apache.hyracks.algebricks.core.algebra.properties.ILocalStructuralProperty;
+import org.apache.hyracks.algebricks.core.algebra.properties.*;
 import org.apache.hyracks.algebricks.core.algebra.properties.ILocalStructuralProperty.PropertyType;
-import org.apache.hyracks.algebricks.core.algebra.properties.INodeDomain;
-import org.apache.hyracks.algebricks.core.algebra.properties.IPartitioningProperty;
-import org.apache.hyracks.algebricks.core.algebra.properties.IPartitioningRequirementsCoordinator;
-import org.apache.hyracks.algebricks.core.algebra.properties.IPhysicalPropertiesVector;
-import org.apache.hyracks.algebricks.core.algebra.properties.LocalOrderProperty;
-import org.apache.hyracks.algebricks.core.algebra.properties.OrderColumn;
-import org.apache.hyracks.algebricks.core.algebra.properties.PhysicalRequirements;
-import org.apache.hyracks.algebricks.core.algebra.properties.StructuralPropertiesVector;
-import org.apache.hyracks.algebricks.core.algebra.properties.UnorderedPartitionedProperty;
 import org.apache.hyracks.algebricks.core.jobgen.impl.JobGenContext;
 import org.apache.hyracks.algebricks.data.IBinaryComparatorFactoryProvider;
 import org.apache.hyracks.algebricks.data.INormalizedKeyComputerFactoryProvider;
 import org.apache.hyracks.api.dataflow.IConnectorDescriptor;
-import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
-import org.apache.hyracks.api.dataflow.value.INormalizedKeyComputerFactory;
-import org.apache.hyracks.api.dataflow.value.ITuplePartitionComputerFactory;
+import org.apache.hyracks.api.dataflow.value.*;
+import org.apache.hyracks.api.dataflow.value.IRangePartitionType.RangePartitioningType;
 import org.apache.hyracks.api.job.IConnectorDescriptorRegistry;
 import org.apache.hyracks.dataflow.common.data.partition.range.RangeMap;
+import org.apache.hyracks.dataflow.common.data.partition.range.StaticFieldRangeMultiPartitionComputerFactory;
 import org.apache.hyracks.dataflow.common.data.partition.range.StaticFieldRangePartitionComputerFactory;
+import org.apache.hyracks.dataflow.std.connectors.MToNMultiPartitioningMergingConnectorDescriptor;
 import org.apache.hyracks.dataflow.std.connectors.MToNPartitioningMergingConnectorDescriptor;
 
 public class RangePartitionMergeExchangePOperator extends AbstractExchangePOperator {
 
     private List<OrderColumn> partitioningFields;
     private INodeDomain domain;
+    private RangePartitioningType rangeType;
     private RangeMap rangeMap;
+
+    private RangePartitionMergeExchangePOperator(List<OrderColumn> partitioningFields, INodeDomain domain,
+            RangeMap rangeMap, RangePartitioningType rangeType) {
+        this.partitioningFields = partitioningFields;
+        this.domain = domain;
+        this.rangeType = rangeType;
+        this.rangeMap = rangeMap;
+    }
 
     public RangePartitionMergeExchangePOperator(List<OrderColumn> partitioningFields, INodeDomain domain,
             RangeMap rangeMap) {
-        this.partitioningFields = partitioningFields;
-        this.domain = domain;
-        this.rangeMap = rangeMap;
+        this(partitioningFields, domain, rangeMap, RangePartitioningType.PROJECT);
+    }
+
+    public RangePartitionMergeExchangePOperator(List<OrderColumn> partitioningFields, INodeDomain domain,
+            RangePartitioningType rangeType, RangeMap rangeMap) {
+        this(partitioningFields, domain, rangeMap, rangeType);
     }
 
     @Override
@@ -79,17 +83,17 @@ public class RangePartitionMergeExchangePOperator extends AbstractExchangePOpera
         return partitioningFields;
     }
 
+    public RangePartitioningType getRangeType() {
+        return rangeType;
+    }
+
     public INodeDomain getDomain() {
         return domain;
     }
 
     @Override
     public void computeDeliveredProperties(ILogicalOperator op, IOptimizationContext context) {
-        List<LogicalVariable> varList = new ArrayList<LogicalVariable>();
-        for (OrderColumn oc : partitioningFields) {
-            varList.add(oc.getColumn());
-        }
-        IPartitioningProperty p = new UnorderedPartitionedProperty(new ListSet<LogicalVariable>(varList), domain);
+        IPartitioningProperty p = new OrderedPartitionedProperty(partitioningFields, domain, rangeType);
         AbstractLogicalOperator op2 = (AbstractLogicalOperator) op.getInputs().get(0).getValue();
         List<ILocalStructuralProperty> op2Locals = op2.getDeliveredPhysicalProperties().getLocalProperties();
         List<ILocalStructuralProperty> locals = new ArrayList<ILocalStructuralProperty>();
@@ -124,6 +128,7 @@ public class RangePartitionMergeExchangePOperator extends AbstractExchangePOpera
             ILogicalOperator op, IOperatorSchema opSchema, JobGenContext context) throws AlgebricksException {
         int n = partitioningFields.size();
         int[] sortFields = new int[n];
+        IBinaryRangeComparatorFactory[] rangeComps = new IBinaryRangeComparatorFactory[n];
         IBinaryComparatorFactory[] comps = new IBinaryComparatorFactory[n];
 
         INormalizedKeyComputerFactoryProvider nkcfProvider = context.getNormalizedKeyComputerFactoryProvider();
@@ -140,17 +145,29 @@ public class RangePartitionMergeExchangePOperator extends AbstractExchangePOpera
                 nkcf = nkcfProvider.getNormalizedKeyComputerFactory(type, order == OrderKind.ASC);
             }
             IBinaryComparatorFactoryProvider bcfp = context.getBinaryComparatorFactoryProvider();
+            if (rangeType != RangePartitioningType.PROJECT) {
+                rangeComps[i] = bcfp.getRangeBinaryComparatorFactory(type, oc.getOrder() == OrderKind.ASC, rangeType);
+            }
             comps[i] = bcfp.getBinaryComparatorFactory(type, oc.getOrder() == OrderKind.ASC);
             i++;
         }
-        ITuplePartitionComputerFactory tpcf = new StaticFieldRangePartitionComputerFactory(sortFields, comps, rangeMap);
-        IConnectorDescriptor conn = new MToNPartitioningMergingConnectorDescriptor(spec, tpcf, sortFields, comps, nkcf);
+        IConnectorDescriptor conn;
+        if(rangeType == RangePartitioningType.PROJECT) {
+            ITuplePartitionComputerFactory tpcf =
+                    new StaticFieldRangePartitionComputerFactory(sortFields, comps, rangeMap);
+            conn = new MToNPartitioningMergingConnectorDescriptor(spec, tpcf, sortFields, comps, nkcf);
+        } else {
+            ITupleMultiPartitionComputerFactory tmpcf =
+                    new StaticFieldRangeMultiPartitionComputerFactory(sortFields, rangeComps, rangeMap, rangeType);
+            conn = new MToNMultiPartitioningMergingConnectorDescriptor(spec, tmpcf, sortFields, comps, nkcf);
+        }
         return new Pair<IConnectorDescriptor, TargetConstraint>(conn, null);
     }
 
     @Override
     public String toString() {
-        return getOperatorTag().toString() + " " + partitioningFields + " SPLIT COUNT:" + rangeMap.getSplitCount();
+        String rangeTypeString = (rangeType == RangePartitioningType.PROJECT) ? "" : " " + rangeType;
+        return getOperatorTag().toString() + " " + partitioningFields + " SPLIT COUNT:" + rangeMap.getSplitCount() + rangeTypeString;
     }
 
 }

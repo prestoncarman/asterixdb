@@ -44,11 +44,11 @@ import org.apache.hyracks.algebricks.core.jobgen.impl.JobGenContext;
 import org.apache.hyracks.algebricks.data.IBinaryComparatorFactoryProvider;
 import org.apache.hyracks.api.dataflow.IConnectorDescriptor;
 import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
+import org.apache.hyracks.api.dataflow.value.IBinaryRangeComparatorFactory;
+import org.apache.hyracks.api.dataflow.value.IRangePartitionType.RangePartitioningType;
 import org.apache.hyracks.api.job.IConnectorDescriptorRegistry;
-import org.apache.hyracks.dataflow.common.data.partition.range.DynamicFieldRangePartitionComputerFactory;
-import org.apache.hyracks.dataflow.common.data.partition.range.FieldRangePartitionComputerFactory;
-import org.apache.hyracks.dataflow.common.data.partition.range.RangeMap;
-import org.apache.hyracks.dataflow.common.data.partition.range.StaticFieldRangePartitionComputerFactory;
+import org.apache.hyracks.dataflow.common.data.partition.range.*;
+import org.apache.hyracks.dataflow.std.connectors.MToNMultiPartitioningConnectorDescriptor;
 import org.apache.hyracks.dataflow.std.connectors.MToNPartitioningConnectorDescriptor;
 
 public class RangePartitionExchangePOperator extends AbstractExchangePOperator {
@@ -58,24 +58,36 @@ public class RangePartitionExchangePOperator extends AbstractExchangePOperator {
     private RangeMap rangeMap;
     private final boolean rangeMapIsComputedAtRunTime;
     private final String rangeMapKeyInContext;
+    private final RangePartitioningType rangeType;
 
     private RangePartitionExchangePOperator(List<OrderColumn> partitioningFields, INodeDomain domain, RangeMap rangeMap,
-            boolean rangeMapIsComputedAtRunTime, String rangeMapKeyInContext) {
+            boolean rangeMapIsComputedAtRunTime, String rangeMapKeyInContext, RangePartitioningType rangeType) {
         this.partitioningFields = partitioningFields;
         this.domain = domain;
         this.rangeMap = rangeMap;
         this.rangeMapIsComputedAtRunTime = rangeMapIsComputedAtRunTime;
         this.rangeMapKeyInContext = rangeMapKeyInContext;
+        this.rangeType = rangeType;
     }
 
     public RangePartitionExchangePOperator(List<OrderColumn> partitioningFields, String rangeMapKeyInContext,
             INodeDomain domain) {
-        this(partitioningFields, domain, null, true, rangeMapKeyInContext);
+        this(partitioningFields, domain, null, true, rangeMapKeyInContext, RangePartitioningType.PROJECT);
     }
 
     public RangePartitionExchangePOperator(List<OrderColumn> partitioningFields, INodeDomain domain,
             RangeMap rangeMap) {
-        this(partitioningFields, domain, rangeMap, false, "");
+        this(partitioningFields, domain, rangeMap, false, "", RangePartitioningType.PROJECT);
+    }
+
+    public RangePartitionExchangePOperator(List<OrderColumn> partitioningFields, INodeDomain domain,
+            RangePartitioningType rangeType, RangeMap rangeMap) {
+        this(partitioningFields, domain, rangeMap, false, "", rangeType);
+    }
+
+    public RangePartitionExchangePOperator(List<OrderColumn> partitioningFields, String rangeMapKeyInContext,
+            RangePartitioningType rangeType, INodeDomain domain) {
+        this(partitioningFields, domain, null, true, rangeMapKeyInContext, rangeType);
     }
 
     @Override
@@ -87,13 +99,17 @@ public class RangePartitionExchangePOperator extends AbstractExchangePOperator {
         return partitioningFields;
     }
 
+    public RangePartitioningType getRangeType() {
+        return rangeType;
+    }
+
     public INodeDomain getDomain() {
         return domain;
     }
 
     @Override
     public void computeDeliveredProperties(ILogicalOperator op, IOptimizationContext context) {
-        IPartitioningProperty p = new OrderedPartitionedProperty(new ArrayList<>(partitioningFields), domain);
+        IPartitioningProperty p = new OrderedPartitionedProperty(new ArrayList<>(partitioningFields), domain, rangeType);
         this.deliveredProperties = new StructuralPropertiesVector(p, new LinkedList<ILocalStructuralProperty>());
     }
 
@@ -108,6 +124,7 @@ public class RangePartitionExchangePOperator extends AbstractExchangePOperator {
             ILogicalOperator op, IOperatorSchema opSchema, JobGenContext context) throws AlgebricksException {
         int n = partitioningFields.size();
         int[] sortFields = new int[n];
+        IBinaryRangeComparatorFactory[] rangeComps = new IBinaryRangeComparatorFactory[n];
         IBinaryComparatorFactory[] comps = new IBinaryComparatorFactory[n];
         IVariableTypeEnvironment env = context.getTypeEnvironment(op);
         int i = 0;
@@ -116,18 +133,33 @@ public class RangePartitionExchangePOperator extends AbstractExchangePOperator {
             sortFields[i] = opSchema.findVariable(var);
             Object type = env.getVarType(var);
             IBinaryComparatorFactoryProvider bcfp = context.getBinaryComparatorFactoryProvider();
+            if (rangeType != RangePartitioningType.PROJECT) {
+                rangeComps[i] = bcfp.getRangeBinaryComparatorFactory(type, oc.getOrder() == OrderKind.ASC, rangeType);
+            }
             comps[i] = bcfp.getBinaryComparatorFactory(type, oc.getOrder() == OrderKind.ASC);
             i++;
         }
+        FieldRangeMultiPartitionComputerFactory multiPartitionerFactory;
         FieldRangePartitionComputerFactory partitionerFactory;
-        if (rangeMapIsComputedAtRunTime) {
-            partitionerFactory = new DynamicFieldRangePartitionComputerFactory(sortFields, comps, rangeMapKeyInContext,
-                    op.getSourceLocation());
+        IConnectorDescriptor conn;
+        if (rangeType == RangePartitioningType.PROJECT) {
+            if (rangeMapIsComputedAtRunTime) {
+                partitionerFactory = new DynamicFieldRangePartitionComputerFactory(sortFields, comps, rangeMapKeyInContext,
+                        op.getSourceLocation());
+            } else {
+                partitionerFactory = new StaticFieldRangePartitionComputerFactory(sortFields, comps, rangeMap);
+            }
+            conn = new MToNPartitioningConnectorDescriptor(spec, partitionerFactory);
         } else {
-            partitionerFactory = new StaticFieldRangePartitionComputerFactory(sortFields, comps, rangeMap);
+            if (rangeMapIsComputedAtRunTime) {
+                multiPartitionerFactory = new DynamicFieldRangeMultiPartitionComputerFactory(sortFields, rangeComps,
+                        rangeMapKeyInContext, op.getSourceLocation(), rangeType);
+            } else {
+                multiPartitionerFactory =
+                        new StaticFieldRangeMultiPartitionComputerFactory(sortFields, rangeComps, rangeMap, rangeType);
+            }
+            conn = new MToNMultiPartitioningConnectorDescriptor(spec, multiPartitionerFactory);
         }
-
-        IConnectorDescriptor conn = new MToNPartitioningConnectorDescriptor(spec, partitionerFactory);
         return new Pair<>(conn, null);
     }
 
@@ -135,6 +167,7 @@ public class RangePartitionExchangePOperator extends AbstractExchangePOperator {
     public String toString() {
         String staticOrDynamic = rangeMapIsComputedAtRunTime ? "" : " Static";
         final String splitCount = rangeMap == null ? "" : " SPLIT COUNT:" + Integer.toString(rangeMap.getSplitCount());
-        return getOperatorTag().toString() + " " + partitioningFields + splitCount + staticOrDynamic;
+        String rangeTypeString = (rangeType == RangePartitioningType.PROJECT) ? "" : " " + rangeType;
+        return getOperatorTag().toString() + " " + partitioningFields + splitCount + staticOrDynamic + rangeTypeString;
     }
 }
