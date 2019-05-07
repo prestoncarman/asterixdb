@@ -109,7 +109,8 @@ public class RangePartitionExchangePOperator extends AbstractExchangePOperator {
 
     @Override
     public void computeDeliveredProperties(ILogicalOperator op, IOptimizationContext context) {
-        IPartitioningProperty p = new OrderedPartitionedProperty(new ArrayList<>(partitioningFields), domain, rangeType);
+        IPartitioningProperty p =
+                new OrderedPartitionedProperty(new ArrayList<>(partitioningFields), domain, rangeType);
         this.deliveredProperties = new StructuralPropertiesVector(p, new LinkedList<ILocalStructuralProperty>());
     }
 
@@ -144,8 +145,8 @@ public class RangePartitionExchangePOperator extends AbstractExchangePOperator {
         IConnectorDescriptor conn;
         if (rangeType == RangePartitioningType.PROJECT) {
             if (rangeMapIsComputedAtRunTime) {
-                partitionerFactory = new DynamicFieldRangePartitionComputerFactory(sortFields, comps, rangeMapKeyInContext,
-                        op.getSourceLocation());
+                partitionerFactory = new DynamicFieldRangePartitionComputerFactory(sortFields, comps,
+                        rangeMapKeyInContext, op.getSourceLocation());
             } else {
                 partitionerFactory = new StaticFieldRangePartitionComputerFactory(sortFields, comps, rangeMap);
             }

@@ -152,7 +152,7 @@ public class RangePartitionMergeExchangePOperator extends AbstractExchangePOpera
             i++;
         }
         IConnectorDescriptor conn;
-        if(rangeType == RangePartitioningType.PROJECT) {
+        if (rangeType == RangePartitioningType.PROJECT) {
             ITuplePartitionComputerFactory tpcf =
                     new StaticFieldRangePartitionComputerFactory(sortFields, comps, rangeMap);
             conn = new MToNPartitioningMergingConnectorDescriptor(spec, tpcf, sortFields, comps, nkcf);
@@ -167,7 +167,8 @@ public class RangePartitionMergeExchangePOperator extends AbstractExchangePOpera
     @Override
     public String toString() {
         String rangeTypeString = (rangeType == RangePartitioningType.PROJECT) ? "" : " " + rangeType;
-        return getOperatorTag().toString() + " " + partitioningFields + " SPLIT COUNT:" + rangeMap.getSplitCount() + rangeTypeString;
+        return getOperatorTag().toString() + " " + partitioningFields + " SPLIT COUNT:" + rangeMap.getSplitCount()
+                + rangeTypeString;
     }
 
 }
