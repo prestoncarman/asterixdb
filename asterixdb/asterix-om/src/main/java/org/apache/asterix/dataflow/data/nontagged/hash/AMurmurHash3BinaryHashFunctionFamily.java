@@ -18,91 +18,168 @@
  */
 package org.apache.asterix.dataflow.data.nontagged.hash;
 
+import static org.apache.asterix.om.util.container.ObjectFactories.RECORD_FACTORY;
+import static org.apache.asterix.om.util.container.ObjectFactories.STORAGE_FACTORY;
+import static org.apache.asterix.om.util.container.ObjectFactories.VOID_FACTORY;
+
 import java.io.DataOutput;
 import java.io.IOException;
 
+import org.apache.asterix.dataflow.data.common.ListAccessorUtil;
+import org.apache.asterix.om.pointables.nonvisitor.RecordField;
+import org.apache.asterix.om.pointables.nonvisitor.SortedRecord;
+import org.apache.asterix.om.typecomputer.impl.TypeComputeUtils;
+import org.apache.asterix.om.types.ARecordType;
 import org.apache.asterix.om.types.ATypeTag;
+import org.apache.asterix.om.types.AbstractCollectionType;
 import org.apache.asterix.om.types.EnumDeserializer;
+import org.apache.asterix.om.types.IAType;
 import org.apache.asterix.om.types.hierachy.FloatToDoubleTypeConvertComputer;
 import org.apache.asterix.om.types.hierachy.IntegerToDoubleTypeConvertComputer;
+import org.apache.asterix.om.util.container.IObjectPool;
+import org.apache.asterix.om.util.container.ListObjectPool;
 import org.apache.hyracks.api.dataflow.value.IBinaryHashFunction;
 import org.apache.hyracks.api.dataflow.value.IBinaryHashFunctionFamily;
+import org.apache.hyracks.api.exceptions.ErrorCode;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.data.std.accessors.MurmurHash3BinaryHash;
+import org.apache.hyracks.data.std.api.IMutableValueStorage;
+import org.apache.hyracks.data.std.api.IPointable;
 import org.apache.hyracks.data.std.util.ArrayBackedValueStorage;
 
 public class AMurmurHash3BinaryHashFunctionFamily implements IBinaryHashFunctionFamily {
 
-    public static final IBinaryHashFunctionFamily INSTANCE = new AMurmurHash3BinaryHashFunctionFamily();
-
     private static final long serialVersionUID = 1L;
+    private final IAType type;
 
-    private AMurmurHash3BinaryHashFunctionFamily() {
+    public AMurmurHash3BinaryHashFunctionFamily(IAType type) {
+        this.type = type;
     }
 
-    // This hash function family is used to promote a numeric type to a DOUBLE numeric type
-    // to return same hash value for the original numeric value, regardless of the numeric type.
-    // (e.g., h( int64("1") )  =  h( double("1.0") )
+    public static IBinaryHashFunction createBinaryHashFunction(IAType type, int seed) {
+        return new GenericHashFunction(type, seed);
+    }
 
+    /**
+     * The returned hash function is used to promote a numeric type to a DOUBLE numeric type to return same hash value
+     * for the original numeric value, regardless of the numeric type. (e.g., h( int64("1") )  =  h( double("1.0") )
+     *
+     * @param seed seed to be used by the hash function created
+     *
+     * @return a generic hash function
+     */
     @Override
     public IBinaryHashFunction createBinaryHashFunction(final int seed) {
-        return new IBinaryHashFunction() {
+        return new GenericHashFunction(type, seed);
+    }
 
-            private ArrayBackedValueStorage fieldValueBuffer = new ArrayBackedValueStorage();
-            private DataOutput fieldValueBufferOutput = fieldValueBuffer.getDataOutput();
-            private ATypeTag sourceTag = null;
-            private boolean numericTypePromotionApplied = false;
+    private static final class GenericHashFunction implements IBinaryHashFunction {
 
-            @Override
-            public int hash(byte[] bytes, int offset, int length) throws HyracksDataException {
+        private final ArrayBackedValueStorage valueBuffer = new ArrayBackedValueStorage();
+        private final DataOutput valueOut = valueBuffer.getDataOutput();
+        private final IObjectPool<IPointable, Void> voidPointableAllocator = new ListObjectPool<>(VOID_FACTORY);
+        private final IObjectPool<IMutableValueStorage, Void> storageAllocator = new ListObjectPool<>(STORAGE_FACTORY);
+        private final IObjectPool<SortedRecord, ARecordType> recordPool = new ListObjectPool<>(RECORD_FACTORY);
+        private final IAType type;
+        private final int seed;
 
-                // If a numeric type is encountered, then we promote each numeric type to the DOUBLE type.
-                fieldValueBuffer.reset();
-                sourceTag = EnumDeserializer.ATYPETAGDESERIALIZER.deserialize(bytes[offset]);
+        private GenericHashFunction(IAType type, int seed) {
+            this.type = type;
+            this.seed = seed;
+        }
 
-                switch (sourceTag) {
-                    case TINYINT:
-                    case SMALLINT:
-                    case INTEGER:
-                    case BIGINT:
-                        try {
-                            IntegerToDoubleTypeConvertComputer.getInstance().convertType(bytes, offset + 1, length - 1,
-                                    fieldValueBufferOutput);
-                        } catch (IOException e) {
-                            throw new HyracksDataException(
-                                    "A numeric type promotion error has occurred before doing hash(). Can't continue process. Detailed Error message:"
-                                            + e.getMessage());
-                        }
-                        numericTypePromotionApplied = true;
-                        break;
+        @Override
+        public int hash(byte[] bytes, int offset, int length) throws HyracksDataException {
+            return hash(type, bytes, offset, length);
+        }
 
-                    case FLOAT:
-                        try {
-                            FloatToDoubleTypeConvertComputer.getInstance().convertType(bytes, offset + 1, length - 1,
-                                    fieldValueBufferOutput);
-                        } catch (IOException e) {
-                            throw new HyracksDataException(
-                                    "A numeric type promotion error has occurred before doing hash(). Can't continue process. Detailed Error message:"
-                                            + e.getMessage());
-                        }
-                        numericTypePromotionApplied = true;
-                        break;
+        private int hash(IAType type, byte[] bytes, int offset, int length) throws HyracksDataException {
+            // if a numeric type is encountered, then we promote each numeric type to the DOUBLE type.
+            valueBuffer.reset();
+            ATypeTag sourceTag = EnumDeserializer.ATYPETAGDESERIALIZER.deserialize(bytes[offset]);
 
-                    default:
-                        numericTypePromotionApplied = false;
-                        break;
-                }
-
-                // If a numeric type promotion happened
-                if (numericTypePromotionApplied) {
-                    return MurmurHash3BinaryHash.hash(fieldValueBuffer.getByteArray(),
-                            fieldValueBuffer.getStartOffset(), fieldValueBuffer.getLength(), seed);
-
-                } else {
-                    // Usual case for non numeric types and the DOBULE numeric type
+            switch (sourceTag) {
+                case TINYINT:
+                case SMALLINT:
+                case INTEGER:
+                case BIGINT:
+                    try {
+                        IntegerToDoubleTypeConvertComputer.getInstance().convertType(bytes, offset + 1, length - 1,
+                                valueOut);
+                    } catch (IOException e) {
+                        throw HyracksDataException.create(ErrorCode.NUMERIC_PROMOTION_ERROR, e.getMessage());
+                    }
+                    return MurmurHash3BinaryHash.hash(valueBuffer.getByteArray(), valueBuffer.getStartOffset(),
+                            valueBuffer.getLength(), seed);
+                case FLOAT:
+                    try {
+                        FloatToDoubleTypeConvertComputer.getInstance().convertType(bytes, offset + 1, length - 1,
+                                valueOut);
+                    } catch (IOException e) {
+                        throw HyracksDataException.create(ErrorCode.NUMERIC_PROMOTION_ERROR, e.getMessage());
+                    }
+                    return MurmurHash3BinaryHash.hash(valueBuffer.getByteArray(), valueBuffer.getStartOffset(),
+                            valueBuffer.getLength(), seed);
+                case ARRAY:
+                    try {
+                        return hashArray(type, bytes, offset);
+                    } catch (IOException e) {
+                        throw HyracksDataException.create(e);
+                    }
+                case OBJECT:
+                    return hashRecord(type, bytes, offset);
+                case DOUBLE:
+                default:
                     return MurmurHash3BinaryHash.hash(bytes, offset, length, seed);
-                }
             }
-        };
+        }
+
+        private int hashArray(IAType type, byte[] bytes, int offset) throws IOException {
+            IAType arrayType = TypeComputeUtils.getActualTypeOrOpen(type, ATypeTag.ARRAY);
+            IAType itemType = ((AbstractCollectionType) arrayType).getItemType();
+            ATypeTag itemTag = itemType.getTypeTag();
+            int numItems = ListAccessorUtil.numberOfItems(bytes, offset);
+            int hash = seed;
+            IPointable item = voidPointableAllocator.allocate(null);
+            ArrayBackedValueStorage storage = (ArrayBackedValueStorage) storageAllocator.allocate(null);
+            try {
+                for (int i = 0; i < numItems; i++) {
+                    ListAccessorUtil.getItem(bytes, offset, i, ATypeTag.ARRAY, itemTag, item, storage);
+                    hash ^= hash(itemType, item.getByteArray(), item.getStartOffset(), item.getLength());
+                }
+            } finally {
+                voidPointableAllocator.free(item);
+                storageAllocator.free(storage);
+            }
+
+            return hash;
+        }
+
+        private int hashRecord(IAType type, byte[] bytes, int offset) throws HyracksDataException {
+            ARecordType recordType = (ARecordType) TypeComputeUtils.getActualTypeOrOpen(type, ATypeTag.OBJECT);
+            SortedRecord record = recordPool.allocate(recordType);
+            IPointable fieldValue = voidPointableAllocator.allocate(null);
+            // TODO(ali): this is not ideal. should be removed when tagged pointables are introduced
+            ArrayBackedValueStorage storage = (ArrayBackedValueStorage) storageAllocator.allocate(null);
+            try {
+                record.reset(bytes, offset);
+                int hash = seed;
+                while (!record.isEmpty()) {
+                    RecordField field = record.poll();
+                    storage.reset();
+                    record.getFieldValue(field, fieldValue, storage);
+                    IAType fieldType = record.getFieldType(field);
+                    hash ^= field.getName().hash() ^ hash(fieldType, fieldValue.getByteArray(),
+                            fieldValue.getStartOffset(), fieldValue.getLength());
+                }
+                return hash;
+            } catch (IOException e) {
+                throw HyracksDataException.create(e);
+            } finally {
+                recordPool.free(record);
+                voidPointableAllocator.free(fieldValue);
+                storageAllocator.free(storage);
+            }
+        }
     }
 }

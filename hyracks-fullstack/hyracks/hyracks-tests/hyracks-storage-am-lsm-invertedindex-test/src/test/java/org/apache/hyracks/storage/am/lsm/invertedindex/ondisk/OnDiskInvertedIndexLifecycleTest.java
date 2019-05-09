@@ -22,7 +22,8 @@ package org.apache.hyracks.storage.am.lsm.invertedindex.ondisk;
 import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import org.apache.hyracks.api.dataflow.value.ITypeTraits;
 import org.apache.hyracks.api.io.FileReference;
-import org.apache.hyracks.data.std.accessors.PointableBinaryComparatorFactory;
+import org.apache.hyracks.data.std.accessors.IntegerBinaryComparatorFactory;
+import org.apache.hyracks.data.std.accessors.UTF8StringBinaryComparatorFactory;
 import org.apache.hyracks.data.std.primitive.IntegerPointable;
 import org.apache.hyracks.data.std.primitive.UTF8StringPointable;
 import org.apache.hyracks.storage.am.common.AbstractIndexLifecycleTest;
@@ -54,10 +55,10 @@ public class OnDiskInvertedIndexLifecycleTest extends AbstractIndexLifecycleTest
         harness.setUp();
         ITypeTraits[] tokenTypeTraits = new ITypeTraits[] { UTF8StringPointable.TYPE_TRAITS };
         IBinaryComparatorFactory[] tokenCmpFactories =
-                new IBinaryComparatorFactory[] { PointableBinaryComparatorFactory.of(UTF8StringPointable.FACTORY) };
+                new IBinaryComparatorFactory[] { UTF8StringBinaryComparatorFactory.INSTANCE };
         ITypeTraits[] invListTypeTraits = new ITypeTraits[] { IntegerPointable.TYPE_TRAITS };
         IBinaryComparatorFactory[] invListCmpFactories =
-                new IBinaryComparatorFactory[] { PointableBinaryComparatorFactory.of(IntegerPointable.FACTORY) };
+                new IBinaryComparatorFactory[] { IntegerBinaryComparatorFactory.INSTANCE };
         IInvertedListBuilder invListBuilder = new FixedSizeElementInvertedListBuilder(invListTypeTraits);
         FileReference btreeFile = harness.getIOManager()
                 .resolveAbsolutePath(harness.getInvListsFileRef().getFile().getAbsolutePath() + "_btree");

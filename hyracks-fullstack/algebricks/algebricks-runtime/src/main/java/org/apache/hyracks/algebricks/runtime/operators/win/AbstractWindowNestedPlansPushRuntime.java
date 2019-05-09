@@ -19,6 +19,7 @@
 
 package org.apache.hyracks.algebricks.runtime.operators.win;
 
+import org.apache.hyracks.algebricks.data.IBinaryBooleanInspector;
 import org.apache.hyracks.algebricks.runtime.base.IRunningAggregateEvaluatorFactory;
 import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluator;
 import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluatorFactory;
@@ -26,13 +27,12 @@ import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import org.apache.hyracks.api.dataflow.value.RecordDescriptor;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
-import org.apache.hyracks.data.std.api.IPointable;
-import org.apache.hyracks.data.std.primitive.VoidPointable;
+import org.apache.hyracks.api.exceptions.SourceLocation;
 import org.apache.hyracks.dataflow.common.comm.io.ArrayTupleBuilder;
 import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAccessor;
 import org.apache.hyracks.dataflow.common.data.accessors.IFrameTupleReference;
+import org.apache.hyracks.dataflow.common.data.accessors.ITupleReference;
 import org.apache.hyracks.dataflow.common.data.accessors.PointableTupleReference;
-import org.apache.hyracks.dataflow.std.group.IAggregatorDescriptor;
 
 /**
  * Base class for window runtime implementations that compute nested aggregates
@@ -43,15 +43,16 @@ abstract class AbstractWindowNestedPlansPushRuntime extends WindowMaterializingP
 
     private final WindowAggregatorDescriptorFactory nestedAggFactory;
 
-    private IAggregatorDescriptor nestedAgg;
+    private IWindowAggregatorDescriptor nestedAgg;
 
     AbstractWindowNestedPlansPushRuntime(int[] partitionColumns,
             IBinaryComparatorFactory[] partitionComparatorFactories,
             IBinaryComparatorFactory[] orderComparatorFactories, int[] projectionColumns, int[] runningAggOutColumns,
             IRunningAggregateEvaluatorFactory[] runningAggFactories, int nestedAggOutSchemaSize,
-            WindowAggregatorDescriptorFactory nestedAggFactory, IHyracksTaskContext ctx) {
+            WindowAggregatorDescriptorFactory nestedAggFactory, IHyracksTaskContext ctx, int memSizeInFrames,
+            SourceLocation sourceLoc) {
         super(partitionColumns, partitionComparatorFactories, orderComparatorFactories, projectionColumns,
-                runningAggOutColumns, runningAggFactories, ctx);
+                runningAggOutColumns, runningAggFactories, ctx, memSizeInFrames, sourceLoc);
         this.nestedAggFactory = nestedAggFactory;
         this.nestedAggOutSchemaSize = nestedAggOutSchemaSize;
     }
@@ -59,7 +60,7 @@ abstract class AbstractWindowNestedPlansPushRuntime extends WindowMaterializingP
     @Override
     protected void init() throws HyracksDataException {
         super.init();
-        nestedAgg = nestedAggFactory.createAggregator(ctx, null, null, null, null, null, -1);
+        nestedAgg = nestedAggCreate();
     }
 
     @Override
@@ -73,26 +74,57 @@ abstract class AbstractWindowNestedPlansPushRuntime extends WindowMaterializingP
         return new ArrayTupleBuilder(projectionList.length + nestedAggOutSchemaSize);
     }
 
+    final IWindowAggregatorDescriptor nestedAggCreate() throws HyracksDataException {
+        return nestedAggFactory.createAggregator(ctx, null, null, null, null, -1);
+    }
+
     /**
      * Aggregator created by
-     * {@link WindowAggregatorDescriptorFactory#createAggregator(IHyracksTaskContext, RecordDescriptor, RecordDescriptor, int[], int[], long)
-     *        WindowAggregatorDescriptorFactory.createAggregator(...)}
+     * {@link WindowAggregatorDescriptorFactory#createAggregator(IHyracksTaskContext, RecordDescriptor,
+     * RecordDescriptor, int[], int[], long) WindowAggregatorDescriptorFactory.createAggregator(...)}
      * does not process argument tuple in init()
      */
-    void nestedAggInit() throws HyracksDataException {
+    final void nestedAggInit() throws HyracksDataException {
+        nestedAggInit(nestedAgg);
+    }
+
+    static void nestedAggInit(IWindowAggregatorDescriptor nestedAgg) throws HyracksDataException {
         nestedAgg.init(null, null, -1, null);
     }
 
-    void nestedAggAggregate(FrameTupleAccessor tAccess, int tIndex) throws HyracksDataException {
+    final void nestedAggAggregate(FrameTupleAccessor tAccess, int tIndex) throws HyracksDataException {
+        nestedAggAggregate(nestedAgg, tAccess, tIndex);
+    }
+
+    static void nestedAggAggregate(IWindowAggregatorDescriptor nestedAgg, FrameTupleAccessor tAccess, int tIndex)
+            throws HyracksDataException {
         nestedAgg.aggregate(tAccess, tIndex, null, -1, null);
     }
 
-    void nestedAggOutputFinalResult(ArrayTupleBuilder outTupleBuilder) throws HyracksDataException {
+    final void nestedAggOutputFinalResult(ArrayTupleBuilder outTupleBuilder) throws HyracksDataException {
+        nestedAggOutputFinalResult(nestedAgg, outTupleBuilder);
+    }
+
+    static void nestedAggOutputFinalResult(IWindowAggregatorDescriptor nestedAgg, ArrayTupleBuilder outTupleBuilder)
+            throws HyracksDataException {
         nestedAgg.outputFinalResult(outTupleBuilder, null, -1, null);
     }
 
-    void nestedAggOutputPartialResult(ArrayTupleBuilder outTupleBuilder) throws HyracksDataException {
-        nestedAgg.outputPartialResult(outTupleBuilder, null, -1, null);
+    final void nestedAggOutputPartialResult(ArrayTupleBuilder outTupleBuilder) throws HyracksDataException {
+        nestedAggOutputPartialResult(nestedAgg, outTupleBuilder);
+    }
+
+    static boolean nestedAggOutputPartialResult(IWindowAggregatorDescriptor nestedAgg,
+            ArrayTupleBuilder outTupleBuilder) throws HyracksDataException {
+        return nestedAgg.outputPartialResult(outTupleBuilder, null, -1, null);
+    }
+
+    final void nestAggDiscardFinalResult() throws HyracksDataException {
+        nestAggDiscardFinalResult(nestedAgg);
+    }
+
+    static void nestAggDiscardFinalResult(IWindowAggregatorDescriptor nestedAgg) throws HyracksDataException {
+        nestedAgg.discardFinalResult();
     }
 
     static IScalarEvaluator[] createEvaluators(IScalarEvaluatorFactory[] evalFactories, IHyracksTaskContext ctx)
@@ -111,11 +143,14 @@ abstract class AbstractWindowNestedPlansPushRuntime extends WindowMaterializingP
         }
     }
 
-    static PointableTupleReference createPointables(int ln) {
-        IPointable[] pointables = new IPointable[ln];
-        for (int i = 0; i < ln; i++) {
-            pointables[i] = VoidPointable.FACTORY.createPointable();
+    static boolean allTrue(ITupleReference tupleRef, IBinaryBooleanInspector boolAccessor) throws HyracksDataException {
+        for (int i = 0, n = tupleRef.getFieldCount(); i < n; i++) {
+            boolean v = boolAccessor.getBooleanValue(tupleRef.getFieldData(i), tupleRef.getFieldStart(i),
+                    tupleRef.getFieldLength(i));
+            if (!v) {
+                return false;
+            }
         }
-        return new PointableTupleReference(pointables);
+        return true;
     }
 }

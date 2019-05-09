@@ -27,9 +27,9 @@ import java.io.IOException;
 
 import org.apache.asterix.formats.nontagged.SerializerDeserializerProvider;
 import org.apache.asterix.om.base.AMutableString;
-import org.apache.asterix.runtime.exceptions.TypeMismatchException;
 import org.apache.asterix.om.types.ATypeTag;
 import org.apache.asterix.om.types.BuiltinType;
+import org.apache.asterix.runtime.exceptions.TypeMismatchException;
 import org.apache.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluator;
 import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluatorFactory;
@@ -87,6 +87,10 @@ public abstract class AbstractQuadStringStringEval implements IScalarEvaluator {
         eval1.evaluate(tuple, ptr1);
         eval2.evaluate(tuple, ptr2);
         eval3.evaluate(tuple, ptr3);
+
+        if (PointableHelper.checkAndSetMissingOrNull(result, ptr0, ptr1, ptr2, ptr3)) {
+            return;
+        }
 
         processArgument(0, ptr0, strPtr0);
         processArgument(1, ptr1, strPtr1);

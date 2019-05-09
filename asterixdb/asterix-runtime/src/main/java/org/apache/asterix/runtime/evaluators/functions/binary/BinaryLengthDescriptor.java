@@ -19,6 +19,7 @@
 
 package org.apache.asterix.runtime.evaluators.functions.binary;
 
+import org.apache.asterix.common.annotations.MissingNullInOutFunction;
 import org.apache.asterix.formats.nontagged.SerializerDeserializerProvider;
 import org.apache.asterix.om.base.AInt64;
 import org.apache.asterix.om.base.AMutableInt64;
@@ -28,6 +29,7 @@ import org.apache.asterix.om.functions.IFunctionDescriptorFactory;
 import org.apache.asterix.om.types.ATypeTag;
 import org.apache.asterix.om.types.BuiltinType;
 import org.apache.asterix.runtime.evaluators.base.AbstractScalarFunctionDynamicDescriptor;
+import org.apache.asterix.runtime.evaluators.functions.PointableHelper;
 import org.apache.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluator;
 import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluatorFactory;
@@ -38,6 +40,7 @@ import org.apache.hyracks.data.std.api.IPointable;
 import org.apache.hyracks.data.std.primitive.ByteArrayPointable;
 import org.apache.hyracks.dataflow.common.data.accessors.IFrameTupleReference;
 
+@MissingNullInOutFunction
 public class BinaryLengthDescriptor extends AbstractScalarFunctionDynamicDescriptor {
     private static final long serialVersionUID = 1L;
     public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
@@ -56,7 +59,7 @@ public class BinaryLengthDescriptor extends AbstractScalarFunctionDynamicDescrip
 
             @Override
             public IScalarEvaluator createScalarEvaluator(final IHyracksTaskContext ctx) throws HyracksDataException {
-                return new AbstractBinaryScalarEvaluator(ctx, args, sourceLoc) {
+                return new AbstractBinaryScalarEvaluator(ctx, args, getIdentifier(), sourceLoc) {
 
                     private AMutableInt64 result = new AMutableInt64(0);
                     @SuppressWarnings("unchecked")
@@ -68,9 +71,14 @@ public class BinaryLengthDescriptor extends AbstractScalarFunctionDynamicDescrip
                             throws HyracksDataException {
                         resultStorage.reset();
                         evaluators[0].evaluate(tuple, pointables[0]);
+
+                        if (PointableHelper.checkAndSetMissingOrNull(resultPointable, pointables[0])) {
+                            return;
+                        }
+
                         ATypeTag tag = ATypeTag.VALUE_TYPE_MAPPING[pointables[0].getByteArray()[pointables[0]
                                 .getStartOffset()]];
-                        checkTypeMachingThrowsIfNot(getIdentifier().getName(), EXPECTED_TAGS, tag);
+                        checkTypeMachingThrowsIfNot(EXPECTED_TAGS, tag);
                         int len = ByteArrayPointable.getContentLength(pointables[0].getByteArray(),
                                 pointables[0].getStartOffset() + 1);
                         result.setValue(len);

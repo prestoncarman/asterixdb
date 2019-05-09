@@ -18,6 +18,8 @@
  */
 package org.apache.asterix.runtime.aggregates.serializable.std;
 
+import java.io.DataOutput;
+
 import org.apache.asterix.om.functions.BuiltinFunctions;
 import org.apache.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluatorFactory;
@@ -25,8 +27,6 @@ import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.exceptions.SourceLocation;
 import org.apache.hyracks.dataflow.common.data.accessors.IFrameTupleReference;
-
-import java.io.DataOutput;
 
 public class SerializableSqlStddevAggregateFunction
         extends AbstractSerializableSingleVariableStatisticsAggregateFunction {
@@ -69,8 +69,17 @@ public class SerializableSqlStddevAggregateFunction
         if (isPop) {
             return BuiltinFunctions.STDDEV_POP;
         } else {
-            return BuiltinFunctions.STDDEV;
+            return BuiltinFunctions.STDDEV_SAMP;
         }
     }
 
+    @Override
+    protected boolean getM3Flag() {
+        return false;
+    }
+
+    @Override
+    protected boolean getM4Flag() {
+        return false;
+    }
 }

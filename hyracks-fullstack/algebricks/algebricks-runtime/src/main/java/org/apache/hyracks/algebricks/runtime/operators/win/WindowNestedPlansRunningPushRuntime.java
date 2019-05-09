@@ -19,21 +19,20 @@
 
 package org.apache.hyracks.algebricks.runtime.operators.win;
 
-import java.nio.ByteBuffer;
-
+import org.apache.hyracks.algebricks.data.IBinaryBooleanInspector;
+import org.apache.hyracks.algebricks.data.IBinaryBooleanInspectorFactory;
 import org.apache.hyracks.algebricks.runtime.base.IRunningAggregateEvaluatorFactory;
 import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluator;
 import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluatorFactory;
 import org.apache.hyracks.api.comm.IFrame;
-import org.apache.hyracks.api.comm.VSizeFrame;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
+import org.apache.hyracks.api.exceptions.SourceLocation;
+import org.apache.hyracks.data.std.primitive.VoidPointable;
 import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAccessor;
-import org.apache.hyracks.dataflow.common.comm.util.FrameUtils;
 import org.apache.hyracks.dataflow.common.data.accessors.FrameTupleReference;
 import org.apache.hyracks.dataflow.common.data.accessors.PointableTupleReference;
-import org.apache.hyracks.dataflow.common.io.GeneratedRunFileReader;
 import org.apache.hyracks.storage.common.MultiComparator;
 
 /**
@@ -41,7 +40,15 @@ import org.apache.hyracks.storage.common.MultiComparator;
  * as well as regular aggregates (in nested plans) over accumulating window frames
  * (unbounded preceding to current row or N following).
  */
-class WindowNestedPlansRunningPushRuntime extends AbstractWindowNestedPlansPushRuntime {
+final class WindowNestedPlansRunningPushRuntime extends AbstractWindowNestedPlansPushRuntime {
+
+    private static final int PARTITION_POSITION_SLOT = 0;
+
+    private static final int FRAME_POSITION_SLOT = 1;
+
+    private static final int TMP_POSITION_SLOT = 2;
+
+    private static final int PARTITION_READER_SLOT_COUNT = TMP_POSITION_SLOT + 1;
 
     private final IScalarEvaluatorFactory[] frameValueEvalFactories;
 
@@ -59,15 +66,21 @@ class WindowNestedPlansRunningPushRuntime extends AbstractWindowNestedPlansPushR
 
     private PointableTupleReference frameEndPointables;
 
+    private final boolean frameEndValidationExists;
+
+    private final IScalarEvaluatorFactory[] frameEndValidationEvalFactories;
+
+    private IScalarEvaluator[] frameEndValidationEvals;
+
+    private PointableTupleReference frameEndValidationPointables;
+
+    private IWindowAggregatorDescriptor nestedAggForInvalidFrame;
+
     private final int frameMaxObjects;
 
-    private IFrame copyFrame2;
+    private final IBinaryBooleanInspectorFactory booleanAccessorFactory;
 
-    private IFrame runFrame;
-
-    private int runFrameChunkId;
-
-    private long runFrameSize;
+    private IBinaryBooleanInspector booleanAccessor;
 
     private FrameTupleAccessor tAccess2;
 
@@ -77,36 +90,44 @@ class WindowNestedPlansRunningPushRuntime extends AbstractWindowNestedPlansPushR
 
     private int tBeginIdxFrameEndGlobal;
 
-    private long readerPosFrameEndGlobal;
-
     private int toWrite;
 
     WindowNestedPlansRunningPushRuntime(int[] partitionColumns, IBinaryComparatorFactory[] partitionComparatorFactories,
             IBinaryComparatorFactory[] orderComparatorFactories, IScalarEvaluatorFactory[] frameValueEvalFactories,
             IBinaryComparatorFactory[] frameValueComparatorFactories, IScalarEvaluatorFactory[] frameEndEvalFactories,
-            int frameMaxObjects, int[] projectionColumns, int[] runningAggOutColumns,
+            IScalarEvaluatorFactory[] frameEndValidationEvalFactories, int frameMaxObjects,
+            IBinaryBooleanInspectorFactory booleanAccessorFactory, int[] projectionColumns, int[] runningAggOutColumns,
             IRunningAggregateEvaluatorFactory[] runningAggFactories, int nestedAggOutSchemaSize,
-            WindowAggregatorDescriptorFactory nestedAggFactory, IHyracksTaskContext ctx) {
+            WindowAggregatorDescriptorFactory nestedAggFactory, IHyracksTaskContext ctx, int memSizeInFrames,
+            SourceLocation sourceLoc) {
         super(partitionColumns, partitionComparatorFactories, orderComparatorFactories, projectionColumns,
-                runningAggOutColumns, runningAggFactories, nestedAggOutSchemaSize, nestedAggFactory, ctx);
+                runningAggOutColumns, runningAggFactories, nestedAggOutSchemaSize, nestedAggFactory, ctx,
+                memSizeInFrames, sourceLoc);
         this.frameValueEvalFactories = frameValueEvalFactories;
-        this.frameEndEvalFactories = frameEndEvalFactories;
         this.frameValueComparatorFactories = frameValueComparatorFactories;
+        this.frameEndEvalFactories = frameEndEvalFactories;
+        this.frameEndValidationEvalFactories = frameEndValidationEvalFactories;
+        this.frameEndValidationExists =
+                frameEndValidationEvalFactories != null && frameEndValidationEvalFactories.length > 0;
         this.frameMaxObjects = frameMaxObjects;
+        this.booleanAccessorFactory = booleanAccessorFactory;
     }
 
     @Override
     protected void init() throws HyracksDataException {
         super.init();
-
         frameValueEvals = createEvaluators(frameValueEvalFactories, ctx);
         frameValueComparators = MultiComparator.create(frameValueComparatorFactories);
-        frameValuePointables = createPointables(frameValueEvalFactories.length);
+        frameValuePointables = PointableTupleReference.create(frameValueEvalFactories.length, VoidPointable.FACTORY);
         frameEndEvals = createEvaluators(frameEndEvalFactories, ctx);
-        frameEndPointables = createPointables(frameEndEvalFactories.length);
-
-        runFrame = new VSizeFrame(ctx);
-        copyFrame2 = new VSizeFrame(ctx);
+        frameEndPointables = PointableTupleReference.create(frameEndEvalFactories.length, VoidPointable.FACTORY);
+        if (frameEndValidationExists) {
+            frameEndValidationEvals = createEvaluators(frameEndValidationEvalFactories, ctx);
+            frameEndValidationPointables =
+                    PointableTupleReference.create(frameEndValidationEvalFactories.length, VoidPointable.FACTORY);
+            booleanAccessor = booleanAccessorFactory.createBinaryBooleanInspector(ctx);
+            nestedAggForInvalidFrame = nestedAggCreate();
+        }
         tAccess2 = new FrameTupleAccessor(inputRecordDesc);
         tRef2 = new FrameTupleReference();
     }
@@ -115,126 +136,125 @@ class WindowNestedPlansRunningPushRuntime extends AbstractWindowNestedPlansPushR
     protected void beginPartitionImpl() throws HyracksDataException {
         super.beginPartitionImpl();
         nestedAggInit();
+        if (frameEndValidationExists) {
+            nestedAggInit(nestedAggForInvalidFrame);
+        }
         chunkIdxFrameEndGlobal = 0;
         tBeginIdxFrameEndGlobal = -1;
-        readerPosFrameEndGlobal = 0;
-        runFrameChunkId = -1;
         toWrite = frameMaxObjects;
     }
 
     @Override
-    protected void producePartitionTuples(int chunkIdx, GeneratedRunFileReader reader) throws HyracksDataException {
-        long readerPos = -1;
+    protected void producePartitionTuples(int chunkIdx, IFrame chunkFrame) throws HyracksDataException {
+        partitionReader.savePosition(PARTITION_POSITION_SLOT);
+
         int nChunks = getPartitionChunkCount();
-        if (nChunks > 1) {
-            readerPos = reader.position();
-            if (chunkIdx == 0) {
-                ByteBuffer curFrameBuffer = curFrame.getBuffer();
-                int pos = curFrameBuffer.position();
-                copyFrame2.ensureFrameSize(curFrameBuffer.capacity());
-                FrameUtils.copyAndFlip(curFrameBuffer, copyFrame2.getBuffer());
-                curFrameBuffer.position(pos);
-            }
-        }
+        boolean isFirstChunkInPartition = chunkIdx == 0;
+        boolean isLastChunkInPartition = chunkIdx == nChunks - 1;
 
-        boolean isLastChunk = chunkIdx == nChunks - 1;
-
-        tAccess.reset(curFrame.getBuffer());
+        tAccess.reset(chunkFrame.getBuffer());
         int tBeginIdx = getTupleBeginIdx(chunkIdx);
         int tEndIdx = getTupleEndIdx(chunkIdx);
+
         for (int tIdx = tBeginIdx; tIdx <= tEndIdx; tIdx++) {
+            boolean isFirstTupleInPartition = isFirstChunkInPartition && tIdx == tBeginIdx;
+            boolean isLastTupleInPartition = isLastChunkInPartition && tIdx == tEndIdx;
+
             tRef.reset(tAccess, tIdx);
 
             // running aggregates
             produceTuple(tupleBuilder, tAccess, tIdx, tRef);
 
-            // frame boundaries
-            evaluate(frameEndEvals, tRef, frameEndPointables);
-
-            int chunkIdxInnerStart = chunkIdxFrameEndGlobal;
-            int tBeginIdxInnerStart = tBeginIdxFrameEndGlobal;
-            if (nChunks > 1) {
-                reader.seek(readerPosFrameEndGlobal);
+            // frame boundary
+            boolean frameEndValid = true;
+            if (frameEndValidationExists) {
+                evaluate(frameEndValidationEvals, tRef, frameEndValidationPointables);
+                frameEndValid = allTrue(frameEndValidationPointables, booleanAccessor);
             }
 
-            int chunkIdxFrameEndLocal = -1, tBeginIdxFrameEndLocal = -1;
-            long readerPosFrameEndLocal = -1;
+            if (frameEndValid) {
+                evaluate(frameEndEvals, tRef, frameEndPointables);
 
-            frame_loop: for (int chunkIdxInner = chunkIdxInnerStart; chunkIdxInner < nChunks; chunkIdxInner++) {
-                long readerPosFrameInner;
-                IFrame frameInner;
-                if (chunkIdxInner == 0) {
-                    // first chunk's frame is always in memory
-                    frameInner = chunkIdx == 0 ? curFrame : copyFrame2;
-                    readerPosFrameInner = 0;
-                } else {
-                    readerPosFrameInner = reader.position();
-                    if (runFrameChunkId == chunkIdxInner) {
-                        // runFrame has this chunk, so just advance the reader
-                        reader.seek(readerPosFrameInner + runFrameSize);
+                int chunkIdxInnerStart = chunkIdxFrameEndGlobal;
+                int tBeginIdxInnerStart = tBeginIdxFrameEndGlobal;
+
+                if (chunkIdxInnerStart < nChunks) {
+                    if (!isFirstTupleInPartition) {
+                        partitionReader.restorePosition(FRAME_POSITION_SLOT);
                     } else {
-                        reader.nextFrame(runFrame);
-                        runFrameSize = reader.position() - readerPosFrameInner;
-                        runFrameChunkId = chunkIdxInner;
+                        partitionReader.rewind();
                     }
-                    frameInner = runFrame;
                 }
-                tAccess2.reset(frameInner.getBuffer());
 
-                int tBeginIdxInner;
-                if (tBeginIdxInnerStart < 0) {
-                    tBeginIdxInner = getTupleBeginIdx(chunkIdxInner);
+                int chunkIdxFrameEndLocal = -1, tBeginIdxFrameEndLocal = -1;
+
+                frame_loop: for (int chunkIdxInner = chunkIdxInnerStart; chunkIdxInner < nChunks; chunkIdxInner++) {
+                    partitionReader.savePosition(TMP_POSITION_SLOT);
+                    IFrame frameInner = partitionReader.nextFrame(false);
+                    tAccess2.reset(frameInner.getBuffer());
+
+                    int tBeginIdxInner;
+                    if (tBeginIdxInnerStart >= 0) {
+                        tBeginIdxInner = tBeginIdxInnerStart;
+                        tBeginIdxInnerStart = -1;
+                    } else {
+                        tBeginIdxInner = getTupleBeginIdx(chunkIdxInner);
+                    }
+                    int tEndIdxInner = getTupleEndIdx(chunkIdxInner);
+
+                    for (int tIdxInner = tBeginIdxInner; tIdxInner <= tEndIdxInner && toWrite != 0; tIdxInner++) {
+                        tRef2.reset(tAccess2, tIdxInner);
+
+                        evaluate(frameValueEvals, tRef2, frameValuePointables);
+
+                        if (frameValueComparators.compare(frameValuePointables, frameEndPointables) > 0) {
+                            // value > end => beyond the frame end
+                            // save position of the current tuple, will continue from it in the next outer iteration
+                            chunkIdxFrameEndLocal = chunkIdxInner;
+                            tBeginIdxFrameEndLocal = tIdxInner;
+                            partitionReader.copyPosition(TMP_POSITION_SLOT, FRAME_POSITION_SLOT);
+                            // exit the frame loop
+                            break frame_loop;
+                        }
+
+                        nestedAggAggregate(tAccess2, tIdxInner);
+
+                        if (toWrite > 0) {
+                            toWrite--;
+                        }
+                    }
+                }
+
+                if (chunkIdxFrameEndLocal >= 0) {
+                    chunkIdxFrameEndGlobal = chunkIdxFrameEndLocal;
+                    tBeginIdxFrameEndGlobal = tBeginIdxFrameEndLocal;
                 } else {
-                    tBeginIdxInner = tBeginIdxInnerStart;
-                    tBeginIdxInnerStart = -1;
+                    // frame end not found, set it beyond the last chunk
+                    chunkIdxFrameEndGlobal = nChunks;
+                    tBeginIdxFrameEndGlobal = 0;
                 }
-                int tEndIdxInner = getTupleEndIdx(chunkIdxInner);
 
-                for (int tIdxInner = tBeginIdxInner; tIdxInner <= tEndIdxInner && toWrite != 0; tIdxInner++) {
-                    tRef2.reset(tAccess2, tIdxInner);
-
-                    evaluate(frameValueEvals, tRef2, frameValuePointables);
-                    if (frameValueComparators.compare(frameValuePointables, frameEndPointables) > 0) {
-                        // save position of the tuple that matches the frame end.
-                        // we'll continue from it in the next outer iteration
-                        chunkIdxFrameEndLocal = chunkIdxInner;
-                        tBeginIdxFrameEndLocal = tIdxInner;
-                        readerPosFrameEndLocal = readerPosFrameInner;
-
-                        // skip and exit if value > end
-                        break frame_loop;
-                    }
-
-                    nestedAggAggregate(tAccess2, tIdxInner);
-
-                    if (toWrite > 0) {
-                        toWrite--;
-                    }
-                }
-            }
-
-            boolean isLastTuple = isLastChunk && tIdx == tEndIdx;
-            if (isLastTuple) {
-                nestedAggOutputFinalResult(tupleBuilder);
-            } else {
                 nestedAggOutputPartialResult(tupleBuilder);
-            }
-            appendToFrameFromTupleBuilder(tupleBuilder);
-
-            if (chunkIdxFrameEndLocal >= 0) {
-                chunkIdxFrameEndGlobal = chunkIdxFrameEndLocal;
-                tBeginIdxFrameEndGlobal = tBeginIdxFrameEndLocal;
-                readerPosFrameEndGlobal = readerPosFrameEndLocal;
             } else {
-                // could not find the end, set beyond the last chunk
-                chunkIdxFrameEndGlobal = nChunks;
-                tBeginIdxFrameEndGlobal = 0;
-                readerPosFrameEndGlobal = 0;
+                nestedAggOutputPartialResult(nestedAggForInvalidFrame, tupleBuilder);
             }
+
+            if (isLastTupleInPartition) {
+                // we've already emitted accumulated partial result for this tuple, so discard it
+                nestAggDiscardFinalResult();
+                if (frameEndValidationExists) {
+                    nestAggDiscardFinalResult(nestedAggForInvalidFrame);
+                }
+            }
+
+            appendToFrameFromTupleBuilder(tupleBuilder);
         }
 
-        if (nChunks > 1) {
-            reader.seek(readerPos);
-        }
+        partitionReader.restorePosition(PARTITION_POSITION_SLOT);
+    }
+
+    @Override
+    protected int getPartitionReaderSlotCount() {
+        return PARTITION_READER_SLOT_COUNT;
     }
 }

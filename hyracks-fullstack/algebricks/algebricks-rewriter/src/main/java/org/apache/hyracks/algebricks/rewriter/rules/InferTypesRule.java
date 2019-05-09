@@ -19,12 +19,14 @@
 package org.apache.hyracks.algebricks.rewriter.rules;
 
 import org.apache.commons.lang3.mutable.Mutable;
-
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.base.IOptimizationContext;
 import org.apache.hyracks.algebricks.core.rewriter.base.IAlgebraicRewriteRule;
 
+/**
+ * This rule computes and sets the output type environment for each operator in the plan
+ */
 public class InferTypesRule implements IAlgebraicRewriteRule {
 
     @Override

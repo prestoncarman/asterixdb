@@ -28,7 +28,8 @@ import org.apache.hyracks.api.dataflow.value.RecordDescriptor;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.api.job.JobSpecification;
-import org.apache.hyracks.data.std.accessors.PointableBinaryComparatorFactory;
+import org.apache.hyracks.data.std.accessors.IntegerBinaryComparatorFactory;
+import org.apache.hyracks.data.std.accessors.UTF8StringBinaryComparatorFactory;
 import org.apache.hyracks.data.std.primitive.IntegerPointable;
 import org.apache.hyracks.data.std.primitive.UTF8StringPointable;
 import org.apache.hyracks.dataflow.common.comm.io.ArrayTupleBuilder;
@@ -107,12 +108,12 @@ public class SecondaryIndexSearchExample {
 
         // comparators for sort fields and BTree fields
         IBinaryComparatorFactory[] secondaryComparatorFactories = new IBinaryComparatorFactory[2];
-        secondaryComparatorFactories[0] = PointableBinaryComparatorFactory.of(UTF8StringPointable.FACTORY);
-        secondaryComparatorFactories[1] = PointableBinaryComparatorFactory.of(IntegerPointable.FACTORY);
+        secondaryComparatorFactories[0] = UTF8StringBinaryComparatorFactory.INSTANCE;
+        secondaryComparatorFactories[1] = IntegerBinaryComparatorFactory.INSTANCE;
 
         // comparators for primary index
         IBinaryComparatorFactory[] primaryComparatorFactories = new IBinaryComparatorFactory[1];
-        primaryComparatorFactories[1] = PointableBinaryComparatorFactory.of(IntegerPointable.FACTORY);
+        primaryComparatorFactories[1] = IntegerBinaryComparatorFactory.INSTANCE;
 
         // schema of tuples coming out of primary index
         RecordDescriptor primaryRecDesc = new RecordDescriptor(new ISerializerDeserializer[] {
@@ -131,7 +132,7 @@ public class SecondaryIndexSearchExample {
         // i.e. we will have a range condition on the first field only (implying
         // [-infinity, +infinity] for the second field)
         IBinaryComparatorFactory[] searchComparatorFactories = new IBinaryComparatorFactory[1];
-        searchComparatorFactories[0] = PointableBinaryComparatorFactory.of(UTF8StringPointable.FACTORY);
+        searchComparatorFactories[0] = UTF8StringBinaryComparatorFactory.INSTANCE;
 
         // build tuple containing low and high search keys
         ArrayTupleBuilder tb = new ArrayTupleBuilder(searchComparatorFactories.length * 2); // low

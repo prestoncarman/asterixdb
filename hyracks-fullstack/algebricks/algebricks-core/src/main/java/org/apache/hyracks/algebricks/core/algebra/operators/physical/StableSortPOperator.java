@@ -47,16 +47,14 @@ import org.apache.hyracks.dataflow.std.sort.TopKSorterOperatorDescriptor;
 
 public class StableSortPOperator extends AbstractStableSortPOperator {
 
-    private int maxNumberOfFrames;
-    private int topK;
+    private final int topK;
 
     public StableSortPOperator(int maxNumberOfFrames) {
         this(maxNumberOfFrames, -1);
     }
 
     public StableSortPOperator(int maxNumberOfFrames, int topK) {
-        super();
-        this.maxNumberOfFrames = maxNumberOfFrames;
+        super(maxNumberOfFrames);
         this.topK = topK;
     }
 
@@ -86,6 +84,7 @@ public class StableSortPOperator extends AbstractStableSortPOperator {
 
         IVariableTypeEnvironment env = context.getTypeEnvironment(op);
         int i = 0;
+        // TODO(ali): should refactor common code with micro sort op
         for (OrderColumn oc : sortColumns) {
             LogicalVariable var = oc.getColumn();
             sortFields[i] = opSchema.findVariable(var);
@@ -118,21 +117,14 @@ public class StableSortPOperator extends AbstractStableSortPOperator {
 
     @Override
     public String toString() {
-        if (orderProp == null) {
-            if (topK != -1) {
-                // A topK value is introduced.
-                return getOperatorTag().toString() + " [topK: " + topK + "]";
-            } else {
-                return getOperatorTag().toString();
-            }
-        } else {
-            if (topK != -1) {
-                // A topK value is introduced.
-                return getOperatorTag().toString() + " [topK: " + topK + "]" + " " + orderProp;
-            } else {
-                return getOperatorTag().toString() + " " + orderProp;
-            }
+        StringBuilder out = new StringBuilder();
+        out.append(getOperatorTag());
+        if (topK != -1) {
+            out.append(" [topK: ").append(topK).append(']');
         }
+        if (orderProp != null) {
+            out.append(' ').append(orderProp);
+        }
+        return out.toString();
     }
-
 }

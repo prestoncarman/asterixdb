@@ -66,11 +66,13 @@ import org.apache.asterix.common.exceptions.ACIDException;
 import org.apache.asterix.common.exceptions.AsterixException;
 import org.apache.asterix.common.exceptions.CompilationException;
 import org.apache.asterix.common.exceptions.ErrorCode;
+import org.apache.asterix.common.exceptions.ExceptionUtils;
 import org.apache.asterix.common.exceptions.MetadataException;
 import org.apache.asterix.common.exceptions.RuntimeDataException;
 import org.apache.asterix.common.functions.FunctionSignature;
 import org.apache.asterix.common.utils.JobUtils;
 import org.apache.asterix.common.utils.JobUtils.ProgressState;
+import org.apache.asterix.common.utils.StorageConstants;
 import org.apache.asterix.compiler.provider.ILangCompilationProvider;
 import org.apache.asterix.external.indexing.ExternalFile;
 import org.apache.asterix.external.indexing.IndexingConstants;
@@ -586,8 +588,8 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                             sourceLoc);
 
             if (compactionPolicy == null) {
-                compactionPolicy = GlobalConfig.DEFAULT_COMPACTION_POLICY_NAME;
-                compactionPolicyProperties = GlobalConfig.DEFAULT_COMPACTION_POLICY_PROPERTIES;
+                compactionPolicy = StorageConstants.DEFAULT_COMPACTION_POLICY_NAME;
+                compactionPolicyProperties = StorageConstants.DEFAULT_COMPACTION_POLICY_PROPERTIES;
             } else {
                 validateCompactionPolicy(compactionPolicy, compactionPolicyProperties, mdTxnCtx, false, sourceLoc);
             }
@@ -626,8 +628,8 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                         // If the dataset has a filter and the user didn't specify a merge
                         // policy, then we will pick the
                         // correlated-prefix as the default merge policy.
-                        compactionPolicy = GlobalConfig.DEFAULT_FILTERED_DATASET_COMPACTION_POLICY_NAME;
-                        compactionPolicyProperties = GlobalConfig.DEFAULT_COMPACTION_POLICY_PROPERTIES;
+                        compactionPolicy = StorageConstants.DEFAULT_FILTERED_DATASET_COMPACTION_POLICY_NAME;
+                        compactionPolicyProperties = StorageConstants.DEFAULT_COMPACTION_POLICY_PROPERTIES;
                     }
                     datasetDetails = new InternalDatasetDetails(InternalDatasetDetails.FileStructure.BTREE,
                             InternalDatasetDetails.PartitioningStrategy.HASH, partitioningExprs, partitioningExprs,
@@ -2622,11 +2624,15 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                 hcc.waitForCompletion(jobId);
             } else {
                 hcc.waitForCompletion(jobId);
+                ensureNotCancelled(clientRequest);
                 printer.print(jobId);
             }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new RuntimeDataException(ErrorCode.REQUEST_CANCELLED, clientRequest.getId());
+        } catch (Exception e) {
+            if (ExceptionUtils.getRootCause(e) instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeDataException(ErrorCode.REQUEST_CANCELLED, clientRequest.getId());
+            }
+            throw e;
         } finally {
             // complete async jobs after their job completes
             if (ResultDelivery.ASYNC == resultDelivery) {
@@ -2992,5 +2998,11 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
     protected void validateDatasetState(MetadataProvider metadataProvider, Dataset dataset, SourceLocation sourceLoc)
             throws Exception {
         validateIfResourceIsActiveInFeed(metadataProvider.getApplicationContext(), dataset, sourceLoc);
+    }
+
+    private static void ensureNotCancelled(ClientRequest clientRequest) throws RuntimeDataException {
+        if (clientRequest.isCancelled()) {
+            throw new RuntimeDataException(ErrorCode.REQUEST_CANCELLED, clientRequest.getId());
+        }
     }
 }

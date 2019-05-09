@@ -21,7 +21,6 @@ package org.apache.hyracks.algebricks.rewriter.rules;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -40,11 +39,11 @@ import org.apache.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import org.apache.hyracks.algebricks.core.algebra.base.OperatorAnnotations;
 import org.apache.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator.ExecutionMode;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractOperatorWithNestedPlans;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AggregateOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.GroupByOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.NestedTupleSourceOperator;
-import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator.ExecutionMode;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.visitors.IsomorphismUtilities;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.visitors.VariableUtilities;
 import org.apache.hyracks.algebricks.core.algebra.plan.ALogicalPlanImpl;
@@ -141,24 +140,27 @@ public abstract class AbstractIntroduceGroupByCombinerRule extends AbstractIntro
         Map<String, Object> annotations = newGbyOp.getAnnotations();
         annotations.putAll(gbyOp.getAnnotations());
 
-        List<LogicalVariable> gbyVars = gbyOp.getGbyVarList();
+        List<LogicalVariable> gbyVars = gbyOp.getGroupByVarList();
 
         // Backup nested plans since tryToPushSubplan(...) may mutate them.
-        List<ILogicalPlan> copiedNestedPlans = new ArrayList<>();
-        for (ILogicalPlan nestedPlan : gbyOp.getNestedPlans()) {
-            ILogicalPlan copiedNestedPlan = OperatorManipulationUtil.deepCopy(nestedPlan, gbyOp);
-            OperatorManipulationUtil.computeTypeEnvironment(copiedNestedPlan, context);
-            copiedNestedPlans.add(copiedNestedPlan);
-        }
+        List<ILogicalPlan> gbyNestedPlans = gbyOp.getNestedPlans();
+        List<ILogicalPlan> backupNestedPlans = new ArrayList<>(gbyNestedPlans);
 
-        for (ILogicalPlan p : gbyOp.getNestedPlans()) {
+        for (int i = 0, n = gbyNestedPlans.size(); i < n; i++) {
+            ILogicalPlan nestedPlan = gbyNestedPlans.get(i);
+
+            // Replace nested plan with its copy
+            ILogicalPlan p = OperatorManipulationUtil.deepCopy(nestedPlan, gbyOp);
+            OperatorManipulationUtil.computeTypeEnvironment(p, context);
+            gbyNestedPlans.set(i, p);
+
             // NOTE: tryToPushSubplan(...) can mutate the nested subplan p.
             Pair<Boolean, ILogicalPlan> bip = tryToPushSubplan(p, gbyOp, newGbyOp, bi, gbyVars, context);
             if (!bip.first) {
                 // For now, if we cannot push everything, give up.
-                // Resets the group-by operator with backup nested plans.
-                gbyOp.getNestedPlans().clear();
-                gbyOp.getNestedPlans().addAll(copiedNestedPlans);
+                // Resets the group-by operator with original nested plans.
+                gbyNestedPlans.clear();
+                gbyNestedPlans.addAll(backupNestedPlans);
                 return null;
             }
             ILogicalPlan pushedSubplan = bip.second;
@@ -304,7 +306,7 @@ public abstract class AbstractIntroduceGroupByCombinerRule extends AbstractIntro
             return true;
         } else {
             GroupByOperator nestedGby = (GroupByOperator) op3;
-            List<LogicalVariable> gbyVars2 = nestedGby.getGbyVarList();
+            List<LogicalVariable> gbyVars2 = nestedGby.getGroupByVarList();
             Set<LogicalVariable> freeVars = new HashSet<>();
             // Removes non-free variables defined in the nested plan.
             OperatorPropertiesUtil.getFreeVariablesInSelfOrDesc(nestedGby, freeVars);

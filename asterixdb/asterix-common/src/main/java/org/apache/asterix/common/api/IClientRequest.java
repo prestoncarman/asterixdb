@@ -23,6 +23,31 @@ import org.apache.hyracks.api.exceptions.HyracksDataException;
 
 public interface IClientRequest {
 
+    enum State {
+
+        RECEIVED("received"),
+        RUNNING("running"),
+        CANCELLED("cancelled"),
+        COMPLETED("completed");
+
+        private final String label;
+
+        State(String label) {
+            this.label = label;
+        }
+
+        public String getLabel() {
+            return label;
+        }
+    }
+
+    /**
+     * A flag indicating if the request has been cancelled
+     *
+     * @return true if the request was cancelled, otherwise false
+     */
+    boolean isCancelled();
+
     /**
      * A system wide unique id representing this {@link IClientRequest}
      *

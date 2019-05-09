@@ -20,23 +20,22 @@ package org.apache.asterix.runtime.evaluators.functions;
 
 import java.util.List;
 
-import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
-import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import org.apache.asterix.builders.ArrayListFactory;
 import org.apache.asterix.builders.IAsterixListBuilder;
-import org.apache.asterix.dataflow.data.nontagged.comparators.AObjectAscBinaryComparatorFactory;
+import org.apache.asterix.common.annotations.MissingNullInOutFunction;
+import org.apache.asterix.formats.nontagged.BinaryComparatorFactoryProvider;
 import org.apache.asterix.formats.nontagged.BinaryHashFunctionFactoryProvider;
 import org.apache.asterix.om.functions.BuiltinFunctions;
 import org.apache.asterix.om.functions.IFunctionDescriptor;
 import org.apache.asterix.om.functions.IFunctionDescriptorFactory;
 import org.apache.asterix.om.functions.IFunctionTypeInferer;
 import org.apache.asterix.om.types.ATypeTag;
+import org.apache.asterix.om.types.BuiltinType;
 import org.apache.asterix.om.types.IAType;
 import org.apache.asterix.om.util.container.IObjectPool;
 import org.apache.asterix.om.util.container.ListObjectPool;
 import org.apache.asterix.runtime.evaluators.base.AbstractScalarFunctionDynamicDescriptor;
 import org.apache.asterix.runtime.functions.FunctionTypeInferers;
-import org.apache.asterix.runtime.utils.ArrayFunctionsUtil;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluator;
@@ -46,6 +45,9 @@ import org.apache.hyracks.api.dataflow.value.IBinaryComparator;
 import org.apache.hyracks.api.dataflow.value.IBinaryHashFunction;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.data.std.api.IPointable;
+
+import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
+import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 
 /**
  * <pre>
@@ -60,11 +62,12 @@ import org.apache.hyracks.data.std.api.IPointable;
  * 1. missing, if any argument is missing.
  * 2. an error if the input lists are not of the same type (one is an ordered list while the other is unordered).
  * 3. null, if any input list is null or is not a list.
- * 4. an error if any list item is a list/object type (i.e. derived type) since deep equality is not yet supported.
- * 5. otherwise, a new list.
+ * 4. otherwise, a new list.
  *
  * </pre>
  */
+
+@MissingNullInOutFunction
 public class ArrayUnionDescriptor extends AbstractScalarFunctionDynamicDescriptor {
     private static final long serialVersionUID = 1L;
     private IAType[] argTypes;
@@ -110,13 +113,15 @@ public class ArrayUnionDescriptor extends AbstractScalarFunctionDynamicDescripto
         private final Int2ObjectMap<List<IPointable>> hashes;
         private final IBinaryComparator comp;
 
-        public ArrayUnionEval(IScalarEvaluatorFactory[] args, IHyracksTaskContext ctx) throws HyracksDataException {
-            super(args, ctx, true, sourceLoc, argTypes);
+        ArrayUnionEval(IScalarEvaluatorFactory[] args, IHyracksTaskContext ctx) throws HyracksDataException {
+            super(args, ctx, sourceLoc, argTypes);
             pointableListAllocator = new ListObjectPool<>(new ArrayListFactory<>());
             hashes = new Int2ObjectOpenHashMap<>();
-            comp = AObjectAscBinaryComparatorFactory.INSTANCE.createBinaryComparator();
-            binaryHashFunction = BinaryHashFunctionFactoryProvider.INSTANCE.getBinaryHashFunctionFactory(null)
-                    .createBinaryHashFunction();
+            // for functions that accept multiple lists arguments, they will be casted to open, hence item is ANY
+            comp = BinaryComparatorFactoryProvider.INSTANCE
+                    .getBinaryComparatorFactory(BuiltinType.ANY, BuiltinType.ANY, true).createBinaryComparator();
+            binaryHashFunction = BinaryHashFunctionFactoryProvider.INSTANCE
+                    .getBinaryHashFunctionFactory(BuiltinType.ANY).createBinaryHashFunction();
         }
 
         @Override
@@ -146,7 +151,7 @@ public class ArrayUnionDescriptor extends AbstractScalarFunctionDynamicDescripto
                 addItem(listBuilder, item, sameHashes);
                 hashes.put(hash, sameHashes);
                 return true;
-            } else if (ArrayFunctionsUtil.findItem(item, sameHashes, comp) == null) {
+            } else if (PointableHelper.findItem(item, sameHashes, comp) == null) {
                 // new item, it could happen that two hashes are the same but they are for different items
                 addItem(listBuilder, item, sameHashes);
                 return true;

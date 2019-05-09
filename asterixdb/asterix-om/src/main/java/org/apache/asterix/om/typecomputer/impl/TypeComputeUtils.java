@@ -20,6 +20,7 @@ package org.apache.asterix.om.typecomputer.impl;
 
 import java.util.List;
 
+import org.apache.asterix.om.pointables.base.DefaultOpenFieldType;
 import org.apache.asterix.om.types.AOrderedListType;
 import org.apache.asterix.om.types.ARecordType;
 import org.apache.asterix.om.types.ATypeTag;
@@ -84,7 +85,7 @@ public class TypeComputeUtils {
             inputTypes[index++] = (IAType) env.getType(arg);
         }
 
-        // Checks input types and computes result types.
+        // Checks input types.
         IAType[] knownInputTypes = TypeComputeUtils.getActualType(inputTypes);
         boolean[] unknownable = TypeComputeUtils.isUnknownableType(inputTypes);
         for (int argIndex = 0; argIndex < knownInputTypes.length; ++argIndex) {
@@ -97,7 +98,7 @@ public class TypeComputeUtils {
         }
 
         // Computes the result type.
-        byte category = TypeComputeUtils.resolveCateogry(inputTypes);
+        byte category = TypeComputeUtils.resolveCategory(inputTypes);
         if (propagateNullAndMissing) {
             if (category == MISSING) {
                 return BuiltinType.AMISSING;
@@ -126,7 +127,7 @@ public class TypeComputeUtils {
         }
     }
 
-    private static byte resolveCateogry(IAType... inputTypes) {
+    private static byte resolveCategory(IAType... inputTypes) {
         byte category = CERTAIN;
         boolean meetNull = false;
         for (IAType inputType : inputTypes) {
@@ -236,4 +237,9 @@ public class TypeComputeUtils {
         return null;
     }
 
+    // this is for complex types. it will return null when asking for a default type for a primitive tag
+    public static IAType getActualTypeOrOpen(IAType type, ATypeTag tag) {
+        IAType actualType = TypeComputeUtils.getActualType(type);
+        return actualType.getTypeTag() == ATypeTag.ANY ? DefaultOpenFieldType.getDefaultOpenFieldType(tag) : actualType;
+    }
 }

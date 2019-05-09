@@ -19,6 +19,7 @@
 package org.apache.asterix.runtime.evaluators.functions;
 
 import org.apache.asterix.builders.IAsterixListBuilder;
+import org.apache.asterix.common.annotations.MissingNullInOutFunction;
 import org.apache.asterix.om.functions.BuiltinFunctions;
 import org.apache.asterix.om.functions.IFunctionDescriptor;
 import org.apache.asterix.om.functions.IFunctionDescriptorFactory;
@@ -49,6 +50,8 @@ import org.apache.hyracks.data.std.api.IPointable;
  *
  * </pre>
  */
+
+@MissingNullInOutFunction
 public class ArrayConcatDescriptor extends AbstractScalarFunctionDynamicDescriptor {
     private static final long serialVersionUID = 1L;
     private IAType[] argTypes;
@@ -89,8 +92,9 @@ public class ArrayConcatDescriptor extends AbstractScalarFunctionDynamicDescript
     }
 
     public class ArrayConcatEval extends AbstractArrayProcessArraysEval {
-        public ArrayConcatEval(IScalarEvaluatorFactory[] args, IHyracksTaskContext ctx) throws HyracksDataException {
-            super(args, ctx, false, sourceLoc, argTypes);
+
+        ArrayConcatEval(IScalarEvaluatorFactory[] args, IHyracksTaskContext ctx) throws HyracksDataException {
+            super(args, ctx, sourceLoc, argTypes);
         }
 
         @Override

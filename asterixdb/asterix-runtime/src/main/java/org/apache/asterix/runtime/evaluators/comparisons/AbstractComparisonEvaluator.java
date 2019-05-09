@@ -22,7 +22,7 @@ import java.io.DataOutput;
 
 import org.apache.asterix.dataflow.data.common.ILogicalBinaryComparator;
 import org.apache.asterix.dataflow.data.common.ILogicalBinaryComparator.Result;
-import org.apache.asterix.dataflow.data.nontagged.comparators.LogicalComparatorUtil;
+import org.apache.asterix.dataflow.data.nontagged.comparators.ComparatorUtil;
 import org.apache.asterix.dataflow.data.nontagged.serde.ADoubleSerializerDeserializer;
 import org.apache.asterix.dataflow.data.nontagged.serde.AFloatSerializerDeserializer;
 import org.apache.asterix.dataflow.data.nontagged.serde.AInt16SerializerDeserializer;
@@ -43,6 +43,7 @@ import org.apache.asterix.om.types.ATypeTag;
 import org.apache.asterix.om.types.BuiltinType;
 import org.apache.asterix.om.types.EnumDeserializer;
 import org.apache.asterix.om.types.IAType;
+import org.apache.asterix.runtime.evaluators.functions.PointableHelper;
 import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluator;
 import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluatorFactory;
 import org.apache.hyracks.algebricks.runtime.evaluators.ConstantEvalFactory;
@@ -80,7 +81,7 @@ public abstract class AbstractComparisonEvaluator implements IScalarEvaluator {
         this.evalLeft = evalLeftFactory.createScalarEvaluator(ctx);
         this.evalRight = evalRightFactory.createScalarEvaluator(ctx);
         this.sourceLoc = sourceLoc;
-        logicalComparator = LogicalComparatorUtil.createLogicalComparator(leftType, rightType, isEquality);
+        logicalComparator = ComparatorUtil.createLogicalComparator(leftType, rightType, isEquality);
         leftConstant = getValueOfConstantEval(evalLeftFactory);
         rightConstant = getValueOfConstantEval(evalRightFactory);
     }
@@ -97,6 +98,11 @@ public abstract class AbstractComparisonEvaluator implements IScalarEvaluator {
         // Evaluates input args.
         evalLeft.evaluate(tuple, argLeft);
         evalRight.evaluate(tuple, argRight);
+
+        if (PointableHelper.checkAndSetMissingOrNull(result, argLeft, argRight)) {
+            return;
+        }
+
         evaluateImpl(result);
     }
 
@@ -109,17 +115,14 @@ public abstract class AbstractComparisonEvaluator implements IScalarEvaluator {
                 return logicalComparator.compare(leftConstant, rightConstant);
             } else {
                 // left is constant, right isn't
-                return logicalComparator.compare(leftConstant, argRight.getByteArray(), argRight.getStartOffset(),
-                        argRight.getLength());
+                return logicalComparator.compare(leftConstant, argRight);
             }
         } else {
             if (rightConstant != null) {
                 // right is constant, left isn't
-                return logicalComparator.compare(argLeft.getByteArray(), argLeft.getStartOffset(), argLeft.getLength(),
-                        rightConstant);
+                return logicalComparator.compare(argLeft, rightConstant);
             } else {
-                return logicalComparator.compare(argLeft.getByteArray(), argLeft.getStartOffset(), argLeft.getLength(),
-                        argRight.getByteArray(), argRight.getStartOffset(), argRight.getLength());
+                return logicalComparator.compare(argLeft, argRight);
             }
         }
     }

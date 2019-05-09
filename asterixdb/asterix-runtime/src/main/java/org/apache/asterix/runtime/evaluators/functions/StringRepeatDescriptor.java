@@ -22,6 +22,7 @@ package org.apache.asterix.runtime.evaluators.functions;
 import java.io.DataOutput;
 import java.io.IOException;
 
+import org.apache.asterix.common.annotations.MissingNullInOutFunction;
 import org.apache.asterix.common.exceptions.ErrorCode;
 import org.apache.asterix.common.exceptions.RuntimeDataException;
 import org.apache.asterix.om.functions.BuiltinFunctions;
@@ -42,6 +43,7 @@ import org.apache.hyracks.data.std.util.ArrayBackedValueStorage;
 import org.apache.hyracks.dataflow.common.data.accessors.IFrameTupleReference;
 import org.apache.hyracks.util.string.UTF8StringUtil;
 
+@MissingNullInOutFunction
 public class StringRepeatDescriptor extends AbstractScalarFunctionDynamicDescriptor {
     private static final long serialVersionUID = 1L;
     public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
@@ -80,6 +82,10 @@ public class StringRepeatDescriptor extends AbstractScalarFunctionDynamicDescrip
                         evalString.evaluate(tuple, argString);
                         evalStart.evaluate(tuple, argNumber);
 
+                        if (PointableHelper.checkAndSetMissingOrNull(result, argString, argNumber)) {
+                            return;
+                        }
+
                         // Gets the repeating times.
                         byte[] bytes = argNumber.getByteArray();
                         int offset = argNumber.getStartOffset();
@@ -87,8 +93,8 @@ public class StringRepeatDescriptor extends AbstractScalarFunctionDynamicDescrip
                                 ATypeHierarchy.getIntegerValue(getIdentifier().getName(), 1, bytes, offset);
                         // Checks repeatingTimes. It should be a non-negative value.
                         if (repeatingTimes < 0) {
-                            throw new RuntimeDataException(ErrorCode.NEGATIVE_VALUE, sourceLoc, getIdentifier(), 1,
-                                    repeatingTimes);
+                            throw new RuntimeDataException(ErrorCode.NEGATIVE_VALUE, sourceLoc,
+                                    getIdentifier().getName(), 1, repeatingTimes);
                         }
 
                         // Gets the input string.

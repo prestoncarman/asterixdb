@@ -30,13 +30,13 @@ import org.apache.asterix.common.exceptions.CompilationException;
 import org.apache.asterix.common.functions.FunctionSignature;
 import org.apache.asterix.lang.common.base.Expression;
 import org.apache.asterix.lang.common.base.ILangExpression;
+import org.apache.asterix.lang.common.context.Scope;
 import org.apache.asterix.lang.common.expression.VariableExpr;
 import org.apache.asterix.lang.common.rewrites.LangRewritingContext;
 import org.apache.asterix.lang.common.struct.Identifier;
 import org.apache.asterix.lang.sqlpp.clause.SelectBlock;
 import org.apache.asterix.lang.sqlpp.expression.WindowExpression;
 import org.apache.asterix.lang.sqlpp.util.FunctionMapUtil;
-import org.apache.asterix.lang.sqlpp.util.SqlppRewriteUtil;
 import org.apache.asterix.lang.sqlpp.util.SqlppVariableUtil;
 import org.apache.asterix.lang.sqlpp.visitor.base.AbstractSqlppExpressionScopingVisitor;
 import org.apache.asterix.om.functions.BuiltinFunctions;
@@ -87,7 +87,6 @@ public class SqlppWindowAggregationSugarVisitor extends AbstractSqlppExpressionS
         FunctionIdentifier winfi = FunctionMapUtil.getInternalWindowFunction(signature);
         if (winfi != null) {
             winExpr.setFunctionSignature(new FunctionSignature(winfi));
-            rewriteSpecificWindowFunctions(winfi, winExpr);
             if (BuiltinFunctions.builtinFunctionHasProperty(winfi,
                     BuiltinFunctions.WindowFunctionProperty.HAS_LIST_ARG)) {
                 wrapAggregationArguments(winExpr, 1);
@@ -100,21 +99,26 @@ public class SqlppWindowAggregationSugarVisitor extends AbstractSqlppExpressionS
         return super.visit(winExpr, arg);
     }
 
-    private void wrapAggregationArguments(WindowExpression winExpr, int limit) throws CompilationException {
-        Set<VariableExpr> liveVars = scopeChecker.getCurrentScope().getLiveVariables();
-
+    void wrapAggregationArguments(WindowExpression winExpr, int limit) throws CompilationException {
         VariableExpr winVar = winExpr.getWindowVar();
+
+        Map<VariableExpr, Set<? extends Scope.SymbolAnnotation>> liveAnnotatedVars =
+                scopeChecker.getCurrentScope().getLiveVariables();
+        Set<VariableExpr> liveVars = liveAnnotatedVars.keySet();
+        Set<VariableExpr> liveContextVars = Scope.findVariablesAnnotatedBy(liveVars,
+                SqlppVariableAnnotation.CONTEXT_VARIABLE, liveAnnotatedVars, winExpr.getSourceLocation());
+
         List<Pair<Expression, Identifier>> winFieldList = winExpr.getWindowFieldList();
-        Map<Expression, Identifier> fieldMap = SqlppVariableUtil.createFieldVariableMap(winFieldList);
+        Map<VariableExpr, Identifier> winVarFieldMap =
+                SqlppGroupByAggregationSugarVisitor.createGroupVarFieldMap(winFieldList);
 
         List<Expression> exprList = winExpr.getExprList();
         int n = exprList.size();
         List<Expression> newExprList = new ArrayList<>(n);
         for (int i = 0; i < n; i++) {
             Expression expr = exprList.get(i);
-            Expression newExpr = i < limit
-                    ? Sql92AggregateFunctionVisitor.wrapAggregationArgument(expr, winVar, fieldMap, liveVars, context)
-                    : expr;
+            Expression newExpr = i < limit ? Sql92AggregateFunctionVisitor.wrapAggregationArgument(expr, winVar,
+                    winVarFieldMap, liveContextVars, null, liveVars, context) : expr;
             newExprList.add(newExpr);
         }
         winExpr.setExprList(newExprList);
@@ -138,28 +142,5 @@ public class SqlppWindowAggregationSugarVisitor extends AbstractSqlppExpressionS
                 SqlppVariableUtil.addToFieldVariableList(varExpr, outFieldList);
             }
         }
-    }
-
-    /**
-     * Apply rewritings for specific window functions:
-     * <ul>
-     * <li>
-     * {@code ratio_to_report(x) -> ratio_to_report_impl(x, x)}.
-     * The first argument will then be rewritten by {@link #wrapAggregationArguments(WindowExpression, int)}.
-     * The remaining rewriting to {@code x/sum(x)} will be done by the expression to plan translator
-     * </li>
-     * </ul>
-     */
-    private void rewriteSpecificWindowFunctions(FunctionIdentifier winfi, WindowExpression winExpr)
-            throws CompilationException {
-        if (BuiltinFunctions.RATIO_TO_REPORT_IMPL.equals(winfi)) {
-            duplicateLastArgument(winExpr);
-        }
-    }
-
-    private void duplicateLastArgument(WindowExpression winExpr) throws CompilationException {
-        List<Expression> exprList = winExpr.getExprList();
-        Expression arg = exprList.get(exprList.size() - 1);
-        exprList.add((Expression) SqlppRewriteUtil.deepCopy(arg));
     }
 }

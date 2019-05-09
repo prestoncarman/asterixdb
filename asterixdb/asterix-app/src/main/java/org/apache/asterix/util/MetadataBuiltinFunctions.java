@@ -19,12 +19,15 @@
 package org.apache.asterix.util;
 
 import org.apache.asterix.app.function.ActiveRequestsRewriter;
+import org.apache.asterix.app.function.CompletedRequestsRewriter;
 import org.apache.asterix.app.function.DatasetResourcesRewriter;
 import org.apache.asterix.app.function.DatasetRewriter;
+import org.apache.asterix.app.function.DumpIndexRewriter;
 import org.apache.asterix.app.function.FeedRewriter;
 import org.apache.asterix.app.function.JobSummariesRewriter;
 import org.apache.asterix.app.function.PingRewriter;
 import org.apache.asterix.app.function.StorageComponentsRewriter;
+import org.apache.asterix.app.function.TPCDSDataGeneratorRewriter;
 import org.apache.asterix.om.functions.BuiltinFunctions;
 import org.apache.asterix.om.utils.RecordUtil;
 
@@ -56,6 +59,12 @@ public class MetadataBuiltinFunctions {
                 (expression, env, mp) -> RecordUtil.FULLY_OPEN_RECORD_TYPE, true);
         BuiltinFunctions.addUnnestFun(PingRewriter.PING, true);
         BuiltinFunctions.addDatasourceFunction(PingRewriter.PING, PingRewriter.INSTANCE);
+        // TPC-DS data generation function
+        BuiltinFunctions.addPrivateFunction(TPCDSDataGeneratorRewriter.TPCDS_DATA_GENERATOR,
+                (expression, env, mp) -> RecordUtil.FULLY_OPEN_RECORD_TYPE, true);
+        BuiltinFunctions.addUnnestFun(TPCDSDataGeneratorRewriter.TPCDS_DATA_GENERATOR, true);
+        BuiltinFunctions.addDatasourceFunction(TPCDSDataGeneratorRewriter.TPCDS_DATA_GENERATOR,
+                TPCDSDataGeneratorRewriter.INSTANCE);
         // Active requests function
         BuiltinFunctions.addFunction(ActiveRequestsRewriter.ACTIVE_REQUESTS,
                 (expression, env, mp) -> RecordUtil.FULLY_OPEN_RECORD_TYPE, true);
@@ -66,6 +75,17 @@ public class MetadataBuiltinFunctions {
                 (expression, env, mp) -> RecordUtil.FULLY_OPEN_RECORD_TYPE, true);
         BuiltinFunctions.addUnnestFun(JobSummariesRewriter.JOBSUMMARIES, true);
         BuiltinFunctions.addDatasourceFunction(JobSummariesRewriter.JOBSUMMARIES, JobSummariesRewriter.INSTANCE);
+        // completed requests function
+        BuiltinFunctions.addFunction(CompletedRequestsRewriter.COMPLETED_REQUESTS,
+                (expression, env, mp) -> RecordUtil.FULLY_OPEN_RECORD_TYPE, true);
+        BuiltinFunctions.addUnnestFun(CompletedRequestsRewriter.COMPLETED_REQUESTS, true);
+        BuiltinFunctions.addDatasourceFunction(CompletedRequestsRewriter.COMPLETED_REQUESTS,
+                CompletedRequestsRewriter.INSTANCE);
+        // Dump index function
+        BuiltinFunctions.addPrivateFunction(DumpIndexRewriter.DUMP_INDEX,
+                (expression, env, mp) -> RecordUtil.FULLY_OPEN_RECORD_TYPE, true);
+        BuiltinFunctions.addUnnestFun(DumpIndexRewriter.DUMP_INDEX, false);
+        BuiltinFunctions.addDatasourceFunction(DumpIndexRewriter.DUMP_INDEX, DumpIndexRewriter.INSTANCE);
     }
 
     private MetadataBuiltinFunctions() {

@@ -19,9 +19,9 @@
 package org.apache.asterix.metadata.utils;
 
 import org.apache.asterix.common.config.DatasetConfig.IndexType;
-import org.apache.asterix.common.config.GlobalConfig;
 import org.apache.asterix.common.exceptions.CompilationException;
 import org.apache.asterix.common.exceptions.ErrorCode;
+import org.apache.asterix.common.utils.StorageConstants;
 import org.apache.asterix.dataflow.data.nontagged.MissingWriterFactory;
 import org.apache.asterix.metadata.declared.MetadataProvider;
 import org.apache.asterix.metadata.entities.Dataset;
@@ -47,7 +47,7 @@ import org.apache.hyracks.api.dataflow.value.ITypeTraits;
 import org.apache.hyracks.api.dataflow.value.RecordDescriptor;
 import org.apache.hyracks.api.exceptions.SourceLocation;
 import org.apache.hyracks.api.job.JobSpecification;
-import org.apache.hyracks.data.std.accessors.PointableBinaryComparatorFactory;
+import org.apache.hyracks.data.std.accessors.ShortBinaryComparatorFactory;
 import org.apache.hyracks.data.std.primitive.ShortPointable;
 import org.apache.hyracks.dataflow.common.data.marshalling.ShortSerializerDeserializer;
 import org.apache.hyracks.dataflow.std.base.AbstractOperatorDescriptor;
@@ -141,7 +141,7 @@ public class SecondaryInvertedIndexOperationsHelper extends SecondaryTreeIndexOp
         tokenTypeTraits[0] = NonTaggedFormatUtil.getTokenTypeTrait(secondaryKeyType);
         if (isPartitioned) {
             // The partitioning field is hardcoded to be a short *without* an Asterix type tag.
-            tokenComparatorFactories[1] = PointableBinaryComparatorFactory.of(ShortPointable.FACTORY);
+            tokenComparatorFactories[1] = ShortBinaryComparatorFactory.INSTANCE;
             tokenTypeTraits[1] = ShortPointable.TYPE_TRAITS;
         }
         // Set tokenizer factory.
@@ -173,7 +173,7 @@ public class SecondaryInvertedIndexOperationsHelper extends SecondaryTreeIndexOp
         if (isPartitioned) {
             tokenKeyPairFields[1] = ShortSerializerDeserializer.INSTANCE;
             tokenKeyPairTypeTraits[1] = tokenTypeTraits[1];
-            tokenKeyPairComparatorFactories[1] = PointableBinaryComparatorFactory.of(ShortPointable.FACTORY);
+            tokenKeyPairComparatorFactories[1] = ShortBinaryComparatorFactory.INSTANCE;
             pkOff = 2;
         }
         if (numPrimaryKeys > 0) {
@@ -303,6 +303,6 @@ public class SecondaryInvertedIndexOperationsHelper extends SecondaryTreeIndexOp
         IIndexDataflowHelperFactory dataflowHelperFactory = new IndexDataflowHelperFactory(
                 metadataProvider.getStorageComponentProvider().getStorageManager(), secondaryFileSplitProvider);
         return createTreeIndexBulkLoadOp(spec, fieldPermutation, dataflowHelperFactory,
-                GlobalConfig.DEFAULT_TREE_FILL_FACTOR);
+                StorageConstants.DEFAULT_TREE_FILL_FACTOR);
     }
 }

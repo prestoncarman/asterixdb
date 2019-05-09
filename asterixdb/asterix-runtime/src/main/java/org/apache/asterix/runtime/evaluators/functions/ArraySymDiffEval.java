@@ -22,14 +22,14 @@ import java.util.List;
 
 import org.apache.asterix.builders.ArrayListFactory;
 import org.apache.asterix.builders.IAsterixListBuilder;
-import org.apache.asterix.dataflow.data.nontagged.comparators.AObjectAscBinaryComparatorFactory;
+import org.apache.asterix.formats.nontagged.BinaryComparatorFactoryProvider;
 import org.apache.asterix.formats.nontagged.BinaryHashFunctionFactoryProvider;
 import org.apache.asterix.om.types.ATypeTag;
+import org.apache.asterix.om.types.BuiltinType;
 import org.apache.asterix.om.types.IAType;
 import org.apache.asterix.om.util.container.IObjectFactory;
 import org.apache.asterix.om.util.container.IObjectPool;
 import org.apache.asterix.om.util.container.ListObjectPool;
-import org.apache.asterix.runtime.utils.ArrayFunctionsUtil;
 import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluatorFactory;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.dataflow.value.IBinaryComparator;
@@ -51,15 +51,17 @@ public class ArraySymDiffEval extends AbstractArrayProcessArraysEval {
     private final IBinaryComparator comp;
     private final IntArrayList intHashes;
 
-    public ArraySymDiffEval(IScalarEvaluatorFactory[] args, IHyracksTaskContext ctx, SourceLocation sourceLocation,
+    ArraySymDiffEval(IScalarEvaluatorFactory[] args, IHyracksTaskContext ctx, SourceLocation sourceLocation,
             IAType[] argTypes) throws HyracksDataException {
-        super(args, ctx, true, sourceLocation, argTypes);
+        super(args, ctx, sourceLocation, argTypes);
         arrayListAllocator = new ListObjectPool<>(new ArrayListFactory<>());
         valueCounterAllocator = new ListObjectPool<>(new ValueCounterFactory());
         hashes = new Int2ObjectOpenHashMap<>();
-        comp = AObjectAscBinaryComparatorFactory.INSTANCE.createBinaryComparator();
+        // for functions that accept multiple lists arguments, they will be casted to open, hence item is ANY
+        comp = BinaryComparatorFactoryProvider.INSTANCE
+                .getBinaryComparatorFactory(BuiltinType.ANY, BuiltinType.ANY, true).createBinaryComparator();
         intHashes = new IntArrayList(50, 10);
-        binaryHashFunction = BinaryHashFunctionFactoryProvider.INSTANCE.getBinaryHashFunctionFactory(null)
+        binaryHashFunction = BinaryHashFunctionFactoryProvider.INSTANCE.getBinaryHashFunctionFactory(BuiltinType.ANY)
                 .createBinaryHashFunction();
     }
 
@@ -68,7 +70,7 @@ public class ArraySymDiffEval extends AbstractArrayProcessArraysEval {
         private int listIndex;
         private int counter;
 
-        protected ValueCounter() {
+        ValueCounter() {
         }
 
         protected void reset(IPointable value, int listIndex, int counter) {
@@ -149,7 +151,7 @@ public class ArraySymDiffEval extends AbstractArrayProcessArraysEval {
             return true;
         } else {
             // potentially, item already exists
-            ValueCounter itemListIdxCounter = ArrayFunctionsUtil.findItem(item, sameHashes, comp);
+            ValueCounter itemListIdxCounter = PointableHelper.findItem(item, sameHashes, comp);
             if (itemListIdxCounter == null) {
                 // new item having the same hash as a different item
                 addItem(item, listIndex, sameHashes);

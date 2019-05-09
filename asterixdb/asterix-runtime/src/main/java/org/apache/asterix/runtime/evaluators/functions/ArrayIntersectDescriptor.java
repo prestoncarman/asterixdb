@@ -28,11 +28,12 @@ import org.apache.asterix.builders.ArrayListFactory;
 import org.apache.asterix.builders.IAsterixListBuilder;
 import org.apache.asterix.builders.OrderedListBuilder;
 import org.apache.asterix.builders.UnorderedListBuilder;
+import org.apache.asterix.common.annotations.MissingNullInOutFunction;
 import org.apache.asterix.common.exceptions.ErrorCode;
 import org.apache.asterix.common.exceptions.RuntimeDataException;
-import org.apache.asterix.dataflow.data.nontagged.comparators.AObjectAscBinaryComparatorFactory;
 import org.apache.asterix.dataflow.data.nontagged.serde.AOrderedListSerializerDeserializer;
 import org.apache.asterix.dataflow.data.nontagged.serde.AUnorderedListSerializerDeserializer;
+import org.apache.asterix.formats.nontagged.BinaryComparatorFactoryProvider;
 import org.apache.asterix.formats.nontagged.BinaryHashFunctionFactoryProvider;
 import org.apache.asterix.om.functions.BuiltinFunctions;
 import org.apache.asterix.om.functions.IFunctionDescriptor;
@@ -42,6 +43,7 @@ import org.apache.asterix.om.pointables.PointableAllocator;
 import org.apache.asterix.om.pointables.base.DefaultOpenFieldType;
 import org.apache.asterix.om.types.ATypeTag;
 import org.apache.asterix.om.types.AbstractCollectionType;
+import org.apache.asterix.om.types.BuiltinType;
 import org.apache.asterix.om.types.IAType;
 import org.apache.asterix.om.util.container.IObjectFactory;
 import org.apache.asterix.om.util.container.IObjectPool;
@@ -49,7 +51,6 @@ import org.apache.asterix.om.util.container.ListObjectPool;
 import org.apache.asterix.runtime.evaluators.base.AbstractScalarFunctionDynamicDescriptor;
 import org.apache.asterix.runtime.evaluators.common.ListAccessor;
 import org.apache.asterix.runtime.functions.FunctionTypeInferers;
-import org.apache.asterix.runtime.utils.ArrayFunctionsUtil;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluator;
@@ -81,11 +82,12 @@ import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
  * 1. missing, if any argument is missing.
  * 2. an error if the input lists are not of the same type (one is an ordered list while the other is unordered).
  * 3. null, if any input list is null or is not a list.
- * 4. an error if any list item is a list/object type (i.e. derived type) since deep equality is not yet supported.
- * 5. otherwise, a new list.
+ * 4. otherwise, a new list.
  *
  * </pre>
  */
+
+@MissingNullInOutFunction
 public class ArrayIntersectDescriptor extends AbstractScalarFunctionDynamicDescriptor {
     private static final long serialVersionUID = 1L;
     private IAType[] argTypes;
@@ -129,7 +131,7 @@ public class ArrayIntersectDescriptor extends AbstractScalarFunctionDynamicDescr
         private IPointable value;
         private int listIndex;
 
-        protected ValueListIndex() {
+        ValueListIndex() {
         }
 
         protected void set(IPointable value, int listIndex) {
@@ -155,7 +157,7 @@ public class ArrayIntersectDescriptor extends AbstractScalarFunctionDynamicDescr
 
     protected class ValueListIndexAllocator implements IObjectFactory<ValueListIndex, ATypeTag> {
 
-        protected ValueListIndexAllocator() {
+        ValueListIndexAllocator() {
         }
 
         @Override
@@ -182,7 +184,7 @@ public class ArrayIntersectDescriptor extends AbstractScalarFunctionDynamicDescr
         private IAsterixListBuilder orderedListBuilder;
         private IAsterixListBuilder unorderedListBuilder;
 
-        public ArrayIntersectEval(IScalarEvaluatorFactory[] args, IHyracksTaskContext ctx) throws HyracksDataException {
+        ArrayIntersectEval(IScalarEvaluatorFactory[] args, IHyracksTaskContext ctx) throws HyracksDataException {
             orderedListBuilder = null;
             unorderedListBuilder = null;
             pointableAllocator = new PointableAllocator();
@@ -193,7 +195,9 @@ public class ArrayIntersectDescriptor extends AbstractScalarFunctionDynamicDescr
             finalResult = new ArrayBackedValueStorage();
             listAccessor = new ListAccessor();
             caster = new CastTypeEvaluator();
-            comp = AObjectAscBinaryComparatorFactory.INSTANCE.createBinaryComparator();
+            // for functions that accept multiple lists arguments, they will be casted to open, hence item is ANY
+            comp = BinaryComparatorFactoryProvider.INSTANCE
+                    .getBinaryComparatorFactory(BuiltinType.ANY, BuiltinType.ANY, true).createBinaryComparator();
             listsArgs = new IPointable[args.length];
             listsEval = new IScalarEvaluator[args.length];
             pointable = new VoidPointable();
@@ -202,14 +206,14 @@ public class ArrayIntersectDescriptor extends AbstractScalarFunctionDynamicDescr
                 listsArgs[i] = new VoidPointable();
                 listsEval[i] = args[i].createScalarEvaluator(ctx);
             }
-            binaryHashFunction = BinaryHashFunctionFactoryProvider.INSTANCE.getBinaryHashFunctionFactory(null)
-                    .createBinaryHashFunction();
+            binaryHashFunction = BinaryHashFunctionFactoryProvider.INSTANCE
+                    .getBinaryHashFunctionFactory(BuiltinType.ANY).createBinaryHashFunction();
         }
 
         @Override
         public void evaluate(IFrameTupleReference tuple, IPointable result) throws HyracksDataException {
             byte listArgType;
-            boolean returnNull = false;
+            boolean isReturnNull = false;
             AbstractCollectionType outList = null;
             ATypeTag listTag;
             int minListIndex = 0;
@@ -220,11 +224,21 @@ public class ArrayIntersectDescriptor extends AbstractScalarFunctionDynamicDescr
             try {
                 for (int i = 0; i < listsEval.length; i++) {
                     listsEval[i].evaluate(tuple, pointable);
-                    if (!returnNull) {
+
+                    if (PointableHelper.checkAndSetMissingOrNull(result, pointable)) {
+                        if (result.getByteArray()[0] == ATypeTag.SERIALIZED_MISSING_TYPE_TAG) {
+                            return;
+                        }
+
+                        // null value, but check other arguments for missing first (higher priority)
+                        isReturnNull = true;
+                    }
+
+                    if (!isReturnNull) {
                         listArgType = pointable.getByteArray()[pointable.getStartOffset()];
                         listTag = ATYPETAGDESERIALIZER.deserialize(listArgType);
                         if (!listTag.isListType()) {
-                            returnNull = true;
+                            isReturnNull = true;
                         } else if (outList != null && outList.getTypeTag() != listTag) {
                             throw new RuntimeDataException(ErrorCode.DIFFERENT_LIST_TYPE_ARGS, sourceLoc);
                         } else {
@@ -244,7 +258,7 @@ public class ArrayIntersectDescriptor extends AbstractScalarFunctionDynamicDescr
                     }
                 }
 
-                if (returnNull) {
+                if (isReturnNull) {
                     PointableHelper.setNull(result);
                     return;
                 }
@@ -315,7 +329,6 @@ public class ArrayIntersectDescriptor extends AbstractScalarFunctionDynamicDescr
                 storage.reset();
                 for (int j = 0; j < listAccessor.size(); j++) {
                     itemInStorage = listAccessor.getOrWriteItem(j, item, storage);
-                    validateItem(item);
                     if (notNullAndMissing(item)) {
                         hash = binaryHashFunction.hash(item.getByteArray(), item.getStartOffset(), item.getLength());
                         sameHashes = hashes.get(hash);
@@ -338,7 +351,6 @@ public class ArrayIntersectDescriptor extends AbstractScalarFunctionDynamicDescr
             List<ValueListIndex> sameHashes;
             for (int j = 0; j < listAccessor.size(); j++) {
                 listAccessor.getOrWriteItem(j, pointable, currentItemStorage);
-                validateItem(pointable);
                 if (notNullAndMissing(pointable)) {
                     // hash the item and look up to see if it is common
                     hash = binaryHashFunction.hash(pointable.getByteArray(), pointable.getStartOffset(),
@@ -362,7 +374,7 @@ public class ArrayIntersectDescriptor extends AbstractScalarFunctionDynamicDescr
                 newHashes.add(valueListIndex);
                 hashes.put(hash, newHashes);
                 return true;
-            } else if (ArrayFunctionsUtil.findItem(item, sameHashes, comp) == null) {
+            } else if (PointableHelper.findItem(item, sameHashes, comp) == null) {
                 ValueListIndex valueListIndex = valueListIndexAllocator.allocate(null);
                 valueListIndex.set(item, -1);
                 sameHashes.add(valueListIndex);
@@ -387,7 +399,7 @@ public class ArrayIntersectDescriptor extends AbstractScalarFunctionDynamicDescr
 
         private void incrementIfExists(List<ValueListIndex> sameHashes, IPointable item, int listIndex,
                 IAsterixListBuilder listBuilder) throws HyracksDataException {
-            ValueListIndex sameValue = ArrayFunctionsUtil.findItem(item, sameHashes, comp);
+            ValueListIndex sameValue = PointableHelper.findItem(item, sameHashes, comp);
             if (sameValue != null && listIndex - sameValue.listIndex == 1) {
                 // found the item, its stamp is OK (stamp saves the index of the last list that has seen this item)
                 // increment stamp of this item
@@ -396,13 +408,6 @@ public class ArrayIntersectDescriptor extends AbstractScalarFunctionDynamicDescr
                     // if this list is the last to stamp, then add to the final result
                     listBuilder.addItem(item);
                 }
-            }
-        }
-
-        // validates that the item is not derived, multisets, objects and arrays are not yet supported
-        private void validateItem(IPointable item) throws RuntimeDataException {
-            if (ATYPETAGDESERIALIZER.deserialize(item.getByteArray()[item.getStartOffset()]).isDerivedType()) {
-                throw new RuntimeDataException(ErrorCode.CANNOT_COMPARE_COMPLEX, sourceLoc);
             }
         }
     }

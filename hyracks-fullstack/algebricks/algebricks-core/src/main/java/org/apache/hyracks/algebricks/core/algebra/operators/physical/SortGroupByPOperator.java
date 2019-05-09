@@ -24,7 +24,6 @@ import java.util.List;
 import java.util.Set;
 
 import org.apache.commons.lang3.mutable.Mutable;
-
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.common.utils.ListSet;
 import org.apache.hyracks.algebricks.common.utils.Pair;
@@ -66,28 +65,13 @@ import org.apache.hyracks.api.job.IOperatorDescriptorRegistry;
 import org.apache.hyracks.dataflow.std.group.AbstractAggregatorDescriptorFactory;
 import org.apache.hyracks.dataflow.std.group.sort.SortGroupByOperatorDescriptor;
 
-public class SortGroupByPOperator extends AbstractPhysicalOperator {
+public class SortGroupByPOperator extends AbstractGroupByPOperator {
 
-    private final int frameLimit;
     private final OrderColumn[] orderColumns;
-    private final List<LogicalVariable> columnSet = new ArrayList<LogicalVariable>();
 
-    public SortGroupByPOperator(List<Pair<LogicalVariable, Mutable<ILogicalExpression>>> gbyList, int frameLimit,
-            OrderColumn[] orderColumns) {
-        this.frameLimit = frameLimit;
+    public SortGroupByPOperator(List<LogicalVariable> columnList, int framesLimit, OrderColumn[] orderColumns) {
+        super(columnList, framesLimit);
         this.orderColumns = orderColumns;
-        computeColumnSet(gbyList);
-    }
-
-    private void computeColumnSet(List<Pair<LogicalVariable, Mutable<ILogicalExpression>>> gbyList) {
-        columnSet.clear();
-        for (Pair<LogicalVariable, Mutable<ILogicalExpression>> p : gbyList) {
-            ILogicalExpression expr = p.second.getValue();
-            if (expr.getExpressionTag() == LogicalExpressionTag.VARIABLE) {
-                VariableReferenceExpression v = (VariableReferenceExpression) expr;
-                columnSet.add(v.getVariableReference());
-            }
-        }
     }
 
     @Override
@@ -96,17 +80,8 @@ public class SortGroupByPOperator extends AbstractPhysicalOperator {
     }
 
     @Override
-    public String toString() {
-        return getOperatorTag().toString() + columnSet;
-    }
-
-    @Override
     public boolean isMicroOperator() {
         return false;
-    }
-
-    private List<LogicalVariable> getGbyColumns() {
-        return columnSet;
     }
 
     @Override
@@ -146,7 +121,7 @@ public class SortGroupByPOperator extends AbstractPhysicalOperator {
     public void contributeRuntimeOperator(IHyracksJobBuilder builder, JobGenContext context, ILogicalOperator op,
             IOperatorSchema opSchema, IOperatorSchema[] inputSchemas, IOperatorSchema outerPlanSchema)
             throws AlgebricksException {
-        List<LogicalVariable> gbyCols = getGbyColumns();
+        List<LogicalVariable> gbyCols = getGroupByColumns();
         int keys[] = JobGenHelper.variablesToFieldIndexes(gbyCols, inputSchemas[0]);
         GroupByOperator gby = (GroupByOperator) op;
         int numFds = gby.getDecorList().size();
@@ -274,7 +249,7 @@ public class SortGroupByPOperator extends AbstractPhysicalOperator {
         normalizedKeyFactory =
                 orderColumns[0].getOrder() == OrderKind.ASC ? nkcfProvider.getNormalizedKeyComputerFactory(type, true)
                         : nkcfProvider.getNormalizedKeyComputerFactory(type, false);
-        SortGroupByOperatorDescriptor gbyOpDesc = new SortGroupByOperatorDescriptor(spec, frameLimit, keys,
+        SortGroupByOperatorDescriptor gbyOpDesc = new SortGroupByOperatorDescriptor(spec, framesLimit, keys,
                 keyAndDecFields, normalizedKeyFactory, compFactories, aggregatorFactory, mergeFactory,
                 partialAggRecordDescriptor, recordDescriptor, false);
         gbyOpDesc.setSourceLocation(gby.getSourceLocation());
@@ -289,10 +264,5 @@ public class SortGroupByPOperator extends AbstractPhysicalOperator {
         int[] inputDependencyLabels = new int[] { 0 };
         int[] outputDependencyLabels = new int[] { 1 };
         return new Pair<int[], int[]>(inputDependencyLabels, outputDependencyLabels);
-    }
-
-    @Override
-    public boolean expensiveThanMaterialization() {
-        return true;
     }
 }

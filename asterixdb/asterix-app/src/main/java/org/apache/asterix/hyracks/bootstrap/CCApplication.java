@@ -50,12 +50,13 @@ import org.apache.asterix.api.http.server.ShutdownApiServlet;
 import org.apache.asterix.api.http.server.VersionApiServlet;
 import org.apache.asterix.app.active.ActiveNotificationHandler;
 import org.apache.asterix.app.cc.CCExtensionManager;
+import org.apache.asterix.app.config.ConfigValidator;
 import org.apache.asterix.app.external.ExternalLibraryUtils;
 import org.apache.asterix.app.replication.NcLifecycleCoordinator;
 import org.apache.asterix.common.api.AsterixThreadFactory;
+import org.apache.asterix.common.api.IConfigValidatorFactory;
 import org.apache.asterix.common.api.INodeJobTracker;
 import org.apache.asterix.common.api.IReceptionistFactory;
-import org.apache.asterix.translator.Receptionist;
 import org.apache.asterix.common.cluster.IGlobalRecoveryManager;
 import org.apache.asterix.common.config.AsterixExtension;
 import org.apache.asterix.common.config.ExtensionProperties;
@@ -79,6 +80,7 @@ import org.apache.asterix.metadata.lock.MetadataLockManager;
 import org.apache.asterix.runtime.job.resource.JobCapacityController;
 import org.apache.asterix.runtime.utils.CcApplicationContext;
 import org.apache.asterix.translator.IStatementExecutorFactory;
+import org.apache.asterix.translator.Receptionist;
 import org.apache.asterix.util.MetadataBuiltinFunctions;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.api.application.ICCServiceContext;
@@ -154,7 +156,7 @@ public class CCApplication extends BaseCCApplication {
         ccExtensionManager = new CCExtensionManager(extensions);
         IGlobalRecoveryManager globalRecoveryManager = createGlobalRecoveryManager();
         appCtx = createApplicationContext(libraryManager, globalRecoveryManager, lifecycleCoordinator,
-                () -> new Receptionist("CC"));
+                () -> new Receptionist("CC"), ConfigValidator::new);
         appCtx.setExtensionManager(ccExtensionManager);
         final CCConfig ccConfig = controllerService.getCCConfig();
         if (System.getProperty("java.rmi.server.hostname") == null) {
@@ -182,10 +184,11 @@ public class CCApplication extends BaseCCApplication {
 
     protected ICcApplicationContext createApplicationContext(ILibraryManager libraryManager,
             IGlobalRecoveryManager globalRecoveryManager, INcLifecycleCoordinator lifecycleCoordinator,
-            IReceptionistFactory receptionistFactory) throws AlgebricksException, IOException {
+            IReceptionistFactory receptionistFactory, IConfigValidatorFactory configValidatorFactory)
+            throws AlgebricksException, IOException {
         return new CcApplicationContext(ccServiceCtx, getHcc(), libraryManager, () -> MetadataManager.INSTANCE,
                 globalRecoveryManager, lifecycleCoordinator, new ActiveNotificationHandler(), componentProvider,
-                new MetadataLockManager(), receptionistFactory);
+                new MetadataLockManager(), receptionistFactory, configValidatorFactory);
     }
 
     protected IGlobalRecoveryManager createGlobalRecoveryManager() throws Exception {
@@ -197,7 +200,7 @@ public class CCApplication extends BaseCCApplication {
     }
 
     @Override
-    protected void configureLoggingLevel(Level level) {
+    public void configureLoggingLevel(Level level) {
         super.configureLoggingLevel(level);
         LoggingConfigUtil.defaultIfMissing(GlobalConfig.ASTERIX_LOGGER_NAME, level);
     }

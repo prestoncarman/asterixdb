@@ -23,7 +23,6 @@ import java.util.HashSet;
 import java.util.Set;
 
 import org.apache.commons.lang3.mutable.Mutable;
-
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.common.utils.Pair;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalExpression;
@@ -90,7 +89,7 @@ public class PushNestedOrderByUnderPreSortedGroupByRule implements IAlgebraicRew
         }
         AbstractPhysicalOperator pOrder1 = (AbstractPhysicalOperator) op2.getPhysicalOperator();
         if (pOrder1.getOperatorTag() != PhysicalOperatorTag.STABLE_SORT
-                && pOrder1.getOperatorTag() != PhysicalOperatorTag.IN_MEMORY_STABLE_SORT) {
+                && pOrder1.getOperatorTag() != PhysicalOperatorTag.MICRO_STABLE_SORT) {
             return false;
         }
         // StableSortPOperator sort1 = (StableSortPOperator) pOrder1;

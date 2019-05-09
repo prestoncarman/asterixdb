@@ -27,6 +27,7 @@ import org.apache.asterix.om.types.BuiltinType;
 import org.apache.asterix.om.types.IAType;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalExpression;
+import org.apache.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import org.apache.hyracks.api.exceptions.SourceLocation;
 
 public class CollectionMemberResultType extends AbstractResultTypeComputer {
@@ -46,10 +47,10 @@ public class CollectionMemberResultType extends AbstractResultTypeComputer {
     }
 
     @Override
-    protected void checkArgType(String funcName, int argIndex, IAType type, SourceLocation sourceLoc)
+    protected void checkArgType(FunctionIdentifier funcId, int argIndex, IAType type, SourceLocation sourceLoc)
             throws AlgebricksException {
         ATypeTag actualTypeTag = type.getTypeTag();
-        if (type.getTypeTag() != ATypeTag.MULTISET && type.getTypeTag() != ATypeTag.ARRAY) {
+        if (!type.getTypeTag().isListType()) {
             throw new TypeMismatchException(sourceLoc, actualTypeTag, ATypeTag.MULTISET, ATypeTag.ARRAY);
         }
     }
@@ -57,7 +58,7 @@ public class CollectionMemberResultType extends AbstractResultTypeComputer {
     @Override
     protected IAType getResultType(ILogicalExpression expr, IAType... strippedInputTypes) throws AlgebricksException {
         IAType type = strippedInputTypes[0];
-        if (type.getTypeTag() == ATypeTag.ANY) {
+        if (!type.getTypeTag().isListType()) {
             return BuiltinType.ANY;
         }
         IAType itemType = ((AbstractCollectionType) type).getItemType();

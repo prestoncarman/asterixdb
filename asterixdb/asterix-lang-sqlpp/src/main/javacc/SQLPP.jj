@@ -332,11 +332,11 @@ class SQLPPParser extends ScopeChecker implements IParser {
             // this is here as the JavaCharStream that's below the lexer sometimes throws Errors that are not handled
             // by the ANTLR-generated lexer or parser (e.g it does this for invalid backslash u + 4 hex digits escapes)
             final String msg = e.getClass().getSimpleName() + (e.getMessage() != null ? ": " + e.getMessage() : "");
-            throw new CompilationException(ErrorCode.PARSE_ERROR, msg);
+            throw new CompilationException(ErrorCode.PARSE_ERROR, LogRedactionUtil.userData(msg));
         } catch (SqlppParseException e) {
-            throw new CompilationException(ErrorCode.PARSE_ERROR, e.getSourceLocation(), getMessage(e));
+            throw new CompilationException(ErrorCode.PARSE_ERROR, e.getSourceLocation(), LogRedactionUtil.userData(getMessage(e)));
         } catch (ParseException e) {
-            throw new CompilationException(ErrorCode.PARSE_ERROR, getMessage(e));
+            throw new CompilationException(ErrorCode.PARSE_ERROR, LogRedactionUtil.userData(getMessage(e)));
         }
     }
 
@@ -1088,8 +1088,9 @@ InsertStatement InsertStatement() throws ParseException:
     query = Query(false)
     ( <RETURNING> returnExpression = Expression())?
     {
-      if (returnExpression != null && var == null) {
-        var = ExpressionToVariableUtil.getGeneratedVariable(query.getBody(), true);
+      if (var == null && returnExpression != null) {
+        var = new VariableExpr(SqlppVariableUtil.toInternalVariableIdentifier(nameComponents.second.getValue()));
+        addSourceLocation(var, startToken);
       }
       query.setTopLevel(true);
       InsertStatement stmt = new InsertStatement(nameComponents.first, nameComponents.second, query, getVarCounter(),
@@ -1111,8 +1112,9 @@ UpsertStatement UpsertStatement() throws ParseException:
     query = Query(false)
     ( <RETURNING> returnExpression = Expression())?
     {
-      if (returnExpression != null && var == null) {
-        var = ExpressionToVariableUtil.getGeneratedVariable(query.getBody(), true);
+      if (var == null && returnExpression != null) {
+          var = new VariableExpr(SqlppVariableUtil.toInternalVariableIdentifier(nameComponents.second.getValue()));
+          addSourceLocation(var, startToken);
       }
       query.setTopLevel(true);
       UpsertStatement stmt = new UpsertStatement(nameComponents.first, nameComponents.second, query, getVarCounter(),
@@ -1124,23 +1126,20 @@ UpsertStatement UpsertStatement() throws ParseException:
 DeleteStatement DeleteStatement() throws ParseException:
 {
   Token startToken = null;
-  VariableExpr varExpr = null;
+  VariableExpr var = null;
   Expression condition = null;
   Pair<Identifier, Identifier> nameComponents;
 }
 {
   <DELETE> { startToken = token; }
-  <FROM> nameComponents  = QualifiedName()
-         ((<AS>)? varExpr = Variable())?
+  <FROM> nameComponents  = QualifiedName() ((<AS>)? var = Variable())?
   (<WHERE> condition = Expression())?
   {
-      if(varExpr == null){
-        varExpr = new VariableExpr();
-        VarIdentifier var = SqlppVariableUtil.toInternalVariableIdentifier(nameComponents.second.getValue());
-        varExpr.setVar(var);
-        addSourceLocation(varExpr, startToken);
+      if (var == null) {
+        var = new VariableExpr(SqlppVariableUtil.toInternalVariableIdentifier(nameComponents.second.getValue()));
+        addSourceLocation(var, startToken);
       }
-      DeleteStatement stmt = new DeleteStatement(varExpr, nameComponents.first, nameComponents.second,
+      DeleteStatement stmt = new DeleteStatement(var, nameComponents.first, nameComponents.second,
           condition, getVarCounter());
       return addSourceLocation(stmt, startToken);
   }
@@ -2726,7 +2725,7 @@ Expression FunctionCallExpr() throws ParseException:
     {
       String name = funcName.function;
       if (distinct) {
-        name += "-distinct";
+        name += FunctionMapUtil.DISTINCT_AGGREGATE_SUFFIX;
       }
       // TODO use funcName.library
       String fqFunctionName = funcName.library == null ? name : funcName.library + "#" + name;
@@ -3417,9 +3416,6 @@ GroupbyClause GroupbyClause()throws ParseException :
         var = Variable()
         )?
         {
-            if(var==null){
-                var = ExpressionToVariableUtil.getGeneratedVariable(expr, false);
-            }
             GbyVariableExpressionPair pair1 = new GbyVariableExpressionPair(var, expr);
             vePairList.add(pair1);
         }
@@ -3432,9 +3428,6 @@ GroupbyClause GroupbyClause()throws ParseException :
          var = Variable()
          )?
          {
-             if(var==null){
-                var = ExpressionToVariableUtil.getGeneratedVariable(expr, false);
-             }
              GbyVariableExpressionPair pair2 = new GbyVariableExpressionPair(var, expr);
              vePairList.add(pair2);
          }
@@ -3607,6 +3600,7 @@ TOKEN [IGNORE_CASE]:
   | <DESC : "desc">
   | <DISCONNECT : "disconnect">
   | <DISTINCT : "distinct">
+  | <DIV : "div">
   | <DROP : "drop">
   | <ELEMENT : "element">
   | <EXPLAIN : "explain">
@@ -3648,6 +3642,7 @@ TOKEN [IGNORE_CASE]:
   | <LIKE : "like">
   | <LIMIT : "limit">
   | <LOAD : "load">
+  | <MOD : "mod">
   | <NODEGROUP : "nodegroup">
   | <NGRAM : "ngram">
   | <NOT : "not">
@@ -3701,9 +3696,7 @@ TOKEN :
     <CARET : "^">
   | <CONCAT : "||">
   | <DIVIDE : "/">
-  | <DIV : "div">
   | <MINUS : "-">
-  | <MOD : "mod">
   | <MUL : "*">
   | <PLUS : "+">
 

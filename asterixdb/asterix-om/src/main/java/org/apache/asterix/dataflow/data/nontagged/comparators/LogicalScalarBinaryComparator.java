@@ -26,6 +26,7 @@ import static org.apache.asterix.om.types.ATypeTag.POINT;
 import static org.apache.asterix.om.types.ATypeTag.POINT3D;
 import static org.apache.asterix.om.types.ATypeTag.POLYGON;
 import static org.apache.asterix.om.types.ATypeTag.RECTANGLE;
+import static org.apache.asterix.om.types.ATypeTag.VALUE_TYPE_MAPPING;
 
 import java.util.EnumSet;
 
@@ -35,87 +36,61 @@ import org.apache.asterix.dataflow.data.nontagged.serde.ADateTimeSerializerDeser
 import org.apache.asterix.dataflow.data.nontagged.serde.ADayTimeDurationSerializerDeserializer;
 import org.apache.asterix.dataflow.data.nontagged.serde.ATimeSerializerDeserializer;
 import org.apache.asterix.dataflow.data.nontagged.serde.AYearMonthDurationSerializerDeserializer;
-import org.apache.asterix.formats.nontagged.BinaryComparatorFactoryProvider;
 import org.apache.asterix.om.base.IAObject;
 import org.apache.asterix.om.types.ATypeTag;
-import org.apache.asterix.om.types.EnumDeserializer;
-import org.apache.hyracks.api.dataflow.value.IBinaryComparator;
+import org.apache.asterix.om.types.hierachy.ATypeHierarchy;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
-import org.apache.hyracks.data.std.accessors.PointableBinaryComparatorFactory;
+import org.apache.hyracks.data.std.api.IPointable;
+import org.apache.hyracks.data.std.primitive.BooleanPointable;
 import org.apache.hyracks.data.std.primitive.ByteArrayPointable;
+import org.apache.hyracks.data.std.primitive.UTF8StringPointable;
 
-public class LogicalScalarBinaryComparator implements ILogicalBinaryComparator {
+public final class LogicalScalarBinaryComparator implements ILogicalBinaryComparator {
 
     private static final EnumSet<ATypeTag> INEQUALITY_UNDEFINED_TYPES =
             EnumSet.of(DURATION, INTERVAL, LINE, POINT, POINT3D, POLYGON, CIRCLE, RECTANGLE);
-
-    private final IBinaryComparator strBinaryComp =
-            BinaryComparatorFactoryProvider.UTF8STRING_POINTABLE_INSTANCE.createBinaryComparator();
-    private final IBinaryComparator circleBinaryComp =
-            ACirclePartialBinaryComparatorFactory.INSTANCE.createBinaryComparator();
-    private final IBinaryComparator durationBinaryComp =
-            ADurationPartialBinaryComparatorFactory.INSTANCE.createBinaryComparator();
-    private final IBinaryComparator intervalBinaryComp =
-            AIntervalAscPartialBinaryComparatorFactory.INSTANCE.createBinaryComparator();
-    private final IBinaryComparator lineBinaryComparator =
-            ALinePartialBinaryComparatorFactory.INSTANCE.createBinaryComparator();
-    private final IBinaryComparator pointBinaryComparator =
-            APointPartialBinaryComparatorFactory.INSTANCE.createBinaryComparator();
-    private final IBinaryComparator point3DBinaryComparator =
-            APoint3DPartialBinaryComparatorFactory.INSTANCE.createBinaryComparator();
-    private final IBinaryComparator polygonBinaryComparator =
-            APolygonPartialBinaryComparatorFactory.INSTANCE.createBinaryComparator();
-    private final IBinaryComparator rectangleBinaryComparator =
-            ARectanglePartialBinaryComparatorFactory.INSTANCE.createBinaryComparator();
-    private final IBinaryComparator uuidBinaryComparator =
-            AUUIDPartialBinaryComparatorFactory.INSTANCE.createBinaryComparator();
-    private final IBinaryComparator byteArrayComparator =
-            new PointableBinaryComparatorFactory(ByteArrayPointable.FACTORY).createBinaryComparator();
-
     private final boolean isEquality;
 
-    public LogicalScalarBinaryComparator(boolean isEquality) {
+    LogicalScalarBinaryComparator(boolean isEquality) {
         this.isEquality = isEquality;
     }
 
-    @SuppressWarnings("squid:S1226") // asking for introducing a new variable for incremented local variables
     @Override
-    public Result compare(byte[] leftBytes, int leftStart, int leftLen, byte[] rightBytes, int rightStart, int rightLen)
-            throws HyracksDataException {
-        ATypeTag leftTag = EnumDeserializer.ATYPETAGDESERIALIZER.deserialize(leftBytes[leftStart]);
-        ATypeTag rightTag = EnumDeserializer.ATYPETAGDESERIALIZER.deserialize(rightBytes[rightStart]);
-        Result comparisonResult = LogicalComparatorUtil.returnMissingOrNullOrMismatch(leftTag, rightTag);
+    public Result compare(IPointable left, IPointable right) throws HyracksDataException {
+        ATypeTag leftTag = VALUE_TYPE_MAPPING[left.getByteArray()[left.getStartOffset()]];
+        ATypeTag rightTag = VALUE_TYPE_MAPPING[right.getByteArray()[right.getStartOffset()]];
+        Result comparisonResult = ComparatorUtil.returnMissingOrNullOrMismatch(leftTag, rightTag);
         if (comparisonResult != null) {
             return comparisonResult;
         }
         if (comparisonUndefined(leftTag, rightTag, isEquality)) {
-            return Result.NULL;
+            return Result.INCOMPARABLE;
         }
-        // compare number if one of args is number
-        comparisonResult =
-                LogicalComparatorUtil.compareNumbers(leftTag, leftBytes, leftStart, rightTag, rightBytes, rightStart);
-        if (comparisonResult != null) {
-            return comparisonResult;
+        // compare number if one of args is number since compatibility has already been checked above
+        if (ATypeHierarchy.getTypeDomain(leftTag) == ATypeHierarchy.Domain.NUMERIC) {
+            return ComparatorUtil.compareNumbers(leftTag, left, rightTag, right);
         }
 
         // comparing non-numeric
-        // return null if !=, the assumption here is only numeric types are compatible with each other
+        // throw an exception if !=, the assumption here is only numeric types are compatible with each other
         if (leftTag != rightTag) {
-            return Result.NULL;
+            throw new IllegalStateException("Two different non-numeric tags but they are compatible");
         }
 
-        leftStart++;
-        leftLen--;
-        rightStart++;
-        rightLen--;
+        byte[] leftBytes = left.getByteArray();
+        byte[] rightBytes = right.getByteArray();
+        int leftStart = left.getStartOffset() + 1;
+        int rightStart = right.getStartOffset() + 1;
+        int leftLen = left.getLength() - 1;
+        int rightLen = right.getLength() - 1;
 
         int result;
         switch (leftTag) {
             case BOOLEAN:
-                result = Integer.compare(leftBytes[leftStart], rightBytes[rightStart]);
+                result = BooleanPointable.compare(leftBytes, leftStart, leftLen, rightBytes, rightStart, rightLen);
                 break;
             case STRING:
-                result = strBinaryComp.compare(leftBytes, leftStart, leftLen, rightBytes, rightStart, rightLen);
+                result = UTF8StringPointable.compare(leftBytes, leftStart, leftLen, rightBytes, rightStart, rightLen);
                 break;
             case YEARMONTHDURATION:
                 result = Integer.compare(AYearMonthDurationSerializerDeserializer.getYearMonth(leftBytes, leftStart),
@@ -138,37 +113,43 @@ public class LogicalScalarBinaryComparator implements ILogicalBinaryComparator {
                         ADateTimeSerializerDeserializer.getChronon(rightBytes, rightStart));
                 break;
             case CIRCLE:
-                result = circleBinaryComp.compare(leftBytes, leftStart, leftLen, rightBytes, rightStart, rightLen);
+                result = ACirclePartialBinaryComparatorFactory.compare(leftBytes, leftStart, leftLen, rightBytes,
+                        rightStart, rightLen);
                 break;
             case LINE:
-                result = lineBinaryComparator.compare(leftBytes, leftStart, leftLen, rightBytes, rightStart, rightLen);
+                result = ALinePartialBinaryComparatorFactory.compare(leftBytes, leftStart, leftLen, rightBytes,
+                        rightStart, rightLen);
                 break;
             case POINT:
-                result = pointBinaryComparator.compare(leftBytes, leftStart, leftLen, rightBytes, rightStart, rightLen);
+                result = APointPartialBinaryComparatorFactory.compare(leftBytes, leftStart, leftLen, rightBytes,
+                        rightStart, rightLen);
                 break;
             case POINT3D:
-                result = point3DBinaryComparator.compare(leftBytes, leftStart, leftLen, rightBytes, rightStart,
-                        rightLen);
+                result = APoint3DPartialBinaryComparatorFactory.compare(leftBytes, leftStart, leftLen, rightBytes,
+                        rightStart, rightLen);
                 break;
             case POLYGON:
-                result = polygonBinaryComparator.compare(leftBytes, leftStart, leftLen, rightBytes, rightStart,
-                        rightLen);
+                result = APolygonPartialBinaryComparatorFactory.compare(leftBytes, leftStart, leftLen, rightBytes,
+                        rightStart, rightLen);
                 break;
             case DURATION:
-                result = durationBinaryComp.compare(leftBytes, leftStart, leftLen, rightBytes, rightStart, rightLen);
+                result = ADurationPartialBinaryComparatorFactory.compare(leftBytes, leftStart, leftLen, rightBytes,
+                        rightStart, rightLen);
                 break;
             case INTERVAL:
-                result = intervalBinaryComp.compare(leftBytes, leftStart, leftLen, rightBytes, rightStart, rightLen);
+                result = AIntervalAscPartialBinaryComparatorFactory.compare(leftBytes, leftStart, leftLen, rightBytes,
+                        rightStart, rightLen);
                 break;
             case RECTANGLE:
-                result = rectangleBinaryComparator.compare(leftBytes, leftStart, leftLen, rightBytes, rightStart,
-                        rightLen);
+                result = ARectanglePartialBinaryComparatorFactory.compare(leftBytes, leftStart, leftLen, rightBytes,
+                        rightStart, rightLen);
                 break;
             case BINARY:
-                result = byteArrayComparator.compare(leftBytes, leftStart, leftLen, rightBytes, rightStart, rightLen);
+                result = ByteArrayPointable.compare(leftBytes, leftStart, leftLen, rightBytes, rightStart, rightLen);
                 break;
             case UUID:
-                result = uuidBinaryComparator.compare(leftBytes, leftStart, leftLen, rightBytes, rightStart, rightLen);
+                result = AUUIDPartialBinaryComparatorFactory.compare(leftBytes, leftStart, leftLen, rightBytes,
+                        rightStart, rightLen);
                 break;
             default:
                 return Result.NULL;
@@ -177,28 +158,27 @@ public class LogicalScalarBinaryComparator implements ILogicalBinaryComparator {
     }
 
     @Override
-    public Result compare(byte[] leftBytes, int leftStart, int leftLen, IAObject rightConstant) {
+    public Result compare(IPointable left, IAObject rightConstant) {
         // TODO(ali): currently defined for numbers only
-        ATypeTag leftTag = EnumDeserializer.ATYPETAGDESERIALIZER.deserialize(leftBytes[leftStart]);
+        ATypeTag leftTag = VALUE_TYPE_MAPPING[left.getByteArray()[left.getStartOffset()]];
         ATypeTag rightTag = rightConstant.getType().getTypeTag();
-        Result comparisonResult = LogicalComparatorUtil.returnMissingOrNullOrMismatch(leftTag, rightTag);
+        Result comparisonResult = ComparatorUtil.returnMissingOrNullOrMismatch(leftTag, rightTag);
         if (comparisonResult != null) {
             return comparisonResult;
         }
         if (comparisonUndefined(leftTag, rightTag, isEquality)) {
             return Result.NULL;
         }
-        comparisonResult = LogicalComparatorUtil.compareNumWithConstant(leftTag, leftBytes, leftStart, rightConstant);
-        if (comparisonResult != null) {
-            return comparisonResult;
+        if (ATypeHierarchy.getTypeDomain(leftTag) == ATypeHierarchy.Domain.NUMERIC) {
+            return ComparatorUtil.compareNumWithConstant(leftTag, left, rightConstant);
         }
         return Result.NULL;
     }
 
     @Override
-    public Result compare(IAObject leftConstant, byte[] rightBytes, int rightStart, int rightLen) {
+    public Result compare(IAObject leftConstant, IPointable right) {
         // TODO(ali): currently defined for numbers only
-        Result result = compare(rightBytes, rightStart, rightLen, leftConstant);
+        Result result = compare(right, leftConstant);
         if (result == Result.LT) {
             return Result.GT;
         } else if (result == Result.GT) {
@@ -212,16 +192,15 @@ public class LogicalScalarBinaryComparator implements ILogicalBinaryComparator {
         // TODO(ali): currently defined for numbers only
         ATypeTag leftTag = leftConstant.getType().getTypeTag();
         ATypeTag rightTag = rightConstant.getType().getTypeTag();
-        Result comparisonResult = LogicalComparatorUtil.returnMissingOrNullOrMismatch(leftTag, rightTag);
+        Result comparisonResult = ComparatorUtil.returnMissingOrNullOrMismatch(leftTag, rightTag);
         if (comparisonResult != null) {
             return comparisonResult;
         }
         if (comparisonUndefined(leftTag, rightTag, isEquality)) {
             return Result.NULL;
         }
-        comparisonResult = LogicalComparatorUtil.compareConstants(leftConstant, rightConstant);
-        if (comparisonResult != null) {
-            return comparisonResult;
+        if (ATypeHierarchy.getTypeDomain(leftTag) == ATypeHierarchy.Domain.NUMERIC) {
+            return ComparatorUtil.compareConstants(leftConstant, rightConstant);
         }
         return Result.NULL;
     }

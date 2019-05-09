@@ -27,15 +27,16 @@ import java.util.Set;
 import org.apache.asterix.api.http.server.NetDiagnosticsApiServlet;
 import org.apache.asterix.api.http.server.ServletConstants;
 import org.apache.asterix.api.http.server.StorageApiServlet;
+import org.apache.asterix.app.config.ConfigValidator;
 import org.apache.asterix.app.io.PersistedResourceRegistry;
 import org.apache.asterix.app.nc.NCAppRuntimeContext;
 import org.apache.asterix.app.nc.RecoveryManager;
 import org.apache.asterix.app.replication.message.RegistrationTasksRequestMessage;
 import org.apache.asterix.common.api.AsterixThreadFactory;
+import org.apache.asterix.common.api.IConfigValidatorFactory;
 import org.apache.asterix.common.api.INcApplicationContext;
 import org.apache.asterix.common.api.IPropertiesFactory;
 import org.apache.asterix.common.api.IReceptionistFactory;
-import org.apache.asterix.translator.Receptionist;
 import org.apache.asterix.common.config.AsterixExtension;
 import org.apache.asterix.common.config.ExternalProperties;
 import org.apache.asterix.common.config.GlobalConfig;
@@ -57,6 +58,7 @@ import org.apache.asterix.common.utils.StoragePathUtil;
 import org.apache.asterix.messaging.MessagingChannelInterfaceFactory;
 import org.apache.asterix.messaging.NCMessageBroker;
 import org.apache.asterix.transaction.management.resource.PersistentLocalResourceRepository;
+import org.apache.asterix.translator.Receptionist;
 import org.apache.asterix.util.MetadataBuiltinFunctions;
 import org.apache.hyracks.api.application.INCServiceContext;
 import org.apache.hyracks.api.application.IServiceContext;
@@ -130,7 +132,7 @@ public class NCApplication extends BaseNCApplication {
             }
             updateOnNodeJoin();
         }
-        runtimeContext.initialize(getRecoveryManagerFactory(), getReceptionistFactory(),
+        runtimeContext.initialize(getRecoveryManagerFactory(), getReceptionistFactory(), getConfigValidatorFactory(),
                 runtimeContext.getNodeProperties().isInitialRun());
         MessagingProperties messagingProperties = runtimeContext.getMessagingProperties();
         NCMessageBroker messageBroker = new NCMessageBroker(controllerService, messagingProperties);
@@ -162,8 +164,12 @@ public class NCApplication extends BaseNCApplication {
         return () -> new Receptionist(nodeId);
     }
 
+    protected IConfigValidatorFactory getConfigValidatorFactory() {
+        return ConfigValidator::new;
+    }
+
     @Override
-    protected void configureLoggingLevel(Level level) {
+    public void configureLoggingLevel(Level level) {
         super.configureLoggingLevel(level);
         LoggingConfigUtil.defaultIfMissing(GlobalConfig.ASTERIX_LOGGER_NAME, level);
     }

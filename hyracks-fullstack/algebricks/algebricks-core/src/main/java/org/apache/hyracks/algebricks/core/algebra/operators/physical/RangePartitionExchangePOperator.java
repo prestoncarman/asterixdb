@@ -140,10 +140,9 @@ public class RangePartitionExchangePOperator extends AbstractExchangePOperator {
             comps[i] = bcfp.getBinaryComparatorFactory(type, oc.getOrder() == OrderKind.ASC);
             i++;
         }
-        FieldRangeMultiPartitionComputerFactory multiPartitionerFactory;
-        FieldRangePartitionComputerFactory partitionerFactory;
         IConnectorDescriptor conn;
         if (rangeType == RangePartitioningType.PROJECT) {
+            FieldRangePartitionComputerFactory partitionerFactory;
             if (rangeMapIsComputedAtRunTime) {
                 partitionerFactory = new DynamicFieldRangePartitionComputerFactory(sortFields, comps,
                         rangeMapKeyInContext, op.getSourceLocation());
@@ -152,6 +151,7 @@ public class RangePartitionExchangePOperator extends AbstractExchangePOperator {
             }
             conn = new MToNPartitioningConnectorDescriptor(spec, partitionerFactory);
         } else {
+            FieldRangeMultiPartitionComputerFactory multiPartitionerFactory;
             if (rangeMapIsComputedAtRunTime) {
                 multiPartitionerFactory = new DynamicFieldRangeMultiPartitionComputerFactory(sortFields, rangeComps,
                         rangeMapKeyInContext, op.getSourceLocation(), rangeType);

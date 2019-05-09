@@ -18,14 +18,18 @@
  */
 package org.apache.asterix.runtime.evaluators.functions;
 
+import org.apache.asterix.common.annotations.MissingNullInOutFunction;
 import org.apache.asterix.formats.nontagged.SerializerDeserializerProvider;
 import org.apache.asterix.om.base.ABoolean;
 import org.apache.asterix.om.base.AMutableInt32;
 import org.apache.asterix.om.functions.BuiltinFunctions;
 import org.apache.asterix.om.functions.IFunctionDescriptor;
 import org.apache.asterix.om.functions.IFunctionDescriptorFactory;
+import org.apache.asterix.om.functions.IFunctionTypeInferer;
 import org.apache.asterix.om.types.BuiltinType;
+import org.apache.asterix.om.types.IAType;
 import org.apache.asterix.runtime.evaluators.base.AbstractScalarFunctionDynamicDescriptor;
+import org.apache.asterix.runtime.functions.FunctionTypeInferers;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluator;
@@ -45,25 +49,37 @@ import org.apache.hyracks.data.std.api.IPointable;
  * It returns (or throws an error at runtime) in order:
  * 1. missing, if any argument is missing.
  * 2. null, if any argument is null.
- * 3. an error if the value is a list/object type (i.e. derived type) since deep equality is not yet supported.
- * 4. null, if the input list is not a list.
- * 5. otherwise, returns true or false.
+ * 3. null, if the input list is not a list.
+ * 4. otherwise, returns true or false.
  *
  * </pre>
  */
+
+@MissingNullInOutFunction
 public class ArrayContainsDescriptor extends AbstractScalarFunctionDynamicDescriptor {
     private static final long serialVersionUID = 1L;
+    private IAType[] argTypes;
 
     public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
         @Override
         public IFunctionDescriptor createFunctionDescriptor() {
             return new ArrayContainsDescriptor();
         }
+
+        @Override
+        public IFunctionTypeInferer createFunctionTypeInferer() {
+            return FunctionTypeInferers.SET_ARGUMENTS_TYPE;
+        }
     };
 
     @Override
     public FunctionIdentifier getIdentifier() {
         return BuiltinFunctions.ARRAY_CONTAINS;
+    }
+
+    @Override
+    public void setImmutableStates(Object... states) {
+        argTypes = (IAType[]) states;
     }
 
     @Override
@@ -82,12 +98,12 @@ public class ArrayContainsDescriptor extends AbstractScalarFunctionDynamicDescri
     public class ArrayContainsEval extends AbstractArraySearchEval {
         private final ISerializerDeserializer booleanSerde;
 
-        public ArrayContainsEval(IScalarEvaluatorFactory[] args, IHyracksTaskContext ctx) throws HyracksDataException {
-            super(args, ctx, sourceLoc);
-            // TODO(ali): should we get the nontagged serde?
+        ArrayContainsEval(IScalarEvaluatorFactory[] args, IHyracksTaskContext ctx) throws HyracksDataException {
+            super(args, ctx, argTypes);
             booleanSerde = SerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.ABOOLEAN);
         }
 
+        @SuppressWarnings("unchecked") // unchecked call
         @Override
         public void processResult(AMutableInt32 intValue, IPointable result) throws HyracksDataException {
             storage.reset();

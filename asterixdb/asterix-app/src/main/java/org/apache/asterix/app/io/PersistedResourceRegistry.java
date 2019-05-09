@@ -37,20 +37,17 @@ import org.apache.asterix.dataflow.data.common.AOrderedListBinaryTokenizerFactor
 import org.apache.asterix.dataflow.data.common.AUnorderedListBinaryTokenizerFactory;
 import org.apache.asterix.dataflow.data.nontagged.comparators.ACirclePartialBinaryComparatorFactory;
 import org.apache.asterix.dataflow.data.nontagged.comparators.ADurationPartialBinaryComparatorFactory;
+import org.apache.asterix.dataflow.data.nontagged.comparators.AGenericAscBinaryComparatorFactory;
+import org.apache.asterix.dataflow.data.nontagged.comparators.AGenericDescBinaryComparatorFactory;
 import org.apache.asterix.dataflow.data.nontagged.comparators.AIntervalAscPartialBinaryComparatorFactory;
 import org.apache.asterix.dataflow.data.nontagged.comparators.AIntervalDescPartialBinaryComparatorFactory;
 import org.apache.asterix.dataflow.data.nontagged.comparators.ALinePartialBinaryComparatorFactory;
-import org.apache.asterix.dataflow.data.nontagged.comparators.AObjectAscBinaryComparatorFactory;
-import org.apache.asterix.dataflow.data.nontagged.comparators.AObjectDescBinaryComparatorFactory;
 import org.apache.asterix.dataflow.data.nontagged.comparators.APoint3DPartialBinaryComparatorFactory;
 import org.apache.asterix.dataflow.data.nontagged.comparators.APointPartialBinaryComparatorFactory;
 import org.apache.asterix.dataflow.data.nontagged.comparators.APolygonPartialBinaryComparatorFactory;
 import org.apache.asterix.dataflow.data.nontagged.comparators.ARectanglePartialBinaryComparatorFactory;
 import org.apache.asterix.dataflow.data.nontagged.comparators.AUUIDPartialBinaryComparatorFactory;
-import org.apache.asterix.dataflow.data.nontagged.comparators.BooleanBinaryComparatorFactory;
 import org.apache.asterix.dataflow.data.nontagged.comparators.ListItemBinaryComparatorFactory;
-import org.apache.asterix.dataflow.data.nontagged.comparators.LongBinaryComparatorFactory;
-import org.apache.asterix.dataflow.data.nontagged.comparators.RawBinaryComparatorFactory;
 import org.apache.asterix.dataflow.data.nontagged.valueproviders.PrimitiveValueProviderFactory;
 import org.apache.asterix.formats.nontagged.AnyBinaryComparatorFactory;
 import org.apache.asterix.formats.nontagged.OrderedBinaryComparatorFactory;
@@ -59,6 +56,11 @@ import org.apache.asterix.metadata.utils.SecondaryCorrelatedTreeIndexOperationsH
 import org.apache.asterix.om.pointables.nonvisitor.AIntervalPointable;
 import org.apache.asterix.om.pointables.nonvisitor.AListPointable;
 import org.apache.asterix.om.pointables.nonvisitor.ARecordPointable;
+import org.apache.asterix.om.types.AOrderedListType;
+import org.apache.asterix.om.types.ARecordType;
+import org.apache.asterix.om.types.AUnionType;
+import org.apache.asterix.om.types.AUnorderedListType;
+import org.apache.asterix.om.types.BuiltinType;
 import org.apache.asterix.runtime.compression.CompressionManager;
 import org.apache.asterix.runtime.utils.RuntimeComponentsProvider;
 import org.apache.asterix.transaction.management.opcallbacks.PrimaryIndexOperationTrackerFactory;
@@ -66,7 +68,19 @@ import org.apache.asterix.transaction.management.opcallbacks.SecondaryIndexOpera
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.io.IJsonSerializable;
 import org.apache.hyracks.api.io.IPersistedResourceRegistry;
+import org.apache.hyracks.data.std.accessors.BooleanBinaryComparatorFactory;
+import org.apache.hyracks.data.std.accessors.ByteArrayBinaryComparatorFactory;
+import org.apache.hyracks.data.std.accessors.ByteBinaryComparatorFactory;
+import org.apache.hyracks.data.std.accessors.DoubleBinaryComparatorFactory;
+import org.apache.hyracks.data.std.accessors.FloatBinaryComparatorFactory;
+import org.apache.hyracks.data.std.accessors.IntegerBinaryComparatorFactory;
+import org.apache.hyracks.data.std.accessors.LongBinaryComparatorFactory;
 import org.apache.hyracks.data.std.accessors.PointableBinaryComparatorFactory;
+import org.apache.hyracks.data.std.accessors.RawBinaryComparatorFactory;
+import org.apache.hyracks.data.std.accessors.ShortBinaryComparatorFactory;
+import org.apache.hyracks.data.std.accessors.UTF8StringBinaryComparatorFactory;
+import org.apache.hyracks.data.std.accessors.UTF8StringLowercaseBinaryComparatorFactory;
+import org.apache.hyracks.data.std.accessors.UTF8StringLowercaseTokenBinaryComparatorFactory;
 import org.apache.hyracks.data.std.primitive.BooleanPointable;
 import org.apache.hyracks.data.std.primitive.ByteArrayPointable;
 import org.apache.hyracks.data.std.primitive.BytePointable;
@@ -184,8 +198,8 @@ public class PersistedResourceRegistry implements IPersistedResourceRegistry {
         REGISTERED_CLASSES.put("AIntervalDescPartialBinaryComparatorFactory",
                 AIntervalDescPartialBinaryComparatorFactory.class);
         REGISTERED_CLASSES.put("ALinePartialBinaryComparatorFactory", ALinePartialBinaryComparatorFactory.class);
-        REGISTERED_CLASSES.put("AObjectAscBinaryComparatorFactory", AObjectAscBinaryComparatorFactory.class);
-        REGISTERED_CLASSES.put("AObjectDescBinaryComparatorFactory", AObjectDescBinaryComparatorFactory.class);
+        REGISTERED_CLASSES.put("AObjectAscBinaryComparatorFactory", AGenericAscBinaryComparatorFactory.class);
+        REGISTERED_CLASSES.put("AObjectDescBinaryComparatorFactory", AGenericDescBinaryComparatorFactory.class);
         REGISTERED_CLASSES.put("APoint3DPartialBinaryComparatorFactory", APoint3DPartialBinaryComparatorFactory.class);
         REGISTERED_CLASSES.put("APointPartialBinaryComparatorFactory", APointPartialBinaryComparatorFactory.class);
         REGISTERED_CLASSES.put("APolygonPartialBinaryComparatorFactory", APolygonPartialBinaryComparatorFactory.class);
@@ -205,6 +219,17 @@ public class PersistedResourceRegistry implements IPersistedResourceRegistry {
         REGISTERED_CLASSES.put("AnyBinaryComparatorFactory", AnyBinaryComparatorFactory.class);
         REGISTERED_CLASSES.put("OrderedBinaryComparatorFactory", OrderedBinaryComparatorFactory.class);
         REGISTERED_CLASSES.put("OrderedLinearizeComparatorFactory", OrderedLinearizeComparatorFactory.class);
+        REGISTERED_CLASSES.put("ByteBinaryComparatorFactory", ByteBinaryComparatorFactory.class);
+        REGISTERED_CLASSES.put("ShortBinaryComparatorFactory", ShortBinaryComparatorFactory.class);
+        REGISTERED_CLASSES.put("IntegerBinaryComparatorFactory", IntegerBinaryComparatorFactory.class);
+        REGISTERED_CLASSES.put("FloatBinaryComparatorFactory", FloatBinaryComparatorFactory.class);
+        REGISTERED_CLASSES.put("DoubleBinaryComparatorFactory", DoubleBinaryComparatorFactory.class);
+        REGISTERED_CLASSES.put("UTF8StringBinaryComparatorFactory", UTF8StringBinaryComparatorFactory.class);
+        REGISTERED_CLASSES.put("UTF8StringLowercaseBinaryComparatorFactory",
+                UTF8StringLowercaseBinaryComparatorFactory.class);
+        REGISTERED_CLASSES.put("UTF8StringLowercaseTokenBinaryComparatorFactory",
+                UTF8StringLowercaseTokenBinaryComparatorFactory.class);
+        REGISTERED_CLASSES.put("ByteArrayBinaryComparatorFactory", ByteArrayBinaryComparatorFactory.class);
 
         // IPointableFactory
         REGISTERED_CLASSES.put("AIntervalPointableFactory", AIntervalPointable.AIntervalPointableFactory.class);
@@ -249,6 +274,13 @@ public class PersistedResourceRegistry implements IPersistedResourceRegistry {
         REGISTERED_CLASSES.put("UTF8NGramTokenFactory", UTF8NGramTokenFactory.class);
         REGISTERED_CLASSES.put("UTF8WordTokenFactory", UTF8WordTokenFactory.class);
         REGISTERED_CLASSES.put("RTreePolicyType", RTreePolicyType.class);
+
+        // IAType
+        REGISTERED_CLASSES.put("BuiltinType", BuiltinType.class);
+        REGISTERED_CLASSES.put("AOrderedListType", AOrderedListType.class);
+        REGISTERED_CLASSES.put("ARecordType", ARecordType.class);
+        REGISTERED_CLASSES.put("AUnionType", AUnionType.class);
+        REGISTERED_CLASSES.put("AUnorderedListType", AUnorderedListType.class);
 
         //ICompressorDecompressorFactory
         CompressionManager.registerCompressorDecompressorsFactoryClasses(REGISTERED_CLASSES);

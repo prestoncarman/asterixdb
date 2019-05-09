@@ -38,10 +38,10 @@ import org.apache.asterix.lang.common.expression.GbyVariableExpressionPair;
 import org.apache.asterix.lang.common.expression.IfExpr;
 import org.apache.asterix.lang.common.expression.IndexAccessor;
 import org.apache.asterix.lang.common.expression.ListConstructor;
+import org.apache.asterix.lang.common.expression.ListSliceExpression;
 import org.apache.asterix.lang.common.expression.LiteralExpr;
 import org.apache.asterix.lang.common.expression.OperatorExpr;
 import org.apache.asterix.lang.common.expression.QuantifiedExpression;
-import org.apache.asterix.lang.common.expression.ListSliceExpression;
 import org.apache.asterix.lang.common.expression.RecordConstructor;
 import org.apache.asterix.lang.common.expression.UnaryExpr;
 import org.apache.asterix.lang.common.expression.VariableExpr;
@@ -372,10 +372,14 @@ public class FreeVariableVisitor extends AbstractSqlppQueryExpressionVisitor<Voi
 
     @Override
     public Void visit(QuantifiedExpression qe, Collection<VariableExpr> freeVars) throws CompilationException {
+        Collection<VariableExpr> qeBindingVars = SqlppVariableUtil.getBindingVariables(qe);
+        Collection<VariableExpr> qeFreeVars = new HashSet<>();
         for (QuantifiedPair pair : qe.getQuantifiedList()) {
-            pair.getExpr().accept(this, freeVars);
+            pair.getExpr().accept(this, qeFreeVars);
         }
-        qe.getSatisfiesExpr().accept(this, freeVars);
+        qe.getSatisfiesExpr().accept(this, qeFreeVars);
+        qeFreeVars.removeAll(qeBindingVars);
+        freeVars.addAll(qeFreeVars);
         return null;
     }
 

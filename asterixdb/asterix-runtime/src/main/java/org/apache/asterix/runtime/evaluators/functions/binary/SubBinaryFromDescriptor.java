@@ -19,6 +19,7 @@
 
 package org.apache.asterix.runtime.evaluators.functions.binary;
 
+import org.apache.asterix.common.annotations.MissingNullInOutFunction;
 import org.apache.asterix.om.functions.BuiltinFunctions;
 import org.apache.asterix.om.functions.IFunctionDescriptor;
 import org.apache.asterix.om.functions.IFunctionDescriptorFactory;
@@ -32,6 +33,7 @@ import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.dataflow.common.data.accessors.IFrameTupleReference;
 
+@MissingNullInOutFunction
 public class SubBinaryFromDescriptor extends AbstractStringOffsetConfigurableDescriptor {
     private static final long serialVersionUID = 1L;
     public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
@@ -60,7 +62,7 @@ public class SubBinaryFromDescriptor extends AbstractStringOffsetConfigurableDes
 
             @Override
             public IScalarEvaluator createScalarEvaluator(final IHyracksTaskContext ctx) throws HyracksDataException {
-                return new AbstractSubBinaryEvaluator(ctx, args, baseOffset, getIdentifier().getName(), sourceLoc) {
+                return new AbstractSubBinaryEvaluator(ctx, args, baseOffset, getIdentifier(), sourceLoc) {
                     @Override
                     protected int getSubLength(IFrameTupleReference tuple) {
                         return Integer.MAX_VALUE;

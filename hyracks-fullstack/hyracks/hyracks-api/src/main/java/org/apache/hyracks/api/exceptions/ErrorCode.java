@@ -153,13 +153,16 @@ public class ErrorCode {
     public static final int NO_RANGEMAP_PRODUCED = 117;
     public static final int RANGEMAP_NOT_FOUND = 118;
     public static final int UNSUPPORTED_WINDOW_SPEC = 119;
+    public static final int EOF = 120;
+    public static final int NUMERIC_PROMOTION_ERROR = 121;
 
     // Compilation error codes.
     public static final int RULECOLLECTION_NOT_INSTANCE_OF_LIST = 10000;
     public static final int CANNOT_COMPOSE_PART_CONSTRAINTS = 10001;
     public static final int PHYS_OPERATOR_NOT_SET = 10002;
     public static final int DESCRIPTOR_GENERATION_ERROR = 10003;
-    public static final int ORDER_EXPR_NOT_NORMALIZED = 10004;
+    public static final int EXPR_NOT_NORMALIZED = 10004;
+    public static final int OPERATOR_NOT_IMPLEMENTED = 10005;
 
     private static class Holder {
         private static final Map<Integer, String> errorMessageMap;

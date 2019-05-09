@@ -30,6 +30,10 @@ import org.apache.hyracks.data.std.api.IPointableFactory;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+/**
+ * Avoid using this comparator factory. Use the pointable-specific comparator factory INSTANCE instead. This class is
+ * only kept for backward compatibility.
+ */
 public class PointableBinaryComparatorFactory implements IBinaryComparatorFactory {
     private static final long serialVersionUID = 1L;
 
@@ -49,10 +53,6 @@ public class PointableBinaryComparatorFactory implements IBinaryComparatorFactor
         return new IBinaryComparator() {
             @Override
             public int compare(byte[] b1, int s1, int l1, byte[] b2, int s2, int l2) {
-                if (l1 == 0 && l2 != 0)
-                    return -1;
-                if (l1 != 0 && l2 == 0)
-                    return 1;
                 p.set(b1, s1, l1);
                 return ((IComparable) p).compareTo(b2, s2, l2);
             }

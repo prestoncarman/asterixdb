@@ -33,13 +33,6 @@ public class ErrorCode {
     private static final String RESOURCE_PATH = "asx_errormsg/en.properties";
     public static final String ASTERIX = "ASX";
 
-    // Extension errors
-    public static final int EXTENSION_ID_CONFLICT = 4001;
-    public static final int EXTENSION_COMPONENT_CONFLICT = 4002;
-    public static final int UNSUPPORTED_MESSAGE_TYPE = 4003;
-    public static final int INVALID_CONFIGURATION = 4004;
-    public static final int UNSUPPORTED_REPLICATION_STRATEGY = 4005;
-
     // Runtime errors
     public static final int CASTING_FIELD = 1;
     public static final int TYPE_MISMATCH_FUNCTION = 2;
@@ -81,6 +74,7 @@ public class ErrorCode {
     public static final int INTEGER_VALUE_EXPECTED = 39;
     public static final int NO_STATEMENT_PROVIDED = 40;
     public static final int REQUEST_CANCELLED = 41;
+    public static final int TPCDS_INVALID_TABLE_NAME = 42;
 
     public static final int UNSUPPORTED_JRE = 100;
 
@@ -189,6 +183,7 @@ public class ErrorCode {
     public static final int COMPILATION_UNEXPECTED_WINDOW_EXPRESSION = 1100;
     public static final int COMPILATION_UNEXPECTED_WINDOW_ORDERBY = 1101;
     public static final int COMPILATION_EXPECTED_WINDOW_FUNCTION = 1102;
+    public static final int COMPILATION_ILLEGAL_USE_OF_IDENTIFIER = 1103;
 
     // Feed errors
     public static final int DATAFLOW_ILLEGAL_STATE = 3001;
@@ -300,6 +295,16 @@ public class ErrorCode {
 
     // Lifecycle management errors
     public static final int DUPLICATE_PARTITION_ID = 4000;
+
+    // Extension errors
+    public static final int EXTENSION_ID_CONFLICT = 4001;
+    public static final int EXTENSION_COMPONENT_CONFLICT = 4002;
+    public static final int UNSUPPORTED_MESSAGE_TYPE = 4003;
+    public static final int INVALID_CONFIGURATION = 4004;
+    public static final int UNSUPPORTED_REPLICATION_STRATEGY = 4005;
+
+    // Lifecycle management errors pt.2
+    public static final int CLUSTER_STATE_UNUSABLE = 4006;
 
     private ErrorCode() {
     }

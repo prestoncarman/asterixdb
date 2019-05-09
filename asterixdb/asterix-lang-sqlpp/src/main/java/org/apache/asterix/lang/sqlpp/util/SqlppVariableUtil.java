@@ -20,10 +20,8 @@ package org.apache.asterix.lang.sqlpp.util;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 import org.apache.asterix.common.exceptions.CompilationException;
@@ -34,14 +32,20 @@ import org.apache.asterix.lang.common.base.ILangExpression;
 import org.apache.asterix.lang.common.clause.GroupbyClause;
 import org.apache.asterix.lang.common.clause.LetClause;
 import org.apache.asterix.lang.common.expression.GbyVariableExpressionPair;
+import org.apache.asterix.lang.common.expression.QuantifiedExpression;
 import org.apache.asterix.lang.common.expression.VariableExpr;
 import org.apache.asterix.lang.common.struct.Identifier;
+import org.apache.asterix.lang.common.struct.QuantifiedPair;
 import org.apache.asterix.lang.common.struct.VarIdentifier;
 import org.apache.asterix.lang.sqlpp.clause.AbstractBinaryCorrelateClause;
 import org.apache.asterix.lang.sqlpp.clause.FromClause;
 import org.apache.asterix.lang.sqlpp.clause.FromTerm;
 import org.apache.asterix.lang.sqlpp.visitor.FreeVariableVisitor;
 import org.apache.hyracks.algebricks.common.utils.Pair;
+import org.apache.hyracks.algebricks.core.algebra.base.ILogicalExpression;
+import org.apache.hyracks.algebricks.core.algebra.base.LogicalExpressionTag;
+import org.apache.hyracks.algebricks.core.algebra.base.LogicalVariable;
+import org.apache.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
 
 public class SqlppVariableUtil {
 
@@ -192,12 +196,13 @@ public class SqlppVariableUtil {
         return bindingVars;
     }
 
-    public static Map<Expression, Identifier> createFieldVariableMap(List<Pair<Expression, Identifier>> fieldList) {
-        Map<Expression, Identifier> fieldVars = new HashMap<>();
-        for (Pair<Expression, Identifier> p : fieldList) {
-            fieldVars.put(p.first, p.second);
+    public static List<VariableExpr> getBindingVariables(QuantifiedExpression qe) {
+        List<QuantifiedPair> quantifiedList = qe.getQuantifiedList();
+        List<VariableExpr> bindingVars = new ArrayList<>(quantifiedList.size());
+        for (QuantifiedPair qp : quantifiedList) {
+            bindingVars.add(qp.getVarExpr());
         }
-        return fieldVars;
+        return bindingVars;
     }
 
     public static void addToFieldVariableList(VariableExpr varExpr, List<Pair<Expression, Identifier>> outFieldList) {
@@ -205,5 +210,10 @@ public class SqlppVariableUtil {
         VariableExpr newVarExpr = new VariableExpr(var);
         newVarExpr.setSourceLocation(varExpr.getSourceLocation());
         outFieldList.add(new Pair<>(newVarExpr, toUserDefinedVariableName(var)));
+    }
+
+    public static LogicalVariable getVariable(ILogicalExpression expr) {
+        return expr.getExpressionTag() == LogicalExpressionTag.VARIABLE
+                ? ((VariableReferenceExpression) expr).getVariableReference() : null;
     }
 }

@@ -33,7 +33,8 @@ public abstract class BaseClientRequest implements IClientRequest {
     private boolean complete;
     private final IRequestReference requestReference;
     private boolean cancellable = false;
-    protected volatile String state = "received";
+    private volatile long completionTime = -1;
+    protected volatile State state = State.RECEIVED;
 
     public BaseClientRequest(IRequestReference requestReference) {
         this.requestReference = requestReference;
@@ -45,6 +46,8 @@ public abstract class BaseClientRequest implements IClientRequest {
             return;
         }
         complete = true;
+        state = State.COMPLETED;
+        completionTime = System.currentTimeMillis();
     }
 
     @Override
@@ -53,6 +56,7 @@ public abstract class BaseClientRequest implements IClientRequest {
             return;
         }
         complete();
+        state = State.CANCELLED;
         if (cancellable) {
             doCancel(appCtx);
         }
@@ -61,6 +65,11 @@ public abstract class BaseClientRequest implements IClientRequest {
     @Override
     public synchronized void markCancellable() {
         cancellable = true;
+    }
+
+    @Override
+    public synchronized boolean isCancelled() {
+        return state == State.CANCELLED;
     }
 
     @Override
@@ -76,7 +85,7 @@ public abstract class BaseClientRequest implements IClientRequest {
     }
 
     public void setRunning() {
-        state = "running";
+        state = State.RUNNING;
     }
 
     @Override
@@ -88,19 +97,19 @@ public abstract class BaseClientRequest implements IClientRequest {
         ObjectNode json = JSONUtil.createObject();
         json.put("uuid", requestReference.getUuid());
         json.put("requestTime", new ADateTime(requestReference.getTime()).toSimpleString());
-        json.put("elapsedTime", getElapsedTime());
+        json.put("elapsedTime", getElapsedTimeInSecs());
         json.put("node", requestReference.getNode());
-        json.put("state", state);
+        json.put("state", state.getLabel());
         json.put("userAgent", ((RequestReference) requestReference).getUserAgent());
         json.put("remoteAddr", ((RequestReference) requestReference).getRemoteAddr());
         json.put("cancellable", cancellable);
         return json;
     }
 
-    private String getElapsedTime() {
+    private double getElapsedTimeInSecs() {
         // this is just an estimation as the request might have been received on a node with a different system time
-        // TODO add dynamic time unit
-        return System.currentTimeMillis() - requestReference.getTime() + "ms";
+        long runningTime = completionTime > 0 ? completionTime : System.currentTimeMillis();
+        return (runningTime - requestReference.getTime()) / 1000d;
     }
 
     protected abstract void doCancel(ICcApplicationContext appCtx) throws HyracksDataException;

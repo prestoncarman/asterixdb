@@ -22,17 +22,17 @@ import static org.apache.asterix.om.types.EnumDeserializer.ATYPETAGDESERIALIZER;
 
 import java.io.IOException;
 
-import org.apache.asterix.common.exceptions.ErrorCode;
-import org.apache.asterix.common.exceptions.RuntimeDataException;
-import org.apache.asterix.dataflow.data.nontagged.comparators.AObjectAscBinaryComparatorFactory;
+import org.apache.asterix.formats.nontagged.BinaryComparatorFactoryProvider;
 import org.apache.asterix.om.base.AMutableInt32;
+import org.apache.asterix.om.types.AbstractCollectionType;
+import org.apache.asterix.om.types.BuiltinType;
+import org.apache.asterix.om.types.IAType;
 import org.apache.asterix.runtime.evaluators.common.ListAccessor;
 import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluator;
 import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluatorFactory;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.dataflow.value.IBinaryComparator;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
-import org.apache.hyracks.api.exceptions.SourceLocation;
 import org.apache.hyracks.data.std.api.IPointable;
 import org.apache.hyracks.data.std.primitive.VoidPointable;
 import org.apache.hyracks.data.std.util.ArrayBackedValueStorage;
@@ -46,11 +46,10 @@ public abstract class AbstractArraySearchEval implements IScalarEvaluator {
     private final IScalarEvaluator searchedValueEval;
     private final IBinaryComparator comp;
     private final ListAccessor listAccessor;
-    private final SourceLocation sourceLocation;
     private final AMutableInt32 intValue;
     protected final ArrayBackedValueStorage storage;
 
-    public AbstractArraySearchEval(IScalarEvaluatorFactory[] args, IHyracksTaskContext ctx, SourceLocation sourceLoc)
+    AbstractArraySearchEval(IScalarEvaluatorFactory[] args, IHyracksTaskContext ctx, IAType[] argTypes)
             throws HyracksDataException {
         storage = new ArrayBackedValueStorage();
         listArg = new VoidPointable();
@@ -58,29 +57,37 @@ public abstract class AbstractArraySearchEval implements IScalarEvaluator {
         tempVal = new VoidPointable();
         listEval = args[0].createScalarEvaluator(ctx);
         searchedValueEval = args[1].createScalarEvaluator(ctx);
-        comp = AObjectAscBinaryComparatorFactory.INSTANCE.createBinaryComparator();
+        comp = createComparator(argTypes[0], argTypes[1]);
         listAccessor = new ListAccessor();
         intValue = new AMutableInt32(-1);
-        sourceLocation = sourceLoc;
+    }
+
+    private static IBinaryComparator createComparator(IAType listType, IAType searchValueType) {
+        IAType itemType = listType.getTypeTag().isListType() ? ((AbstractCollectionType) listType).getItemType()
+                : BuiltinType.ANY;
+        return BinaryComparatorFactoryProvider.INSTANCE.getBinaryComparatorFactory(itemType, searchValueType, true)
+                .createBinaryComparator();
     }
 
     @Override
     public void evaluate(IFrameTupleReference tuple, IPointable result) throws HyracksDataException {
-        // 1st arg: list
+        // Evaluators
         listEval.evaluate(tuple, listArg);
+        searchedValueEval.evaluate(tuple, searchedValueArg);
+
+        if (PointableHelper.checkAndSetMissingOrNull(result, listArg, searchedValueArg)) {
+            return;
+        }
+
+        // 1st arg: list
         byte[] listBytes = listArg.getByteArray();
         int listOffset = listArg.getStartOffset();
 
+        // TODO(ali): could be optimized to not evaluate again if the search value evaluator is a constant
         // 2nd arg: value to search for
-        searchedValueEval.evaluate(tuple, searchedValueArg);
         byte[] valueBytes = searchedValueArg.getByteArray();
         int valueOffset = searchedValueArg.getStartOffset();
         int valueLength = searchedValueArg.getLength();
-
-        // for now, we don't support deep equality of object/lists. Throw an error if the value is of these types
-        if (ATYPETAGDESERIALIZER.deserialize(valueBytes[valueOffset]).isDerivedType()) {
-            throw new RuntimeDataException(ErrorCode.CANNOT_COMPARE_COMPLEX, sourceLocation);
-        }
 
         if (!ATYPETAGDESERIALIZER.deserialize(listBytes[listOffset]).isListType()) {
             PointableHelper.setNull(result);
@@ -91,7 +98,6 @@ public abstract class AbstractArraySearchEval implements IScalarEvaluator {
         intValue.setValue(-1);
         listAccessor.reset(listBytes, listOffset);
         int numItems = listAccessor.size();
-
         try {
             for (int i = 0; i < numItems; i++) {
                 listAccessor.getOrWriteItem(i, tempVal, storage);

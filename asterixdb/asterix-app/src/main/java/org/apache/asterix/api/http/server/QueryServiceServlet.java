@@ -23,6 +23,8 @@ import static org.apache.asterix.common.exceptions.ErrorCode.NO_STATEMENT_PROVID
 import static org.apache.asterix.common.exceptions.ErrorCode.REJECT_BAD_CLUSTER_STATE;
 import static org.apache.asterix.common.exceptions.ErrorCode.REJECT_NODE_UNREGISTERED;
 import static org.apache.asterix.common.exceptions.ErrorCode.REQUEST_TIMEOUT;
+import static org.apache.hyracks.api.exceptions.ErrorCode.HYRACKS;
+import static org.apache.hyracks.api.exceptions.ErrorCode.JOB_REQUIREMENTS_EXCEED_CAPACITY;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -87,6 +89,7 @@ import org.apache.logging.log4j.Logger;
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
+
 import io.netty.handler.codec.http.HttpResponseStatus;
 
 public class QueryServiceServlet extends AbstractQueryApiServlet {
@@ -424,7 +427,7 @@ public class QueryServiceServlet extends AbstractQueryApiServlet {
                 GlobalConfig.ASTERIX_LOGGER.log(Level.ERROR, e.getMessage(), e);
             }
         } else {
-            setParamFromRequest(request, param);
+            setParamFromRequest(request, param, optionalParams);
         }
     }
 
@@ -449,18 +452,17 @@ public class QueryServiceServlet extends AbstractQueryApiServlet {
         param.setStatementParams(
                 getOptStatementParameters(jsonRequest, jsonRequest.fieldNames(), JsonNode::get, v -> v));
         param.setMultiStatement(getOptBoolean(jsonRequest, Parameter.MULTI_STATEMENT, true));
-        setJsonOptionalParameters(jsonRequest, optionalParameters);
+        setJsonOptionalParameters(jsonRequest, param, optionalParameters);
     }
 
-    protected void setJsonOptionalParameters(JsonNode jsonRequest, Map<String, String> optionalParameters) {
+    protected void setJsonOptionalParameters(JsonNode jsonRequest, QueryServiceRequestParameters param,
+            Map<String, String> optionalParameters) {
         // allows extensions to set extra parameters
     }
 
-    private void setParamFromRequest(IServletRequest request, QueryServiceRequestParameters param) throws IOException {
+    private void setParamFromRequest(IServletRequest request, QueryServiceRequestParameters param,
+            Map<String, String> optionalParameters) throws IOException {
         param.setStatement(getParameter(request, Parameter.STATEMENT));
-        if (param.getStatement() == null) {
-            param.setStatement(HttpUtil.getRequestBody(request));
-        }
         param.setFormat(toLower(getParameter(request, Parameter.FORMAT)));
         param.setPretty(Boolean.parseBoolean(getParameter(request, Parameter.PRETTY)));
         param.setMode(toLower(getParameter(request, Parameter.MODE)));
@@ -476,6 +478,12 @@ public class QueryServiceServlet extends AbstractQueryApiServlet {
         } catch (JsonParseException | JsonMappingException e) {
             GlobalConfig.ASTERIX_LOGGER.log(Level.ERROR, e.getMessage(), e);
         }
+        setOptionalParameters(request, param, optionalParameters);
+    }
+
+    protected void setOptionalParameters(IServletRequest request, QueryServiceRequestParameters param,
+            Map<String, String> optionalParameters) {
+        // allows extensions to set extra parameters
     }
 
     private void setAccessControlHeaders(IServletRequest request, IServletResponse response) throws IOException {
@@ -535,7 +543,7 @@ public class QueryServiceServlet extends AbstractQueryApiServlet {
         Charset resultCharset = HttpUtil.setContentType(response, HttpUtil.ContentType.APPLICATION_JSON, request);
         PrintWriter httpWriter = response.writer();
         SessionOutput sessionOutput = createSessionOutput(httpWriter);
-        QueryServiceRequestParameters param = new QueryServiceRequestParameters();
+        QueryServiceRequestParameters param = newRequestParameters();
         try {
             // buffer the output until we are ready to set the status of the response message correctly
             sessionOutput.hold();
@@ -669,6 +677,7 @@ public class QueryServiceServlet extends AbstractQueryApiServlet {
                     state.setStatus(ResultStatus.FATAL, HttpResponseStatus.SERVICE_UNAVAILABLE);
                     break;
                 case ASTERIX + NO_STATEMENT_PROVIDED:
+                case HYRACKS + JOB_REQUIREMENTS_EXCEED_CAPACITY:
                     state.setStatus(ResultStatus.FATAL, HttpResponseStatus.BAD_REQUEST);
                     break;
                 default:
@@ -743,6 +752,10 @@ public class QueryServiceServlet extends AbstractQueryApiServlet {
                 throw new IllegalStateException("Unrecognized plan format: " + planFormat);
         }
         pw.print(",\n");
+    }
+
+    protected QueryServiceRequestParameters newRequestParameters() {
+        return new QueryServiceRequestParameters();
     }
 
     private static boolean isJsonFormat(String format) {

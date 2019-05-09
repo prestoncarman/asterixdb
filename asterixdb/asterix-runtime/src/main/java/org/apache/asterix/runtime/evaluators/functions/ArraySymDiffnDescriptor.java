@@ -18,6 +18,7 @@
  */
 package org.apache.asterix.runtime.evaluators.functions;
 
+import org.apache.asterix.common.annotations.MissingNullInOutFunction;
 import org.apache.asterix.om.functions.BuiltinFunctions;
 import org.apache.asterix.om.functions.IFunctionDescriptor;
 import org.apache.asterix.om.functions.IFunctionDescriptorFactory;
@@ -45,11 +46,12 @@ import org.apache.hyracks.api.exceptions.HyracksDataException;
  * 1. missing, if any argument is missing.
  * 2. an error if the input lists are not of the same type (one is an ordered list while the other is unordered).
  * 3. null, if any input list is null or is not a list.
- * 4. an error if any list item is a list/object type (i.e. derived type) since deep equality is not yet supported.
- * 5. otherwise, a new list.
+ * 4. otherwise, a new list.
  *
  * </pre>
  */
+
+@MissingNullInOutFunction
 public class ArraySymDiffnDescriptor extends AbstractScalarFunctionDynamicDescriptor {
     private static final long serialVersionUID = 1L;
     private IAType[] argTypes;
@@ -91,7 +93,7 @@ public class ArraySymDiffnDescriptor extends AbstractScalarFunctionDynamicDescri
 
     public class ArraySymDiffnEval extends ArraySymDiffEval {
 
-        public ArraySymDiffnEval(IScalarEvaluatorFactory[] args, IHyracksTaskContext ctx) throws HyracksDataException {
+        ArraySymDiffnEval(IScalarEvaluatorFactory[] args, IHyracksTaskContext ctx) throws HyracksDataException {
             super(args, ctx, sourceLoc, argTypes);
         }
 

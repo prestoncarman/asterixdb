@@ -59,9 +59,7 @@ public class CCMessageBroker implements ICCMessageBroker {
     @Override
     public void receivedMessage(IMessage message, String nodeId) throws Exception {
         ICcAddressedMessage msg = (ICcAddressedMessage) message;
-        if (LOGGER.isInfoEnabled()) {
-            LOGGER.info("Received message: " + msg);
-        }
+        IMessage.logMessage(LOGGER, message);
         ICcApplicationContext appCtx = (ICcApplicationContext) ccs.getApplicationContext();
         msg.handle(appCtx);
     }

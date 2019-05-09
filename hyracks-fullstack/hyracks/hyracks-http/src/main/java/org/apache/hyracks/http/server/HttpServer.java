@@ -18,6 +18,7 @@
  */
 package org.apache.hyracks.http.server;
 
+import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -28,9 +29,6 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import io.netty.util.internal.logging.InternalLoggerFactory;
-import io.netty.util.internal.logging.Log4J2LoggerFactory;
-import io.netty.util.internal.logging.Log4JLoggerFactory;
 import org.apache.hyracks.http.api.IChannelClosedHandler;
 import org.apache.hyracks.http.api.IServlet;
 import org.apache.hyracks.util.MXHelper;
@@ -52,8 +50,6 @@ import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
-import io.netty.util.internal.logging.InternalLoggerFactory;
-import io.netty.util.internal.logging.Log4J2LoggerFactory;
 
 public class HttpServer {
     // Constants
@@ -77,7 +73,7 @@ public class HttpServer {
     private final List<IServlet> servlets;
     private final EventLoopGroup bossGroup;
     private final EventLoopGroup workerGroup;
-    private final int port;
+    private final InetSocketAddress address;
     private final ThreadPoolExecutor executor;
     // Mutable members
     private volatile int state = STOPPED;
@@ -86,19 +82,20 @@ public class HttpServer {
     private Throwable cause;
     private HttpServerConfig config;
 
-    static {
-        InternalLoggerFactory.setDefaultFactory(Log4J2LoggerFactory.INSTANCE);
-    }
-
     public HttpServer(EventLoopGroup bossGroup, EventLoopGroup workerGroup, int port, HttpServerConfig config) {
-        this(bossGroup, workerGroup, port, config, null);
+        this(bossGroup, workerGroup, new InetSocketAddress(port), config, null);
     }
 
-    public HttpServer(EventLoopGroup bossGroup, EventLoopGroup workerGroup, int port, HttpServerConfig config,
-            IChannelClosedHandler closeHandler) {
+    public HttpServer(EventLoopGroup bossGroup, EventLoopGroup workerGroup, InetSocketAddress address,
+            HttpServerConfig config) {
+        this(bossGroup, workerGroup, address, config, null);
+    }
+
+    public HttpServer(EventLoopGroup bossGroup, EventLoopGroup workerGroup, InetSocketAddress address,
+            HttpServerConfig config, IChannelClosedHandler closeHandler) {
         this.bossGroup = bossGroup;
         this.workerGroup = workerGroup;
-        this.port = port;
+        this.address = address;
         this.closedHandler = closeHandler;
         this.config = config;
         ctx = new ConcurrentHashMap<>();
@@ -106,7 +103,8 @@ public class HttpServer {
         workQueue = new LinkedBlockingQueue<>(config.getRequestQueueSize());
         int numExecutorThreads = config.getThreadCount();
         executor = new ThreadPoolExecutor(numExecutorThreads, numExecutorThreads, 0L, TimeUnit.MILLISECONDS, workQueue,
-                runnable -> new Thread(runnable, "HttpExecutor(port:" + port + ")-" + threadId.getAndIncrement()));
+                runnable -> new Thread(runnable,
+                        "HttpExecutor(port:" + address.getPort() + ")-" + threadId.getAndIncrement()));
         long directMemoryBudget = numExecutorThreads * (long) HIGH_WRITE_BUFFER_WATER_MARK
                 + numExecutorThreads * config.getMaxResponseChunkSize();
         LOGGER.log(Level.DEBUG,
@@ -130,7 +128,7 @@ public class HttpServer {
                 doStart();
                 setStarted();
             } catch (Throwable e) { // NOSONAR
-                LOGGER.log(Level.ERROR, "Failure starting an Http Server with port: " + port, e);
+                LOGGER.error("Failure starting an Http Server at: {}", address, e);
                 setFailed(e);
                 throw e;
             }
@@ -246,7 +244,7 @@ public class HttpServer {
                 .childOption(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT)
                 .childOption(ChannelOption.WRITE_BUFFER_WATER_MARK, WRITE_BUFFER_WATER_MARK)
                 .handler(new LoggingHandler(LogLevel.DEBUG)).childHandler(getChannelInitializer());
-        Channel newChannel = b.bind(port).sync().channel();
+        Channel newChannel = b.bind(address).sync().channel();
         newChannel.closeFuture().addListener(f -> {
             // This listener is invoked from within a netty IO thread. Hence, we can never block it
             // For simplicity, we will submit the recovery task to a different thread
@@ -406,7 +404,7 @@ public class HttpServer {
 
     @Override
     public String toString() {
-        return "{\"class\":\"" + getClass().getSimpleName() + "\",\"port\":" + port + ",\"state\":\"" + getState()
+        return "{\"class\":\"" + getClass().getSimpleName() + "\",\"address\":" + address + ",\"state\":\"" + getState()
                 + "\"}";
     }
 
