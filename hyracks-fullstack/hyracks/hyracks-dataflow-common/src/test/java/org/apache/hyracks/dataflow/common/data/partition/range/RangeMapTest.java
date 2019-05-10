@@ -18,15 +18,14 @@
  */
 package org.apache.hyracks.dataflow.common.data.partition.range;
 
-import org.apache.hyracks.data.std.util.ArrayBackedValueStorage;
-import org.apache.hyracks.dataflow.common.data.partition.range.RangeMap;
-import org.junit.Test;
+import static org.junit.Assert.assertTrue;
 
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.LinkedList;
 
-import static org.junit.Assert.assertTrue;
+import org.apache.hyracks.data.std.util.ArrayBackedValueStorage;
+import org.junit.Test;
 
 public class RangeMapTest extends AbstractRangeMapTest {
 

@@ -19,7 +19,11 @@
 
 package org.apache.asterix.dataflow.data.nontagged.comparators.rangeinterval;
 
-import junit.framework.TestCase;
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutput;
+import java.io.DataOutputStream;
+import java.io.IOException;
+
 import org.apache.asterix.dataflow.data.nontagged.serde.AInt64SerializerDeserializer;
 import org.apache.asterix.dataflow.data.nontagged.serde.AIntervalSerializerDeserializer;
 import org.apache.asterix.om.base.AInt64;
@@ -30,10 +34,7 @@ import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.junit.Assert;
 import org.junit.Test;
 
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutput;
-import java.io.DataOutputStream;
-import java.io.IOException;
+import junit.framework.TestCase;
 
 public class RangeIntervalBinaryComparatorFactoryTest extends TestCase {
 

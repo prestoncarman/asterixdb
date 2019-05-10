@@ -19,6 +19,7 @@
 package org.apache.hyracks.dataflow.common.data.partition.range;
 
 import java.util.Arrays;
+
 import org.apache.hyracks.api.dataflow.value.IRangeMap;
 
 /**

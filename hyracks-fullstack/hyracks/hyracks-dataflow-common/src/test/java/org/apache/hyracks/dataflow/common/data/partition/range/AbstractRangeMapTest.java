@@ -18,13 +18,13 @@
  */
 package org.apache.hyracks.dataflow.common.data.partition.range;
 
-import org.apache.hyracks.api.dataflow.value.IRangeMap;
-import org.apache.hyracks.api.exceptions.HyracksDataException;
-import org.apache.hyracks.data.std.primitive.LongPointable;
+import static org.junit.Assert.assertTrue;
 
 import java.util.LinkedList;
 
-import static org.junit.Assert.assertTrue;
+import org.apache.hyracks.api.dataflow.value.IRangeMap;
+import org.apache.hyracks.api.exceptions.HyracksDataException;
+import org.apache.hyracks.data.std.primitive.LongPointable;
 
 public abstract class AbstractRangeMapTest {
 

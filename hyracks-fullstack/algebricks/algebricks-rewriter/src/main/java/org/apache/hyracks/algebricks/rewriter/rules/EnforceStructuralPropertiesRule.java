@@ -72,8 +72,6 @@ import org.apache.hyracks.algebricks.core.algebra.operators.physical.RandomMerge
 import org.apache.hyracks.algebricks.core.algebra.operators.physical.RandomPartitionExchangePOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.physical.RangePartitionExchangePOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.physical.RangePartitionMergeExchangePOperator;
-import org.apache.hyracks.algebricks.core.algebra.operators.physical.RangeMultiPartitionExchangePOperator;
-import org.apache.hyracks.algebricks.core.algebra.operators.physical.RangeMultiPartitionMergeExchangePOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.physical.ReplicatePOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.physical.SequentialMergeExchangePOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.physical.SortForwardPOperator;
@@ -105,7 +103,6 @@ import org.apache.hyracks.algebricks.core.rewriter.base.IAlgebraicRewriteRule;
 import org.apache.hyracks.algebricks.core.rewriter.base.PhysicalOptimizationConfig;
 import org.apache.hyracks.algebricks.rewriter.util.PhysicalOptimizationsUtil;
 import org.apache.hyracks.api.dataflow.value.IRangePartitionType.RangePartitioningType;
-import org.apache.hyracks.api.dataflow.value.IRangePartitionType;
 import org.apache.hyracks.api.exceptions.SourceLocation;
 import org.apache.hyracks.dataflow.common.data.partition.range.RangeMap;
 import org.apache.hyracks.util.LogRedactionUtil;
@@ -646,7 +643,8 @@ public class EnforceStructuralPropertiesRule implements IAlgebraicRewriteRule {
                 RangeMap rangeMap = (RangeMap) parentOp.getAnnotations().get(OperatorAnnotations.USE_STATIC_RANGE);
                 RangePartitioningType rangePartitioningType =
                         ((OrderedPartitionedProperty) partitioningDeliveredByChild).getRangePartitioningType();
-                mergingConnector = new RangePartitionMergeExchangePOperator(ordCols, domain, rangePartitioningType, rangeMap);
+                mergingConnector =
+                        new RangePartitionMergeExchangePOperator(ordCols, domain, rangePartitioningType, rangeMap);
             } else {
                 OrderColumn[] sortColumns = new OrderColumn[ordCols.size()];
                 sortColumns = ordCols.toArray(sortColumns);
@@ -758,7 +756,8 @@ public class EnforceStructuralPropertiesRule implements IAlgebraicRewriteRule {
         parentOp.recomputeSchema();
         ctx.computeAndSetTypeEnvironmentForOperator(parentOp);
 
-        return new RangePartitionExchangePOperator(partitioningColumns, rangeMapKey, rangePartitioningType, targetDomain);
+        return new RangePartitionExchangePOperator(partitioningColumns, rangeMapKey, rangePartitioningType,
+                targetDomain);
     }
 
     private static ReplicateOperator createReplicateOperator(Mutable<ILogicalOperator> inputOperator,
