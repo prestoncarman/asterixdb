@@ -20,7 +20,7 @@ package org.apache.hyracks.api.dataflow.value;
 
 import java.io.Serializable;
 
-public interface IBinaryRangeComparatorFactory extends Serializable {
+public interface IBinaryRangeComparatorFactory extends IBinaryComparatorFactory {
     public IBinaryComparator createMinBinaryComparator();
 
     public IBinaryComparator createMaxBinaryComparator();
