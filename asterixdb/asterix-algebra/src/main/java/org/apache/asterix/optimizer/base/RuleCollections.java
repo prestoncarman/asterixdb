@@ -42,6 +42,7 @@ import org.apache.asterix.optimizer.rules.ExtractDistinctByExpressionsRule;
 import org.apache.asterix.optimizer.rules.ExtractOrderExpressionsRule;
 import org.apache.asterix.optimizer.rules.ExtractWindowExpressionsRule;
 import org.apache.asterix.optimizer.rules.FeedScanCollectionToUnnest;
+import org.apache.asterix.optimizer.rules.FindDataSourcesRule;
 import org.apache.asterix.optimizer.rules.FixReplicateOperatorOutputsRule;
 import org.apache.asterix.optimizer.rules.FullTextContainsParameterCheckRule;
 import org.apache.asterix.optimizer.rules.FuzzyEqRule;
@@ -77,6 +78,7 @@ import org.apache.asterix.optimizer.rules.RemoveRedundantSelectRule;
 import org.apache.asterix.optimizer.rules.RemoveSortInFeedIngestionRule;
 import org.apache.asterix.optimizer.rules.RemoveUnusedOneToOneEquiJoinRule;
 import org.apache.asterix.optimizer.rules.RewriteDistinctAggregateRule;
+import org.apache.asterix.optimizer.rules.SetAsterixMemoryRequirementsRule;
 import org.apache.asterix.optimizer.rules.SetAsterixPhysicalOperatorsRule;
 import org.apache.asterix.optimizer.rules.SetClosedRecordConstructorsRule;
 import org.apache.asterix.optimizer.rules.SetupCommitExtensionOpRule;
@@ -105,6 +107,7 @@ import org.apache.hyracks.algebricks.rewriter.rules.ExtractCommonOperatorsRule;
 import org.apache.hyracks.algebricks.rewriter.rules.ExtractGbyExpressionsRule;
 import org.apache.hyracks.algebricks.rewriter.rules.ExtractGroupByDecorVariablesRule;
 import org.apache.hyracks.algebricks.rewriter.rules.FactorRedundantGroupAndDecorVarsRule;
+import org.apache.hyracks.algebricks.rewriter.rules.HybridToInMemoryHashJoinRule;
 import org.apache.hyracks.algebricks.rewriter.rules.InferTypesRule;
 import org.apache.hyracks.algebricks.rewriter.rules.InlineAssignIntoAggregateRule;
 import org.apache.hyracks.algebricks.rewriter.rules.InlineSingleReferenceVariablesRule;
@@ -350,6 +353,7 @@ public final class RuleCollections {
     public static final List<IAlgebraicRewriteRule> buildDataExchangeRuleCollection() {
         List<IAlgebraicRewriteRule> dataExchange = new LinkedList<>();
         dataExchange.add(new SetExecutionModeRule());
+        dataExchange.add(new FindDataSourcesRule());
         return dataExchange;
     }
 
@@ -359,6 +363,9 @@ public final class RuleCollections {
         //Turned off the following rule for now not to change OptimizerTest results.
         physicalRewritesAllLevels.add(new SetupCommitExtensionOpRule());
         physicalRewritesAllLevels.add(new SetAsterixPhysicalOperatorsRule());
+        physicalRewritesAllLevels.add(new SetAsterixMemoryRequirementsRule());
+        // must run after SetMemoryRequirementsRule
+        physicalRewritesAllLevels.add(new HybridToInMemoryHashJoinRule());
         physicalRewritesAllLevels.add(new AddEquivalenceClassForRecordConstructorRule());
         physicalRewritesAllLevels.add(new CheckFullParallelSortRule());
         physicalRewritesAllLevels.add(new EnforceStructuralPropertiesRule(BuiltinFunctions.RANGE_MAP,
@@ -403,11 +410,11 @@ public final class RuleCollections {
                 .add(new IsolateHyracksOperatorsRule(HeuristicOptimizer.hyraxOperatorsBelowWhichJobGenIsDisabled));
         prepareForJobGenRewrites.add(new FixReplicateOperatorOutputsRule());
         prepareForJobGenRewrites.add(new ExtractCommonOperatorsRule());
-        // Re-infer all types, so that, e.g., the effect of not-is-null is
-        // propagated.
+        // Re-infer all types, so that, e.g., the effect of not-is-null is propagated
         prepareForJobGenRewrites.add(new ReinferAllTypesRule());
         prepareForJobGenRewrites.add(new PushGroupByIntoSortRule());
         prepareForJobGenRewrites.add(new SetExecutionModeRule());
+        prepareForJobGenRewrites.add(new SetAsterixMemoryRequirementsRule());
         prepareForJobGenRewrites.add(new SweepIllegalNonfunctionalFunctions());
         prepareForJobGenRewrites.add(new FixReplicateOperatorOutputsRule());
         return prepareForJobGenRewrites;

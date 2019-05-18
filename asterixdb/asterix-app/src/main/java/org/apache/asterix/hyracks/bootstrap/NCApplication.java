@@ -18,18 +18,28 @@
  */
 package org.apache.asterix.hyracks.bootstrap;
 
+import static org.apache.asterix.api.http.server.ServletConstants.HYRACKS_CONNECTION_ATTR;
+import static org.apache.asterix.common.utils.Servlets.QUERY_RESULT;
+import static org.apache.asterix.common.utils.Servlets.QUERY_SERVICE;
+import static org.apache.asterix.common.utils.Servlets.QUERY_STATUS;
+
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
+import org.apache.asterix.algebra.base.ILangExtension;
+import org.apache.asterix.api.http.server.NCQueryServiceServlet;
 import org.apache.asterix.api.http.server.NetDiagnosticsApiServlet;
+import org.apache.asterix.api.http.server.QueryResultApiServlet;
+import org.apache.asterix.api.http.server.QueryStatusApiServlet;
 import org.apache.asterix.api.http.server.ServletConstants;
 import org.apache.asterix.api.http.server.StorageApiServlet;
 import org.apache.asterix.app.config.ConfigValidator;
 import org.apache.asterix.app.io.PersistedResourceRegistry;
 import org.apache.asterix.app.nc.NCAppRuntimeContext;
+import org.apache.asterix.app.nc.NCExtensionManager;
 import org.apache.asterix.app.nc.RecoveryManager;
 import org.apache.asterix.app.replication.message.RegistrationTasksRequestMessage;
 import org.apache.asterix.common.api.AsterixThreadFactory;
@@ -38,6 +48,7 @@ import org.apache.asterix.common.api.INcApplicationContext;
 import org.apache.asterix.common.api.IPropertiesFactory;
 import org.apache.asterix.common.api.IReceptionistFactory;
 import org.apache.asterix.common.config.AsterixExtension;
+import org.apache.asterix.common.config.ExtensionProperties;
 import org.apache.asterix.common.config.ExternalProperties;
 import org.apache.asterix.common.config.GlobalConfig;
 import org.apache.asterix.common.config.MessagingProperties;
@@ -55,6 +66,7 @@ import org.apache.asterix.common.utils.PrintUtil;
 import org.apache.asterix.common.utils.Servlets;
 import org.apache.asterix.common.utils.StorageConstants;
 import org.apache.asterix.common.utils.StoragePathUtil;
+import org.apache.asterix.compiler.provider.ILangCompilationProvider;
 import org.apache.asterix.messaging.MessagingChannelInterfaceFactory;
 import org.apache.asterix.messaging.NCMessageBroker;
 import org.apache.asterix.transaction.management.resource.PersistentLocalResourceRepository;
@@ -84,6 +96,7 @@ public class NCApplication extends BaseNCApplication {
     private static final Logger LOGGER = LogManager.getLogger();
 
     protected INCServiceContext ncServiceCtx;
+    protected NCExtensionManager ncExtensionManager;
     private INcApplicationContext runtimeContext;
     private String nodeId;
     private boolean stopInitiated;
@@ -124,7 +137,9 @@ public class NCApplication extends BaseNCApplication {
                     (controllerService).getConfiguration().getClusterPublicAddress());
         }
         MetadataBuiltinFunctions.init();
-        runtimeContext = new NCAppRuntimeContext(ncServiceCtx, getExtensions(), getPropertiesFactory());
+
+        ncExtensionManager = new NCExtensionManager(new ArrayList<>(getExtensions()));
+        runtimeContext = new NCAppRuntimeContext(ncServiceCtx, ncExtensionManager, getPropertiesFactory());
         MetadataProperties metadataProperties = runtimeContext.getMetadataProperties();
         if (!metadataProperties.getNodeNames().contains(this.ncServiceCtx.getNodeId())) {
             if (LOGGER.isInfoEnabled()) {
@@ -181,14 +196,21 @@ public class NCApplication extends BaseNCApplication {
         HttpServer apiServer = new HttpServer(webManager.getBosses(), webManager.getWorkers(),
                 externalProperties.getNcApiPort(), config);
         apiServer.setAttribute(ServletConstants.SERVICE_CONTEXT_ATTR, ncServiceCtx);
+        apiServer.setAttribute(HYRACKS_CONNECTION_ATTR, getApplicationContext().getHcc());
         apiServer.addServlet(new StorageApiServlet(apiServer.ctx(), getApplicationContext(), Servlets.STORAGE));
         apiServer.addServlet(
                 new NetDiagnosticsApiServlet(apiServer.ctx(), getApplicationContext(), Servlets.NET_DIAGNOSTICS));
+        final ILangCompilationProvider sqlppCompilationProvider =
+                ncExtensionManager.getCompilationProvider(ILangExtension.Language.SQLPP);
+        apiServer.addServlet(new NCQueryServiceServlet(apiServer.ctx(), new String[] { QUERY_SERVICE },
+                getApplicationContext(), sqlppCompilationProvider.getLanguage(), sqlppCompilationProvider, null));
+        apiServer.addServlet(new QueryStatusApiServlet(apiServer.ctx(), getApplicationContext(), QUERY_STATUS));
+        apiServer.addServlet(new QueryResultApiServlet(apiServer.ctx(), getApplicationContext(), QUERY_RESULT));
         webManager.add(apiServer);
     }
 
-    protected List<AsterixExtension> getExtensions() {
-        return Collections.emptyList();
+    protected List<AsterixExtension> getExtensions() throws Exception {
+        return new ExtensionProperties(PropertiesAccessor.getInstance(ncServiceCtx.getAppConfig())).getExtensions();
     }
 
     protected IPropertiesFactory getPropertiesFactory() throws IOException, AsterixException {

@@ -77,6 +77,9 @@ import org.apache.hyracks.algebricks.core.algebra.operators.logical.WriteResultO
 public class LogicalOperatorPrettyPrintVisitorJson extends AbstractLogicalOperatorPrettyPrintVisitor {
     Map<AbstractLogicalOperator, String> operatorIdentity = new HashMap<>();
 
+    public LogicalOperatorPrettyPrintVisitorJson() {
+    }
+
     public LogicalOperatorPrettyPrintVisitorJson(Appendable app) {
         super(app);
     }
@@ -115,6 +118,12 @@ public class LogicalOperatorPrettyPrintVisitorJson extends AbstractLogicalOperat
             }
             return operatorIdentity.get(op);
         }
+    }
+
+    @Override
+    public AlgebricksAppendable reset(AlgebricksAppendable buffer) {
+        operatorIdentity.clear();
+        return super.reset(buffer);
     }
 
     @Override
@@ -171,6 +180,10 @@ public class LogicalOperatorPrettyPrintVisitorJson extends AbstractLogicalOperat
     @Override
     public Void visitAggregateOperator(AggregateOperator op, Integer indent) throws AlgebricksException {
         addIndent(indent).append("\"operator\": \"aggregate\"");
+        if (!op.getExpressions().isEmpty()) {
+            addIndent(0).append(",\n");
+            pprintExprList(op.getExpressions(), indent);
+        }
         variablePrintHelper(op.getVariables(), indent);
         return null;
     }
@@ -658,7 +671,7 @@ public class LogicalOperatorPrettyPrintVisitorJson extends AbstractLogicalOperat
     @Override
     public Void visitWindowOperator(WindowOperator op, Integer indent) throws AlgebricksException {
         Integer fldIndent = indent + 2;
-        addIndent(indent).append("\"operator\": \"window\"");
+        addIndent(indent).append("\"operator\": \"window-aggregate\"");
         variablePrintHelper(op.getVariables(), indent);
         List<Mutable<ILogicalExpression>> expressions = op.getExpressions();
         if (!expressions.isEmpty()) {

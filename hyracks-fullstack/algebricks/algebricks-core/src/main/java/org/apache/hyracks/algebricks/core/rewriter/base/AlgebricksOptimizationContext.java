@@ -38,7 +38,7 @@ import org.apache.hyracks.algebricks.core.algebra.expressions.IMissableTypeCompu
 import org.apache.hyracks.algebricks.core.algebra.expressions.IVariableEvalSizeEnvironment;
 import org.apache.hyracks.algebricks.core.algebra.expressions.IVariableTypeEnvironment;
 import org.apache.hyracks.algebricks.core.algebra.metadata.IMetadataProvider;
-import org.apache.hyracks.algebricks.core.algebra.prettyprint.LogicalOperatorPrettyPrintVisitor;
+import org.apache.hyracks.algebricks.core.algebra.prettyprint.AbstractLogicalOperatorPrettyPrintVisitor;
 import org.apache.hyracks.algebricks.core.algebra.properties.DefaultNodeGroupDomain;
 import org.apache.hyracks.algebricks.core.algebra.properties.FunctionalDependency;
 import org.apache.hyracks.algebricks.core.algebra.properties.ILogicalPropertiesVector;
@@ -85,24 +85,15 @@ public class AlgebricksOptimizationContext implements IOptimizationContext {
     private final IExpressionTypeComputer expressionTypeComputer;
     private final IMissableTypeComputer nullableTypeComputer;
     private final INodeDomain defaultNodeDomain;
-    private final LogicalOperatorPrettyPrintVisitor prettyPrintVisitor;
+    private final AbstractLogicalOperatorPrettyPrintVisitor prettyPrintVisitor;
     private final IConflictingTypeResolver conflictingTypeResovler;
-
-    public AlgebricksOptimizationContext(int varCounter, IExpressionEvalSizeComputer expressionEvalSizeComputer,
-            IMergeAggregationExpressionFactory mergeAggregationExpressionFactory,
-            IExpressionTypeComputer expressionTypeComputer, IMissableTypeComputer missableTypeComputer,
-            IConflictingTypeResolver conflictingTypeResovler, PhysicalOptimizationConfig physicalOptimizationConfig,
-            AlgebricksPartitionConstraint clusterLocations) {
-        this(varCounter, expressionEvalSizeComputer, mergeAggregationExpressionFactory, expressionTypeComputer,
-                missableTypeComputer, conflictingTypeResovler, physicalOptimizationConfig, clusterLocations,
-                new LogicalOperatorPrettyPrintVisitor());
-    }
 
     public AlgebricksOptimizationContext(int varCounter, IExpressionEvalSizeComputer expressionEvalSizeComputer,
             IMergeAggregationExpressionFactory mergeAggregationExpressionFactory,
             IExpressionTypeComputer expressionTypeComputer, IMissableTypeComputer nullableTypeComputer,
             IConflictingTypeResolver conflictingTypeResovler, PhysicalOptimizationConfig physicalOptimizationConfig,
-            AlgebricksPartitionConstraint clusterLocations, LogicalOperatorPrettyPrintVisitor prettyPrintVisitor) {
+            AlgebricksPartitionConstraint clusterLocations,
+            AbstractLogicalOperatorPrettyPrintVisitor prettyPrintVisitor) {
         this.varCounter = varCounter;
         this.expressionEvalSizeComputer = expressionEvalSizeComputer;
         this.mergeAggregationExpressionFactory = mergeAggregationExpressionFactory;
@@ -330,7 +321,7 @@ public class AlgebricksOptimizationContext implements IOptimizationContext {
     }
 
     @Override
-    public LogicalOperatorPrettyPrintVisitor getPrettyPrintVisitor() {
+    public AbstractLogicalOperatorPrettyPrintVisitor getPrettyPrintVisitor() {
         return prettyPrintVisitor;
     }
 

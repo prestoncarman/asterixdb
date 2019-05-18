@@ -100,7 +100,6 @@ import org.apache.hyracks.algebricks.core.algebra.util.OperatorManipulationUtil;
 import org.apache.hyracks.algebricks.core.algebra.util.OperatorPropertiesUtil;
 import org.apache.hyracks.algebricks.core.config.AlgebricksConfig;
 import org.apache.hyracks.algebricks.core.rewriter.base.IAlgebraicRewriteRule;
-import org.apache.hyracks.algebricks.core.rewriter.base.PhysicalOptimizationConfig;
 import org.apache.hyracks.algebricks.rewriter.util.PhysicalOptimizationsUtil;
 import org.apache.hyracks.api.dataflow.value.IRangePartitionType.RangePartitioningType;
 import org.apache.hyracks.api.exceptions.SourceLocation;
@@ -111,7 +110,6 @@ public class EnforceStructuralPropertiesRule implements IAlgebraicRewriteRule {
 
     private static final String HASH_MERGE = "hash_merge";
     private static final String TRUE_CONSTANT = "true";
-    private PhysicalOptimizationConfig physicalOptimizationConfig;
     private final FunctionIdentifier rangeMapFunction;
     private final FunctionIdentifier localSamplingFun;
     private final FunctionIdentifier typePropagatingFun;
@@ -148,7 +146,6 @@ public class EnforceStructuralPropertiesRule implements IAlgebraicRewriteRule {
         // These are actually logical constraints, so they could be pre-computed
         // somewhere else, too.
 
-        physicalOptimizationConfig = context.getPhysicalOptimizationConfig();
         if (AlgebricksConfig.ALGEBRICKS_LOGGER.isTraceEnabled()) {
             AlgebricksConfig.ALGEBRICKS_LOGGER.trace(">>>> Optimizing operator " + op.getPhysicalOperator() + ".\n");
         }
@@ -214,7 +211,7 @@ public class EnforceStructuralPropertiesRule implements IAlgebraicRewriteRule {
         boolean loggerTraceEnabled = AlgebricksConfig.ALGEBRICKS_LOGGER.isTraceEnabled();
 
         // The child index of the child operator to optimize first.
-        int startChildIndex = getStartChildIndex(op, pr, nestedPlan, context);
+        int startChildIndex = getStartChildIndex(op, pr, nestedPlan);
         IPartitioningProperty firstDeliveredPartitioning = null;
         // Enforce data properties in a top-down manner.
         for (j = 0; j < op.getInputs().size(); j++) {
@@ -329,8 +326,7 @@ public class EnforceStructuralPropertiesRule implements IAlgebraicRewriteRule {
     // Gets the index of a child to start top-down data property enforcement.
     // If there is a partitioning-compatible child with the operator in opRef,
     // start from this child; otherwise, start from child zero.
-    private int getStartChildIndex(AbstractLogicalOperator op, PhysicalRequirements pr, boolean nestedPlan,
-            IOptimizationContext context) throws AlgebricksException {
+    private int getStartChildIndex(AbstractLogicalOperator op, PhysicalRequirements pr, boolean nestedPlan) {
         IPhysicalPropertiesVector[] reqdProperties = null;
         if (pr != null) {
             reqdProperties = pr.getRequiredProperties();
@@ -469,7 +465,7 @@ public class EnforceStructuralPropertiesRule implements IAlgebraicRewriteRule {
         if (pp == null || pp.getPartitioningType() == PartitioningType.UNPARTITIONED) {
             addLocalEnforcers(op, childIndex, diffPropertiesVector.getLocalProperties(), nestedPlan, context);
             IPhysicalPropertiesVector deliveredByNewChild =
-                    ((AbstractLogicalOperator) op.getInputs().get(0).getValue()).getDeliveredPhysicalProperties();
+                    op.getInputs().get(0).getValue().getDeliveredPhysicalProperties();
             if (!nestedPlan) {
                 addPartitioningEnforcers(op, childIndex, pp, required, deliveredByNewChild, domain, context);
             }
@@ -556,9 +552,9 @@ public class EnforceStructuralPropertiesRule implements IAlgebraicRewriteRule {
         oo.setSourceLocation(sourceLoc);
         oo.setExecutionMode(AbstractLogicalOperator.ExecutionMode.LOCAL);
         if (isMicroOp) {
-            oo.setPhysicalOperator(new MicroStableSortPOperator(physicalOptimizationConfig.getMaxFramesExternalSort()));
+            oo.setPhysicalOperator(new MicroStableSortPOperator());
         } else {
-            oo.setPhysicalOperator(new StableSortPOperator(physicalOptimizationConfig.getMaxFramesExternalSort()));
+            oo.setPhysicalOperator(new StableSortPOperator());
         }
         oo.getInputs().add(topOp);
         context.computeAndSetTypeEnvironmentForOperator(oo);
