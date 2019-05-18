@@ -21,7 +21,7 @@ package org.apache.hyracks.dataflow.common.data.partition.range;
 import org.apache.hyracks.api.comm.IFrameTupleAccessor;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.dataflow.value.IBinaryComparator;
-import org.apache.hyracks.api.dataflow.value.IBinaryRangeComparatorFactory;
+import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import org.apache.hyracks.api.dataflow.value.IRangePartitionType.RangePartitioningType;
 import org.apache.hyracks.api.dataflow.value.ITupleMultiPartitionComputer;
 import org.apache.hyracks.api.dataflow.value.ITupleMultiPartitionComputerFactory;
@@ -31,13 +31,17 @@ import org.apache.hyracks.api.storage.IGrowableIntArray;
 public abstract class FieldRangeMultiPartitionComputerFactory implements ITupleMultiPartitionComputerFactory {
     private static final long serialVersionUID = 1L;
     private final int[] rangeFields;
-    private IBinaryRangeComparatorFactory[] comparatorFactories;
+    private IBinaryComparatorFactory[] minComparatorFactories;
+    private IBinaryComparatorFactory[] maxComparatorFactories;
     private RangePartitioningType rangeType;
 
     public FieldRangeMultiPartitionComputerFactory(int[] rangeFields,
-            IBinaryRangeComparatorFactory[] comparatorFactories, RangePartitioningType rangeType) {
+            IBinaryComparatorFactory[] minComparatorFactories,
+            IBinaryComparatorFactory[] maxComparatorFactories,
+            RangePartitioningType rangeType) {
         this.rangeFields = rangeFields;
-        this.comparatorFactories = comparatorFactories;
+        this.minComparatorFactories = minComparatorFactories;
+        this.maxComparatorFactories = maxComparatorFactories;
         this.rangeType = rangeType;
     }
 
@@ -45,13 +49,13 @@ public abstract class FieldRangeMultiPartitionComputerFactory implements ITupleM
 
     @Override
     public ITupleMultiPartitionComputer createPartitioner(IHyracksTaskContext hyracksTaskContext) {
-        final IBinaryComparator[] minComparators = new IBinaryComparator[comparatorFactories.length];
-        for (int i = 0; i < comparatorFactories.length; ++i) {
-            minComparators[i] = comparatorFactories[i].createMinBinaryComparator();
+        final IBinaryComparator[] minComparators = new IBinaryComparator[minComparatorFactories.length];
+        for (int i = 0; i < minComparatorFactories.length; ++i) {
+            minComparators[i] = minComparatorFactories[i].createBinaryComparator();
         }
-        final IBinaryComparator[] maxComparators = new IBinaryComparator[comparatorFactories.length];
-        for (int i = 0; i < comparatorFactories.length; ++i) {
-            maxComparators[i] = comparatorFactories[i].createMaxBinaryComparator();
+        final IBinaryComparator[] maxComparators = new IBinaryComparator[maxComparatorFactories.length];
+        for (int i = 0; i < maxComparatorFactories.length; ++i) {
+            maxComparators[i] = maxComparatorFactories[i].createBinaryComparator();
         }
 
         return new ITupleMultiPartitionComputer() {

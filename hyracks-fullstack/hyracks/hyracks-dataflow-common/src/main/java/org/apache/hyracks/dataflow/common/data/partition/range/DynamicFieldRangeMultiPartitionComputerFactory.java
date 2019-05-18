@@ -19,7 +19,7 @@
 package org.apache.hyracks.dataflow.common.data.partition.range;
 
 import org.apache.hyracks.api.context.IHyracksTaskContext;
-import org.apache.hyracks.api.dataflow.value.IBinaryRangeComparatorFactory;
+import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import org.apache.hyracks.api.dataflow.value.IRangePartitionType.RangePartitioningType;
 import org.apache.hyracks.api.exceptions.ErrorCode;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
@@ -32,9 +32,11 @@ public class DynamicFieldRangeMultiPartitionComputerFactory extends FieldRangeMu
     private final SourceLocation sourceLocation;
 
     public DynamicFieldRangeMultiPartitionComputerFactory(int[] rangeFields,
-            IBinaryRangeComparatorFactory[] comparatorFactories, String rangeMapKeyInContext,
+            IBinaryComparatorFactory[] minComparatorFactories,
+            IBinaryComparatorFactory[] maxComparatorFactories,
+            String rangeMapKeyInContext,
             SourceLocation sourceLocation, RangePartitioningType rangeType) {
-        super(rangeFields, comparatorFactories, rangeType);
+        super(rangeFields, minComparatorFactories, maxComparatorFactories, rangeType);
         this.rangeMapKeyInContext = rangeMapKeyInContext;
         this.sourceLocation = sourceLocation;
     }

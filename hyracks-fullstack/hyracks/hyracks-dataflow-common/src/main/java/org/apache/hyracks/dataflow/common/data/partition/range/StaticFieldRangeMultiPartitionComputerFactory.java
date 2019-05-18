@@ -19,6 +19,8 @@
 package org.apache.hyracks.dataflow.common.data.partition.range;
 
 import org.apache.hyracks.api.context.IHyracksTaskContext;
+import org.apache.hyracks.api.dataflow.value.IBinaryComparator;
+import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import org.apache.hyracks.api.dataflow.value.IBinaryRangeComparatorFactory;
 import org.apache.hyracks.api.dataflow.value.IRangePartitionType;
 
@@ -27,9 +29,10 @@ public class StaticFieldRangeMultiPartitionComputerFactory extends FieldRangeMul
     private RangeMap rangeMap;
 
     public StaticFieldRangeMultiPartitionComputerFactory(int[] rangeFields,
-            IBinaryRangeComparatorFactory[] comparatorFactories, RangeMap rangeMap,
+            IBinaryComparatorFactory[] minComparatorFactories,
+            IBinaryComparatorFactory[] maxComparatorFactories, RangeMap rangeMap,
             IRangePartitionType.RangePartitioningType rangeType) {
-        super(rangeFields, comparatorFactories, rangeType);
+        super(rangeFields, minComparatorFactories, maxComparatorFactories, rangeType);
         this.rangeMap = rangeMap;
     }
 
