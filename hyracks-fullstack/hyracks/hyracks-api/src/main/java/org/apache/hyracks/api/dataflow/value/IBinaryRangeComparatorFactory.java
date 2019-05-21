@@ -18,8 +18,6 @@
  */
 package org.apache.hyracks.api.dataflow.value;
 
-import java.io.Serializable;
-
 public interface IBinaryRangeComparatorFactory extends IBinaryComparatorFactory {
     public IBinaryComparator createMinBinaryComparator();
 

@@ -47,14 +47,10 @@ import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import org.apache.hyracks.api.dataflow.value.IBinaryRangeComparatorFactory;
 import org.apache.hyracks.api.dataflow.value.IRangePartitionType.RangePartitioningType;
 import org.apache.hyracks.api.job.IConnectorDescriptorRegistry;
-import org.apache.hyracks.dataflow.common.data.partition.range.DynamicFieldRangeMultiPartitionComputerFactory;
 import org.apache.hyracks.dataflow.common.data.partition.range.DynamicFieldRangePartitionComputerFactory;
-import org.apache.hyracks.dataflow.common.data.partition.range.FieldRangeMultiPartitionComputerFactory;
 import org.apache.hyracks.dataflow.common.data.partition.range.FieldRangePartitionComputerFactory;
 import org.apache.hyracks.dataflow.common.data.partition.range.RangeMap;
-import org.apache.hyracks.dataflow.common.data.partition.range.StaticFieldRangeMultiPartitionComputerFactory;
 import org.apache.hyracks.dataflow.common.data.partition.range.StaticFieldRangePartitionComputerFactory;
-import org.apache.hyracks.dataflow.std.connectors.MToNMultiPartitioningConnectorDescriptor;
 import org.apache.hyracks.dataflow.std.connectors.MToNPartitioningConnectorDescriptor;
 
 public class RangePartitionExchangePOperator extends AbstractExchangePOperator {
@@ -140,33 +136,33 @@ public class RangePartitionExchangePOperator extends AbstractExchangePOperator {
             sortFields[i] = opSchema.findVariable(var);
             Object type = env.getVarType(var);
             IBinaryComparatorFactoryProvider bcfp = context.getBinaryComparatorFactoryProvider();
-            if (rangeType != RangePartitioningType.PROJECT) {
-                rangeComps[i] = bcfp.getRangeBinaryComparatorFactory(type, oc.getOrder() == OrderKind.ASC, rangeType);
-            }
+            //            if (rangeType != RangePartitioningType.PROJECT) {
+            //                rangeComps[i] = bcfp.getRangeBinaryComparatorFactory(type, oc.getOrder() == OrderKind.ASC, rangeType);
+            //            }
             comps[i] = bcfp.getBinaryComparatorFactory(type, oc.getOrder() == OrderKind.ASC);
             i++;
         }
         IConnectorDescriptor conn;
-        if (rangeType == RangePartitioningType.PROJECT) {
-            FieldRangePartitionComputerFactory partitionerFactory;
-            if (rangeMapIsComputedAtRunTime) {
-                partitionerFactory = new DynamicFieldRangePartitionComputerFactory(sortFields, comps,
-                        rangeMapKeyInContext, op.getSourceLocation());
-            } else {
-                partitionerFactory = new StaticFieldRangePartitionComputerFactory(sortFields, comps, rangeMap);
-            }
-            conn = new MToNPartitioningConnectorDescriptor(spec, partitionerFactory);
+        //        if (rangeType == RangePartitioningType.PROJECT) {
+        FieldRangePartitionComputerFactory partitionerFactory;
+        if (rangeMapIsComputedAtRunTime) {
+            partitionerFactory = new DynamicFieldRangePartitionComputerFactory(sortFields, comps, rangeMapKeyInContext,
+                    op.getSourceLocation());
         } else {
-            FieldRangeMultiPartitionComputerFactory multiPartitionerFactory;
-            if (rangeMapIsComputedAtRunTime) {
-                multiPartitionerFactory = new DynamicFieldRangeMultiPartitionComputerFactory(sortFields, rangeComps,
-                        rangeMapKeyInContext, op.getSourceLocation(), rangeType);
-            } else {
-                multiPartitionerFactory =
-                        new StaticFieldRangeMultiPartitionComputerFactory(sortFields, rangeComps, rangeMap, rangeType);
-            }
-            conn = new MToNMultiPartitioningConnectorDescriptor(spec, multiPartitionerFactory);
+            partitionerFactory = new StaticFieldRangePartitionComputerFactory(sortFields, comps, rangeMap);
         }
+        conn = new MToNPartitioningConnectorDescriptor(spec, partitionerFactory);
+        //        } else {
+        //            FieldRangeMultiPartitionComputerFactory multiPartitionerFactory;
+        //            if (rangeMapIsComputedAtRunTime) {
+        //                multiPartitionerFactory = new DynamicFieldRangeMultiPartitionComputerFactory(sortFields, rangeComps,
+        //                        rangeMapKeyInContext, op.getSourceLocation(), rangeType);
+        //            } else {
+        //                multiPartitionerFactory =
+        //                        new StaticFieldRangeMultiPartitionComputerFactory(sortFields, rangeComps, rangeMap, rangeType);
+        //            }
+        //            conn = new MToNMultiPartitioningConnectorDescriptor(spec, multiPartitionerFactory);
+        //        }
         return new Pair<>(conn, null);
     }
 

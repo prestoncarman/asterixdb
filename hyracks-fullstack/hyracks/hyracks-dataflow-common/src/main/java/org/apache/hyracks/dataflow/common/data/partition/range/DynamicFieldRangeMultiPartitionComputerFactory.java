@@ -32,10 +32,8 @@ public class DynamicFieldRangeMultiPartitionComputerFactory extends FieldRangeMu
     private final SourceLocation sourceLocation;
 
     public DynamicFieldRangeMultiPartitionComputerFactory(int[] rangeFields,
-            IBinaryComparatorFactory[] minComparatorFactories,
-            IBinaryComparatorFactory[] maxComparatorFactories,
-            String rangeMapKeyInContext,
-            SourceLocation sourceLocation, RangePartitioningType rangeType) {
+            IBinaryComparatorFactory[] minComparatorFactories, IBinaryComparatorFactory[] maxComparatorFactories,
+            String rangeMapKeyInContext, SourceLocation sourceLocation, RangePartitioningType rangeType) {
         super(rangeFields, minComparatorFactories, maxComparatorFactories, rangeType);
         this.rangeMapKeyInContext = rangeMapKeyInContext;
         this.sourceLocation = sourceLocation;

@@ -35,10 +35,8 @@ public abstract class FieldRangeMultiPartitionComputerFactory implements ITupleM
     private IBinaryComparatorFactory[] maxComparatorFactories;
     private RangePartitioningType rangeType;
 
-    public FieldRangeMultiPartitionComputerFactory(int[] rangeFields,
-            IBinaryComparatorFactory[] minComparatorFactories,
-            IBinaryComparatorFactory[] maxComparatorFactories,
-            RangePartitioningType rangeType) {
+    public FieldRangeMultiPartitionComputerFactory(int[] rangeFields, IBinaryComparatorFactory[] minComparatorFactories,
+            IBinaryComparatorFactory[] maxComparatorFactories, RangePartitioningType rangeType) {
         this.rangeFields = rangeFields;
         this.minComparatorFactories = minComparatorFactories;
         this.maxComparatorFactories = maxComparatorFactories;
