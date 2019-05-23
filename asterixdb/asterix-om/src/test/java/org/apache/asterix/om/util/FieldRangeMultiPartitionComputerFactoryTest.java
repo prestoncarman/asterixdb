@@ -25,9 +25,10 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-import org.apache.asterix.dataflow.data.nontagged.comparators.AGenericAscBinaryComparatorFactory;
+import org.apache.asterix.dataflow.data.nontagged.comparators.AIntervalAscPartialBinaryComparatorFactory;
+import org.apache.asterix.dataflow.data.nontagged.serde.AIntervalSerializerDeserializer;
+import org.apache.asterix.om.base.AInterval;
 import org.apache.asterix.om.types.ATypeTag;
-import org.apache.asterix.om.types.BuiltinType;
 import org.apache.hyracks.api.comm.IFrame;
 import org.apache.hyracks.api.comm.IFrameTupleAccessor;
 import org.apache.hyracks.api.comm.VSizeFrame;
@@ -40,8 +41,9 @@ import org.apache.hyracks.api.dataflow.value.ITupleMultiPartitionComputerFactory
 import org.apache.hyracks.api.dataflow.value.RecordDescriptor;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.storage.IGrowableIntArray;
-import org.apache.hyracks.dataflow.common.comm.io.FrameFixedFieldTupleAppender;
+import org.apache.hyracks.dataflow.common.comm.io.ArrayTupleBuilder;
 import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAccessor;
+import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAppender;
 import org.apache.hyracks.dataflow.common.data.marshalling.Integer64SerializerDeserializer;
 import org.apache.hyracks.dataflow.common.data.partition.range.RangeMap;
 import org.apache.hyracks.dataflow.common.data.partition.range.StaticFieldRangeMultiPartitionComputerFactory;
@@ -54,14 +56,15 @@ import junit.framework.TestCase;
 
 public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
 
-    private final Integer64SerializerDeserializer int64Serde = Integer64SerializerDeserializer.INSTANCE;
+    //    private final Integer64SerializerDeserializer int64Serde = Integer64SerializerDeserializer.INSTANCE;
+    private final AIntervalSerializerDeserializer intervalSerde = AIntervalSerializerDeserializer.INSTANCE;
     @SuppressWarnings("rawtypes")
     private final ISerializerDeserializer[] SerDers =
             new ISerializerDeserializer[] { Integer64SerializerDeserializer.INSTANCE };
     private final RecordDescriptor RecordDesc = new RecordDescriptor(SerDers);
 
-    IBinaryComparatorFactory[] BINARY_ASC_COMPARATOR_FACTORIES = new IBinaryComparatorFactory[] {
-            new AGenericAscBinaryComparatorFactory(BuiltinType.AINTERVAL, BuiltinType.AINTERVAL) };
+    IBinaryComparatorFactory[] BINARY_ASC_COMPARATOR_FACTORIES =
+            new IBinaryComparatorFactory[] { AIntervalAscPartialBinaryComparatorFactory.INSTANCE };
     //    IBinaryRangeComparatorFactory[] BINARY_DESC_COMPARATOR_FACTORIES = new IBinaryRangeComparatorFactory[] {
     //            new PointableBinaryRangeDescComparatorFactory(LongPointable.FACTORY) };
     //    IBinaryRangeComparatorFactory[] BINARY_REPLICATE_COMPARATOR_FACTORIES = new IBinaryRangeComparatorFactory[] {
@@ -78,7 +81,7 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
      *    --|--|--|--|--|--|--|--|--|--|--|--|--|--|--|--
      */
 
-    private final int FRAME_SIZE = 320;
+    private final int FRAME_SIZE = 640;
     private final int INTEGER_LENGTH = Long.BYTES;
     // tag=1 + start=INTEGER_LENGTH + end=INTEGER_LENGTH in bytes
     private final int INTERVAL_LENGTH = 1 + 2 * INTEGER_LENGTH;
@@ -112,9 +115,9 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             DataOutput dos = new DataOutputStream(bos);
             for (int i = 0; i < integers.length; ++i) {
-                dos.write(ATypeTag.SERIALIZED_INT64_TYPE_TAG); // writes an interval (note for stephen ermshar)
-                int64Serde.serialize(integers[i], dos);
-                int64Serde.serialize(integers[i] + duration, dos);
+                AInterval interval =
+                        new AInterval(integers[i], integers[i] + duration, ATypeTag.SERIALIZED_DATETIME_TYPE_TAG);
+                intervalSerde.serialize(interval, dos);
             }
             bos.close();
             return bos.toByteArray();
@@ -134,12 +137,21 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
     private ByteBuffer prepareData(IHyracksTaskContext ctx, Long[] integers, long duration)
             throws HyracksDataException {
         IFrame frame = new VSizeFrame(ctx);
-        FrameFixedFieldTupleAppender fffta = new FrameFixedFieldTupleAppender(RecordDesc.getFieldCount());
-        fffta.reset(frame, true);
 
-        byte[] serializedIntegers = getIntervalBytes(integers, duration);
+        FrameTupleAppender appender = new FrameTupleAppender();
+        ArrayTupleBuilder tb = new ArrayTupleBuilder(RecordDesc.getFieldCount());
+        DataOutput dos = tb.getDataOutput();
+        appender.reset(frame, true);
+
+        //        byte[] serializedIntervals = getIntervalBytes(integers, duration);
         for (int i = 0; i < integers.length; ++i) {
-            fffta.appendField(serializedIntegers, i * INTEGER_LENGTH, INTEGER_LENGTH);
+            tb.reset();
+            AInterval interval =
+                    new AInterval(integers[i], integers[i] + duration, ATypeTag.SERIALIZED_DATETIME_TYPE_TAG);
+            intervalSerde.serialize(interval, dos);
+            tb.addFieldEndOffset();
+            //            appender.reset(frame, true);
+            appender.append(tb.getFieldEndOffsets(), tb.getByteArray(), 0, tb.getSize());
         }
 
         return frame.getBuffer();
@@ -150,9 +162,9 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
             RangePartitioningType rangeType, int nParts, int[][] results, long duration) throws HyracksDataException {
         IHyracksTaskContext ctx = TestUtils.create(FRAME_SIZE);
         int[] rangeFields = new int[] { 0 };
-        ITupleMultiPartitionComputerFactory frpcf = new StaticFieldRangeMultiPartitionComputerFactory(rangeFields,
+        ITupleMultiPartitionComputerFactory itmpcf = new StaticFieldRangeMultiPartitionComputerFactory(rangeFields,
                 minComparatorFactories, maxComparatorFactories, rangeMap, rangeType);
-        ITupleMultiPartitionComputer partitioner = frpcf.createPartitioner(ctx);
+        ITupleMultiPartitionComputer partitioner = itmpcf.createPartitioner(ctx);
         partitioner.initialize();
 
         IFrameTupleAccessor accessor = new FrameTupleAccessor(RecordDesc);

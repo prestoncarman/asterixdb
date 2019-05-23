@@ -127,7 +127,7 @@ public class RangePartitionExchangePOperator extends AbstractExchangePOperator {
             ILogicalOperator op, IOperatorSchema opSchema, JobGenContext context) throws AlgebricksException {
         int n = partitioningFields.size();
         int[] sortFields = new int[n];
-        IBinaryRangeComparatorFactory[] rangeComps = new IBinaryRangeComparatorFactory[n];
+//        IBinaryRangeComparatorFactory[] rangeComps = new IBinaryRangeComparatorFactory[n];
         IBinaryComparatorFactory[] comps = new IBinaryComparatorFactory[n];
         IVariableTypeEnvironment env = context.getTypeEnvironment(op);
         int i = 0;
