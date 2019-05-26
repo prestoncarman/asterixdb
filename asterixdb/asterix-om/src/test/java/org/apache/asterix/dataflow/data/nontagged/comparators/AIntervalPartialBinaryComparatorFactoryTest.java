@@ -19,112 +19,140 @@
 
 package org.apache.asterix.dataflow.data.nontagged.comparators;
 
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutput;
+import java.io.DataOutputStream;
+import java.io.IOException;
+
+import org.apache.asterix.dataflow.data.nontagged.serde.AIntervalSerializerDeserializer;
+import org.apache.asterix.om.base.AInterval;
+import org.apache.asterix.om.types.ATypeTag;
+import org.apache.hyracks.api.dataflow.value.IBinaryComparator;
+import org.apache.hyracks.api.dataflow.value.ISerializerDeserializer;
+import org.apache.hyracks.api.exceptions.HyracksDataException;
+import org.junit.Assert;
+import org.junit.Test;
+
 import junit.framework.TestCase;
 
-public class AqlBinaryComparatorFactoryTest extends TestCase {
-    //
-    //    @SuppressWarnings("rawtypes")
-    //    private final ISerializerDeserializer serde = AObjectSerializerDeserializer.INSTANCE;
-    //
-    //    /*
-    //     * The following points (X) will be tested for this interval (+).
-    //     *
-    //     * ----X---XXX---X---XXX---X----
-    //     * ---------+++++++++++---------
-    //     */
-    //    private final int INTERVAL_LENGTH = Byte.BYTES + Byte.BYTES + Long.BYTES + Long.BYTES;
-    //    private final int INTEGER_LENGTH = Byte.BYTES + Long.BYTES;
-    //    private final AInterval[] INTERVALS = new AInterval[] { new AInterval(10, 15, (byte) 16),
-    //            new AInterval(10, 20, (byte) 16), new AInterval(15, 20, (byte) 16) };
-    //    private final AInt64[] INTEGERS = new AInt64[] { new AInt64(10l), new AInt64(15l), new AInt64(20l) };
-    //
-    //    @SuppressWarnings("unused")
-    //    private byte[] getIntervalBytes() throws HyracksDataException {
-    //        try {
-    //            ByteArrayOutputStream bos = new ByteArrayOutputStream();
-    //            DataOutput dos = new DataOutputStream(bos);
-    //            for (int i = 0; i < INTERVALS.length; ++i) {
-    //                serde.serialize(INTERVALS[i], dos);
-    //            }
-    //            bos.close();
-    //            return bos.toByteArray();
-    //        } catch (IOException e) {
-    //            throw HyracksDataException.create(e);
-    //        }
-    //    }
-    //
-    //    private byte[] getIntegerBytes() throws HyracksDataException {
-    //        try {
-    //            ByteArrayOutputStream bos = new ByteArrayOutputStream();
-    //            DataOutput dos = new DataOutputStream(bos);
-    //            for (int i = 0; i < INTEGERS.length; ++i) {
-    //                serde.serialize(INTEGERS[i], dos);
-    //            }
-    //            bos.close();
-    //            return bos.toByteArray();
-    //        } catch (IOException e) {
-    //            throw HyracksDataException.create(e);
-    //        }
-    //    }
-    //
-    //    private void executeBinaryComparatorTests(IBinaryComparator bc, byte[] bytes, int fieldLength, int[][] results)
-    //            throws HyracksDataException {
-    //        for (int i = 0; i < results.length; ++i) {
-    //            int leftOffset = i * fieldLength;
-    //            for (int j = 0; j < results[i].length; ++j) {
-    //                int rightOffset = j * fieldLength;
-    //                int c = bc.compare(bytes, leftOffset, fieldLength, bytes, rightOffset, fieldLength);
-    //                Assert.assertEquals("results[" + i + "][" + j + "]", results[i][j], c);
-    //            }
-    //        }
-    //    }
-    //
-    //    //    private final AInterval[] INTERVALS = new AInterval[] { new AInterval(10, 20, (byte) 16),
-    //    //            new AInterval(10, 15, (byte) 16), new AInterval(15, 20, (byte) 16) };
-    //    //    private final AInt64[] INTEGERS = new AInt64[] { new AInt64(10l), new AInt64(15l), new AInt64(20l) };
-    //    //
-    //    @Test
-    //    public void testIntervalAsc() throws HyracksDataException {
-    //        IBinaryComparator bc = AObjectAscBinaryComparatorFactory.INSTANCE.createBinaryComparator();
-    //        byte[] bytes = getIntervalBytes();
-    //        int[][] results = new int[3][];
-    //        results[0] = new int[] { 0, -1, -1 };
-    //        results[1] = new int[] { 1, 0, -1 };
-    //        results[2] = new int[] { 1, 1, 0 };
-    //        executeBinaryComparatorTests(bc, bytes, INTERVAL_LENGTH, results);
-    //    }
-    //
-    //    @Test
-    //    public void testIntervalDesc() throws HyracksDataException {
-    //        IBinaryComparator bc = AObjectDescBinaryComparatorFactory.INSTANCE.createBinaryComparator();
-    //        byte[] bytes = getIntervalBytes();
-    //        int[][] results = new int[3][];
-    //        results[0] = new int[] { 0, 1, 1 };
-    //        results[1] = new int[] { -1, 0, 1 };
-    //        results[2] = new int[] { -1, -1, 0 };
-    //        executeBinaryComparatorTests(bc, bytes, INTERVAL_LENGTH, results);
-    //    }
-    //
-    //    @Test
-    //    public void testIntegerAsc() throws HyracksDataException {
-    //        IBinaryComparator bc = AObjectAscBinaryComparatorFactory.INSTANCE.createBinaryComparator();
-    //        byte[] bytes = getIntegerBytes();
-    //        int[][] results = new int[3][];
-    //        results[0] = new int[] { 0, -1, -1 };
-    //        results[1] = new int[] { 1, 0, -1 };
-    //        results[2] = new int[] { 1, 1, 0 };
-    //        executeBinaryComparatorTests(bc, bytes, INTEGER_LENGTH, results);
-    //    }
-    //
-    //    @Test
-    //    public void testIngeterDesc() throws HyracksDataException {
-    //        IBinaryComparator bc = AObjectDescBinaryComparatorFactory.INSTANCE.createBinaryComparator();
-    //        byte[] bytes = getIntegerBytes();
-    //        int[][] results = new int[3][];
-    //        results[0] = new int[] { 0, 1, 1 };
-    //        results[1] = new int[] { -1, 0, 1 };
-    //        results[2] = new int[] { -1, -1, 0 };
-    //        executeBinaryComparatorTests(bc, bytes, INTEGER_LENGTH, results);
-    //    }
+public class AIntervalPartialBinaryComparatorFactoryTest extends TestCase {
 
+    @SuppressWarnings("rawtypes")
+    private final ISerializerDeserializer serde = AIntervalSerializerDeserializer.INSTANCE;
+
+    /*
+     * Compares all interval partial binary comparators.
+     * 12 Cases include <, ==, > for start ASC, start DESC, end ASC, end DESC.
+     */
+    //    private final int INTERVAL_LENGTH = Byte.BYTES + Byte.BYTES + Long.BYTES + Long.BYTES;
+    private final int INTERVAL_LENGTH = 1 + 2 * Long.BYTES;
+    private final AInterval[] INTERVALS = new AInterval[] { new AInterval(5, 5, ATypeTag.SERIALIZED_DATETIME_TYPE_TAG),
+            new AInterval(5, 10, ATypeTag.SERIALIZED_DATETIME_TYPE_TAG),
+            new AInterval(5, 15, ATypeTag.SERIALIZED_DATETIME_TYPE_TAG),
+            new AInterval(5, 20, ATypeTag.SERIALIZED_DATETIME_TYPE_TAG),
+            new AInterval(5, 25, ATypeTag.SERIALIZED_DATETIME_TYPE_TAG),
+            new AInterval(10, 10, ATypeTag.SERIALIZED_DATETIME_TYPE_TAG),
+            new AInterval(10, 15, ATypeTag.SERIALIZED_DATETIME_TYPE_TAG),
+            new AInterval(10, 20, ATypeTag.SERIALIZED_DATETIME_TYPE_TAG),
+            new AInterval(10, 25, ATypeTag.SERIALIZED_DATETIME_TYPE_TAG),
+            new AInterval(15, 15, ATypeTag.SERIALIZED_DATETIME_TYPE_TAG),
+            new AInterval(15, 20, ATypeTag.SERIALIZED_DATETIME_TYPE_TAG),
+            new AInterval(15, 25, ATypeTag.SERIALIZED_DATETIME_TYPE_TAG),
+            new AInterval(20, 20, ATypeTag.SERIALIZED_DATETIME_TYPE_TAG),
+            new AInterval(20, 25, ATypeTag.SERIALIZED_DATETIME_TYPE_TAG),
+            new AInterval(25, 25, ATypeTag.SERIALIZED_DATETIME_TYPE_TAG),
+            // BASE COMPARISON, compared to all preceding intervals
+            new AInterval(10, 20, ATypeTag.SERIALIZED_DATETIME_TYPE_TAG) };
+
+    IBinaryComparator START_ASC = AIntervalAscPartialBinaryComparatorFactory.INSTANCE.createBinaryComparator();
+    IBinaryComparator END_ASC = AIntervalEndpointAscPartialBinaryComparatorFactory.INSTANCE.createBinaryComparator();
+    IBinaryComparator START_DESC =
+            AIntervalStartpointDescPartialBinaryComparatorFactory.INSTANCE.createBinaryComparator();
+    IBinaryComparator END_DESC = AIntervalDescPartialBinaryComparatorFactory.INSTANCE.createBinaryComparator();
+
+    @SuppressWarnings("unused")
+    private byte[] getIntervalBytes() throws HyracksDataException {
+        try {
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            DataOutput dos = new DataOutputStream(bos);
+            for (int i = 0; i < INTERVALS.length; ++i) {
+                serde.serialize(INTERVALS[i], dos);
+            }
+            bos.close();
+            return bos.toByteArray();
+        } catch (IOException e) {
+            throw HyracksDataException.create(e);
+        }
+    }
+
+    private void executeBinaryComparatorTests(IBinaryComparator bc, byte[] bytes, int[] results)
+            throws HyracksDataException {
+        // the last interval in INTERVALS is compared to all the preceding intervals
+        for (int i = 0; i < results.length; ++i) {
+            int leftOffset = i * INTERVAL_LENGTH; // get the ith interval
+            int rightOffset = INTERVAL_LENGTH * (INTERVALS.length - 1); // get the last interval
+            int c = bc.compare(bytes, leftOffset, INTERVAL_LENGTH, bytes, rightOffset, INTERVAL_LENGTH);
+            Assert.assertEquals("results[" + i + "]", results[i], c);
+        }
+    }
+
+    @Test
+    public void testIntervalAsc() throws HyracksDataException {
+        byte[] bytes = getIntervalBytes();
+        int[] results = new int[] {
+                // end:  5  10  15  20  25  // start:
+                -1, -1, -1, -1, -1, //  5
+                -1, -1, 0, 1, // 10, these all have start points equal to the base, so we compare end points
+                1, 1, 1, // 15
+                1, 1, // 20
+                1 // 25
+        };
+        executeBinaryComparatorTests(START_ASC, bytes, results);
+    }
+
+    @Test
+    public void testIntervalEndpointAsc() throws HyracksDataException {
+        byte[] bytes = getIntervalBytes();
+        int[] results = new int[] {
+                //                  ** have endpoints equal to the base so we compare start points
+                // end:  5  10  15  20  25  // start:
+                -1, -1, -1, -1, 1, //  5
+                -1, -1, 0, 1, // 10
+                -1, 1, 1, // 15
+                1, 1, // 20
+                1 // 25
+        };
+        executeBinaryComparatorTests(END_ASC, bytes, results);
+    }
+
+    @Test
+    public void testIntervalStartpointDesc() throws HyracksDataException {
+        byte[] bytes = getIntervalBytes();
+        int[] results = new int[] {
+                // the negative of the results in testIntervalAsc()
+                // end:  5  10  15  20  25  // start:
+                1, 1, 1, 1, 1, //  5
+                1, 1, 0, -1, // 10, these all have start points equal to the base, so we compare end points
+                -1, -1, -1, // 15
+                -1, -1, // 20
+                -1 // 25
+        };
+        executeBinaryComparatorTests(START_DESC, bytes, results);
+    }
+
+    @Test
+    public void testIntervalDesc() throws HyracksDataException {
+        byte[] bytes = getIntervalBytes();
+        int[] results = new int[] {
+                // the negative of the results in testIntervalEndpointAsc()
+                //                  ** have endpoints equal to the base so we compare start points
+                // end:  5  10  15  20  25  // start:
+                1, 1, 1, 1, -1, //  5
+                1, 1, 0, -1, // 10
+                1, -1, -1, // 15
+                -1, -1, // 20
+                -1 // 25
+        };
+        executeBinaryComparatorTests(END_DESC, bytes, results);
+    }
 }
