@@ -107,9 +107,17 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
     private final Long[] PARTITION_EDGE_CASES =
             new Long[] { -25l, 50l, 99l, 100l, 101l, 150l, 199l, 200l, 201l, 250l, 299l, 300l, 301l, 350l, 425l };
 
+    // The map of the partitions, listed as the split points. split points include min and max.
+    // first and last partitions include all values less than and greater than min and max split points respectively.
+    //
+    //             0          )[           1          )[           2            )[             3
+    //   0  )[  1 )[  2 )[  3 )[  4 )[  5 )[  6 )[  7 )[  8 )[  9 )[  10 )[  11 )[  12 )[  13 )[  14 )[  15
+    // 0     25    50    75    100   125   150   175   200   225   250    275    300    325    350    375    400
+    // 400   375   350   325   300   275   250   225   200   175   150    125    100    75     50     25     0
+
     // The map of the partitions, listed as the split points.
-    //partitions   {  0,   1,   2,   3,    4,    5,    6,    7,    8,    9,   10,   11,   12,   13,   14,   15,   16 };
-    //map          { 0l, 25l, 50l, 75l, 100l, 125l, 150l, 175l, 200l, 225l, 250l, 275l, 300l, 325l, 350l, 375l, 400l };
+    // partitions   {  0,   1,   2,   3,    4,    5,    6,    7,    8,    9,   10,   11,   12,   13,   14,   15,   16 };
+    // map          { 0l, 25l, 50l, 75l, 100l, 125l, 150l, 175l, 200l, 225l, 250l, 275l, 300l, 325l, 350l, 375l, 400l };
     private final Long[] MAP_POINTS = new Long[] { 0l, 25l, 50l, 75l, 100l, 125l, 150l, 175l, 200l, 225l, 250l, 275l,
             300l, 325l, 350l, 375l, 400l };
 
@@ -233,7 +241,64 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
         }
     }
 
-    // SUCCESS (24 MAY 2019 14:44) (Note for Stephen Ermshar)
+    // ============================
+    // PROJECT TESTS
+
+    @Test // (Stephen) Results Array Checked
+    public void testFRMPCF_Project_ASC_D3_N4_EDGE() throws HyracksDataException {
+        int[][] results = new int[15][];
+        results[0] = new int[] { 0 };
+        results[1] = new int[] { 0 };
+        results[2] = new int[] { 0 };
+        results[3] = new int[] { 1 };
+        results[4] = new int[] { 1 };
+        results[5] = new int[] { 1 };
+        results[6] = new int[] { 1 };
+        results[7] = new int[] { 2 };
+        results[8] = new int[] { 2 };
+        results[9] = new int[] { 2 };
+        results[10] = new int[] { 2 };
+        results[11] = new int[] { 3 };
+        results[12] = new int[] { 3 };
+        results[13] = new int[] { 3 };
+        results[14] = new int[] { 3 }; // Actual: [4]
+
+        RangeMap rangeMap = getRangeMap(MAP_POINTS);
+
+        executeFieldRangeMultiPartitionTests(PARTITION_EDGE_CASES, rangeMap, BINARY_ASC_COMPARATOR_FACTORIES,
+                BINARY_ASC_COMPARATOR_FACTORIES, RangePartitioningType.PROJECT, 4, results, 3);
+    }
+
+    @Test // (Stephen) Results Array Checked, would like a double check
+    public void testFRMPCF_Project_DESC_D3_N4_EDGE() throws HyracksDataException {
+        int[][] results = new int[16][];
+        results[0] = new int[] { 3 }; // -25:-22
+        results[1] = new int[] { 3 }; //  50:53
+        results[2] = new int[] { 2 }; //  99:102
+        results[3] = new int[] { 2 }; // 100:103
+        results[4] = new int[] { 2 }; // 101:104
+        results[5] = new int[] { 2 }; // 150:153
+        results[6] = new int[] { 1 }; // 199:202
+        results[7] = new int[] { 1 }; // 200:203
+        results[8] = new int[] { 1 }; // 201:204
+        results[9] = new int[] { 1 }; // 250:253
+        results[10] = new int[] { 0 }; // 299:302
+        results[11] = new int[] { 0 }; // 300:303
+        results[12] = new int[] { 0 }; // 301:304
+        results[13] = new int[] { 0 }; // 350:353
+        results[14] = new int[] { 0 }; // 425:428
+
+        Long[] map = MAP_POINTS.clone();
+        ArrayUtils.reverse(map);
+        RangeMap rangeMap = getRangeMap(map);
+
+        executeFieldRangeMultiPartitionTests(PARTITION_EDGE_CASES, rangeMap, BINARY_DESC_COMPARATOR_FACTORIES,
+                BINARY_DESC_COMPARATOR_FACTORIES, RangePartitioningType.PROJECT, 4, results, 3);
+    }
+
+    // ============================
+    // deprecated PROJECT TESTS
+
     @Test
     public void testFieldRangeMultiPartitionAscProject4AllPartitions() throws HyracksDataException {
         int[][] results = new int[16][];
@@ -260,7 +325,6 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
                 BINARY_ASC_COMPARATOR_FACTORIES, RangePartitioningType.PROJECT, 4, results, 3);
     }
 
-    // SUCCESS (24 MAY 2019 14:44) (Note for Stephen Ermshar)
     @Test
     public void testFieldRangeMultiPartitionDescProject4AllPartitions() throws HyracksDataException {
         int[][] results = new int[16][];
@@ -289,7 +353,6 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
                 BINARY_DESC_COMPARATOR_FACTORIES, RangePartitioningType.PROJECT, 4, results, 3);
     }
 
-    // SUCCESS (24 MAY 2019 14:44) (Note for Stephen Ermshar)
     @Test
     public void testFieldRangeMultiPartitionAscProject16AllPartitions() throws HyracksDataException {
         int[][] results = new int[16][];
@@ -316,7 +379,6 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
                 BINARY_ASC_COMPARATOR_FACTORIES, RangePartitioningType.PROJECT, 16, results, 3);
     }
 
-    // SUCCESS (24 MAY 2019 14:44) (Note for Stephen Ermshar)
     @Test
     public void testFieldRangeMultiPartitionDescProject16AllPartitions() throws HyracksDataException {
         int[][] results = new int[16][];
@@ -345,32 +407,7 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
                 BINARY_DESC_COMPARATOR_FACTORIES, RangePartitioningType.PROJECT, 16, results, 3);
     }
 
-    @Test
-    public void testFieldRangeMultiPartitionAscProject16Partitions() throws HyracksDataException {
-        int[][] results = new int[15][];
-        results[0] = new int[] { 0 };
-        results[1] = new int[] { 2 };
-        results[2] = new int[] { 3 };
-        results[3] = new int[] { 4 };
-        results[4] = new int[] { 4 };
-        results[5] = new int[] { 6 };
-        results[6] = new int[] { 7 };
-        results[7] = new int[] { 8 };
-        results[8] = new int[] { 8 };
-        results[9] = new int[] { 10 };
-        results[10] = new int[] { 11 };
-        results[11] = new int[] { 12 };
-        results[12] = new int[] { 12 };
-        results[13] = new int[] { 14 };
-        results[14] = new int[] { 15 };
-
-        RangeMap rangeMap = getRangeMap(MAP_POINTS);
-
-        executeFieldRangeMultiPartitionTests(PARTITION_EDGE_CASES, rangeMap, BINARY_ASC_COMPARATOR_FACTORIES,
-                BINARY_ASC_COMPARATOR_FACTORIES, RangePartitioningType.PROJECT, 16, results, 3);
-    }
-
-    @Test
+    @Test // (Stephen) Results Array Checked
     public void testFieldRangeMultiPartitionAscProject4Partitions() throws HyracksDataException {
         int[][] results = new int[15][];
         results[0] = new int[] { 0 };
@@ -387,7 +424,7 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
         results[11] = new int[] { 3 };
         results[12] = new int[] { 3 };
         results[13] = new int[] { 3 };
-        results[14] = new int[] { 3 };
+        results[14] = new int[] { 3 }; // Actual: [4]
 
         RangeMap rangeMap = getRangeMap(MAP_POINTS);
 
@@ -395,8 +432,45 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
                 BINARY_ASC_COMPARATOR_FACTORIES, RangePartitioningType.PROJECT, 4, results, 3);
     }
 
-    @Test
-    public void testFieldRangeMultiPartitionAscReplicate4Partitions() throws HyracksDataException {
+    @Test // (Stephen) Results Array Checked
+    public void testFieldRangeMultiPartitionAscProject16Partitions() throws HyracksDataException {
+        int[][] results = new int[15][];
+        results[0] = new int[] { 0 };
+        results[1] = new int[] { 2 };
+        results[2] = new int[] { 3 };
+        results[3] = new int[] { 4 };
+        results[4] = new int[] { 4 };
+        results[5] = new int[] { 6 };
+        results[6] = new int[] { 7 };
+        results[7] = new int[] { 8 };
+        results[8] = new int[] { 8 };
+        results[9] = new int[] { 10 };
+        results[10] = new int[] { 11 };
+        results[11] = new int[] { 12 };
+        results[12] = new int[] { 12 };
+        results[13] = new int[] { 14 };
+        results[14] = new int[] { 15 }; // Actual: [16]
+
+        RangeMap rangeMap = getRangeMap(MAP_POINTS);
+
+        executeFieldRangeMultiPartitionTests(PARTITION_EDGE_CASES, rangeMap, BINARY_ASC_COMPARATOR_FACTORIES,
+                BINARY_ASC_COMPARATOR_FACTORIES, RangePartitioningType.PROJECT, 16, results, 3);
+    }
+
+    // ============================
+    // PROJECT_END TESTS
+
+    //    @Test
+    //    public void testFRMPCF_ProjectEnd_ASC_D3_N4_EDGE() {}
+    //
+    //    @Test
+    //    public void testFRMPCF_ProjectEnd_DESC_D3_N4_EDGE() {}
+
+    // ============================
+    // REPLICATE TESTS
+
+    @Test // (Stephen) Results Array Checked
+    public void testFRMPCF_Replicate_ASC_D3_N4_EDGE() throws HyracksDataException {
         int[][] results = new int[15][];
         results[0] = new int[] { 0, 1, 2, 3 };
         results[1] = new int[] { 0, 1, 2, 3 };
@@ -420,7 +494,37 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
                 BINARY_ASC_COMPARATOR_FACTORIES, RangePartitioningType.REPLICATE, 4, results, 3);
     }
 
-    @Test
+    @Test // (Stephen) Results Array Checked, unsure of direction in which Replicate extends for DESC
+    public void testFRMPCF_Replicate_DESC_D3_N4_EDGE() throws HyracksDataException {
+        int[][] results = new int[15][];
+        results[0] = new int[] { 3 }; // -25
+        results[1] = new int[] { 3 }; //  50
+        results[2] = new int[] { 3 }; //  99
+        results[3] = new int[] { 3 }; // 100
+        results[4] = new int[] { 2, 3 }; // 101
+        results[5] = new int[] { 2, 3 }; // 150
+        results[6] = new int[] { 2, 3 }; // 199
+        results[7] = new int[] { 2, 3 }; // 200
+        results[8] = new int[] { 1, 2, 3 }; // 201
+        results[9] = new int[] { 1, 2, 3 }; // 250
+        results[10] = new int[] { 1, 2, 3 }; // 299
+        results[11] = new int[] { 1, 2, 3 }; // 300
+        results[12] = new int[] { 0, 1, 2, 3 }; // 301
+        results[13] = new int[] { 0, 1, 2, 3 }; // 350
+        results[14] = new int[] { 0, 1, 2, 3 }; // 425
+
+        Long[] map = MAP_POINTS.clone();
+        ArrayUtils.reverse(map);
+        RangeMap rangeMap = getRangeMap(map);
+
+        executeFieldRangeMultiPartitionTests(PARTITION_EDGE_CASES, rangeMap, BINARY_DESC_COMPARATOR_FACTORIES,
+                BINARY_DESC_COMPARATOR_FACTORIES, RangePartitioningType.REPLICATE, 4, results, 3);
+    }
+
+    // ============================
+    // deprecated REPLICATE TESTS
+
+    @Test // (Stephen) Results Array Checked
     public void testFieldRangeMultiPartitionAscReplicate16Partitions() throws HyracksDataException {
         int[][] results = new int[15][];
         results[0] = new int[] { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
@@ -445,62 +549,11 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
                 BINARY_ASC_COMPARATOR_FACTORIES, RangePartitioningType.REPLICATE, 16, results, 3);
     }
 
-    @Test
-    public void testFieldRangeMultiPartitionAscSplit4AllPartitions() throws HyracksDataException {
-        // (Stephen Ermshar) same as project asc 4
-        int[][] results = new int[16][];
-        results[0] = new int[] { 0 };
-        results[1] = new int[] { 0 };
-        results[2] = new int[] { 0 };
-        results[3] = new int[] { 0 };
-        results[4] = new int[] { 1 };
-        results[5] = new int[] { 1 };
-        results[6] = new int[] { 1 };
-        results[7] = new int[] { 1 };
-        results[8] = new int[] { 2 };
-        results[9] = new int[] { 2 };
-        results[10] = new int[] { 2 };
-        results[11] = new int[] { 2 };
-        results[12] = new int[] { 3 };
-        results[13] = new int[] { 3 };
-        results[14] = new int[] { 3 };
-        results[15] = new int[] { 3 };
+    // ============================
+    // SPLIT TESTS
 
-        RangeMap rangeMap = getRangeMap(MAP_POINTS);
-
-        executeFieldRangeMultiPartitionTests(EACH_PARTITION, rangeMap, BINARY_ASC_COMPARATOR_FACTORIES,
-                BINARY_ASC_MAX_COMPARATOR_FACTORIES, RangePartitioningType.REPLICATE, 4, results, 3);
-    }
-
-    @Test
-    public void testFieldRangeMultiPartitionAscSplit16AllPartitions() throws HyracksDataException {
-        int[][] results = new int[16][];
-        results[0] = new int[] { 0 };
-        results[1] = new int[] { 1 };
-        results[2] = new int[] { 2 };
-        results[3] = new int[] { 3 };
-        results[4] = new int[] { 4 };
-        results[5] = new int[] { 5 };
-        results[6] = new int[] { 6 };
-        results[7] = new int[] { 7 };
-        results[8] = new int[] { 8 };
-        results[9] = new int[] { 9 };
-        results[10] = new int[] { 10 };
-        results[11] = new int[] { 11 };
-        results[12] = new int[] { 12 };
-        results[13] = new int[] { 13 };
-        results[14] = new int[] { 14 };
-        results[15] = new int[] { 15 };
-
-        RangeMap rangeMap = getRangeMap(MAP_POINTS);
-
-        executeFieldRangeMultiPartitionTests(EACH_PARTITION, rangeMap, BINARY_ASC_COMPARATOR_FACTORIES,
-                BINARY_ASC_MAX_COMPARATOR_FACTORIES, RangePartitioningType.REPLICATE, 16, results, 3);
-    }
-
-    @Test
-    public void testFieldRangeMultiPartitionAscSplit4Partitions() throws HyracksDataException {
-        // not correct
+    @Test // (Stephen) Results Array Checked
+    public void testFRMPCF_Split_ASC_D3_N4_EDGE() throws HyracksDataException {
         int[][] results = new int[15][];
         results[0] = new int[] { 0 };
         results[1] = new int[] { 0 };
@@ -508,11 +561,11 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
         results[3] = new int[] { 1 };
         results[4] = new int[] { 1 };
         results[5] = new int[] { 1 };
-        results[6] = new int[] { 1 };
+        results[6] = new int[] { 1, 2 };
         results[7] = new int[] { 2 };
         results[8] = new int[] { 2 };
         results[9] = new int[] { 2 };
-        results[10] = new int[] { 2 };
+        results[10] = new int[] { 2, 3 };
         results[11] = new int[] { 3 };
         results[12] = new int[] { 3 };
         results[13] = new int[] { 3 };
@@ -521,6 +574,167 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
         RangeMap rangeMap = getRangeMap(MAP_POINTS);
 
         executeFieldRangeMultiPartitionTests(PARTITION_EDGE_CASES, rangeMap, BINARY_ASC_COMPARATOR_FACTORIES,
-                BINARY_ASC_MAX_COMPARATOR_FACTORIES, RangePartitioningType.PROJECT, 4, results, 3);
+                BINARY_ASC_MAX_COMPARATOR_FACTORIES, RangePartitioningType.SPLIT, 4, results, 3);
+    }
+
+    @Test // (Stephen) Results Array Checked, would like a double check
+    public void testFRMPCF_Split_DESC_D3_N4_EDGE() throws HyracksDataException {
+        int[][] results = new int[15][];
+        results[0] = new int[] { 3 }; // -25:-22
+        results[1] = new int[] { 3 }; //  50:53
+        results[2] = new int[] { 2, 3 }; //  99:102
+        results[3] = new int[] { 2, 3 }; // 100:103
+        results[4] = new int[] { 2 }; // 101:104
+        results[5] = new int[] { 2 }; // 150:153
+        results[6] = new int[] { 1, 2 }; // 199:202
+        results[7] = new int[] { 1, 2 }; // 200:203
+        results[8] = new int[] { 1 }; // 201:204
+        results[9] = new int[] { 1 }; // 250:253
+        results[10] = new int[] { 0, 1 }; // 299:302
+        results[11] = new int[] { 0, 1 }; // 300:303
+        results[12] = new int[] { 0 }; // 301:304
+        results[13] = new int[] { 0 }; // 350:353
+        results[14] = new int[] { 0 }; // 425:428
+
+        Long[] map = MAP_POINTS.clone();
+        ArrayUtils.reverse(map);
+        RangeMap rangeMap = getRangeMap(map);
+
+        executeFieldRangeMultiPartitionTests(PARTITION_EDGE_CASES, rangeMap, BINARY_DESC_MAX_COMPARATOR_FACTORIES,
+                BINARY_DESC_COMPARATOR_FACTORIES, RangePartitioningType.SPLIT, 4, results, 3);
+    }
+
+    @Test // (Stephen) Results Array Checked
+    public void testFRMPCF_Split_ASC_D50_N16_EDGE() throws HyracksDataException {
+        int[][] results = new int[15][];
+        results[0] = new int[] { 0, 1 }; // -25:25
+        results[1] = new int[] { 2, 3, 4 }; // 50:100
+        results[2] = new int[] { 3, 4, 5 }; // 99:149
+        results[3] = new int[] { 4, 5, 6 }; // 100:150
+        results[4] = new int[] { 4, 5, 6 }; // 101:151
+        results[5] = new int[] { 6, 7, 8 }; // 150:200
+        results[6] = new int[] { 7, 8, 9 }; // 199:249
+        results[7] = new int[] { 8, 9, 10 }; // 200:250
+        results[8] = new int[] { 8, 9, 10 }; // 201:251
+        results[9] = new int[] { 10, 11, 12 }; // 250:300
+        results[10] = new int[] { 11, 12, 13 }; // 299:349
+        results[11] = new int[] { 12, 13, 14 }; // 300:350
+        results[12] = new int[] { 12, 13, 14 }; // 301:351
+        results[13] = new int[] { 14, 15 }; // 350:400
+        results[14] = new int[] { 15 }; // 425:475
+
+        RangeMap rangeMap = getRangeMap(MAP_POINTS);
+
+        executeFieldRangeMultiPartitionTests(PARTITION_EDGE_CASES, rangeMap, BINARY_ASC_COMPARATOR_FACTORIES,
+                BINARY_ASC_MAX_COMPARATOR_FACTORIES, RangePartitioningType.SPLIT, 16, results, 50);
+    }
+
+    @Test // (Stephen) Results Array Checked, would like a double check
+    public void testFRMPCF_Split_DESC_D50_N16_EDGE() throws HyracksDataException {
+        int[][] results = new int[15][];
+        results[0] = new int[] { 15 }; // -25:25
+        results[1] = new int[] { 12, 13, 14 }; // 50:100
+        results[2] = new int[] { 10, 11, 12 }; // 99:149
+        results[3] = new int[] { 10, 11, 12 }; // 100:150
+        results[4] = new int[] { 9, 10, 11 }; // 101:151
+        results[5] = new int[] { 8, 9, 10 }; // 150:200
+        results[6] = new int[] { 6, 7, 8 }; // 199:249
+        results[7] = new int[] { 6, 7, 8 }; // 200:250
+        results[8] = new int[] { 5, 6, 7 }; // 201:251
+        results[9] = new int[] { 4, 5, 6 }; // 250:300
+        results[10] = new int[] { 2, 3, 4 }; // 299:349
+        results[11] = new int[] { 2, 3, 4 }; // 300:350
+        results[12] = new int[] { 1, 2, 3 }; // 301:351
+        results[13] = new int[] { 0, 1, 2 }; // 350:400
+        results[14] = new int[] { 0 }; // 425:475
+
+        Long[] map = MAP_POINTS.clone();
+        ArrayUtils.reverse(map);
+        RangeMap rangeMap = getRangeMap(map);
+
+        executeFieldRangeMultiPartitionTests(PARTITION_EDGE_CASES, rangeMap, BINARY_ASC_COMPARATOR_FACTORIES,
+                BINARY_ASC_MAX_COMPARATOR_FACTORIES, RangePartitioningType.SPLIT, 16, results, 50);
+    }
+
+    @Test // (Stephen) Results Array Checked
+    public void testFRMPCF_Split_ASC_D3_N16_EACH() throws HyracksDataException {
+        int[][] results = new int[16][];
+        results[0] = new int[] { 0 }; // 20:23
+        results[1] = new int[] { 0 }; // 45:48
+        results[2] = new int[] { 0 }; // 70:73
+        results[3] = new int[] { 0 }; // 95:98
+        results[4] = new int[] { 1 }; // 120:123
+        results[5] = new int[] { 1 }; // 145:148
+        results[6] = new int[] { 1 }; // 170:173
+        results[7] = new int[] { 1 }; // 195:198
+        results[8] = new int[] { 2 }; // 220:223
+        results[9] = new int[] { 2 }; // 245:248
+        results[10] = new int[] { 2 }; // 270:273
+        results[11] = new int[] { 2 }; // 295:298
+        results[12] = new int[] { 3 }; // 320:323
+        results[13] = new int[] { 3 }; // 345:348
+        results[14] = new int[] { 3 }; // 370:373
+        results[15] = new int[] { 3 }; // 395:398
+
+        RangeMap rangeMap = getRangeMap(MAP_POINTS);
+
+        executeFieldRangeMultiPartitionTests(EACH_PARTITION, rangeMap, BINARY_ASC_COMPARATOR_FACTORIES,
+                BINARY_ASC_MAX_COMPARATOR_FACTORIES, RangePartitioningType.SPLIT, 16, results, 3);
+    }
+
+    @Test // (Stephen) Results Array Checked
+    public void testFRMPCF_Split_DESC_D3_N4_EACH() throws HyracksDataException {
+        int[][] results = new int[16][];
+        results[0] = new int[] { 3 }; // 20:23
+        results[1] = new int[] { 3 }; // 45:48
+        results[2] = new int[] { 3 }; // 70:73
+        results[3] = new int[] { 3 }; // 95:98
+        results[4] = new int[] { 2 }; // 120:123
+        results[5] = new int[] { 2 }; // 145:148
+        results[6] = new int[] { 2 }; // 170:173
+        results[7] = new int[] { 2 }; // 195:198
+        results[8] = new int[] { 1 }; // 220:223
+        results[9] = new int[] { 1 }; // 245:248
+        results[10] = new int[] { 1 }; // 270:273
+        results[11] = new int[] { 1 }; // 295:298
+        results[12] = new int[] { 0 }; // 320:323
+        results[13] = new int[] { 0 }; // 345:348
+        results[14] = new int[] { 0 }; // 370:373
+        results[15] = new int[] { 0 }; // 395:398
+
+        Long[] map = MAP_POINTS.clone();
+        ArrayUtils.reverse(map);
+        RangeMap rangeMap = getRangeMap(map);
+
+        executeFieldRangeMultiPartitionTests(EACH_PARTITION, rangeMap, BINARY_ASC_COMPARATOR_FACTORIES,
+                BINARY_ASC_MAX_COMPARATOR_FACTORIES, RangePartitioningType.SPLIT, 16, results, 3);
+    }
+
+    // ============================
+    // deprecated SPLIT TESTS
+
+    @Test // (Stephen) Results Array Checked
+    public void testFieldRangeMultiPartitionAscSplit16Partitions() throws HyracksDataException {
+        int[][] results = new int[15][];
+        results[0] = new int[] { 0 };
+        results[1] = new int[] { 2 };
+        results[2] = new int[] { 3, 4 };
+        results[3] = new int[] { 4 };
+        results[4] = new int[] { 4 };
+        results[5] = new int[] { 6 };
+        results[6] = new int[] { 7, 8 };
+        results[7] = new int[] { 8 };
+        results[8] = new int[] { 8 };
+        results[9] = new int[] { 10 };
+        results[10] = new int[] { 11, 12 };
+        results[11] = new int[] { 12 };
+        results[12] = new int[] { 12 };
+        results[13] = new int[] { 14 };
+        results[14] = new int[] { 15 };
+
+        RangeMap rangeMap = getRangeMap(MAP_POINTS);
+
+        executeFieldRangeMultiPartitionTests(PARTITION_EDGE_CASES, rangeMap, BINARY_ASC_COMPARATOR_FACTORIES,
+                BINARY_ASC_MAX_COMPARATOR_FACTORIES, RangePartitioningType.SPLIT, 16, results, 3);
     }
 }
