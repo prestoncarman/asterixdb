@@ -22,6 +22,5 @@ import org.apache.hyracks.api.exceptions.HyracksDataException;
 
 @FunctionalInterface
 public interface IBinaryBooleanInspector {
-
     boolean getBooleanValue(byte[] bytes, int offset, int length) throws HyracksDataException;
 }

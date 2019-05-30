@@ -2804,6 +2804,126 @@
       </compilation-unit>
     </test-case>
   </test-group>
+  <test-group name="bitwise">
+    <test-case FilePath="bitwise">
+      <compilation-unit name="bit_and_01">
+        <output-dir compare="Text">bit_and_01</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="bitwise">
+      <compilation-unit name="bit_and_02">
+        <output-dir compare="Text">bit_and_02</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="bitwise">
+      <compilation-unit name="bit_and_03">
+        <output-dir compare="Text">bit_and_03</output-dir>
+        <expected-error>Invalid number of arguments for function</expected-error>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="bitwise">
+      <compilation-unit name="bit_or_01">
+        <output-dir compare="Text">bit_or_01</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="bitwise">
+      <compilation-unit name="bit_or_02">
+        <output-dir compare="Text">bit_or_02</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="bitwise">
+      <compilation-unit name="bit_or_03">
+        <output-dir compare="Text">bit_or_03</output-dir>
+        <expected-error>Invalid number of arguments for function</expected-error>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="bitwise">
+      <compilation-unit name="bit_xor_01">
+        <output-dir compare="Text">bit_xor_01</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="bitwise">
+      <compilation-unit name="bit_xor_02">
+        <output-dir compare="Text">bit_xor_02</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="bitwise">
+      <compilation-unit name="bit_xor_03">
+        <output-dir compare="Text">bit_xor_03</output-dir>
+        <expected-error>Invalid number of arguments for function</expected-error>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="bitwise">
+      <compilation-unit name="bit_not_01">
+        <output-dir compare="Text">bit_not_01</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="bitwise">
+      <compilation-unit name="bit_not_02">
+        <output-dir compare="Text">bit_not_02</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="bitwise">
+      <compilation-unit name="bit_count_01">
+        <output-dir compare="Text">bit_count_01</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="bitwise">
+      <compilation-unit name="bit_count_02">
+        <output-dir compare="Text">bit_count_02</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="bitwise">
+      <compilation-unit name="bit_set_01">
+        <output-dir compare="Text">bit_set_01</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="bitwise">
+      <compilation-unit name="bit_set_02">
+        <output-dir compare="Text">bit_set_02</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="bitwise">
+      <compilation-unit name="bit_clear_01">
+        <output-dir compare="Text">bit_clear_01</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="bitwise">
+      <compilation-unit name="bit_clear_02">
+        <output-dir compare="Text">bit_clear_02</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="bitwise">
+      <compilation-unit name="bit_shift_01">
+        <output-dir compare="Text">bit_shift_01</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="bitwise">
+      <compilation-unit name="bit_shift_02">
+        <output-dir compare="Text">bit_shift_02</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="bitwise">
+      <compilation-unit name="bit_test_01">
+        <output-dir compare="Text">bit_test_01</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="bitwise">
+      <compilation-unit name="bit_test_02">
+        <output-dir compare="Text">bit_test_02</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="bitwise">
+      <compilation-unit name="is_bit_set_01">
+        <output-dir compare="Text">is_bit_set_01</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="bitwise">
+      <compilation-unit name="is_bit_set_02">
+        <output-dir compare="Text">is_bit_set_02</output-dir>
+      </compilation-unit>
+    </test-case>
+  </test-group>
   <test-group name="boolean">
     <test-case FilePath="boolean">
       <compilation-unit name="and_01">
@@ -5640,6 +5760,11 @@
       </compilation-unit>
     </test-case>
     <test-case FilePath="misc">
+      <compilation-unit name="field_access_union-ASTERIXDB-2288">
+        <output-dir compare="Text">field_access_union-ASTERIXDB-2288</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="misc">
       <compilation-unit name="constant_folding">
         <output-dir compare="Text">constant_folding</output-dir>
       </compilation-unit>
@@ -5905,6 +6030,11 @@
     <test-case FilePath="misc">
       <compilation-unit name="metadata_only_01">
         <output-dir compare="Text">metadata_only_01</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="misc">
+      <compilation-unit name="cast-ASTERIXDB-2458">
+        <output-dir compare="Text">cast-ASTERIXDB-2458</output-dir>
       </compilation-unit>
     </test-case>
   </test-group>
@@ -10225,8 +10355,33 @@
       </compilation-unit>
     </test-case>
     <test-case FilePath="window">
+      <compilation-unit name="first_value_01">
+        <output-dir compare="Text">first_value_01</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="window">
+      <compilation-unit name="lag_01">
+        <output-dir compare="Text">lag_01</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="window">
+      <compilation-unit name="last_value_01">
+        <output-dir compare="Text">last_value_01</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="window">
+      <compilation-unit name="lead_01">
+        <output-dir compare="Text">lead_01</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="window">
       <compilation-unit name="misc_01">
         <output-dir compare="Text">misc_01</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="window">
+      <compilation-unit name="nth_value_01">
+        <output-dir compare="Text">nth_value_01</output-dir>
       </compilation-unit>
     </test-case>
     <test-case FilePath="window">
@@ -10267,6 +10422,8 @@
         <expected-error>ASX1037: Invalid query parameter compiler.windowmemory</expected-error>
         <expected-error>ASX1102: Expected window or aggregate function, got: unknown_func</expected-error>
         <expected-error>ASX1079: Compilation error: count is a SQL-92 aggregate function</expected-error>
+        <expected-error>ASX1104: Invalid modifier RESPECT/IGNORE NULLS for function</expected-error>
+        <expected-error>ASX1104: Invalid modifier RESPECT/IGNORE NULLS for function</expected-error>
         <source-location>false</source-location>
       </compilation-unit>
     </test-case>
