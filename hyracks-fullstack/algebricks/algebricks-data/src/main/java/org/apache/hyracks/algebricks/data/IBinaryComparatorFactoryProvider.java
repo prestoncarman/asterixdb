@@ -20,6 +20,7 @@ package org.apache.hyracks.algebricks.data;
 
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
+import org.apache.hyracks.api.dataflow.value.IRangePartitionType.RangePartitioningType;
 
 /**
  * Provides {@link org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory} for different types. Whether a
@@ -67,4 +68,21 @@ public interface IBinaryComparatorFactoryProvider {
      */
     IBinaryComparatorFactory getBinaryComparatorFactory(Object leftType, Object rightType, boolean ascending,
             boolean ignoreCase) throws AlgebricksException;
+
+    /**
+     * @param type the type of the left binary data
+     * @param ascending the order direction. true if ascending order is desired, false otherwise
+     * @return the appropriate {@link org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory} instance
+     * @throws AlgebricksException if the comparator factory for the passed type could not be created
+     */
+    IBinaryComparatorFactory getRangeMaxBinaryComparatorFactory(Object type, boolean ascending, RangePartitioningType rangeType) throws AlgebricksException;
+
+    /**
+     * @param type the type of the left binary data
+     * @param ascending the order direction. true if ascending order is desired, false otherwise
+     * @return the appropriate {@link org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory} instance
+     * @throws AlgebricksException if the comparator factory for the passed type could not be created
+     */
+    IBinaryComparatorFactory getRangeMinBinaryComparatorFactory(Object type, boolean ascending, RangePartitioningType rangeType) throws AlgebricksException;
+
 }

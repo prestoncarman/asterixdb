@@ -51,10 +51,13 @@ import org.apache.hyracks.api.dataflow.IConnectorDescriptor;
 import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import org.apache.hyracks.api.dataflow.value.INormalizedKeyComputerFactory;
 import org.apache.hyracks.api.dataflow.value.IRangePartitionType.RangePartitioningType;
+import org.apache.hyracks.api.dataflow.value.ITupleMultiPartitionComputerFactory;
 import org.apache.hyracks.api.dataflow.value.ITuplePartitionComputerFactory;
 import org.apache.hyracks.api.job.IConnectorDescriptorRegistry;
 import org.apache.hyracks.dataflow.common.data.partition.range.RangeMap;
+import org.apache.hyracks.dataflow.common.data.partition.range.StaticFieldRangeMultiPartitionComputerFactory;
 import org.apache.hyracks.dataflow.common.data.partition.range.StaticFieldRangePartitionComputerFactory;
+import org.apache.hyracks.dataflow.std.connectors.MToNMultiPartitioningMergingConnectorDescriptor;
 import org.apache.hyracks.dataflow.std.connectors.MToNPartitioningMergingConnectorDescriptor;
 
 public class RangePartitionMergeExchangePOperator extends AbstractExchangePOperator {
@@ -136,9 +139,9 @@ public class RangePartitionMergeExchangePOperator extends AbstractExchangePOpera
             ILogicalOperator op, IOperatorSchema opSchema, JobGenContext context) throws AlgebricksException {
         int n = partitioningFields.size();
         int[] sortFields = new int[n];
-        //        IBinaryRangeComparatorFactory[] rangeComps = new IBinaryRangeComparatorFactory[n];
+        IBinaryComparatorFactory[] minComps = new IBinaryComparatorFactory[n];
+        IBinaryComparatorFactory[] maxComps = new IBinaryComparatorFactory[n];
         IBinaryComparatorFactory[] comps = new IBinaryComparatorFactory[n];
-
         INormalizedKeyComputerFactoryProvider nkcfProvider = context.getNormalizedKeyComputerFactoryProvider();
         INormalizedKeyComputerFactory nkcf = null;
 
@@ -153,22 +156,24 @@ public class RangePartitionMergeExchangePOperator extends AbstractExchangePOpera
                 nkcf = nkcfProvider.getNormalizedKeyComputerFactory(type, order == OrderKind.ASC);
             }
             IBinaryComparatorFactoryProvider bcfp = context.getBinaryComparatorFactoryProvider();
-            //            if (rangeType != RangePartitioningType.PROJECT) {
-            //                rangeComps[i] = bcfp.getRangeBinaryComparatorFactory(type, oc.getOrder() == OrderKind.ASC, rangeType);
-            //            }
-            comps[i] = bcfp.getBinaryComparatorFactory(type, oc.getOrder() == OrderKind.ASC);
+            if (rangeType != RangePartitioningType.PROJECT) {
+                minComps[i] = bcfp.getRangeMinBinaryComparatorFactory(type, oc.getOrder() == OrderKind.ASC, rangeType);
+                maxComps[i] = bcfp.getRangeMaxBinaryComparatorFactory(type, oc.getOrder() == OrderKind.ASC, rangeType);
+            } else {
+                comps[i] = bcfp.getBinaryComparatorFactory(type, oc.getOrder() == OrderKind.ASC);
+            }
             i++;
         }
         IConnectorDescriptor conn;
-        //        if (rangeType == RangePartitioningType.PROJECT) {
-        ITuplePartitionComputerFactory tpcf = new StaticFieldRangePartitionComputerFactory(sortFields, comps, rangeMap);
-        conn = new MToNPartitioningMergingConnectorDescriptor(spec, tpcf, sortFields, comps, nkcf);
-        //        } else {
-        //            ITupleMultiPartitionComputerFactory tmpcf =
-        //                    new StaticFieldRangeMultiPartitionComputerFactory(sortFields, rangeComps, rangeMap, rangeType);
-        //            conn = new MToNMultiPartitioningMergingConnectorDescriptor(spec, tmpcf, sortFields, comps, nkcf);
-        //        }
-        //        return new Pair<IConnectorDescriptor, TargetConstraint>(conn, null);
+        if (rangeType == RangePartitioningType.PROJECT) {
+            ITuplePartitionComputerFactory tpcf =
+                    new StaticFieldRangePartitionComputerFactory(sortFields, comps, rangeMap);
+            conn = new MToNPartitioningMergingConnectorDescriptor(spec, tpcf, sortFields, comps, nkcf);
+        } else {
+            ITupleMultiPartitionComputerFactory tmpcf =
+                    new StaticFieldRangeMultiPartitionComputerFactory(sortFields, minComps, maxComps, rangeMap, rangeType);
+            conn = new MToNMultiPartitioningMergingConnectorDescriptor(spec, tmpcf, sortFields, comps, nkcf);
+        }
         return new Pair<>(conn, null);
     }
 

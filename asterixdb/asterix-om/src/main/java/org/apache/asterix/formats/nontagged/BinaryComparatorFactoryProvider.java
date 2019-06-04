@@ -28,6 +28,8 @@ import org.apache.asterix.dataflow.data.nontagged.comparators.AGenericAscBinaryC
 import org.apache.asterix.dataflow.data.nontagged.comparators.AGenericDescBinaryComparatorFactory;
 import org.apache.asterix.dataflow.data.nontagged.comparators.AIntervalAscPartialBinaryComparatorFactory;
 import org.apache.asterix.dataflow.data.nontagged.comparators.AIntervalDescPartialBinaryComparatorFactory;
+import org.apache.asterix.dataflow.data.nontagged.comparators.AIntervalEndpointAscPartialBinaryComparatorFactory;
+import org.apache.asterix.dataflow.data.nontagged.comparators.AIntervalStartpointDescPartialBinaryComparatorFactory;
 import org.apache.asterix.dataflow.data.nontagged.comparators.ALinePartialBinaryComparatorFactory;
 import org.apache.asterix.dataflow.data.nontagged.comparators.APoint3DPartialBinaryComparatorFactory;
 import org.apache.asterix.dataflow.data.nontagged.comparators.APointPartialBinaryComparatorFactory;
@@ -37,6 +39,7 @@ import org.apache.asterix.dataflow.data.nontagged.comparators.AUUIDPartialBinary
 import org.apache.asterix.om.types.ATypeTag;
 import org.apache.asterix.om.types.BuiltinType;
 import org.apache.asterix.om.types.IAType;
+import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.data.IBinaryComparatorFactoryProvider;
 import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import org.apache.hyracks.data.std.accessors.BooleanBinaryComparatorFactory;
@@ -51,6 +54,7 @@ import org.apache.hyracks.data.std.accessors.ShortBinaryComparatorFactory;
 import org.apache.hyracks.data.std.accessors.UTF8StringBinaryComparatorFactory;
 import org.apache.hyracks.data.std.accessors.UTF8StringLowercaseBinaryComparatorFactory;
 import org.apache.hyracks.data.std.accessors.UTF8StringLowercaseTokenBinaryComparatorFactory;
+import org.apache.hyracks.api.dataflow.value.IRangePartitionType.RangePartitioningType;
 
 public class BinaryComparatorFactoryProvider implements IBinaryComparatorFactoryProvider, Serializable {
 
@@ -170,6 +174,32 @@ public class BinaryComparatorFactoryProvider implements IBinaryComparatorFactory
             default:
                 return addOffset(RawBinaryComparatorFactory.INSTANCE, ascending);
         }
+    }
+
+    public IBinaryComparatorFactory getRangeMinBinaryComparatorFactory(Object type, boolean ascending,
+            RangePartitioningType rangeType) throws AlgebricksException {
+        IAType objectType = (IAType) type;
+        if (objectType.getTypeTag() == ATypeTag.INTERVAL) {
+            if (ascending) {
+                return addOffset(AIntervalAscPartialBinaryComparatorFactory.INSTANCE, ascending);
+            } else {
+                return addOffset(AIntervalDescPartialBinaryComparatorFactory.INSTANCE, ascending);
+            }
+        }
+        return createGenericBinaryComparatorFactory(objectType, objectType, ascending);
+    }
+
+    public IBinaryComparatorFactory getRangeMaxBinaryComparatorFactory(Object type, boolean ascending,
+            RangePartitioningType rangeType) throws AlgebricksException {
+        IAType objectType = (IAType) type;
+        if (objectType.getTypeTag() == ATypeTag.INTERVAL) {
+            if (ascending) {
+                return addOffset(AIntervalEndpointAscPartialBinaryComparatorFactory.INSTANCE, ascending);
+            } else {
+                return addOffset(AIntervalStartpointDescPartialBinaryComparatorFactory.INSTANCE, ascending);
+            }
+        }
+        return createGenericBinaryComparatorFactory(objectType, objectType, ascending);
     }
 
     private IBinaryComparatorFactory addOffset(final IBinaryComparatorFactory inst, final boolean ascending) {
