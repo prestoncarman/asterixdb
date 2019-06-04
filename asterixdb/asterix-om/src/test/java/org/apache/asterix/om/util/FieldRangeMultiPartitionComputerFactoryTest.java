@@ -60,7 +60,6 @@ import junit.framework.TestCase;
 
 public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
 
-    //    private final Integer64SerializerDeserializer int64Serde = Integer64SerializerDeserializer.INSTANCE;
     private final AIntervalSerializerDeserializer intervalSerde = AIntervalSerializerDeserializer.INSTANCE;
     @SuppressWarnings("rawtypes")
     private final ISerializerDeserializer[] SerDers =
@@ -131,10 +130,9 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
         try {
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             DataOutput dos = new DataOutputStream(bos);
+            AInterval[] intervals = getAIntervals(integers, duration);
             for (int i = 0; i < integers.length; ++i) {
-                AInterval interval =
-                        new AInterval(integers[i], integers[i] + duration, ATypeTag.SERIALIZED_DATETIME_TYPE_TAG);
-                intervalSerde.serialize(interval, dos);
+                intervalSerde.serialize(intervals[i], dos);
             }
             bos.close();
             return bos.toByteArray();
@@ -151,8 +149,15 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
         return new RangeMap(1, getIntervalBytes(integers, 0), offsets);
     }
 
-    private ByteBuffer prepareData(IHyracksTaskContext ctx, Long[] integers, long duration)
-            throws HyracksDataException {
+    private AInterval[] getAIntervals(Long[] integers, long duration) {
+        AInterval[] intervals = new AInterval[integers.length];
+        for (int i = 0; i < integers.length; ++i) {
+            intervals[i] = new AInterval(integers[i], integers[i] + duration, ATypeTag.SERIALIZED_DATETIME_TYPE_TAG);
+        }
+        return intervals;
+    }
+
+    private ByteBuffer prepareData(IHyracksTaskContext ctx, AInterval[] intervals) throws HyracksDataException {
         IFrame frame = new VSizeFrame(ctx);
 
         FrameTupleAppender appender = new FrameTupleAppender();
@@ -160,13 +165,10 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
         DataOutput dos = tb.getDataOutput();
         appender.reset(frame, true);
 
-        for (int i = 0; i < integers.length; ++i) {
+        for (int i = 0; i < intervals.length; ++i) {
             tb.reset();
-            AInterval interval =
-                    new AInterval(integers[i], integers[i] + duration, ATypeTag.SERIALIZED_DATETIME_TYPE_TAG);
-            intervalSerde.serialize(interval, dos);
+            intervalSerde.serialize(intervals[i], dos);
             tb.addFieldEndOffset();
-            //            appender.reset(frame, true);
             appender.append(tb.getFieldEndOffsets(), tb.getByteArray(), 0, tb.getSize());
         }
 
@@ -184,7 +186,8 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
         partitioner.initialize();
 
         IFrameTupleAccessor accessor = new FrameTupleAccessor(RecordDesc);
-        ByteBuffer buffer = prepareData(ctx, integers, duration);
+        AInterval[] intervals = getAIntervals(integers, duration);
+        ByteBuffer buffer = prepareData(ctx, intervals);
         accessor.reset(buffer);
 
         IGrowableIntArray map = new IntArrayList(16, 1);
@@ -192,7 +195,7 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
         for (int i = 0; i < results.length; ++i) {
             map.clear();
             partitioner.partition(accessor, i, nParts, map);
-            checkPartitionResult(integers[i], results[i], map);
+            checkPartitionResult(intervals[i], results[i], map);
         }
     }
 
@@ -220,9 +223,9 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
         return result;
     }
 
-    private void checkPartitionResult(Long value, int[] results, IGrowableIntArray map) {
+    private void checkPartitionResult(AInterval interval, int[] results, IGrowableIntArray map) {
         if (results.length != map.size()) {
-            Assert.assertEquals("The partition for value (" + value + ") gives different number of partitions",
+            Assert.assertEquals("The partition for value (" + interval + ") gives different number of partitions",
                     results.length, map.size());
         }
         for (int i = 0; i < results.length; ++i) {
@@ -234,7 +237,7 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
                 }
             }
             if (!match) {
-                Assert.assertEquals("Individual partitions for " + value + " do not match", getString(results),
+                Assert.assertEquals("Individual partitions for " + interval + " do not match", getString(results),
                         getString(map));
                 return;
             }
@@ -261,7 +264,7 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
         results[11] = new int[] { 3 };
         results[12] = new int[] { 3 };
         results[13] = new int[] { 3 };
-        results[14] = new int[] { 3 }; // Actual: [4]
+        results[14] = new int[] { 3 };
 
         RangeMap rangeMap = getRangeMap(MAP_POINTS);
 
@@ -271,7 +274,7 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
 
     @Test // (Stephen) Results Array Checked, would like a double check
     public void testFRMPCF_Project_DESC_D3_N4_EDGE() throws HyracksDataException {
-        int[][] results = new int[16][];
+        int[][] results = new int[15][];
         results[0] = new int[] { 3 }; // -25:-22
         results[1] = new int[] { 3 }; //  50:53
         results[2] = new int[] { 2 }; //  99:102
@@ -424,7 +427,7 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
         results[11] = new int[] { 3 };
         results[12] = new int[] { 3 };
         results[13] = new int[] { 3 };
-        results[14] = new int[] { 3 }; // Actual: [4]
+        results[14] = new int[] { 3 };
 
         RangeMap rangeMap = getRangeMap(MAP_POINTS);
 

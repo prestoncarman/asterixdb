@@ -141,23 +141,33 @@ public abstract class FieldRangeMultiPartitionComputerFactory implements ITupleM
              */
             private int binarySearchRangePartition(IFrameTupleAccessor accessor, int tIndex,
                     IBinaryComparator[] comparators) throws HyracksDataException {
-                int searchIndex = 0;
-                int left = 0;
-                int right = splitCount;
-                int cmp;
-                while (left <= right) {
-                    searchIndex = (left + right) / 2;
-                    cmp = compareSlotAndFields(accessor, tIndex, searchIndex, comparators);
-                    if (cmp > 0) {
-                        left = searchIndex + 1;
-                        searchIndex += 1;
-                    } else if (cmp < 0) {
-                        right = searchIndex - 1;
-                    } else {
-                        return searchIndex + 1;
+                //                int searchIndex = 0;
+                //                int left = 0;
+                //                int right = splitCount - 1;
+                //                int cmp;
+                //                while (left <= right) {
+                //                    searchIndex = (left + right) / 2;
+                //                    cmp = compareSlotAndFields(accessor, tIndex, searchIndex, comparators);
+                //                    if (cmp > 0) {
+                //                        left = searchIndex + 1;
+                //                        searchIndex += 1;
+                //                    } else if (cmp < 0) {
+                //                        right = searchIndex - 1;
+                //                    } else {
+                //                        return searchIndex + 1;
+                //                    }
+                //                }
+                //                return searchIndex;
+
+                int slotIndex = 0;
+                for (int slotNumber = 0; slotNumber < rangeMap.getSplitCount(); ++slotNumber) {
+                    int c = compareSlotAndFields(accessor, tIndex, slotIndex, comparators);
+                    if (c < 0) {
+                        return slotIndex;
                     }
+                    slotIndex++;
                 }
-                return searchIndex;
+                return slotIndex;
             }
 
             private int compareSlotAndFields(IFrameTupleAccessor accessor, int tIndex, int slotNumber,
