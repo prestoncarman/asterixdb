@@ -24,6 +24,7 @@ import java.io.DataOutput;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 import org.apache.asterix.dataflow.data.nontagged.comparators.AIntervalAscPartialBinaryComparatorFactory;
 import org.apache.asterix.dataflow.data.nontagged.comparators.AIntervalDescPartialBinaryComparatorFactory;
@@ -195,6 +196,15 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
 
         IGrowableIntArray map = new IntArrayList(16, 1);
 
+        System.out.println();
+        for (int i = 0; i < results.length; i++) {
+            map.clear();
+            partitioner.partition(accessor, i, nParts, map);
+            System.out.print(
+                    "interval: (" + intervals[i].getIntervalStart() + ", " + intervals[i].getIntervalEnd() + ")   ");
+            System.out.println("E: " + Arrays.toString(results[i]) + "; A: " + getString(map));
+        }
+
         for (int i = 0; i < results.length; ++i) {
             map.clear();
             partitioner.partition(accessor, i, nParts, map);
@@ -240,8 +250,8 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
                 }
             }
             if (!match) {
-                Assert.assertEquals("Individual partitions for " + interval + " do not match", getString(results),
-                        getString(map));
+                Assert.assertEquals("Individual partitions for (" + interval.getIntervalStart() + ":"
+                        + interval.getIntervalEnd() + ") do not match", getString(results), getString(map));
                 return;
             }
         }
@@ -455,7 +465,7 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
         results[11] = new int[] { 12 };
         results[12] = new int[] { 12 };
         results[13] = new int[] { 14 };
-        results[14] = new int[] { 15 }; // Actual: [16]
+        results[14] = new int[] { 15 };
 
         RangeMap rangeMap = getRangeMap(MAP_POINTS);
 
@@ -500,21 +510,21 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
                 BINARY_ASC_COMPARATOR_FACTORIES, RangePartitioningType.REPLICATE, 4, results, 3);
     }
 
-    @Test // (Stephen) Results Array Checked, unsure of direction in which Replicate extends for DESC
+    @Test // (Stephen) Results Array Checked, unsure of direction in which Replicate extends for DESC. FAILED.
     public void testFRMPCF_Replicate_DESC_D3_N4_EDGE() throws HyracksDataException {
         int[][] results = new int[15][];
         results[0] = new int[] { 3 }; // -25
         results[1] = new int[] { 3 }; //  50
-        results[2] = new int[] { 3 }; //  99
-        results[3] = new int[] { 3 }; // 100
+        results[2] = new int[] { 3 }; //  99:102  // Actual: [2, 3]
+        results[3] = new int[] { 3 }; // 100   // Actual: [2, 3]
         results[4] = new int[] { 2, 3 }; // 101
         results[5] = new int[] { 2, 3 }; // 150
-        results[6] = new int[] { 2, 3 }; // 199
-        results[7] = new int[] { 2, 3 }; // 200
+        results[6] = new int[] { 2, 3 }; // 199  // Actual: [1, 2, 3]
+        results[7] = new int[] { 2, 3 }; // 200 // Actual: [1, 2, 3]
         results[8] = new int[] { 1, 2, 3 }; // 201
         results[9] = new int[] { 1, 2, 3 }; // 250
-        results[10] = new int[] { 1, 2, 3 }; // 299
-        results[11] = new int[] { 1, 2, 3 }; // 300
+        results[10] = new int[] { 1, 2, 3 }; // 299 // Actual: [0, 1, 2, 3]
+        results[11] = new int[] { 1, 2, 3 }; // 300 // Actual: [0, 1, 2, 3]
         results[12] = new int[] { 0, 1, 2, 3 }; // 301
         results[13] = new int[] { 0, 1, 2, 3 }; // 350
         results[14] = new int[] { 0, 1, 2, 3 }; // 425
@@ -583,21 +593,21 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
                 BINARY_ASC_MAX_COMPARATOR_FACTORIES, RangePartitioningType.SPLIT, 4, results, 3);
     }
 
-    @Test // (Stephen) Results Array Checked, would like a double check
+    @Test // (Stephen) Results Array Checked, FAILED. `actual` has result with 0 partitions, which should never happen.
     public void testFRMPCF_Split_DESC_D3_N4_EDGE() throws HyracksDataException {
         int[][] results = new int[15][];
         results[0] = new int[] { 3 }; // -25:-22
         results[1] = new int[] { 3 }; //  50:53
-        results[2] = new int[] { 2, 3 }; //  99:102
-        results[3] = new int[] { 2, 3 }; // 100:103
+        results[2] = new int[] { 2, 3 }; //  99:102  // Actual: []
+        results[3] = new int[] { 2, 3 }; // 100:103  // Actual: [2]
         results[4] = new int[] { 2 }; // 101:104
         results[5] = new int[] { 2 }; // 150:153
-        results[6] = new int[] { 1, 2 }; // 199:202
-        results[7] = new int[] { 1, 2 }; // 200:203
+        results[6] = new int[] { 1, 2 }; // 199:202  // Actual: []
+        results[7] = new int[] { 1, 2 }; // 200:203  // Actual: [1]
         results[8] = new int[] { 1 }; // 201:204
         results[9] = new int[] { 1 }; // 250:253
-        results[10] = new int[] { 0, 1 }; // 299:302
-        results[11] = new int[] { 0, 1 }; // 300:303
+        results[10] = new int[] { 0, 1 }; // 299:302  // Actual: []
+        results[11] = new int[] { 0, 1 }; // 300:303  // Actual: [0]
         results[12] = new int[] { 0 }; // 301:304
         results[13] = new int[] { 0 }; // 350:353
         results[14] = new int[] { 0 }; // 425:428
@@ -610,21 +620,21 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
                 BINARY_DESC_COMPARATOR_FACTORIES, RangePartitioningType.SPLIT, 4, results, 3);
     }
 
-    @Test // (Stephen) Results Array Checked
+    @Test // (Stephen) Results Array Checked, FAILED.
     public void testFRMPCF_Split_ASC_D50_N16_EDGE() throws HyracksDataException {
         int[][] results = new int[15][];
-        results[0] = new int[] { 0, 1 }; // -25:25  // Actual: 1 partition
-        results[1] = new int[] { 2, 3, 4 }; // 50:100
+        results[0] = new int[] { 0, 1 }; // -25:25  // Actual: [0]
+        results[1] = new int[] { 2, 3, 4 }; // 50:100  // Actual: [2, 3]
         results[2] = new int[] { 3, 4, 5 }; // 99:149
-        results[3] = new int[] { 4, 5, 6 }; // 100:150
+        results[3] = new int[] { 4, 5, 6 }; // 100:150  // Actual: [4, 5, 6]
         results[4] = new int[] { 4, 5, 6 }; // 101:151
-        results[5] = new int[] { 6, 7, 8 }; // 150:200
+        results[5] = new int[] { 6, 7, 8 }; // 150:200  // Actual: [6, 7, 8]
         results[6] = new int[] { 7, 8, 9 }; // 199:249
-        results[7] = new int[] { 8, 9, 10 }; // 200:250
+        results[7] = new int[] { 8, 9, 10 }; // 200:250  // Actual: [8, 9]
         results[8] = new int[] { 8, 9, 10 }; // 201:251
-        results[9] = new int[] { 10, 11, 12 }; // 250:300
+        results[9] = new int[] { 10, 11, 12 }; // 250:300  // Actual: [10, 11]
         results[10] = new int[] { 11, 12, 13 }; // 299:349
-        results[11] = new int[] { 12, 13, 14 }; // 300:350
+        results[11] = new int[] { 12, 13, 14 }; // 300:350 // Actual: [12, 13]
         results[12] = new int[] { 12, 13, 14 }; // 301:351
         results[13] = new int[] { 14, 15 }; // 350:400
         results[14] = new int[] { 15 }; // 425:475
@@ -635,23 +645,23 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
                 BINARY_ASC_MAX_COMPARATOR_FACTORIES, RangePartitioningType.SPLIT, 16, results, 50);
     }
 
-    @Test // (Stephen) Results Array Checked, would like a double check
+    @Test // (Stephen) Results Array Checked, would like a double check. FAILED.
     public void testFRMPCF_Split_DESC_D50_N16_EDGE() throws HyracksDataException {
         int[][] results = new int[15][];
         results[0] = new int[] { 15 }; // -25:25
-        results[1] = new int[] { 12, 13 }; // 50:100  // Actual: 2 partitions
+        results[1] = new int[] { 12, 13 }; // 50:100
         results[2] = new int[] { 10, 11, 12 }; // 99:149
-        results[3] = new int[] { 10, 11, 12 }; // 100:150
+        results[3] = new int[] { 10, 11, 12 }; // 100:150   // Actual: [10, 11]
         results[4] = new int[] { 9, 10, 11 }; // 101:151
-        results[5] = new int[] { 8, 9, 10 }; // 150:200
+        results[5] = new int[] { 8, 9, 10 }; // 150:200  // Actual: [8, 9]
         results[6] = new int[] { 6, 7, 8 }; // 199:249
-        results[7] = new int[] { 6, 7, 8 }; // 200:250
+        results[7] = new int[] { 6, 7, 8 }; // 200:250  // Actual: [6, 7]
         results[8] = new int[] { 5, 6, 7 }; // 201:251
-        results[9] = new int[] { 4, 5, 6 }; // 250:300
+        results[9] = new int[] { 4, 5, 6 }; // 250:300  // Actual: [4, 5]
         results[10] = new int[] { 2, 3, 4 }; // 299:349
-        results[11] = new int[] { 2, 3, 4 }; // 300:350
+        results[11] = new int[] { 2, 3, 4 }; // 300:350  // Actual: [2, 3]
         results[12] = new int[] { 1, 2, 3 }; // 301:351
-        results[13] = new int[] { 0, 1, 2 }; // 350:400
+        results[13] = new int[] { 0, 1, 2 }; // 350:400  // Actual: [0, 1]
         results[14] = new int[] { 0 }; // 425:475
 
         //        // following results for `alternative map for descending` mentioned in header comment
@@ -674,21 +684,21 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
     public void testFRMPCF_Split_ASC_D3_N16_EACH() throws HyracksDataException {
         int[][] results = new int[16][];
         results[0] = new int[] { 0 }; // 20:23
-        results[1] = new int[] { 0 }; // 45:48  // Actual: 1
-        results[2] = new int[] { 0 }; // 70:73
-        results[3] = new int[] { 0 }; // 95:98
-        results[4] = new int[] { 1 }; // 120:123
-        results[5] = new int[] { 1 }; // 145:148
-        results[6] = new int[] { 1 }; // 170:173
-        results[7] = new int[] { 1 }; // 195:198
-        results[8] = new int[] { 2 }; // 220:223
-        results[9] = new int[] { 2 }; // 245:248
-        results[10] = new int[] { 2 }; // 270:273
-        results[11] = new int[] { 2 }; // 295:298
-        results[12] = new int[] { 3 }; // 320:323
-        results[13] = new int[] { 3 }; // 345:348
-        results[14] = new int[] { 3 }; // 370:373
-        results[15] = new int[] { 3 }; // 395:398
+        results[1] = new int[] { 1 }; // 45:48
+        results[2] = new int[] { 2 }; // 70:73
+        results[3] = new int[] { 3 }; // 95:98
+        results[4] = new int[] { 4 }; // 120:123
+        results[5] = new int[] { 5 }; // 145:148
+        results[6] = new int[] { 6 }; // 170:173
+        results[7] = new int[] { 7 }; // 195:198
+        results[8] = new int[] { 8 }; // 220:223
+        results[9] = new int[] { 9 }; // 245:248
+        results[10] = new int[] { 10 }; // 270:273
+        results[11] = new int[] { 11 }; // 295:298
+        results[12] = new int[] { 12 }; // 320:323
+        results[13] = new int[] { 13 }; // 345:348
+        results[14] = new int[] { 14 }; // 370:373
+        results[15] = new int[] { 15 }; // 395:398
 
         RangeMap rangeMap = getRangeMap(MAP_POINTS);
 
@@ -696,32 +706,32 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
                 BINARY_ASC_MAX_COMPARATOR_FACTORIES, RangePartitioningType.SPLIT, 16, results, 3);
     }
 
-    @Test // (Stephen) Results Array Checked
-    public void testFRMPCF_Split_DESC_D3_N4_EACH() throws HyracksDataException {
+    @Test // (Stephen) Results Array NOT fully Checked
+    public void testFRMPCF_Split_DESC_D3_N16_EACH() throws HyracksDataException {
         int[][] results = new int[16][];
-        results[0] = new int[] { 3 }; // 20:23  // Actual: 0
-        results[1] = new int[] { 3 }; // 45:48
-        results[2] = new int[] { 3 }; // 70:73
-        results[3] = new int[] { 3 }; // 95:98
-        results[4] = new int[] { 2 }; // 120:123
-        results[5] = new int[] { 2 }; // 145:148
-        results[6] = new int[] { 2 }; // 170:173
-        results[7] = new int[] { 2 }; // 195:198
-        results[8] = new int[] { 1 }; // 220:223
-        results[9] = new int[] { 1 }; // 245:248
-        results[10] = new int[] { 1 }; // 270:273
-        results[11] = new int[] { 1 }; // 295:298
-        results[12] = new int[] { 0 }; // 320:323
-        results[13] = new int[] { 0 }; // 345:348
-        results[14] = new int[] { 0 }; // 370:373
+        results[0] = new int[] { 15 }; // 20:23
+        results[1] = new int[] { 14 }; // 45:48
+        results[2] = new int[] { 13 }; // 70:73
+        results[3] = new int[] { 12 }; // 95:98
+        results[4] = new int[] { 11 }; // 120:123
+        results[5] = new int[] { 10 }; // 145:148
+        results[6] = new int[] { 9 }; // 170:173
+        results[7] = new int[] { 8 }; // 195:198
+        results[8] = new int[] { 7 }; // 220:223
+        results[9] = new int[] { 6 }; // 245:248
+        results[10] = new int[] { 5 }; // 270:273
+        results[11] = new int[] { 4 }; // 295:298
+        results[12] = new int[] { 3 }; // 320:323
+        results[13] = new int[] { 2 }; // 345:348
+        results[14] = new int[] { 1 }; // 370:373
         results[15] = new int[] { 0 }; // 395:398
 
         Long[] map = MAP_POINTS.clone();
         ArrayUtils.reverse(map);
         RangeMap rangeMap = getRangeMap(map);
 
-        executeFieldRangeMultiPartitionTests(EACH_PARTITION, rangeMap, BINARY_ASC_COMPARATOR_FACTORIES,
-                BINARY_ASC_MAX_COMPARATOR_FACTORIES, RangePartitioningType.SPLIT, 16, results, 3);
+        executeFieldRangeMultiPartitionTests(EACH_PARTITION, rangeMap, BINARY_DESC_COMPARATOR_FACTORIES,
+                BINARY_DESC_MAX_COMPARATOR_FACTORIES, RangePartitioningType.SPLIT, 16, results, 3);
     }
 
     // ============================
