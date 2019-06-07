@@ -510,21 +510,21 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
                 BINARY_ASC_COMPARATOR_FACTORIES, RangePartitioningType.REPLICATE, 4, results, 3);
     }
 
-    @Test // (Stephen) Results Array Checked, unsure of direction in which Replicate extends for DESC. FAILED.
+    @Test // (Stephen) Results Array Checked
     public void testFRMPCF_Replicate_DESC_D3_N4_EDGE() throws HyracksDataException {
         int[][] results = new int[15][];
-        results[0] = new int[] { 3 }; // -25
+        results[0] = new int[] { 3 }; // -25:22
         results[1] = new int[] { 3 }; //  50
-        results[2] = new int[] { 3 }; //  99:102  // Actual: [2, 3]
-        results[3] = new int[] { 3 }; // 100   // Actual: [2, 3]
+        results[2] = new int[] { 2, 3 }; //  99:102
+        results[3] = new int[] { 2, 3 }; // 100:103
         results[4] = new int[] { 2, 3 }; // 101
         results[5] = new int[] { 2, 3 }; // 150
-        results[6] = new int[] { 2, 3 }; // 199  // Actual: [1, 2, 3]
-        results[7] = new int[] { 2, 3 }; // 200 // Actual: [1, 2, 3]
+        results[6] = new int[] { 1, 2, 3 }; // 199:202
+        results[7] = new int[] { 1, 2, 3 }; // 200
         results[8] = new int[] { 1, 2, 3 }; // 201
         results[9] = new int[] { 1, 2, 3 }; // 250
-        results[10] = new int[] { 1, 2, 3 }; // 299 // Actual: [0, 1, 2, 3]
-        results[11] = new int[] { 1, 2, 3 }; // 300 // Actual: [0, 1, 2, 3]
+        results[10] = new int[] { 0, 1, 2, 3 }; // 299
+        results[11] = new int[] { 0, 1, 2, 3 }; // 300
         results[12] = new int[] { 0, 1, 2, 3 }; // 301
         results[13] = new int[] { 0, 1, 2, 3 }; // 350
         results[14] = new int[] { 0, 1, 2, 3 }; // 425
@@ -593,20 +593,20 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
                 BINARY_ASC_MAX_COMPARATOR_FACTORIES, RangePartitioningType.SPLIT, 4, results, 3);
     }
 
-    @Test // (Stephen) Results Array Checked, FAILED. `actual` has result with 0 partitions, which should never happen.
+    @Test // (Stephen) Results Array Checked, FAILED.
     public void testFRMPCF_Split_DESC_D3_N4_EDGE() throws HyracksDataException {
         int[][] results = new int[15][];
         results[0] = new int[] { 3 }; // -25:-22
         results[1] = new int[] { 3 }; //  50:53
-        results[2] = new int[] { 2, 3 }; //  99:102  // Actual: []
+        results[2] = new int[] { 2, 3 }; //  99:102
         results[3] = new int[] { 2, 3 }; // 100:103  // Actual: [2]
         results[4] = new int[] { 2 }; // 101:104
         results[5] = new int[] { 2 }; // 150:153
-        results[6] = new int[] { 1, 2 }; // 199:202  // Actual: []
+        results[6] = new int[] { 1, 2 }; // 199:202
         results[7] = new int[] { 1, 2 }; // 200:203  // Actual: [1]
         results[8] = new int[] { 1 }; // 201:204
         results[9] = new int[] { 1 }; // 250:253
-        results[10] = new int[] { 0, 1 }; // 299:302  // Actual: []
+        results[10] = new int[] { 0, 1 }; // 299:302
         results[11] = new int[] { 0, 1 }; // 300:303  // Actual: [0]
         results[12] = new int[] { 0 }; // 301:304
         results[13] = new int[] { 0 }; // 350:353
@@ -616,8 +616,8 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
         ArrayUtils.reverse(map);
         RangeMap rangeMap = getRangeMap(map);
 
-        executeFieldRangeMultiPartitionTests(PARTITION_EDGE_CASES, rangeMap, BINARY_DESC_MAX_COMPARATOR_FACTORIES,
-                BINARY_DESC_COMPARATOR_FACTORIES, RangePartitioningType.SPLIT, 4, results, 3);
+        executeFieldRangeMultiPartitionTests(PARTITION_EDGE_CASES, rangeMap, BINARY_DESC_COMPARATOR_FACTORIES,
+                BINARY_DESC_MAX_COMPARATOR_FACTORIES, RangePartitioningType.SPLIT, 4, results, 3);
     }
 
     @Test // (Stephen) Results Array Checked, FAILED.
@@ -626,9 +626,9 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
         results[0] = new int[] { 0, 1 }; // -25:25  // Actual: [0]
         results[1] = new int[] { 2, 3, 4 }; // 50:100  // Actual: [2, 3]
         results[2] = new int[] { 3, 4, 5 }; // 99:149
-        results[3] = new int[] { 4, 5, 6 }; // 100:150  // Actual: [4, 5, 6]
+        results[3] = new int[] { 4, 5, 6 }; // 100:150  // Actual: [4, 5]
         results[4] = new int[] { 4, 5, 6 }; // 101:151
-        results[5] = new int[] { 6, 7, 8 }; // 150:200  // Actual: [6, 7, 8]
+        results[5] = new int[] { 6, 7, 8 }; // 150:200  // Actual: [6, 7]
         results[6] = new int[] { 7, 8, 9 }; // 199:249
         results[7] = new int[] { 8, 9, 10 }; // 200:250  // Actual: [8, 9]
         results[8] = new int[] { 8, 9, 10 }; // 201:251
@@ -663,14 +663,6 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
         results[12] = new int[] { 1, 2, 3 }; // 301:351
         results[13] = new int[] { 0, 1, 2 }; // 350:400  // Actual: [0, 1]
         results[14] = new int[] { 0 }; // 425:475
-
-        //        // following results for `alternative map for descending` mentioned in header comment
-        //        results[0] = new int[] { 15 }; // -25:25
-        //        results[1] = new int[] { 12, 13 }; // 50:100
-        //        results[2] = new int[] { 10, 11, 12 }; // 99:149
-        //        results[3] = new int[] { 10, 11 }; // 100:150
-        //        results[4] = new int[] { 9, 10, 11 }; // 101:151
-        //        results[5] = new int[] { 7, 8, 9 }; // 150:200  // Actual: 2 partitions
 
         Long[] map = MAP_POINTS.clone();
         ArrayUtils.reverse(map);
