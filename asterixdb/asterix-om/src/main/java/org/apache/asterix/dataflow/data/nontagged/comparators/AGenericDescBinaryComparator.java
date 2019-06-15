@@ -35,7 +35,7 @@ final class AGenericDescBinaryComparator extends AbstractAGenericBinaryComparato
     }
 
     @Override
-    protected int compareInterval(byte[] b1, int s1, int l1, byte[] b2, int s2, int l2) {
+    protected int compareInterval(byte[] b1, int s1, int l1, byte[] b2, int s2, int l2) throws HyracksDataException {
         return -AIntervalDescPartialBinaryComparatorFactory.compare(b1, s1 + 1, l1 - 1, b2, s2 + 1, l2 - 1);
     }
 }

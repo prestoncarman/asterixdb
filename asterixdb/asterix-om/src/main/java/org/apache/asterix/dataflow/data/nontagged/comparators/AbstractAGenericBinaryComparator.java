@@ -143,7 +143,7 @@ abstract class AbstractAGenericBinaryComparator implements IBinaryComparator {
         }
     }
 
-    protected int compareInterval(byte[] b1, int s1, int l1, byte[] b2, int s2, int l2) {
+    protected int compareInterval(byte[] b1, int s1, int l1, byte[] b2, int s2, int l2) throws HyracksDataException {
         return AIntervalAscPartialBinaryComparatorFactory.compare(b1, s1 + 1, l1 - 1, b2, s2 + 1, l2 - 1);
     }
 

@@ -46,7 +46,7 @@ public class AIntervalAscPartialBinaryComparatorFactory implements IBinaryCompar
     }
 
     @SuppressWarnings("squid:S1172") // unused parameter
-    public static int compare(byte[] b1, int s1, int l1, byte[] b2, int s2, int l2) {
+    public static int compare(byte[] b1, int s1, int l1, byte[] b2, int s2, int l2) throws HyracksDataException {
         int c = Long.compare(AIntervalSerializerDeserializer.getIntervalStart(b1, s1),
                 AIntervalSerializerDeserializer.getIntervalStart(b2, s2));
         if (c == 0) {
