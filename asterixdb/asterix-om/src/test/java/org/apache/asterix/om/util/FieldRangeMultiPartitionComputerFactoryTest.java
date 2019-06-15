@@ -76,8 +76,6 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
     IBinaryComparatorFactory[] BINARY_DESC_MAX_COMPARATOR_FACTORIES =
             new IBinaryComparatorFactory[] { AIntervalStartpointDescPartialBinaryComparatorFactory.INSTANCE };
 
-    //    IBinaryRangeComparatorFactory[] BINARY_REPLICATE_COMPARATOR_FACTORIES = new IBinaryRangeComparatorFactory[] {
-    //            new PointableBinaryReplicateRangeComparatorFactory(LongPointable.FACTORY) };
     /*
      * The following points (X) will be tested for these 4 partitions.
      *
@@ -110,13 +108,14 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
     // The map of the partitions, listed as the split points. split points include min and max.
     // first and last partitions include all values less than and greater than min and max split points respectively.
     //
-    //             0          )[           1          )[           2            )[             3
-    //   0  )[  1 )[  2 )[  3 )[  4 )[  5 )[  6 )[  7 )[  8 )[  9 )[  10 )[  11 )[  12 )[  13 )[  14 )[  15
-    // 0     25    50    75    100   125   150   175   200   225   250    275    300    325    350    375    400
-    // 400   375   350   325   300   275   250   225   200   175   150    125    100    75     50     25     0
-    //   0   ]  (1 ]  (2 ]  (3 ]  (4 ]  (5 ]  (6 ]  (7 ]  (8 ]  (9 ]  (10 ]  (11 ]  (12 ] ( 13 ] ( 14 ] (  15
-    //              0          ]  (           1        ]  (           2          ]  (             3
-    // ^ last two rows: alternative map for descending
+    // Both rangemap partitions and test intervals are end exclusive.
+    // an ascending test interval ending on 200 like (190, 200) is not in partition 8.
+    // similarly, a descending test ending on 200 like (210, 200) is not in partition 8.
+    //
+    //                   0          )[           1          )[           2            )[             3
+    //         0  )[  1 )[  2 )[  3 )[  4 )[  5 )[  6 )[  7 )[  8 )[  9 )[  10 )[  11 )[  12 )[  13 )[  14 )[  15
+    // ASC   0     25    50    75    100   125   150   175   200   225   250    275    300    325    350    375    400
+    // DESC  400   375   350   325   300   275   250   225   200   175   150    125    100    75     50     25     0
 
     // The map of the partitions, listed as the split points.
     // partitions   {  0,   1,   2,   3,    4,    5,    6,    7,    8,    9,   10,   11,   12,   13,   14,   15,   16 };
@@ -599,15 +598,15 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
         results[0] = new int[] { 3 }; // -25:-22
         results[1] = new int[] { 3 }; //  50:53
         results[2] = new int[] { 2, 3 }; //  99:102
-        results[3] = new int[] { 2, 3 }; // 100:103  // Actual: [2]
+        results[3] = new int[] { 2 }; // 100:103
         results[4] = new int[] { 2 }; // 101:104
         results[5] = new int[] { 2 }; // 150:153
         results[6] = new int[] { 1, 2 }; // 199:202
-        results[7] = new int[] { 1, 2 }; // 200:203  // Actual: [1]
+        results[7] = new int[] { 1 }; // 200:203
         results[8] = new int[] { 1 }; // 201:204
         results[9] = new int[] { 1 }; // 250:253
         results[10] = new int[] { 0, 1 }; // 299:302
-        results[11] = new int[] { 0, 1 }; // 300:303  // Actual: [0]
+        results[11] = new int[] { 0 }; // 300:303
         results[12] = new int[] { 0 }; // 301:304
         results[13] = new int[] { 0 }; // 350:353
         results[14] = new int[] { 0 }; // 425:428
@@ -623,18 +622,18 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
     @Test // (Stephen) Results Array Checked, FAILED.
     public void testFRMPCF_Split_ASC_D50_N16_EDGE() throws HyracksDataException {
         int[][] results = new int[15][];
-        results[0] = new int[] { 0, 1 }; // -25:25  // Actual: [0]
-        results[1] = new int[] { 2, 3, 4 }; // 50:100  // Actual: [2, 3]
+        results[0] = new int[] { 0 }; // -25:25
+        results[1] = new int[] { 2, 3 }; // 50:100
         results[2] = new int[] { 3, 4, 5 }; // 99:149
-        results[3] = new int[] { 4, 5, 6 }; // 100:150  // Actual: [4, 5]
+        results[3] = new int[] { 4, 5 }; // 100:150
         results[4] = new int[] { 4, 5, 6 }; // 101:151
-        results[5] = new int[] { 6, 7, 8 }; // 150:200  // Actual: [6, 7]
+        results[5] = new int[] { 6, 7 }; // 150:200
         results[6] = new int[] { 7, 8, 9 }; // 199:249
-        results[7] = new int[] { 8, 9, 10 }; // 200:250  // Actual: [8, 9]
+        results[7] = new int[] { 8, 9 }; // 200:250
         results[8] = new int[] { 8, 9, 10 }; // 201:251
-        results[9] = new int[] { 10, 11, 12 }; // 250:300  // Actual: [10, 11]
+        results[9] = new int[] { 10, 11 }; // 250:300
         results[10] = new int[] { 11, 12, 13 }; // 299:349
-        results[11] = new int[] { 12, 13, 14 }; // 300:350 // Actual: [12, 13]
+        results[11] = new int[] { 12, 13 }; // 300:350
         results[12] = new int[] { 12, 13, 14 }; // 301:351
         results[13] = new int[] { 14, 15 }; // 350:400
         results[14] = new int[] { 15 }; // 425:475
@@ -651,17 +650,17 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
         results[0] = new int[] { 15 }; // -25:25
         results[1] = new int[] { 12, 13 }; // 50:100
         results[2] = new int[] { 10, 11, 12 }; // 99:149
-        results[3] = new int[] { 10, 11, 12 }; // 100:150   // Actual: [10, 11]
+        results[3] = new int[] { 10, 11 }; // 100:150
         results[4] = new int[] { 9, 10, 11 }; // 101:151
-        results[5] = new int[] { 8, 9, 10 }; // 150:200  // Actual: [8, 9]
+        results[5] = new int[] { 8, 9 }; // 150:200
         results[6] = new int[] { 6, 7, 8 }; // 199:249
-        results[7] = new int[] { 6, 7, 8 }; // 200:250  // Actual: [6, 7]
+        results[7] = new int[] { 6, 7 }; // 200:250
         results[8] = new int[] { 5, 6, 7 }; // 201:251
-        results[9] = new int[] { 4, 5, 6 }; // 250:300  // Actual: [4, 5]
+        results[9] = new int[] { 4, 5 }; // 250:300
         results[10] = new int[] { 2, 3, 4 }; // 299:349
-        results[11] = new int[] { 2, 3, 4 }; // 300:350  // Actual: [2, 3]
+        results[11] = new int[] { 2, 3 }; // 300:350
         results[12] = new int[] { 1, 2, 3 }; // 301:351
-        results[13] = new int[] { 0, 1, 2 }; // 350:400  // Actual: [0, 1]
+        results[13] = new int[] { 0, 1 }; // 350:400
         results[14] = new int[] { 0 }; // 425:475
 
         Long[] map = MAP_POINTS.clone();

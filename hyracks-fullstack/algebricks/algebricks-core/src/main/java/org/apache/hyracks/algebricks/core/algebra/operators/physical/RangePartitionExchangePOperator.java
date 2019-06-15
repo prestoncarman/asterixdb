@@ -44,7 +44,6 @@ import org.apache.hyracks.algebricks.core.jobgen.impl.JobGenContext;
 import org.apache.hyracks.algebricks.data.IBinaryComparatorFactoryProvider;
 import org.apache.hyracks.api.dataflow.IConnectorDescriptor;
 import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
-import org.apache.hyracks.api.dataflow.value.IBinaryRangeComparatorFactory;
 import org.apache.hyracks.api.dataflow.value.IRangePartitionType.RangePartitioningType;
 import org.apache.hyracks.api.job.IConnectorDescriptorRegistry;
 import org.apache.hyracks.dataflow.common.data.partition.range.DynamicFieldRangeMultiPartitionComputerFactory;
@@ -154,9 +153,8 @@ public class RangePartitionExchangePOperator extends AbstractExchangePOperator {
         if (rangeType == RangePartitioningType.PROJECT) {
             FieldRangePartitionComputerFactory partitionerFactory;
             if (rangeMapIsComputedAtRunTime) {
-                partitionerFactory =
-                        new DynamicFieldRangePartitionComputerFactory(sortFields, comps, rangeMapKeyInContext,
-                                op.getSourceLocation());
+                partitionerFactory = new DynamicFieldRangePartitionComputerFactory(sortFields, comps,
+                        rangeMapKeyInContext, op.getSourceLocation());
             } else {
                 partitionerFactory = new StaticFieldRangePartitionComputerFactory(sortFields, comps, rangeMap);
             }
@@ -164,12 +162,11 @@ public class RangePartitionExchangePOperator extends AbstractExchangePOperator {
         } else {
             FieldRangeMultiPartitionComputerFactory multiPartitionerFactory;
             if (rangeMapIsComputedAtRunTime) {
-                multiPartitionerFactory =
-                        new DynamicFieldRangeMultiPartitionComputerFactory(sortFields, minComps, maxComps, rangeMapKeyInContext,
-                                op.getSourceLocation(), rangeType);
+                multiPartitionerFactory = new DynamicFieldRangeMultiPartitionComputerFactory(sortFields, minComps,
+                        maxComps, rangeMapKeyInContext, op.getSourceLocation(), rangeType);
             } else {
-                multiPartitionerFactory =
-                        new StaticFieldRangeMultiPartitionComputerFactory(sortFields, minComps, maxComps, rangeMap, rangeType);
+                multiPartitionerFactory = new StaticFieldRangeMultiPartitionComputerFactory(sortFields, minComps,
+                        maxComps, rangeMap, rangeType);
             }
             conn = new MToNMultiPartitioningConnectorDescriptor(spec, multiPartitionerFactory);
         }

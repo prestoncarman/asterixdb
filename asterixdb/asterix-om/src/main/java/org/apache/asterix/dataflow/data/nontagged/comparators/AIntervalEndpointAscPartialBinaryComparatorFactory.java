@@ -36,9 +36,6 @@ public class AIntervalEndpointAscPartialBinaryComparatorFactory implements IBina
     public static final AIntervalEndpointAscPartialBinaryComparatorFactory INSTANCE =
             new AIntervalEndpointAscPartialBinaryComparatorFactory();
 
-    private static final IBinaryComparator descendingComparator =
-            AIntervalDescPartialBinaryComparatorFactory.INSTANCE.createBinaryComparator();
-
     private AIntervalEndpointAscPartialBinaryComparatorFactory() {
 
     }
@@ -49,14 +46,8 @@ public class AIntervalEndpointAscPartialBinaryComparatorFactory implements IBina
     }
 
     @SuppressWarnings("squid:S1172") // unused parameter
-    public static int compare(byte[] b1, int s1, int l1, byte[] b2, int s2, int l2) {
-        int c = 0;
-        try {
-            c = -descendingComparator.compare(b1, s1, l1, b2, s2, l2);
-        } catch (HyracksDataException exception) {
-            c = 0;
-        }
-        return c;
+    public static int compare(byte[] b1, int s1, int l1, byte[] b2, int s2, int l2) throws HyracksDataException {
+        return -AIntervalDescPartialBinaryComparatorFactory.compare(b1, s1, l1, b2, s2, l2);
     }
 
     @Override

@@ -170,8 +170,8 @@ public class RangePartitionMergeExchangePOperator extends AbstractExchangePOpera
                     new StaticFieldRangePartitionComputerFactory(sortFields, comps, rangeMap);
             conn = new MToNPartitioningMergingConnectorDescriptor(spec, tpcf, sortFields, comps, nkcf);
         } else {
-            ITupleMultiPartitionComputerFactory tmpcf =
-                    new StaticFieldRangeMultiPartitionComputerFactory(sortFields, minComps, maxComps, rangeMap, rangeType);
+            ITupleMultiPartitionComputerFactory tmpcf = new StaticFieldRangeMultiPartitionComputerFactory(sortFields,
+                    minComps, maxComps, rangeMap, rangeType);
             conn = new MToNMultiPartitioningMergingConnectorDescriptor(spec, tmpcf, sortFields, comps, nkcf);
         }
         return new Pair<>(conn, null);

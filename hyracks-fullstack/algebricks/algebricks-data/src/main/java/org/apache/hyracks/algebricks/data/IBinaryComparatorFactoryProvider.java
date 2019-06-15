@@ -75,7 +75,8 @@ public interface IBinaryComparatorFactoryProvider {
      * @return the appropriate {@link org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory} instance
      * @throws AlgebricksException if the comparator factory for the passed type could not be created
      */
-    IBinaryComparatorFactory getRangeMaxBinaryComparatorFactory(Object type, boolean ascending, RangePartitioningType rangeType) throws AlgebricksException;
+    IBinaryComparatorFactory getRangeMaxBinaryComparatorFactory(Object type, boolean ascending,
+            RangePartitioningType rangeType) throws AlgebricksException;
 
     /**
      * @param type the type of the left binary data
@@ -83,6 +84,7 @@ public interface IBinaryComparatorFactoryProvider {
      * @return the appropriate {@link org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory} instance
      * @throws AlgebricksException if the comparator factory for the passed type could not be created
      */
-    IBinaryComparatorFactory getRangeMinBinaryComparatorFactory(Object type, boolean ascending, RangePartitioningType rangeType) throws AlgebricksException;
+    IBinaryComparatorFactory getRangeMinBinaryComparatorFactory(Object type, boolean ascending,
+            RangePartitioningType rangeType) throws AlgebricksException;
 
 }
