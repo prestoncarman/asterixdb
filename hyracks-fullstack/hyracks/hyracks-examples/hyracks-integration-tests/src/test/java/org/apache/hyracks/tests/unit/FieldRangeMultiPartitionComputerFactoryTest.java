@@ -19,7 +19,12 @@
 
 package org.apache.hyracks.tests.unit;
 
-import junit.framework.TestCase;
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutput;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+
 import org.apache.commons.lang3.ArrayUtils;
 import org.apache.hyracks.api.comm.IFrame;
 import org.apache.hyracks.api.comm.IFrameTupleAccessor;
@@ -27,34 +32,25 @@ import org.apache.hyracks.api.comm.VSizeFrame;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.dataflow.value.IBinaryComparator;
 import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
+import org.apache.hyracks.api.dataflow.value.IRangePartitionType.RangePartitioningType;
 import org.apache.hyracks.api.dataflow.value.ISerializerDeserializer;
 import org.apache.hyracks.api.dataflow.value.ITupleMultiPartitionComputer;
 import org.apache.hyracks.api.dataflow.value.ITupleMultiPartitionComputerFactory;
 import org.apache.hyracks.api.dataflow.value.RecordDescriptor;
-//import org.apache.hyracks.api.dataflow.value.;
-import org.apache.hyracks.api.dataflow.value.IRangePartitionType.RangePartitioningType;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.storage.IGrowableIntArray;
 import org.apache.hyracks.data.std.accessors.LongBinaryComparatorFactory;
-import org.apache.hyracks.data.std.api.IComparable;
-import org.apache.hyracks.data.std.api.IPointable;
-import org.apache.hyracks.data.std.api.IPointableFactory;
-import org.apache.hyracks.data.std.primitive.LongPointable;
 import org.apache.hyracks.dataflow.common.comm.io.FrameFixedFieldTupleAppender;
 import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAccessor;
 import org.apache.hyracks.dataflow.common.data.marshalling.Integer64SerializerDeserializer;
-import org.apache.hyracks.dataflow.common.data.partition.range.StaticFieldRangeMultiPartitionComputerFactory;
 import org.apache.hyracks.dataflow.common.data.partition.range.RangeMap;
+import org.apache.hyracks.dataflow.common.data.partition.range.StaticFieldRangeMultiPartitionComputerFactory;
 import org.apache.hyracks.storage.common.arraylist.IntArrayList;
 import org.apache.hyracks.test.support.TestUtils;
 import org.junit.Assert;
 import org.junit.Test;
 
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutput;
-import java.io.DataOutputStream;
-import java.io.IOException;
-import java.nio.ByteBuffer;
+import junit.framework.TestCase;
 
 public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
 
@@ -134,8 +130,8 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
             int[][] results) throws HyracksDataException {
         IHyracksTaskContext ctx = TestUtils.create(FRAME_SIZE);
         int[] rangeFields = new int[] { 0 };
-        ITupleMultiPartitionComputerFactory frpcf =
-                new StaticFieldRangeMultiPartitionComputerFactory(rangeFields, comparatorFactories, comparatorFactories, rangeMap, rangeType);
+        ITupleMultiPartitionComputerFactory frpcf = new StaticFieldRangeMultiPartitionComputerFactory(rangeFields,
+                comparatorFactories, comparatorFactories, rangeMap, rangeType);
         ITupleMultiPartitionComputer partitioner = frpcf.createPartitioner(ctx);
         partitioner.initialize();
 
@@ -221,7 +217,8 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
 
         RangeMap rangeMap = getRangeMap(MAP_POINTS);
 
-        executeFieldRangeMultiPartitionTests(PARTITION_EDGE_CASES, rangeMap, BINARY_ASC_COMPARATOR_FACTORIES, RangePartitioningType.PROJECT, 4, results);
+        executeFieldRangeMultiPartitionTests(PARTITION_EDGE_CASES, rangeMap, BINARY_ASC_COMPARATOR_FACTORIES,
+                RangePartitioningType.PROJECT, 4, results);
     }
 
     @Test
@@ -247,10 +244,9 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
         ArrayUtils.reverse(map);
         RangeMap rangeMap = getRangeMap(map);
 
-        executeFieldRangeMultiPartitionTests(PARTITION_EDGE_CASES, rangeMap,
-                BINARY_DESC_COMPARATOR_FACTORIES, RangePartitioningType.PROJECT, 4, results);
+        executeFieldRangeMultiPartitionTests(PARTITION_EDGE_CASES, rangeMap, BINARY_DESC_COMPARATOR_FACTORIES,
+                RangePartitioningType.PROJECT, 4, results);
     }
-
 
     // ============================
     // REPLICATE TESTS
@@ -276,8 +272,8 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
 
         RangeMap rangeMap = getRangeMap(MAP_POINTS);
 
-        executeFieldRangeMultiPartitionTests(PARTITION_EDGE_CASES, rangeMap,
-                BINARY_ASC_COMPARATOR_FACTORIES, RangePartitioningType.REPLICATE, 4, results);
+        executeFieldRangeMultiPartitionTests(PARTITION_EDGE_CASES, rangeMap, BINARY_ASC_COMPARATOR_FACTORIES,
+                RangePartitioningType.REPLICATE, 4, results);
     }
 
     @Test
@@ -303,7 +299,7 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
         ArrayUtils.reverse(map);
         RangeMap rangeMap = getRangeMap(map);
 
-        executeFieldRangeMultiPartitionTests(PARTITION_EDGE_CASES, rangeMap,
-                BINARY_DESC_COMPARATOR_FACTORIES, RangePartitioningType.REPLICATE, 4, results);
+        executeFieldRangeMultiPartitionTests(PARTITION_EDGE_CASES, rangeMap, BINARY_DESC_COMPARATOR_FACTORIES,
+                RangePartitioningType.REPLICATE, 4, results);
     }
 }
