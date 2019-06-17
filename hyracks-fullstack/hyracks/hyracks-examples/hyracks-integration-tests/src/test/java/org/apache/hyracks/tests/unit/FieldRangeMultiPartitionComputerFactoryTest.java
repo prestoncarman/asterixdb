@@ -56,7 +56,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-public class FieldRangePartitionComputerFactoryTest extends TestCase {
+public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
 
     private final Integer64SerializerDeserializer int64Serde = Integer64SerializerDeserializer.INSTANCE;
     @SuppressWarnings("rawtypes")
