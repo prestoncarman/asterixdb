@@ -22,7 +22,7 @@ import org.apache.hyracks.api.comm.IFrameTupleAccessor;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.dataflow.value.IBinaryComparator;
 import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
-import org.apache.hyracks.api.dataflow.value.IRangePartitionType.RangePartitioningType;
+import org.apache.hyracks.api.dataflow.value.RangePartitioningType;
 import org.apache.hyracks.api.dataflow.value.ITupleMultiPartitionComputer;
 import org.apache.hyracks.api.dataflow.value.ITupleMultiPartitionComputerFactory;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
@@ -162,8 +162,8 @@ public abstract class FieldRangeMultiPartitionComputerFactory implements ITupleM
                     int fStart = accessor.getFieldStartOffset(tIndex, fIdx);
                     int fEnd = accessor.getFieldEndOffset(tIndex, fIdx);
                     c = comparators[fieldNum].compare(accessor.getBuffer().array(), startOffset + slotLength + fStart,
-                            fEnd - fStart, rangeMap.getByteArray(fieldNum, slotNumber),
-                            rangeMap.getStartOffset(fieldNum, slotNumber), rangeMap.getLength(fieldNum, slotNumber));
+                            fEnd - fStart, rangeMap.getByteArray(), rangeMap.getStartOffset(fieldNum, slotNumber),
+                            rangeMap.getLength(fieldNum, slotNumber));
                     if (c != 0) {
                         return c;
                     }

@@ -18,8 +18,7 @@
  */
 package org.apache.hyracks.api.dataflow.value;
 
-public interface IRangePartitionType {
-    public enum RangePartitioningType {
+public enum RangePartitioningType {
         /**
          * Partitioning is determined by finding the range partition where the first data point lies.
          */
@@ -37,5 +36,4 @@ public interface IRangePartitionType {
          * or comes after the data point.
          */
         REPLICATE
-    }
 }

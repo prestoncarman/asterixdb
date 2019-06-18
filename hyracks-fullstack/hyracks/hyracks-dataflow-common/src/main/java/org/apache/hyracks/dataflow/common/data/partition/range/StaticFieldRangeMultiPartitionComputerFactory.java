@@ -20,7 +20,7 @@ package org.apache.hyracks.dataflow.common.data.partition.range;
 
 import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
-import org.apache.hyracks.api.dataflow.value.IRangePartitionType;
+import org.apache.hyracks.api.dataflow.value.RangePartitioningType;
 
 public class StaticFieldRangeMultiPartitionComputerFactory extends FieldRangeMultiPartitionComputerFactory {
     private static final long serialVersionUID = 1L;
@@ -28,7 +28,7 @@ public class StaticFieldRangeMultiPartitionComputerFactory extends FieldRangeMul
 
     public StaticFieldRangeMultiPartitionComputerFactory(int[] rangeFields,
             IBinaryComparatorFactory[] minComparatorFactories, IBinaryComparatorFactory[] maxComparatorFactories,
-            RangeMap rangeMap, IRangePartitionType.RangePartitioningType rangeType) {
+            RangeMap rangeMap, RangePartitioningType rangeType) {
         super(rangeFields, minComparatorFactories, maxComparatorFactories, rangeType);
         this.rangeMap = rangeMap;
     }

@@ -20,7 +20,7 @@ package org.apache.hyracks.algebricks.data;
 
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
-import org.apache.hyracks.api.dataflow.value.IRangePartitionType.RangePartitioningType;
+import org.apache.hyracks.api.dataflow.value.RangePartitioningType;
 
 /**
  * Provides {@link org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory} for different types. Whether a

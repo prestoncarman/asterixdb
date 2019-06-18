@@ -42,7 +42,7 @@ import org.apache.asterix.om.types.IAType;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.data.IBinaryComparatorFactoryProvider;
 import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
-import org.apache.hyracks.api.dataflow.value.IRangePartitionType.RangePartitioningType;
+import org.apache.hyracks.api.dataflow.value.RangePartitioningType;
 import org.apache.hyracks.data.std.accessors.BooleanBinaryComparatorFactory;
 import org.apache.hyracks.data.std.accessors.ByteArrayBinaryComparatorFactory;
 import org.apache.hyracks.data.std.accessors.ByteBinaryComparatorFactory;
