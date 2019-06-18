@@ -19,9 +19,7 @@
 
 package org.apache.hyracks.storage.common.arraylist;
 
-import org.apache.hyracks.api.storage.IGrowableIntArray;
-
-public class IntArrayList implements IGrowableIntArray {
+public class IntArrayList {
     private int[] data;
     private int size;
     private int first;
@@ -34,7 +32,6 @@ public class IntArrayList implements IGrowableIntArray {
         this.growth = growth;
     }
 
-    @Override
     public int size() {
         return size;
     }
@@ -43,7 +40,6 @@ public class IntArrayList implements IGrowableIntArray {
         return first;
     }
 
-    @Override
     public void add(int i) {
         if (size == data.length) {
             int[] newData = new int[data.length + growth];
@@ -74,7 +70,6 @@ public class IntArrayList implements IGrowableIntArray {
         return data[size - 1];
     }
 
-    @Override
     public int get(int i) {
         return data[i];
     }
@@ -93,7 +88,6 @@ public class IntArrayList implements IGrowableIntArray {
         first++;
     }
 
-    @Override
     public void clear() {
         size = 0;
         first = 0;
