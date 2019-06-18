@@ -40,10 +40,8 @@ public abstract class AbstractRangeMapTest {
         int splitIndex = 0;
         for (Byte key : tags) {
             // check Splits
-            assertTrue("Tag matches for split: " + splitIndex,
-                    (byte) key == rangeMap.getTag(columnIndex, splitIndex));
-            lp.set(rangeMap.getByteArray(),
-                    rangeMap.getStartOffset(columnIndex, splitIndex) + 1,
+            assertTrue("Tag matches for split: " + splitIndex, (byte) key == rangeMap.getTag(columnIndex, splitIndex));
+            lp.set(rangeMap.getByteArray(), rangeMap.getStartOffset(columnIndex, splitIndex) + 1,
                     rangeMap.getLength(columnIndex, splitIndex) - 1);
             assertTrue("Value matches for split: " + splitIndex, values.get(i) == lp.getLong());
             splitIndex++;

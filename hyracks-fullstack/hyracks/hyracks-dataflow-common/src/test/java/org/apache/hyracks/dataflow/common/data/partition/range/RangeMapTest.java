@@ -18,8 +18,6 @@
  */
 package org.apache.hyracks.dataflow.common.data.partition.range;
 
-import static org.junit.Assert.assertTrue;
-
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.LinkedList;
@@ -43,78 +41,6 @@ public class RangeMapTest extends AbstractRangeMapTest {
         RangeMap rm = new RangeMap(1, abvs.getByteArray(), offsets);
 
         testMapNumeric(tags, values, rm);
-    }
-
-    /*
-     * Test a single field range map of seven integers.
-     */
-    @Test
-    public void testRangeMapPartitionFromSlot() throws Exception {
-        ArrayBackedValueStorage abvs = new ArrayBackedValueStorage();
-        LinkedList<Byte> tags = new LinkedList<>();
-        LinkedList<Long> values = new LinkedList<>();
-
-        int[] offsets = createDefaultMapNumeric(tags, values, abvs);
-
-        RangeMap rm = new RangeMap(1, abvs.getByteArray(), offsets);
-
-        // Test 5 slots with 4 partitions
-        assertTrue("Slot 0 of 5 to partition 0", 0 == rm.getPartitionFromSlot(0, 4));
-        assertTrue("Slot 1 of 5 to partition 0", 0 == rm.getPartitionFromSlot(1, 4));
-        assertTrue("Slot 2 of 5 to partition 1", 1 == rm.getPartitionFromSlot(2, 4));
-        assertTrue("Slot 3 of 5 to partition 2", 2 == rm.getPartitionFromSlot(3, 4));
-        assertTrue("Slot 4 of 5 to partition 2", 2 == rm.getPartitionFromSlot(4, 4));
-
-        // Test 5 slots with 3 partitions
-        assertTrue("Slot 0 of 5 to partition 0", 0 == rm.getPartitionFromSlot(0, 3));
-        assertTrue("Slot 1 of 5 to partition 1", 0 == rm.getPartitionFromSlot(1, 3));
-        assertTrue("Slot 2 of 5 to partition 1", 1 == rm.getPartitionFromSlot(2, 3));
-        assertTrue("Slot 3 of 5 to partition 2", 1 == rm.getPartitionFromSlot(3, 3));
-        assertTrue("Slot 4 of 5 to partition 2", 2 == rm.getPartitionFromSlot(4, 3));
-    }
-
-    @Test
-    public void testRangeMapMaxSlotFromPartition() throws Exception {
-        ArrayBackedValueStorage abvs = new ArrayBackedValueStorage();
-        LinkedList<Byte> tags = new LinkedList<>();
-        LinkedList<Long> values = new LinkedList<>();
-
-        int[] offsets = createDefaultMapNumeric(tags, values, abvs);
-
-        RangeMap rm = new RangeMap(1, abvs.getByteArray(), offsets);
-
-        // Test 5 slots with 4 partitions
-        assertTrue("Partition 0 to 1 of 5 slots", 1 == rm.getMaxSlotFromPartition(0, 4));
-        assertTrue("Partition 1 to 1 of 5 slots", 2 == rm.getMaxSlotFromPartition(1, 4));
-        assertTrue("Partition 2 to 1 of 5 slots", 4 == rm.getMaxSlotFromPartition(2, 4));
-        assertTrue("Partition 3 to 1 of 5 slots", 5 == rm.getMaxSlotFromPartition(3, 4));
-
-        // Test 5 slots with 3 partitions
-        assertTrue("Partition 0 to 1 of 5 slots", 1 == rm.getMaxSlotFromPartition(0, 3));
-        assertTrue("Partition 1 to 1 of 5 slots", 3 == rm.getMaxSlotFromPartition(1, 3));
-        assertTrue("Partition 2 to 1 of 5 slots", 5 == rm.getMaxSlotFromPartition(2, 3));
-    }
-
-    @Test
-    public void testRangeMapMinSlotFromPartition() throws Exception {
-        ArrayBackedValueStorage abvs = new ArrayBackedValueStorage();
-        LinkedList<Byte> tags = new LinkedList<>();
-        LinkedList<Long> values = new LinkedList<>();
-
-        int[] offsets = createDefaultMapNumeric(tags, values, abvs);
-
-        RangeMap rm = new RangeMap(1, abvs.getByteArray(), offsets);
-
-        // Test 5 slots with 4 partitions
-        assertTrue("Partition 0 to 1 of 5 slots", -1 == rm.getMinSlotFromPartition(0, 4));
-        assertTrue("Partition 1 to 1 of 5 slots", 1 == rm.getMinSlotFromPartition(1, 4));
-        assertTrue("Partition 2 to 1 of 5 slots", 2 == rm.getMinSlotFromPartition(2, 4));
-        assertTrue("Partition 3 to 1 of 5 slots", 4 == rm.getMinSlotFromPartition(3, 4));
-
-        // Test 5 slots with 3 partitions
-        assertTrue("Partition 0 to 1 of 5 slots", -1 == rm.getMinSlotFromPartition(0, 3));
-        assertTrue("Partition 1 to 1 of 5 slots", 1 == rm.getMinSlotFromPartition(1, 3));
-        assertTrue("Partition 2 to 1 of 5 slots", 3 == rm.getMinSlotFromPartition(2, 3));
     }
 
     private int[] createDefaultMapNumeric(LinkedList<Byte> tags, LinkedList<Long> values, ArrayBackedValueStorage abvs)
