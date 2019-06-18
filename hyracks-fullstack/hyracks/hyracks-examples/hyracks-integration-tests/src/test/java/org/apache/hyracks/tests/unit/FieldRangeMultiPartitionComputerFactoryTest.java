@@ -31,10 +31,10 @@ import org.apache.hyracks.api.comm.IFrameTupleAccessor;
 import org.apache.hyracks.api.comm.VSizeFrame;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
-import org.apache.hyracks.api.dataflow.value.RangePartitioningType;
 import org.apache.hyracks.api.dataflow.value.ISerializerDeserializer;
 import org.apache.hyracks.api.dataflow.value.ITupleMultiPartitionComputer;
 import org.apache.hyracks.api.dataflow.value.ITupleMultiPartitionComputerFactory;
+import org.apache.hyracks.api.dataflow.value.RangePartitioningType;
 import org.apache.hyracks.api.dataflow.value.RecordDescriptor;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.storage.IGrowableIntArray;
@@ -62,6 +62,9 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
     IBinaryComparatorFactory[] BINARY_ASC_COMPARATOR_FACTORIES =
             new IBinaryComparatorFactory[] { LongBinaryComparatorFactory.INSTANCE };
 
+    private final int FRAME_SIZE = 320;
+    private final int INTEGER_LENGTH = Long.BYTES;
+
     /*
      * The following points (X) will be tested for these 4 partitions.
      *
@@ -70,22 +73,23 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
      *
      * The following points (X) will be tested for these 16 partitions.
      *
-     * X-------X----XXX----X----XXX----X----XXX----X-------X
-     *    --|--|--|--|--|--|--|--|--|--|--|--|--|--|--|--
+     *     X  -----------X----------XXX----------X----------XXX----------X------------XXX------------X------------  X
+     *        -----|-----|-----|-----|-----|-----|-----|-----|-----|-----|------|------|------|------|------|-----
      */
 
-    private final int FRAME_SIZE = 320;
-    private final int INTEGER_LENGTH = Long.BYTES;
+    // N4                0          )[           1          )[           2            )[             3
+    // N16     0  )[  1 )[  2 )[  3 )[  4 )[  5 )[  6 )[  7 )[  8 )[  9 )[  10 )[  11 )[  12 )[  13 )[  14 )[  15
+    // ASC   0     25    50    75    100   125   150   175   200   225   250    275    300    325    350    375    400
 
     //result index {      0,   1,   2,   3,    4,    5,    6,    7,    8,    9,    10,   11,   12,   13,   14        };
     //points       {    -25l, 50l, 99l, 100l, 101l, 150l, 199l, 200l, 201l, 250l, 299l, 300l, 301l, 350l, 425l       };
     private final Long[] PARTITION_EDGE_CASES =
             new Long[] { -25l, 50l, 99l, 100l, 101l, 150l, 199l, 200l, 201l, 250l, 299l, 300l, 301l, 350l, 425l };
 
-    //map          { 0l, 25l, 50l, 75l, 100l, 125l, 150l, 175l, 200l, 225l, 250l, 275l, 300l, 325l, 350l, 375l, 400l };
-    //partitions   {    0,   1,   2,   3,    4,    5,    6,    7,    8,    9,    10,   11,   12,   13,   14,  15     };
-    private final Long[] MAP_POINTS = new Long[] { 0l, 25l, 50l, 75l, 100l, 125l, 150l, 175l, 200l, 225l, 250l, 275l,
-            300l, 325l, 350l, 375l, 400l };
+    //map      {  25l, 50l, 75l, 100l, 125l, 150l, 175l, 200l, 225l, 250l, 275l, 300l, 325l, 350l, 375l };
+    //splits   {    0,   1,   2,    3,    4,    5,    6,    7,    8,    9,   10,   11,   12,   13,   14 };
+    private final Long[] MAP_POINTS =
+            new Long[] { 25l, 50l, 75l, 100l, 125l, 150l, 175l, 200l, 225l, 250l, 275l, 300l, 325l, 350l, 375l };
 
     private byte[] getIntegerBytes(Long[] integers) throws HyracksDataException {
         try {

@@ -19,21 +19,21 @@
 package org.apache.hyracks.api.dataflow.value;
 
 public enum RangePartitioningType {
-        /**
-         * Partitioning is determined by finding the range partition where the first data point lies.
-         */
-        PROJECT,
-        /**
-         * Partitioning is determined by finding the range partition where the last data point lies.
-         */
-        PROJECT_END,
-        /**
-         * Partitioning is determined by finding all the range partitions where the data has a point.
-         */
-        SPLIT,
-        /**
-         * Partitioning is determined by finding all the range partitions where the data has a point
-         * or comes after the data point.
-         */
-        REPLICATE
+    /**
+     * Partitioning is determined by finding the range partition where the first data point lies.
+     */
+    PROJECT,
+    /**
+     * Partitioning is determined by finding the range partition where the last data point lies.
+     */
+    PROJECT_END,
+    /**
+     * Partitioning is determined by finding all the range partitions where the data has a point.
+     */
+    SPLIT,
+    /**
+     * Partitioning is determined by finding all the range partitions where the data has a point
+     * or comes after the data point.
+     */
+    REPLICATE
 }

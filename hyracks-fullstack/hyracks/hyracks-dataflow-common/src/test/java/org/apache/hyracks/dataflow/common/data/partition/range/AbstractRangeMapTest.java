@@ -34,13 +34,13 @@ public abstract class AbstractRangeMapTest {
 
         // Metadata
         assertTrue("Test keys and values size matches", tags.size() == values.size());
-        assertTrue("Split points match", tags.size() - 2 == rangeMap.getSplitCount());
+        assertTrue("Split points match", tags.size() == rangeMap.getSplitCount());
 
         int i = 0;
         int splitIndex = 0;
-        for (Byte key : tags) {
+        for (Byte tag : tags) {
             // check Splits
-            assertTrue("Tag matches for split: " + splitIndex, (byte) key == rangeMap.getTag(columnIndex, splitIndex));
+            assertTrue("Tag matches for split: " + splitIndex, (byte) tag == rangeMap.getTag(columnIndex, splitIndex));
             lp.set(rangeMap.getByteArray(), rangeMap.getStartOffset(columnIndex, splitIndex) + 1,
                     rangeMap.getLength(columnIndex, splitIndex) - 1);
             assertTrue("Value matches for split: " + splitIndex, values.get(i) == lp.getLong());
