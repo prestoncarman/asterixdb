@@ -46,7 +46,7 @@ public class AIntervalEndpointAscPartialBinaryComparatorFactory implements IBina
     }
 
     @SuppressWarnings("squid:S1172") // unused parameter
-    public static int compare(byte[] b1, int s1, int l1, byte[] b2, int s2, int l2) throws HyracksDataException {
+    public static int compare(byte[] b1, int s1, int l1, byte[] b2, int s2, int l2) {
         return -AIntervalDescPartialBinaryComparatorFactory.compare(b1, s1, l1, b2, s2, l2);
     }
 
