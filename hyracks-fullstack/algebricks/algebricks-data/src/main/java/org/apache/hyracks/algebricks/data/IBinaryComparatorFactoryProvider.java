@@ -72,19 +72,11 @@ public interface IBinaryComparatorFactoryProvider {
     /**
      * @param type the type of the left binary data
      * @param ascending the order direction. true if ascending order is desired, false otherwise
+     * @param endpointMin the endpoint to get, true if getting min endpoint, false if getting max endpoint.
+     * @param rangeType the range partitioning method to be used
      * @return the appropriate {@link org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory} instance
      * @throws AlgebricksException if the comparator factory for the passed type could not be created
      */
-    IBinaryComparatorFactory getRangeMaxBinaryComparatorFactory(Object type, boolean ascending,
+    IBinaryComparatorFactory getRangeBinaryComparatorFactory(Object type, boolean ascending, boolean endpointMin,
             RangePartitioningType rangeType) throws AlgebricksException;
-
-    /**
-     * @param type the type of the left binary data
-     * @param ascending the order direction. true if ascending order is desired, false otherwise
-     * @return the appropriate {@link org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory} instance
-     * @throws AlgebricksException if the comparator factory for the passed type could not be created
-     */
-    IBinaryComparatorFactory getRangeMinBinaryComparatorFactory(Object type, boolean ascending,
-            RangePartitioningType rangeType) throws AlgebricksException;
-
 }

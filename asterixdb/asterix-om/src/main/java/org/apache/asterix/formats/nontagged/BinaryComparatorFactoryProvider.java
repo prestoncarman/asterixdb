@@ -174,27 +174,22 @@ public class BinaryComparatorFactoryProvider implements IBinaryComparatorFactory
         }
     }
 
-    public IBinaryComparatorFactory getRangeMinBinaryComparatorFactory(Object type, boolean ascending,
+    public IBinaryComparatorFactory getRangeBinaryComparatorFactory(Object type, boolean ascending, boolean endpointMin,
             RangePartitioningType rangeType) throws AlgebricksException {
         IAType objectType = (IAType) type;
         if (objectType.getTypeTag() == ATypeTag.INTERVAL) {
             if (ascending) {
-                return addOffset(AIntervalAscPartialBinaryComparatorFactory.INSTANCE, ascending);
+                if (endpointMin) {
+                    return addOffset(AIntervalAscPartialBinaryComparatorFactory.INSTANCE, ascending);
+                } else {
+                    return addOffset(AIntervalEndpointAscPartialBinaryComparatorFactory.INSTANCE, ascending);
+                }
             } else {
-                return addOffset(AIntervalDescPartialBinaryComparatorFactory.INSTANCE, ascending);
-            }
-        }
-        return createGenericBinaryComparatorFactory(objectType, objectType, ascending);
-    }
-
-    public IBinaryComparatorFactory getRangeMaxBinaryComparatorFactory(Object type, boolean ascending,
-            RangePartitioningType rangeType) throws AlgebricksException {
-        IAType objectType = (IAType) type;
-        if (objectType.getTypeTag() == ATypeTag.INTERVAL) {
-            if (ascending) {
-                return addOffset(AIntervalEndpointAscPartialBinaryComparatorFactory.INSTANCE, ascending);
-            } else {
-                return addOffset(AIntervalStartpointDescPartialBinaryComparatorFactory.INSTANCE, ascending);
+                if (endpointMin) {
+                    return addOffset(AIntervalDescPartialBinaryComparatorFactory.INSTANCE, ascending);
+                } else {
+                    return addOffset(AIntervalStartpointDescPartialBinaryComparatorFactory.INSTANCE, ascending);
+                }
             }
         }
         return createGenericBinaryComparatorFactory(objectType, objectType, ascending);
