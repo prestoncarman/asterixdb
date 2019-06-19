@@ -635,7 +635,8 @@ public class EnforceStructuralPropertiesRule implements IAlgebraicRewriteRule {
                 mergingConnector = new RandomMergeExchangePOperator();
             }
         } else {
-            if (parentOp.getAnnotations().containsKey(OperatorAnnotations.USE_STATIC_RANGE)) {
+            if (parentOp.getAnnotations().containsKey(OperatorAnnotations.USE_STATIC_RANGE)
+                    && partitioningDeliveredByChild.getPartitioningType() == PartitioningType.ORDERED_PARTITIONED) {
                 RangeMap rangeMap = (RangeMap) parentOp.getAnnotations().get(OperatorAnnotations.USE_STATIC_RANGE);
                 RangePartitioningType rangePartitioningType =
                         ((OrderedPartitionedProperty) partitioningDeliveredByChild).getRangePartitioningType();
