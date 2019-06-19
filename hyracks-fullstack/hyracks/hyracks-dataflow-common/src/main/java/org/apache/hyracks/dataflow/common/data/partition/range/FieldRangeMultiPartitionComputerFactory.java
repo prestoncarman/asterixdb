@@ -90,8 +90,8 @@ public abstract class FieldRangeMultiPartitionComputerFactory implements ITupleM
              */
             private void getRangePartitions(IFrameTupleAccessor accessor, int tIndex, IGrowableIntArray map)
                     throws HyracksDataException {
-                int minPartition = getPartitionMap(binarySearchRangePartition(accessor, tIndex, minComparators));
-                int maxPartition = getPartitionMap(binarySearchRangePartition(accessor, tIndex, maxComparators));
+                int minPartition = getPartitionMap(searchRangePartition(accessor, tIndex, minComparators));
+                int maxPartition = getPartitionMap(searchRangePartition(accessor, tIndex, maxComparators));
                 switch (rangeType) {
                     case PROJECT:
                         addPartition(minPartition, map);
@@ -139,7 +139,7 @@ public abstract class FieldRangeMultiPartitionComputerFactory implements ITupleM
             /*
              * Return first match or suggested index.
              */
-            private int binarySearchRangePartition(IFrameTupleAccessor accessor, int tIndex,
+            private int searchRangePartition(IFrameTupleAccessor accessor, int tIndex,
                     IBinaryComparator[] comparators) throws HyracksDataException {
                 int slotIndex = 0;
                 for (int slotNumber = 0; slotNumber < rangeMap.getSplitCount(); ++slotNumber) {
