@@ -140,11 +140,11 @@ public class RangePartitionExchangePOperator extends AbstractExchangePOperator {
             sortFields[i] = opSchema.findVariable(var);
             Object type = env.getVarType(var);
             IBinaryComparatorFactoryProvider bcfp = context.getBinaryComparatorFactoryProvider();
-            if (rangeType != RangePartitioningType.PROJECT) {
+            if (rangeType == RangePartitioningType.PROJECT) {
+                comps[i] = bcfp.getBinaryComparatorFactory(type, oc.getOrder() == OrderKind.ASC);
+            } else {
                 minComps[i] = bcfp.getRangeMinBinaryComparatorFactory(type, oc.getOrder() == OrderKind.ASC, rangeType);
                 maxComps[i] = bcfp.getRangeMaxBinaryComparatorFactory(type, oc.getOrder() == OrderKind.ASC, rangeType);
-            } else {
-                comps[i] = bcfp.getBinaryComparatorFactory(type, oc.getOrder() == OrderKind.ASC);
             }
             i++;
         }

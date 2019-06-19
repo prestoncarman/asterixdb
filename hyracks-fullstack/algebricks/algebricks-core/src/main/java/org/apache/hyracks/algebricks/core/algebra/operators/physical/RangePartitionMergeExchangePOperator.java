@@ -156,11 +156,11 @@ public class RangePartitionMergeExchangePOperator extends AbstractExchangePOpera
                 nkcf = nkcfProvider.getNormalizedKeyComputerFactory(type, order == OrderKind.ASC);
             }
             IBinaryComparatorFactoryProvider bcfp = context.getBinaryComparatorFactoryProvider();
-            if (rangeType != RangePartitioningType.PROJECT) {
+            if (rangeType == RangePartitioningType.PROJECT) {
+                comps[i] = bcfp.getBinaryComparatorFactory(type, oc.getOrder() == OrderKind.ASC);
+            } else {
                 minComps[i] = bcfp.getRangeMinBinaryComparatorFactory(type, oc.getOrder() == OrderKind.ASC, rangeType);
                 maxComps[i] = bcfp.getRangeMaxBinaryComparatorFactory(type, oc.getOrder() == OrderKind.ASC, rangeType);
-            } else {
-                comps[i] = bcfp.getBinaryComparatorFactory(type, oc.getOrder() == OrderKind.ASC);
             }
             i++;
         }
