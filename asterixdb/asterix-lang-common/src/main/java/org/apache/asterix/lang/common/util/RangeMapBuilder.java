@@ -67,7 +67,7 @@ public class RangeMapBuilder {
 
         List<Statement> hintStatements = parser.parse();
         if (hintStatements.isEmpty()) {
-            throw new CompilationException("No range hint was supplied to the RangeMapBuilder.");
+            throw new CompilationException("No range split points were provided.");
         } else if (hintStatements.size() != 1) {
             throw new CompilationException("Only one range statement is allowed for the range hint.");
         }
