@@ -159,8 +159,10 @@ public class RangePartitionMergeExchangePOperator extends AbstractExchangePOpera
             if (rangeType == RangePartitioningType.PROJECT) {
                 comps[i] = bcfp.getBinaryComparatorFactory(type, oc.getOrder() == OrderKind.ASC);
             } else {
-                minComps[i] = bcfp.getRangeBinaryComparatorFactory(type, oc.getOrder() == OrderKind.ASC, true, rangeType);
-                maxComps[i] = bcfp.getRangeBinaryComparatorFactory(type, oc.getOrder() == OrderKind.ASC, false, rangeType);
+                minComps[i] =
+                        bcfp.getRangeBinaryComparatorFactory(type, oc.getOrder() == OrderKind.ASC, true, rangeType);
+                maxComps[i] =
+                        bcfp.getRangeBinaryComparatorFactory(type, oc.getOrder() == OrderKind.ASC, false, rangeType);
             }
             i++;
         }
