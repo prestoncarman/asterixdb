@@ -5259,6 +5259,11 @@
       </compilation-unit>
     </test-case>
     <test-case FilePath="index-selection">
+      <compilation-unit name="intersection-misc-01">
+        <output-dir compare="Text">intersection-misc-01</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="index-selection">
       <compilation-unit name="intersection-with-between">
         <output-dir compare="Text">intersection-with-between</output-dir>
       </compilation-unit>
@@ -12346,6 +12351,15 @@
     <test-case FilePath="metrics">
       <compilation-unit name="full-scan">
         <output-dir compare="Text">full-scan</output-dir>
+      </compilation-unit>
+    </test-case>
+  </test-group>
+  <test-group name="warnings">
+    <test-case FilePath="warnings" check-warnings="true">
+      <compilation-unit name="min-max-incompatible-types">
+        <output-dir compare="Text">min-max-incompatible-types</output-dir>
+        <expected-warn>ASX0003: Type incompatibility: function min/max gets incompatible input values: bigint and string</expected-warn>
+        <expected-warn>ASX0004: Unsupported type: min/max cannot process input type object</expected-warn>
       </compilation-unit>
     </test-case>
   </test-group>

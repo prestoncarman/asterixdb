@@ -33,4 +33,11 @@ public interface IFormattedException {
      * @return the error code
      */
     int getErrorCode();
+
+    /**
+     * Gets the message of this exception
+     *
+     * @return the exception message
+     */
+    String getMessage();
 }
