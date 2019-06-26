@@ -51,8 +51,7 @@ public class AIntervalPartialBinaryComparatorFactoryTest extends TestCase {
      * 12 Cases include <, ==, > for start ASC, start DESC, end ASC, end DESC.
      */
     private final int INTERVAL_LENGTH = 1 + 2 * Long.BYTES;
-    private final AInterval[] INTERVALS = new AInterval[] {
-            new AInterval(5, 5, ATypeTag.SERIALIZED_DATETIME_TYPE_TAG),
+    private final AInterval[] INTERVALS = new AInterval[] { new AInterval(5, 5, ATypeTag.SERIALIZED_DATETIME_TYPE_TAG),
             new AInterval(5, 10, ATypeTag.SERIALIZED_DATETIME_TYPE_TAG),
             new AInterval(5, 15, ATypeTag.SERIALIZED_DATETIME_TYPE_TAG),
             new AInterval(5, 20, ATypeTag.SERIALIZED_DATETIME_TYPE_TAG),
