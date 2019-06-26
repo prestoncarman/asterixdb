@@ -37,6 +37,12 @@ import junit.framework.TestCase;
 
 public class AIntervalPartialBinaryComparatorFactoryTest extends TestCase {
 
+    /**
+     * This test uses all the interval partial binary comparators to check combinations of cases where intervals' start
+     * and end points are before, in between, after, and on the start and endpoints of the interval that they are being
+     * compared to.
+     */
+
     @SuppressWarnings("rawtypes")
     private final ISerializerDeserializer serde = AIntervalSerializerDeserializer.INSTANCE;
 
@@ -44,9 +50,9 @@ public class AIntervalPartialBinaryComparatorFactoryTest extends TestCase {
      * Compares all interval partial binary comparators.
      * 12 Cases include <, ==, > for start ASC, start DESC, end ASC, end DESC.
      */
-    //    private final int INTERVAL_LENGTH = Byte.BYTES + Byte.BYTES + Long.BYTES + Long.BYTES;
     private final int INTERVAL_LENGTH = 1 + 2 * Long.BYTES;
-    private final AInterval[] INTERVALS = new AInterval[] { new AInterval(5, 5, ATypeTag.SERIALIZED_DATETIME_TYPE_TAG),
+    private final AInterval[] INTERVALS = new AInterval[] {
+            new AInterval(5, 5, ATypeTag.SERIALIZED_DATETIME_TYPE_TAG),
             new AInterval(5, 10, ATypeTag.SERIALIZED_DATETIME_TYPE_TAG),
             new AInterval(5, 15, ATypeTag.SERIALIZED_DATETIME_TYPE_TAG),
             new AInterval(5, 20, ATypeTag.SERIALIZED_DATETIME_TYPE_TAG),
@@ -98,61 +104,35 @@ public class AIntervalPartialBinaryComparatorFactoryTest extends TestCase {
 
     @Test
     public void testIntervalAsc() throws HyracksDataException {
+        // Intervals with startpoints equal to the base are compared by endpoint.
         byte[] bytes = getIntervalBytes();
-        int[] results = new int[] {
-                // end:  5  10  15  20  25  // start:
-                -1, -1, -1, -1, -1, //  5
-                -1, -1, 0, 1, // 10, these all have start points equal to the base, so we compare end points
-                1, 1, 1, // 15
-                1, 1, // 20
-                1 // 25
-        };
+        int[] results = new int[] { -1, -1, -1, -1, -1, -1, -1, 0, 1, 1, 1, 1, 1, 1, 1 };
         executeBinaryComparatorTests(START_ASC, bytes, results);
     }
 
     @Test
     public void testIntervalEndpointAsc() throws HyracksDataException {
+        // Intervals with endpoints equal to the base are compared by startpoint.
         byte[] bytes = getIntervalBytes();
-        int[] results = new int[] {
-                //                  ** have endpoints equal to the base so we compare start points
-                // end:  5  10  15  20  25  // start:
-                -1, -1, -1, -1, 1, //  5
-                -1, -1, 0, 1, // 10
-                -1, 1, 1, // 15
-                1, 1, // 20
-                1 // 25
-        };
+        int[] results = new int[] { -1, -1, -1, -1, 1, -1, -1, 0, 1, -1, 1, 1, 1, 1, 1 };
         executeBinaryComparatorTests(END_ASC, bytes, results);
     }
 
     @Test
     public void testIntervalStartpointDesc() throws HyracksDataException {
+        // Intervals with startpoints equal to the base are compared by endpoint.
         byte[] bytes = getIntervalBytes();
-        int[] results = new int[] {
-                // the negative of the results in testIntervalAsc()
-                // end:  5  10  15  20  25  // start:
-                1, 1, 1, 1, 1, //  5
-                1, 1, 0, -1, // 10, these all have start points equal to the base, so we compare end points
-                -1, -1, -1, // 15
-                -1, -1, // 20
-                -1 // 25
-        };
+        // these results are the negative of the results in testIntervalAsc()
+        int[] results = new int[] { 1, 1, 1, 1, 1, 1, 1, 0, -1, -1, -1, -1, -1, -1, -1 };
         executeBinaryComparatorTests(START_DESC, bytes, results);
     }
 
     @Test
     public void testIntervalDesc() throws HyracksDataException {
+        // Intervals with endpoints equal to the base are compared by startpoint.
         byte[] bytes = getIntervalBytes();
-        int[] results = new int[] {
-                // the negative of the results in testIntervalEndpointAsc()
-                //                  ** have endpoints equal to the base so we compare start points
-                // end:  5  10  15  20  25  // start:
-                1, 1, 1, 1, -1, //  5
-                1, 1, 0, -1, // 10
-                1, -1, -1, // 15
-                -1, -1, // 20
-                -1 // 25
-        };
+        // these results are the negative of the results in testIntervalEndpointAsc()
+        int[] results = new int[] { 1, 1, 1, 1, -1, 1, 1, 0, -1, 1, -1, -1, -1, -1, -1 };
         executeBinaryComparatorTests(END_DESC, bytes, results);
     }
 }

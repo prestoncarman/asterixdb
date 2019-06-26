@@ -77,20 +77,38 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
             new IBinaryComparatorFactory[] { AIntervalStartpointDescPartialBinaryComparatorFactory.INSTANCE };
 
     /*
+     * These tests check the range partitioning types with various interval sizes and range map split points.
+     * For each range type they check the ASCending and DESCending comparators for intervals with durations of D = 3, and
+     * a range map of the overall range that has been split into N = 4 parts.
+     * the test for the Split type also checks larger intervals and more splits on the range map to make sure it splits
+     * correctly across many partitions, and within single partitions.
+     *
+     * The map of the partitions, listed as the rangeMap split points in ascending and descending orders:
+     *
      * The following points (X) will be tested for these 4 partitions.
      *
-     * X-------X----XXX----X----XXX----X----XXX----X-------X
-     *    -----------|-----------|-----------|-----------
+     *     X  -----------X----------XXX----------X----------XXX----------X------------XXX------------X------------  X
+     *        -----------------------|-----------------------|-------------------------|--------------------------
      *
      * The following points (X) will be tested for these 16 partitions.
      *
-     * X-------X----XXX----X----XXX----X----XXX----X-------X
-     *    --|--|--|--|--|--|--|--|--|--|--|--|--|--|--|--
+     *     X  -----------X----------XXX----------X----------XXX----------X------------XXX------------X------------  X
+     *        -----|-----|-----|-----|-----|-----|-----|-----|-----|-----|------|------|------|------|------|-----
+     *
+     * N4                0          )[           1          )[           2            )[             3
+     * N16     0  )[  1 )[  2 )[  3 )[  4 )[  5 )[  6 )[  7 )[  8 )[  9 )[  10 )[  11 )[  12 )[  13 )[  14 )[  15
+     * ASC   0     25    50    75    100   125   150   175   200   225   250    275    300    325    350    375    400
+     * DESC  400   375   350   325   300   275   250   225   200   175   150    125    100    75     50     25     0
+     *
+     * First and last partitions include all values less than and greater than min and max split points respectively.
+     *
+     * Both rangeMap partitions and test intervals are end exclusive.
+     * an ascending test interval ending on 200 like (190, 200) is not in partition 8.
+     * similarly, a descending test ending on 200 like (210, 200) is not in partition 8.
      */
 
     private final int FRAME_SIZE = 640;
     private final int INTEGER_LENGTH = Long.BYTES;
-    // tag=1 + start=INTEGER_LENGTH + end=INTEGER_LENGTH in bytes
     private final int INTERVAL_LENGTH = 1 + 2 * INTEGER_LENGTH;
 
     // Tests points inside each partition.
@@ -104,25 +122,6 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
     //points       {    -25l, 50l, 99l, 100l, 101l, 150l, 199l, 200l, 201l, 250l, 299l, 300l, 301l, 350l, 425l       };
     private final Long[] PARTITION_EDGE_CASES =
             new Long[] { -25l, 50l, 99l, 100l, 101l, 150l, 199l, 200l, 201l, 250l, 299l, 300l, 301l, 350l, 425l };
-
-    // These tests check the range partitioning types with various interval sizes and range map split points.
-    // For each range type they check the ASCending and DESCending comparators for intervals with durations of D = 3, and
-    // a range map of the overall range that has been split into N = 4 parts.
-    // the test for the Split type also checks larger intervals and more splits on the range map to make sure it splits
-    // correctly across many partitions, and within single partitions.
-    //
-    // The map of the partitions, listed as the rangeMap split points in ascending and descending orders:
-    //
-    // N4                0          )[           1          )[           2            )[             3
-    // N16     0  )[  1 )[  2 )[  3 )[  4 )[  5 )[  6 )[  7 )[  8 )[  9 )[  10 )[  11 )[  12 )[  13 )[  14 )[  15
-    // ASC   0     25    50    75    100   125   150   175   200   225   250    275    300    325    350    375    400
-    // DESC  400   375   350   325   300   275   250   225   200   175   150    125    100    75     50     25     0
-    //
-    // first and last partitions include all values less than and greater than min and max split points respectively.
-    //
-    // Both rangeMap partitions and test intervals are end exclusive.
-    // an ascending test interval ending on 200 like (190, 200) is not in partition 8.
-    // similarly, a descending test ending on 200 like (210, 200) is not in partition 8.
 
     // The map of the partitions, listed as the split points.
     // partitions   {  0,   1,   2,   3,    4,    5,    6,    7,    8,    9,   10,   11,   12,   13,   14,   15,   16 };

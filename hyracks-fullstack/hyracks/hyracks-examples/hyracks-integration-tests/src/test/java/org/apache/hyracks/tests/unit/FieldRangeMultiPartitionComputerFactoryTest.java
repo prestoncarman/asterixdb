@@ -66,20 +66,25 @@ public class FieldRangeMultiPartitionComputerFactoryTest extends TestCase {
     private final int INTEGER_LENGTH = Long.BYTES;
 
     /*
+     * These tests check the range partitioning types with various integer positions and range map split points.
+     * The test for PROJECT also checks PROJECT_END and SPLIT, which have the same results for integers.
+     *
      * The following points (X) will be tested for these 4 partitions.
      *
-     * X-------X----XXX----X----XXX----X----XXX----X-------X
-     *    -----------|-----------|-----------|-----------
+     *     X  -----------X----------XXX----------X----------XXX----------X------------XXX------------X------------  X
+     *        -----------------------|-----------------------|-------------------------|--------------------------
      *
      * The following points (X) will be tested for these 16 partitions.
      *
      *     X  -----------X----------XXX----------X----------XXX----------X------------XXX------------X------------  X
      *        -----|-----|-----|-----|-----|-----|-----|-----|-----|-----|------|------|------|------|------|-----
+     *
+     * N4                0          )[           1          )[           2            )[             3
+     * N16     0  )[  1 )[  2 )[  3 )[  4 )[  5 )[  6 )[  7 )[  8 )[  9 )[  10 )[  11 )[  12 )[  13 )[  14 )[  15
+     * ASC   0     25    50    75    100   125   150   175   200   225   250    275    300    325    350    375    400
+     *
+     * First and last partitions include all values less than and greater than min and max split points respectively.
      */
-
-    // N4                0          )[           1          )[           2            )[             3
-    // N16     0  )[  1 )[  2 )[  3 )[  4 )[  5 )[  6 )[  7 )[  8 )[  9 )[  10 )[  11 )[  12 )[  13 )[  14 )[  15
-    // ASC   0     25    50    75    100   125   150   175   200   225   250    275    300    325    350    375    400
 
     //result index {      0,   1,   2,   3,    4,    5,    6,    7,    8,    9,    10,   11,   12,   13,   14        };
     //points       {    -25l, 50l, 99l, 100l, 101l, 150l, 199l, 200l, 201l, 250l, 299l, 300l, 301l, 350l, 425l       };
