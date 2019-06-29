@@ -16,7 +16,3 @@
 # specific language governing permissions and limitations
 # under the License.
 #
-range-connector/sort-hint-on-closed-numeric.aql
-range-connector/sort-hint-on-closed-numeric-desc.aql
-range-connector/sort-hint-on-closed-string.aql
-range-connector/sort-hint-on-closed-string-desc.aql
