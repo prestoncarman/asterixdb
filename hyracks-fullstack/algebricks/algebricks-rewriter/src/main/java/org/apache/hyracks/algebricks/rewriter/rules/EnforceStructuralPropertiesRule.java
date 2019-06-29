@@ -625,27 +625,37 @@ public class EnforceStructuralPropertiesRule implements IAlgebraicRewriteRule {
 
     private IPhysicalOperator createMergingConnector(ILogicalOperator parentOp, INodeDomain domain,
             IPhysicalPropertiesVector deliveredByChild) {
+        // (Stephen) A merging connector merges all the partitions in one site. This happens when the data is
+        // UNPARTITIONED
+
         IPhysicalOperator mergingConnector;
         List<OrderColumn> ordCols = computeOrderColumns(deliveredByChild);
-        IPartitioningProperty partitioningDeliveredByChild = deliveredByChild.getPartitioningProperty();
-        if (ordCols.isEmpty()) {
+        if (ordCols.isEmpty()) { // (Stephen) Partitions are not sorted locally
+            IPartitioningProperty partitioningDeliveredByChild = deliveredByChild.getPartitioningProperty();
             if (partitioningDeliveredByChild.getPartitioningType() == PartitioningType.ORDERED_PARTITIONED) {
+                // (Stephen) there is ORDERED_PARTITIONED globally, ie. "partition 0 < partition 1 < partition 2 < ..."
                 mergingConnector = new SequentialMergeExchangePOperator();
             } else {
+                // (Stephen) partitions are not globally sorted
                 mergingConnector = new RandomMergeExchangePOperator();
             }
-        } else {
+        } else { // (Stephen) Partitions are sorted locally
             if (parentOp.getAnnotations().containsKey(OperatorAnnotations.USE_STATIC_RANGE)) {
+                // (Stephen) A static range has been provided
                 RangeMap rangeMap = (RangeMap) parentOp.getAnnotations().get(OperatorAnnotations.USE_STATIC_RANGE);
-                if (partitioningDeliveredByChild.getPartitioningType() == PartitioningType.ORDERED_PARTITIONED) {
-                    RangePartitioningType rangePartitioningType =
-                            ((OrderedPartitionedProperty) partitioningDeliveredByChild).getRangePartitioningType();
-                    mergingConnector =
-                            new RangePartitionMergeExchangePOperator(ordCols, domain, rangePartitioningType, rangeMap);
-                } else {
-                    mergingConnector = new RangePartitionMergeExchangePOperator(ordCols, domain, rangeMap);
-                }
-            } else {
+                // (Stephen) The RangePartitionMergeExchangePOperator sets deliveredProperties in its
+                //              `AbstractPhysicalOperator` parent class to an instance of
+                //              `OrderedPartitionedProperty` rather than `UNPARTITIONED` as all the other physical
+                //              operators in this `createMergingConnector` method do.
+                //
+                // RangePartitioningType can only come from an instance of `OrderedPartitionedProperty`, which we do
+                // not have here if the PartitioningType is `ORDERED_PARTITIONED`.
+                //
+                // does RangePartitionMergeExchangePOperator need to be ORDERED_PARTITIONED? (I'm pretty sure `yes`)
+                // is ORDERED_PARTITIONED always referring to global data partitioning? (I'm pretty sure `yes`)
+                //
+                mergingConnector = new RangePartitionMergeExchangePOperator(ordCols, domain, rangeMap);
+            } else { // (Stephen) no static range
                 OrderColumn[] sortColumns = new OrderColumn[ordCols.size()];
                 sortColumns = ordCols.toArray(sortColumns);
                 mergingConnector = new SortMergeExchangePOperator(sortColumns);
