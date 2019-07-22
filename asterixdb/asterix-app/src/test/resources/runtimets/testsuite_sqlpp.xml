@@ -2734,10 +2734,6 @@
         <output-dir compare="Text">array_errors</output-dir>
         <expected-error>Input contains different list types (in line 25, at column 8)</expected-error>
         <expected-error>Input contains different list types (in line 25, at column 8)</expected-error>
-        <expected-error>Invalid number of arguments for function array-range (in line 25, at column 8)</expected-error>
-        <expected-error>Invalid number of arguments for function array-range (in line 25, at column 8)</expected-error>
-        <expected-error>Invalid number of arguments for function array-replace (in line 25, at column 8)</expected-error>
-        <expected-error>Invalid number of arguments for function array-replace (in line 25, at column 8)</expected-error>
         <expected-error>Input contains different list types (in line 25, at column 8)</expected-error>
         <expected-error>Input contains different list types (in line 25, at column 8)</expected-error>
         <expected-error>Input contains different list types (in line 25, at column 8)</expected-error>
@@ -5022,6 +5018,11 @@
       </compilation-unit>
     </test-case>
     <test-case FilePath="group-by">
+      <compilation-unit name="two-step-agg-01">
+        <output-dir compare="Text">two-step-agg-01</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="group-by">
       <compilation-unit name="null">
         <output-dir compare="Text">null</output-dir>
       </compilation-unit>
@@ -5687,6 +5688,11 @@
     <test-case FilePath="misc">
       <compilation-unit name="record-serialization-ASTERIXDB-2567">
         <output-dir compare="Text">record-serialization-ASTERIXDB-2567</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="misc">
+      <compilation-unit name="record-serialization-ASTERIXDB-2613">
+        <output-dir compare="Text">record-serialization-ASTERIXDB-2613</output-dir>
       </compilation-unit>
     </test-case>
     <test-case FilePath="misc">

@@ -17,9 +17,7 @@
  * under the License.
  */
 
-/*
-* Description  : Testing correct number of arguments required
-* Expected Res : Error, 3 or 4 args are required
-*/
+// testing fix for asterix record object serialization where the record has nested records. the record needs to be
+// serialized as open since it will be inside of a list of ANY. every field should also be serialized as open
 
-select array_replace([2,6],2,5,1,6);
+select value array_put([3], {"f": {"ff": 4}});

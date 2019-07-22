@@ -25,23 +25,15 @@ import java.util.Map;
 
 import org.apache.hyracks.algebricks.core.algebra.base.EquivalenceClass;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalVariable;
-import org.apache.hyracks.api.dataflow.value.RangePartitioningType;
 
 public class OrderedPartitionedProperty implements IPartitioningProperty {
 
     private final List<OrderColumn> orderColumns;
     private INodeDomain domain;
-    private RangePartitioningType rangeType;
-
-    public OrderedPartitionedProperty(List<OrderColumn> orderColumns, INodeDomain domain,
-            RangePartitioningType rangeType) {
-        this.domain = domain;
-        this.orderColumns = orderColumns;
-        this.rangeType = rangeType;
-    }
 
     public OrderedPartitionedProperty(List<OrderColumn> orderColumns, INodeDomain domain) {
-        this(orderColumns, domain, RangePartitioningType.PROJECT);
+        this.domain = domain;
+        this.orderColumns = orderColumns;
     }
 
     public List<OrderColumn> getOrderColumns() {
@@ -61,13 +53,9 @@ public class OrderedPartitionedProperty implements IPartitioningProperty {
         return PartitioningType.ORDERED_PARTITIONED;
     }
 
-    public RangePartitioningType getRangePartitioningType() {
-        return rangeType;
-    }
-
     @Override
     public String toString() {
-        return getPartitioningType().toString() + " Column(s): " + orderColumns + " Range Type: " + rangeType;
+        return getPartitioningType().toString() + orderColumns + " domain:" + domain;
     }
 
     @Override
@@ -75,7 +63,7 @@ public class OrderedPartitionedProperty implements IPartitioningProperty {
             List<FunctionalDependency> fds) {
         List<OrderColumn> columns = PropertiesUtil.replaceOrderColumnsByEqClasses(orderColumns, equivalenceClasses);
         columns = PropertiesUtil.applyFDsToOrderColumns(columns, fds);
-        return new OrderedPartitionedProperty(columns, domain, rangeType);
+        return new OrderedPartitionedProperty(columns, domain);
     }
 
     @Override
@@ -96,17 +84,24 @@ public class OrderedPartitionedProperty implements IPartitioningProperty {
     }
 
     @Override
-    public void substituteColumnVars(Map<LogicalVariable, LogicalVariable> varMap) {
+    public IPartitioningProperty substituteColumnVars(Map<LogicalVariable, LogicalVariable> varMap) {
+        boolean applied = false;
+        List<OrderColumn> newOrderColumns = new ArrayList<>(orderColumns.size());
         for (OrderColumn orderColumn : orderColumns) {
-            if (varMap.containsKey(orderColumn.getColumn())) {
-                orderColumn.setColumn(varMap.get(orderColumn.getColumn()));
+            LogicalVariable columnVar = orderColumn.getColumn();
+            LogicalVariable newColumnVar = varMap.get(columnVar);
+            if (newColumnVar != null) {
+                applied = true;
+            } else {
+                newColumnVar = columnVar;
             }
+            newOrderColumns.add(new OrderColumn(newColumnVar, orderColumn.getOrder()));
         }
+        return applied ? new OrderedPartitionedProperty(newOrderColumns, domain) : this;
     }
 
     @Override
     public IPartitioningProperty clonePartitioningProperty() {
         return new OrderedPartitionedProperty(new ArrayList<>(orderColumns), domain);
     }
-
 }

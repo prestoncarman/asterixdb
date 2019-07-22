@@ -17,9 +17,13 @@
  * under the License.
  */
 
-/*
-* Description  : Testing different input list types
-* Expected Res : Error due to processing different list types
-*/
+use test;
 
-select array_union([3,5,1], [2,1], {{3, 1}});
+select m, array_count((from g select value g.t.unique1 limit 3)) cnt
+from onektup t
+group by unique2 % 2 as m group as g
+order by m
+;
+
+
+

@@ -17,9 +17,23 @@
  * under the License.
  */
 
-/*
-* Description  : Testing different input list types
-* Expected Res : Error due to processing different list types
-*/
+package org.apache.hyracks.algebricks.runtime.base;
 
-select array_symdiffn([3,5,1], [2,1], {{3, 1}});
+import org.apache.hyracks.api.context.IHyracksTaskContext;
+import org.apache.hyracks.api.exceptions.IWarningCollector;
+
+/**
+ * Context for runtime function evaluators
+ */
+public interface IEvaluatorContext {
+    /**
+     * Returns current task's context, or {@code null} if this evaluator
+     * is being executed by the constant folding rule at compile time.
+     */
+    IHyracksTaskContext getTaskContext();
+
+    /**
+     * Returns a warning collector, never {@code null}
+     */
+    IWarningCollector getWarningCollector();
+}
