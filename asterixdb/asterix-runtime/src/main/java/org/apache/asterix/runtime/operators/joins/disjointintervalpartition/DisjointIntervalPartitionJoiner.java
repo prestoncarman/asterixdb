@@ -72,8 +72,9 @@ public class DisjointIntervalPartitionJoiner extends AbstractMergeJoiner {
 
     private long joinComparisonCount = 0;
     private long joinResultCount = 0;
-    private long spillWriteCount = 0;
-    private long spillReadCount = 0;
+    private long spillPartitionWriteCount = 0;
+    private long spillPartitionReadCount = 0;
+    private long spillJoinReadCount = 0;
 
     private final int partition;
     private final int memorySize;
@@ -122,11 +123,21 @@ public class DisjointIntervalPartitionJoiner extends AbstractMergeJoiner {
         partitionAndSpill.processFrame(inputBuffer[LEFT_PARTITION].getBuffer());
     }
 
+    private void printPartitionCounts(String key, LinkedList<Long> counts) {
+        System.err.println(key + " Partitions{");
+        for (int i = 0; i < counts.size(); ++i) {
+            System.err.println("  " + i + ": " + counts.get(i) + ",");
+        }
+        System.err.println("}");
+    }
+
     @Override
     public void processLeftClose(IFrameWriter writer) throws HyracksDataException {
         getRunFileReaders(partitionAndSpill, leftRunFileReaders, leftPartitionCounts);
         // Handle spill file.
         processSpill(partitionAndSpill, leftRunFileReaders, leftPartitionCounts);
+
+//        printPartitionCounts("Left", leftPartitionCounts);
 
         // Probe side
         partitionAndSpill.resetForNewDataset(rightRd, rightDipc, PROBE_RUN_FILES_PREFIX, getNewSpillWriter());
@@ -144,27 +155,28 @@ public class DisjointIntervalPartitionJoiner extends AbstractMergeJoiner {
             getInMemoryTupleAccessors(partitionAndSpill, rightPartitionCounts);
             processInMemoryJoin(writer);
         }
+//        printPartitionCounts("Right", rightPartitionCounts);
 
         partitionAndSpill.close();
         resultAppender.write(writer, true);
 
         cleanupPartitions(leftRunFileReaders);
         cleanupPartitions(rightRunFileReaders);
-        long cpu = joinComparisonCount + leftComparator.getTotalCalled() + rightComparator.getTotalCalled();
+        long cpu = joinComparisonCount;
         if (LOGGER.isLoggable(Level.WARNING)) {
             LOGGER.warning(",DisjointIntervalPartitionJoiner Statistics Log," + partition + ",partition," + memorySize
-                    + ",memory," + joinResultCount + ",results," + cpu + ",CPU,"
-                    + (spillWriteCount + spillReadCount) + ",IO," + spillWriteCount + ",frames_written,"
-                    + spillReadCount + ",frames_read," + leftComparator.getTotalCalled() + ",partition_comparison_left,"
-                    + rightComparator.getTotalCalled() + ",partition_comparison_right," + joinComparisonCount
-                    + ",join_comparison");
+                    + ",memory," + joinResultCount + ",results," + cpu + ",CPU," + spillJoinReadCount + ",IO,"
+                    + spillPartitionWriteCount + ",partition_frames_written," + spillPartitionReadCount
+                    + ",partition_frames_read," + spillJoinReadCount + ",partition_frames_read,"
+                    + leftComparator.getTotalCalled() + ",partition_comparison_left," + rightComparator.getTotalCalled()
+                    + ",partition_comparison_right," + joinComparisonCount + ",join_comparison");
         }
         System.out.println(",DisjointIntervalPartitionJoiner Statistics Log," + partition + ",partition," + memorySize
-                + ",memory," + joinResultCount + ",results," + cpu + ",CPU,"
-                + (spillWriteCount + spillReadCount) + ",IO," + spillWriteCount + ",frames_written," + spillReadCount
-                + ",frames_read," + leftComparator.getTotalCalled() + ",partition_comparison_left,"
-                + rightComparator.getTotalCalled() + ",partition_comparison_right," + joinComparisonCount
-                + ",join_comparison");
+                + ",memory," + joinResultCount + ",results," + cpu + ",CPU," + spillJoinReadCount + ",IO,"
+                + spillPartitionWriteCount + ",partition_frames_written," + spillPartitionReadCount
+                + ",partition_frames_read," + spillJoinReadCount + ",partition_frames_read,"
+                + leftComparator.getTotalCalled() + ",partition_comparison_left," + rightComparator.getTotalCalled()
+                + ",partition_comparison_right," + joinComparisonCount + ",join_comparison");
     }
 
     private void processInMemoryJoin(IFrameWriter writer) throws HyracksDataException {
@@ -173,18 +185,18 @@ public class DisjointIntervalPartitionJoiner extends AbstractMergeJoiner {
             //            printRunFileTuples("spilled " + i++ + " on " + partition, leftRunFileReaders.get(l));
             resetInMemoryPartitions();
             leftRunFileReaders.get(l).reset();
-            joinInMemroryPartitions(leftRunFileReaders.get(l), l, writer);
+            joinInMemoryPartitions(leftRunFileReaders.get(l), l, writer);
         }
     }
 
-    private void joinInMemroryPartitions(RunFileReader runFileReader, int leftPid, IFrameWriter writer)
+    private void joinInMemoryPartitions(RunFileReader runFileReader, int leftPid, IFrameWriter writer)
             throws HyracksDataException {
         // Prepare frame.
         runFileReader.open();
         if (runFileReader.nextFrame(tmpFrame)) {
             joinTupleAccessor.reset(tmpFrame.getBuffer());
             joinTupleAccessor.next();
-            spillReadCount++;
+            spillJoinReadCount++;
         }
         while (joinTupleAccessor.exists()) {
             joinInMemoryPartitionTuple(leftPid, writer);
@@ -254,7 +266,7 @@ public class DisjointIntervalPartitionJoiner extends AbstractMergeJoiner {
             rfr.open();
             while (rfr.nextFrame(tmpFrame)) {
                 dipas.processFrame(tmpFrame.getBuffer());
-                spillReadCount++;
+                spillPartitionReadCount++;
             }
             rfr.close();
             getRunFileReaders(dipas, rfrs, rpc);
@@ -265,7 +277,7 @@ public class DisjointIntervalPartitionJoiner extends AbstractMergeJoiner {
             LinkedList<Long> rpc) throws HyracksDataException {
         //        int offset = rfrs.size();
         dipas.spillAllPartitions();
-        spillWriteCount += dipas.getSpillWriteCount();
+        spillPartitionWriteCount += dipas.getSpillWriteCount();
         for (int i = 0; i < numberOfPartitions; i++) {
             if (dipas.getPartitionSizeInTup(i) > 0) {
                 rfrs.add(dipas.getRFReader(i));
@@ -317,7 +329,7 @@ public class DisjointIntervalPartitionJoiner extends AbstractMergeJoiner {
             if (partitionRunsReaders.get(i + offset).nextFrame(runReaderFrames[i])) {
                 tupleAccessors[i].reset(runReaderFrames[i].getBuffer());
                 tupleAccessors[i].next();
-                spillReadCount++;
+                spillJoinReadCount++;
             }
         }
     }
@@ -342,7 +354,7 @@ public class DisjointIntervalPartitionJoiner extends AbstractMergeJoiner {
         if (runFileReader.nextFrame(tmpFrame)) {
             joinTupleAccessor.reset(tmpFrame.getBuffer());
             joinTupleAccessor.next();
-            spillReadCount++;
+            spillJoinReadCount++;
         }
         while (joinTupleAccessor.exists()) {
             joinPartitionTuple(leftPid, partitionRunsReaders, offset, writer);
@@ -359,7 +371,7 @@ public class DisjointIntervalPartitionJoiner extends AbstractMergeJoiner {
             if (reader.nextFrame(frame)) {
                 accessor.reset(frame.getBuffer());
                 accessor.next();
-                spillReadCount++;
+                spillJoinReadCount++;
             }
         }
     }
