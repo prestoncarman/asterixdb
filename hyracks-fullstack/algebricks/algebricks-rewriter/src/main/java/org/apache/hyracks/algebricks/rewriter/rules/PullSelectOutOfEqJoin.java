@@ -98,7 +98,7 @@ public class PullSelectOutOfEqJoin implements IAlgebraicRewriteRule {
         }
     }
 
-    private boolean isEqVarVar(ILogicalExpression expr) {
+    protected boolean isEqVarVar(ILogicalExpression expr) {
         if (expr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
             return false;
         }

@@ -79,6 +79,7 @@ import org.apache.asterix.optimizer.rules.am.IntroduceLSMComponentFilterRule;
 import org.apache.asterix.optimizer.rules.am.IntroduceSelectAccessMethodRule;
 import org.apache.asterix.optimizer.rules.subplan.AsterixMoveFreeVariableOperatorOutOfSubplanRule;
 import org.apache.asterix.optimizer.rules.subplan.InlineSubplanInputForNestedTupleSourceRule;
+import org.apache.asterix.optimizer.rules.temporal.PullSelectOutOfIntervalJoin;
 import org.apache.asterix.optimizer.rules.temporal.TranslateIntervalExpressionRule;
 import org.apache.hyracks.algebricks.core.rewriter.base.HeuristicOptimizer;
 import org.apache.hyracks.algebricks.core.rewriter.base.IAlgebraicRewriteRule;
@@ -317,6 +318,7 @@ public final class RuleCollections {
     public static final List<IAlgebraicRewriteRule> buildPhysicalRewritesAllLevelsRuleCollection() {
         List<IAlgebraicRewriteRule> physicalRewritesAllLevels = new LinkedList<>();
         physicalRewritesAllLevels.add(new PullSelectOutOfEqJoin());
+        physicalRewritesAllLevels.add(new PullSelectOutOfIntervalJoin());
         //Turned off the following rule for now not to change OptimizerTest results.
         physicalRewritesAllLevels.add(new SetupCommitExtensionOpRule());
         physicalRewritesAllLevels.add(new SetAsterixPhysicalOperatorsRule());
