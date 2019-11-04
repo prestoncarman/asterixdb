@@ -32,6 +32,11 @@
   </properties>
   <dependencies>
     <dependency>
+      <groupId>net.smacke</groupId>
+      <artifactId>jaydio</artifactId>
+      <version>0.1</version>
+    </dependency>
+    <dependency>
       <groupId>org.apache.hyracks</groupId>
       <artifactId>hyracks-control-common</artifactId>
       <version>${project.version}</version>

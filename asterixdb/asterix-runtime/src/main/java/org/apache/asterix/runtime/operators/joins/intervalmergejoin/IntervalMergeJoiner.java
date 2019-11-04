@@ -37,7 +37,7 @@ import org.apache.hyracks.dataflow.std.buffermanager.IDeletableTupleBufferManage
 import org.apache.hyracks.dataflow.std.buffermanager.ITupleAccessor;
 import org.apache.hyracks.dataflow.std.buffermanager.TupleAccessor;
 import org.apache.hyracks.dataflow.std.buffermanager.VariableDeletableTupleMemoryManager;
-import org.apache.hyracks.dataflow.std.join.RunFileStream;
+import org.apache.hyracks.dataflow.std.join.RunFileStreamDir;
 import org.apache.hyracks.dataflow.std.structures.RunFilePointer;
 import org.apache.hyracks.dataflow.std.structures.TuplePointer;
 
@@ -110,7 +110,7 @@ public class IntervalMergeJoiner extends AbstractIntervalMergeJoiner {
     private final LinkedList<TuplePointer> memoryBuffer = new LinkedList<>();
 
     private int leftStreamIndex;
-    private final RunFileStream runFileStream;
+    private final RunFileStreamDir runFileStream;
     private final RunFilePointer runFilePointer;
 
     private IntervalSideTuple memoryTuple;
@@ -149,7 +149,7 @@ public class IntervalMergeJoiner extends AbstractIntervalMergeJoiner {
 
         // Run File and frame cache (left buffer)
         leftStreamIndex = TupleAccessor.UNSET;
-        runFileStream = new RunFileStream(ctx, "ismj-left", status.branch[LEFT_PARTITION]);
+        runFileStream = new RunFileStreamDir(ctx, "ismj-left", status.branch[LEFT_PARTITION]);
         runFilePointer = new RunFilePointer();
 
         memoryTuple = new IntervalSideTuple(mjc, memoryAccessor, rightKeys[0]);

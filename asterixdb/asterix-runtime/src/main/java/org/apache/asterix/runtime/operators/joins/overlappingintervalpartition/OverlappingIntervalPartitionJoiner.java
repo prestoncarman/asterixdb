@@ -39,8 +39,10 @@ import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.io.FileReference;
 import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAccessor;
 import org.apache.hyracks.dataflow.common.comm.util.FrameUtils;
-import org.apache.hyracks.dataflow.common.io.RunFileReader;
-import org.apache.hyracks.dataflow.common.io.RunFileWriter;
+//import org.apache.hyracks.dataflow.common.io.RunFileReader;
+//import org.apache.hyracks.dataflow.common.io.RunFileWriter;
+import org.apache.hyracks.dataflow.std.join.RunFileReaderDir;
+import org.apache.hyracks.dataflow.std.join.RunFileWriterDir;
 import org.apache.hyracks.dataflow.std.buffermanager.BufferInfo;
 import org.apache.hyracks.dataflow.std.buffermanager.IFrameBufferManager;
 import org.apache.hyracks.dataflow.std.buffermanager.VPartitionTupleBufferManager;
@@ -51,7 +53,7 @@ public class OverlappingIntervalPartitionJoiner extends AbstractStreamJoiner {
 
     private static final Logger LOGGER = Logger.getLogger(OverlappingIntervalPartitionJoiner.class.getName());
 
-    private final RunFileWriter probeRunFileWriter;
+    private final RunFileWriterDir probeRunFileWriter;
     private int probeRunFilePid = -1;
 
     private final ITuplePartitionComputer buildHpc;
@@ -108,7 +110,7 @@ public class OverlappingIntervalPartitionJoiner extends AbstractStreamJoiner {
         this.probeHpc = probeHpc;
 
         FileReference file = ctx.getJobletContext().createManagedWorkspaceFile("OverlappingIntervalPartitionJoiner");
-        probeRunFileWriter = new RunFileWriter(file, ctx.getIOManager());
+        probeRunFileWriter = new RunFileWriterDir(file, ctx.getIOManager());
         probeRunFileWriter.open();
 
         probeRunFilePointers = new TreeMap<>(RunFilePointer.ASC);
@@ -186,7 +188,7 @@ public class OverlappingIntervalPartitionJoiner extends AbstractStreamJoiner {
     //    }
 
     private void joinLoopOnMemory(IFrameWriter writer) throws HyracksDataException {
-        RunFileReader pReader = probeRunFileWriter.createDeleteOnCloseReader();
+        RunFileReaderDir pReader = probeRunFileWriter.createDeleteOnCloseReader();
         pReader.open();
         // Load first frame.
         loadReaderNextFrame(pReader);
@@ -204,7 +206,7 @@ public class OverlappingIntervalPartitionJoiner extends AbstractStreamJoiner {
         pReader.close();
     }
 
-    private void joinMemoryBlockWithRunFile(IFrameWriter writer, RunFileReader pReader) throws HyracksDataException {
+    private void joinMemoryBlockWithRunFile(IFrameWriter writer, RunFileReaderDir pReader) throws HyracksDataException {
         // Join Disk partitions with Memory partitions
         for (RunFilePointer probeId : probeRunFilePointers.navigableKeySet()) {
             Pair<Integer, Integer> probe = OverlappingIntervalPartitionUtil
@@ -233,7 +235,7 @@ public class OverlappingIntervalPartitionJoiner extends AbstractStreamJoiner {
         }
     }
 
-    private void joinMemoryPartitionsWithRunFile(RunFileReader pReader, RunFilePointer rfpStart, List<IFrameBufferManager> buildFbms,
+    private void joinMemoryPartitionsWithRunFile(RunFileReaderDir pReader, RunFilePointer rfpStart, List<IFrameBufferManager> buildFbms,
             IFrameWriter writer) throws HyracksDataException {
         long fileOffsetStart = rfpStart.getFileOffset();
         int tupleStart = rfpStart.getTupleIndex();
@@ -259,7 +261,7 @@ public class OverlappingIntervalPartitionJoiner extends AbstractStreamJoiner {
         } while (pReader.getReadPointer() < fileOffsetEnd && loadReaderNextFrame(pReader));
     }
 
-    private boolean loadReaderNextFrame(RunFileReader pReader) throws HyracksDataException {
+    private boolean loadReaderNextFrame(RunFileReaderDir pReader) throws HyracksDataException {
         if (pReader.nextFrame(reloadBuffer)) {
             accessorProbe.reset(reloadBuffer.getBuffer());
             spillReadCount++;

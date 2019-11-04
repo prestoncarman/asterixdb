@@ -40,7 +40,7 @@ import org.apache.hyracks.dataflow.std.buffermanager.IPartitionedDeletableTupleB
 import org.apache.hyracks.dataflow.std.buffermanager.ITupleAccessor;
 import org.apache.hyracks.dataflow.std.buffermanager.TupleAccessor;
 import org.apache.hyracks.dataflow.std.buffermanager.VPartitionDeletableTupleBufferManager;
-import org.apache.hyracks.dataflow.std.join.RunFileStream;
+import org.apache.hyracks.dataflow.std.join.RunFileStreamDir;
 import org.apache.hyracks.dataflow.std.structures.RunFilePointer;
 import org.apache.hyracks.dataflow.std.structures.TuplePointer;
 
@@ -140,7 +140,7 @@ public class IntervalForwardSweepJoiner extends AbstractStreamJoiner {
     private final ForwardSweepActiveManager[] activeManager;
     private final ITupleAccessor[] memoryAccessor;
     private final int[] streamIndex;
-    private final RunFileStream[] runFileStream;
+    private final RunFileStreamDir[] runFileStream;
     private final RunFilePointer[] runFilePointer;
 
     private IntervalSideTuple[] memoryTuple;
@@ -208,9 +208,9 @@ public class IntervalForwardSweepJoiner extends AbstractStreamJoiner {
         activeManager[RIGHT_PARTITION] = new ForwardSweepActiveManager(bufferManager, RIGHT_PARTITION);
 
         // Run files for both branches
-        runFileStream = new RunFileStream[JOIN_PARTITIONS];
-        runFileStream[LEFT_PARTITION] = new RunFileStream(ctx, "ifsj-left", branchStatus[LEFT_PARTITION]);
-        runFileStream[RIGHT_PARTITION] = new RunFileStream(ctx, "ifsj-right", branchStatus[RIGHT_PARTITION]);
+        runFileStream = new RunFileStreamDir[JOIN_PARTITIONS];
+        runFileStream[LEFT_PARTITION] = new RunFileStreamDir(ctx, "ifsj-left", branchStatus[LEFT_PARTITION]);
+        runFileStream[RIGHT_PARTITION] = new RunFileStreamDir(ctx, "ifsj-right", branchStatus[RIGHT_PARTITION]);
         runFilePointer = new RunFilePointer[JOIN_PARTITIONS];
         runFilePointer[LEFT_PARTITION] = new RunFilePointer();
         runFilePointer[RIGHT_PARTITION] = new RunFilePointer();

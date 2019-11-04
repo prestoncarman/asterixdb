@@ -22,6 +22,8 @@ import java.io.File;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.ClosedByInterruptException;
+import java.nio.channels.ClosedChannelException;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -35,6 +37,8 @@ import org.apache.hyracks.api.io.IFileHandle;
 import org.apache.hyracks.api.io.IIOFuture;
 import org.apache.hyracks.api.io.IIOManager;
 import org.apache.hyracks.api.io.IODeviceHandle;
+
+import net.smacke.jaydio.DirectRandomAccessFile;
 
 public class IOManager implements IIOManager {
     private static final String WORKSPACE_FILE_SUFFIX = ".waf";
@@ -77,7 +81,19 @@ public class IOManager implements IIOManager {
             throws HyracksDataException {
         FileHandle fHandle = new FileHandle(fileRef);
         try {
-            fHandle.open(rwMode, syncMode);
+            fHandle.open(rwMode, syncMode, false);
+        } catch (IOException e) {
+            throw new HyracksDataException(e);
+        }
+        return fHandle;
+    }
+
+    @Override
+    public IFileHandle openDir(FileReference fileRef, FileReadWriteMode rwMode, FileSyncMode syncMode)
+            throws HyracksDataException {
+        FileHandle fHandle = new FileHandle(fileRef);
+        try {
+            fHandle.open(rwMode, syncMode, true);
         } catch (IOException e) {
             throw new HyracksDataException(e);
         }
@@ -108,6 +124,39 @@ public class IOManager implements IIOManager {
         } catch (IOException e) {
             throw new HyracksDataException(e);
         }
+    }
+
+    @Override
+    public int syncDirWrite(IFileHandle fHandle, long offset, ByteBuffer data) throws HyracksDataException {
+        try {
+            if (fHandle == null) {
+                throw new IllegalStateException("Trying to write to a deleted file.");
+            }
+            DirectRandomAccessFile fout = ((FileHandle) fHandle).getDraf();
+            int n = 0;
+            int remaining = data.remaining();
+            long len;
+            // NEEDED? Could be used to write any where in file.
+            fout.seek(offset);
+            long pastFilePointer = fout.getFilePointer();
+            while (remaining > 0) {
+                fout.write(data.array(), 0, remaining);
+                len = fout.getFilePointer() - pastFilePointer;
+                if (len < 0) {
+                    throw new HyracksDataException(
+                            "Error writing to file: " + ((FileHandle) fHandle).getFileReference().toString());
+                }
+                remaining -= len;
+                offset += len;
+                n += len;
+            }
+            return n;
+        } catch (HyracksDataException e) {
+            throw e;
+        } catch (IOException e) {
+            throw new HyracksDataException(e);
+        }
+
     }
 
     @Override
@@ -151,7 +200,7 @@ public class IOManager implements IIOManager {
      * @param offset
      * @param data
      * @return The number of bytes read, possibly zero, or -1 if the given offset is greater than or equal to the file's
-     * current size
+     *         current size
      * @throws HyracksDataException
      */
     @Override
@@ -176,6 +225,54 @@ public class IOManager implements IIOManager {
         }
     }
 
+    /**
+     * Please do check the return value of this read!
+     *
+     * @param fHandle
+     * @param offset
+     * @param data
+     * @return The number of bytes read, possibly zero, or -1 if the given offset is greater than or equal to the file's
+     *         current size
+     * @throws HyracksDataException
+     */
+    @Override
+    public int syncDirRead(IFileHandle fHandle, long offset, ByteBuffer data) throws HyracksDataException {
+        try {
+            int n = 0;
+            int remaining = data.remaining();
+            DirectRandomAccessFile fin = ((FileHandle) fHandle).getDraf();
+            fin.seek(offset);
+            long pastFilePointer = fin.getFilePointer();
+            long len;
+            while (remaining > 0) {
+                fin.read(data.array(), 0, remaining);
+                len = fin.getFilePointer() - pastFilePointer;
+                if (len <= 0) {
+                    return n == 0 ? -1 : n;
+                }
+                remaining -= len;
+                offset += len;
+                n += len;
+                pastFilePointer = fin.getFilePointer();
+            }
+            return n;
+        } catch (ClosedByInterruptException e) {
+            Thread.currentThread().interrupt();
+            // re-open the closed channel. The channel will be closed during the typical file lifecycle
+            try {
+                ((FileHandle) fHandle).ensureOpenDir();
+            } catch (IOException e1) {
+                // TODO Auto-generated catch block
+                e1.printStackTrace();
+            }
+            throw new HyracksDataException(e);
+        } catch (ClosedChannelException e) {
+            throw new HyracksDataException(e);
+        } catch (IOException e) {
+            throw new HyracksDataException(e);
+        }
+    }
+
     @Override
     public IIOFuture asyncWrite(IFileHandle fHandle, long offset, ByteBuffer data) {
         AsyncWriteRequest req = new AsyncWriteRequest((FileHandle) fHandle, offset, data);
@@ -192,6 +289,15 @@ public class IOManager implements IIOManager {
 
     @Override
     public void close(IFileHandle fHandle) throws HyracksDataException {
+        try {
+            ((FileHandle) fHandle).close();
+        } catch (IOException e) {
+            throw new HyracksDataException(e);
+        }
+    }
+
+    @Override
+    public void closeDir(IFileHandle fHandle) throws HyracksDataException {
         try {
             ((FileHandle) fHandle).close();
         } catch (IOException e) {
@@ -323,5 +429,11 @@ public class IOManager implements IIOManager {
     public FileReference getAbsoluteFileRef(int ioDeviceId, String relativePath) {
         IODeviceHandle devHandle = ioDevices.get(ioDeviceId);
         return new FileReference(devHandle, relativePath);
+    }
+
+    @Override
+    public void flushDir(IFileHandle fHandle) throws IOException {
+        DirectRandomAccessFile draf = ((FileHandle) fHandle).getDraf();
+        draf.seek(0);
     }
 }

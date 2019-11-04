@@ -40,23 +40,14 @@ import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAccessor;
 import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAppender;
 import org.apache.hyracks.dataflow.common.data.accessors.FrameTupleReference;
 import org.apache.hyracks.dataflow.common.data.marshalling.IntegerSerializerDeserializer;
-import org.apache.hyracks.dataflow.common.io.RunFileReader;
-import org.apache.hyracks.dataflow.common.io.RunFileWriter;
+import org.apache.hyracks.dataflow.std.join.RunFileReaderDir;
+import org.apache.hyracks.dataflow.std.join.RunFileWriterDir;
 import org.apache.hyracks.test.support.TestUtils;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-/**
- * Test for RunFileReader and RunFileWriter.
- * 
- * Runs test for single and multiple frames written to the run file.
- * The reading can be done in sequence, reverse and in separate sessions between writing. 
- * 
- * @see org.apache.hyracks.dataflow.common.io.RunFileReader
- * @see org.apache.hyracks.dataflow.common.io.RunFileWriter
- */
-public class RunFileTest {
+public class RunFileDirTest {
 
     private static final int INPUT_BUFFER_SIZE = 4096;
     private static final int TEST_FRAME_SIZE = 256;
@@ -67,14 +58,20 @@ public class RunFileTest {
 
     private final IHyracksTaskContext ctx = TestUtils.create(TEST_FRAME_SIZE);
 
-    private RunFileReader reader;
-    private RunFileWriter writer;
+    private RunFileReaderDir reader;
+    private RunFileWriterDir writer;
+
+    //    FrameFixedFieldAppender appender;
+    //    static ISerializerDeserializer[] fields = new ISerializerDeserializer[] { IntegerSerializerDeserializer.INSTANCE,
+    //            IntegerSerializerDeserializer.INSTANCE, IntegerSerializerDeserializer.INSTANCE };
+    //    static RecordDescriptor recordDescriptor = new RecordDescriptor(fields);
+    //    static ArrayTupleBuilder tupleBuilder = new ArrayTupleBuilder(recordDescriptor.getFieldCount());
 
     @Before
     public void setup() throws HyracksDataException {
         FileReference file = ctx.getJobletContext().createManagedWorkspaceFile("RunFileTest");
         IIOManager ioManager = ctx.getIOManager();
-        writer = new RunFileWriter(file, ioManager);
+        writer = new RunFileWriterDir(file, ioManager);
     }
 
     @SuppressWarnings("unused")

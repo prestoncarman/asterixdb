@@ -26,19 +26,24 @@ import org.apache.hyracks.api.io.FileReference;
 import org.apache.hyracks.api.io.IFileHandle;
 import org.apache.hyracks.api.io.IIOManager;
 
+import net.smacke.jaydio.DirectRandomAccessFile;
+
 public class FileHandle implements IFileHandle {
     private final FileReference fileRef;
+
+    private DirectRandomAccessFile draf;
 
     private RandomAccessFile raf;
 
     private FileChannel channel;
+    private String mode;
 
     public FileHandle(FileReference fileRef) {
         this.fileRef = fileRef;
     }
 
-    public void open(IIOManager.FileReadWriteMode rwMode, IIOManager.FileSyncMode syncMode) throws IOException {
-        String mode;
+    public void open(IIOManager.FileReadWriteMode rwMode, IIOManager.FileSyncMode syncMode, boolean dir)
+            throws IOException {
         switch (rwMode) {
             case READ_ONLY:
                 mode = "r";
@@ -67,13 +72,41 @@ public class FileHandle implements IFileHandle {
             default:
                 throw new IllegalArgumentException();
         }
-        raf = new RandomAccessFile(fileRef.getFile(), mode);
-        channel = raf.getChannel();
+        if (!dir)
+            ensureOpen();
+        else
+            ensureOpenDir();
+    }
+
+    //DirectRandomAccessFile calls linux O_DIRECT in order to bypass the OS Cache. Needed for experiment
+    public DirectRandomAccessFile getDraf() {
+        return draf;
+    }
+
+    public synchronized void ensureOpen() throws IOException {
+        if (raf == null || !raf.getChannel().isOpen()) {
+            raf = new RandomAccessFile(fileRef.getFile(), mode);
+            channel = raf.getChannel();
+        }
+    }
+
+    public synchronized void ensureOpenDir() throws IOException {
+        if (raf != null) {
+            System.err.println("ensureOpenDir: raf is already open by RandomAccessFile");
+        }
+        if (draf == null) {
+            draf = new DirectRandomAccessFile(fileRef.getFile(), mode);
+        }
     }
 
     public void close() throws IOException {
-        channel.close();
-        raf.close();
+        if (raf != null) {
+            channel.close();
+            raf.close();
+        }
+        if (draf != null) {
+            draf.close();
+        }
     }
 
     public FileReference getFileReference() {

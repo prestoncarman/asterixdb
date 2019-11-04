@@ -18,6 +18,7 @@
  */
 package org.apache.hyracks.api.io;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.concurrent.Executor;
@@ -41,17 +42,26 @@ public interface IIOManager {
     public IFileHandle open(FileReference fileRef, FileReadWriteMode rwMode, FileSyncMode syncMode)
             throws HyracksDataException;
 
+    public IFileHandle openDir(FileReference fileRef, FileReadWriteMode rwMode, FileSyncMode syncMode)
+            throws HyracksDataException;
+
     public int syncWrite(IFileHandle fHandle, long offset, ByteBuffer data) throws HyracksDataException;
+
+    public int syncDirWrite(IFileHandle fHandle, long offset, ByteBuffer data) throws HyracksDataException;
 
     public long syncWrite(IFileHandle fHandle, long offset, ByteBuffer[] dataArray) throws HyracksDataException;
 
     public int syncRead(IFileHandle fHandle, long offset, ByteBuffer data) throws HyracksDataException;
+
+    public int syncDirRead(IFileHandle fHandle, long offset, ByteBuffer data) throws HyracksDataException;
 
     public IIOFuture asyncWrite(IFileHandle fHandle, long offset, ByteBuffer data);
 
     public IIOFuture asyncRead(IFileHandle fHandle, long offset, ByteBuffer data);
 
     public void close(IFileHandle fHandle) throws HyracksDataException;
+
+    public void closeDir(IFileHandle fHandle) throws HyracksDataException;
 
     public void sync(IFileHandle fileHandle, boolean metadata) throws HyracksDataException;
 
@@ -67,4 +77,6 @@ public interface IIOManager {
      * @return A file reference based on the mounting point of {@code ioDeviceId} and the passed {@code relativePath}
      */
     public FileReference getAbsoluteFileRef(int ioDeviceId, String relativePath);
+
+    public void flushDir(IFileHandle fHandle) throws IOException;
 }
