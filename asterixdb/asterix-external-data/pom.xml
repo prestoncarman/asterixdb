@@ -263,20 +263,12 @@
       </exclusions>
     </dependency>
     <dependency>
-      <groupId>net.java.dev.rome</groupId>
+      <groupId>com.rometools</groupId>
       <artifactId>rome-fetcher</artifactId>
-      <version>1.0.0</version>
-      <exclusions>
-        <exclusion>
-          <artifactId>rome</artifactId>
-          <groupId>net.java.dev.rome</groupId>
-        </exclusion>
-      </exclusions>
     </dependency>
     <dependency>
-      <groupId>rome</groupId>
+      <groupId>com.rometools</groupId>
       <artifactId>rome</artifactId>
-      <version>1.0.1-modified-01</version>
     </dependency>
     <dependency>
       <groupId>jdom</groupId>

@@ -778,6 +778,16 @@
         <version>${hyracks.version}</version>
         <type>test-jar</type>
       </dependency>
+     <dependency>
+        <groupId>com.rometools</groupId>
+        <artifactId>rome-fetcher</artifactId>
+        <version>1.5.0</version>
+      </dependency>
+      <dependency>
+        <groupId>com.rometools</groupId>
+        <artifactId>rome</artifactId>
+        <version>1.5.0</version>
+      </dependency>
       <dependency>
         <groupId>org.json</groupId>
         <artifactId>json</artifactId>
