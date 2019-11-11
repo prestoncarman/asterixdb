@@ -56,7 +56,7 @@ public class RunFileReaderDir implements IFrameReader {
             return false;
         }
         readPreviousPtr = readPtr;
-        //frame.reset();
+        frame.reset();
 
         int readLength = ioManager.syncDirRead(handle, readPtr, frame.getBuffer());
         if (readLength <= 0) {

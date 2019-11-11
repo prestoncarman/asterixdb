@@ -61,12 +61,6 @@ public class RunFileDirTest {
     private RunFileReaderDir reader;
     private RunFileWriterDir writer;
 
-    //    FrameFixedFieldAppender appender;
-    //    static ISerializerDeserializer[] fields = new ISerializerDeserializer[] { IntegerSerializerDeserializer.INSTANCE,
-    //            IntegerSerializerDeserializer.INSTANCE, IntegerSerializerDeserializer.INSTANCE };
-    //    static RecordDescriptor recordDescriptor = new RecordDescriptor(fields);
-    //    static ArrayTupleBuilder tupleBuilder = new ArrayTupleBuilder(recordDescriptor.getFieldCount());
-
     @Before
     public void setup() throws HyracksDataException {
         FileReference file = ctx.getJobletContext().createManagedWorkspaceFile("RunFileTest");
