@@ -20,6 +20,8 @@ package org.apache.asterix.external.input.record.reader.rss;
 
 import java.net.MalformedURLException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -32,13 +34,14 @@ import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 
-import com.sun.syndication.feed.synd.SyndEntryImpl;
+import com.rometools.rome.feed.synd.SyndEntry;
 
-public class RSSRecordReaderFactory implements IRecordReaderFactory<SyndEntryImpl> {
+public class RSSRecordReaderFactory implements IRecordReaderFactory<SyndEntry> {
 
     private static final long serialVersionUID = 1L;
-    private final List<String> urls = new ArrayList<String>();
+    private final List<String> urls = new ArrayList<>();
     private transient AlgebricksAbsolutePartitionConstraint clusterLocations;
+    private static final List<String> recordReaderNames = Collections.unmodifiableList(Arrays.asList("rss_feed"));
 
     @Override
     public DataSourceType getDataSourceType() {
@@ -69,13 +72,17 @@ public class RSSRecordReaderFactory implements IRecordReaderFactory<SyndEntryImp
         }
     }
 
+    public List<String> getRecordReaderNames() {
+        return recordReaderNames;
+    }
+
     @Override
     public boolean isIndexible() {
         return false;
     }
 
     @Override
-    public IRecordReader<? extends SyndEntryImpl> createRecordReader(IHyracksTaskContext ctx, int partition)
+    public IRecordReader<? extends SyndEntry> createRecordReader(IHyracksTaskContext ctx, int partition)
             throws HyracksDataException {
         try {
             return new RSSRecordReader(urls.get(partition));
@@ -85,8 +92,8 @@ public class RSSRecordReaderFactory implements IRecordReaderFactory<SyndEntryImp
     }
 
     @Override
-    public Class<? extends SyndEntryImpl> getRecordClass() {
-        return SyndEntryImpl.class;
+    public Class<? extends SyndEntry> getRecordClass() {
+        return SyndEntry.class;
     }
 
 }
