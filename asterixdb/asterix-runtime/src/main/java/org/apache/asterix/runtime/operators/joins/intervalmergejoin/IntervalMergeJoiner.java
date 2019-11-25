@@ -88,6 +88,7 @@ class IntervalSideTuple {
     public boolean removeFromMemory(IntervalSideTuple ist) throws HyracksDataException {
         return imjc.checkToRemoveInMemory(accessor, tupleIndex, ist.accessor, ist.tupleIndex);
     }
+
     public boolean checkForEarlyExit(IntervalSideTuple ist) throws HyracksDataException {
         return imjc.checkForEarlyExit(accessor, tupleIndex, ist.accessor, ist.tupleIndex);
     }
@@ -349,11 +350,11 @@ public class IntervalMergeJoiner extends AbstractIntervalMergeJoiner {
 
     private void freezeAndSpill() throws HyracksDataException {
         //        if (LOGGER.isLoggable(Level.WARNING)) {
-        System.err.println("freeze snapshot: " + frameCounts[RIGHT_PARTITION] + " right, " + frameCounts[LEFT_PARTITION]
-                + " left, " + joinComparisonCount + " comparisons, " + joinResultCount + " results, ["
-                + bufferManager.getNumTuples() + " tuples memory].");
-        //        }
-
+        if (DEBUG) {
+            System.err.println("freeze snapshot: " + frameCounts[RIGHT_PARTITION] + " right, "
+                    + frameCounts[LEFT_PARTITION] + " left, " + joinComparisonCount + " comparisons, " + joinResultCount
+                    + " results, [" + bufferManager.getNumTuples() + " tuples memory].");
+        }
         // Mark where to start reading
         if (runFileStream.isReading()) {
             runFilePointer.reset(runFileStream.getReadPointer(), inputAccessor[LEFT_PARTITION].getTupleId());
@@ -389,16 +390,17 @@ public class IntervalMergeJoiner extends AbstractIntervalMergeJoiner {
 
     private void unfreezeAndContinue(ITupleAccessor accessor) throws HyracksDataException {
         //        if (LOGGER.isLoggable(Level.WARNING)) {
-        System.err.println("snapshot: " + frameCounts[RIGHT_PARTITION] + " right, " + frameCounts[LEFT_PARTITION]
-                + " left, " + joinComparisonCount + " comparisons, " + joinResultCount + " results, ["
-                + bufferManager.getNumTuples() + " tuples memory, " + spillCount + " spills, "
-                + (runFileStream.getFileCount() - spillFileCount) + " files, "
-                + (runFileStream.getWriteCount() - spillWriteCount) + " written, "
-                + (runFileStream.getReadCount() - spillReadCount) + " read].");
-        spillFileCount = runFileStream.getFileCount();
-        spillReadCount = runFileStream.getReadCount();
-        spillWriteCount = runFileStream.getWriteCount();
-        //        }
+        if (DEBUG) {
+            System.err.println("snapshot: " + frameCounts[RIGHT_PARTITION] + " right, " + frameCounts[LEFT_PARTITION]
+                    + " left, " + joinComparisonCount + " comparisons, " + joinResultCount + " results, ["
+                    + bufferManager.getNumTuples() + " tuples memory, " + spillCount + " spills, "
+                    + (runFileStream.getFileCount() - spillFileCount) + " files, "
+                    + (runFileStream.getWriteCount() - spillWriteCount) + " written, "
+                    + (runFileStream.getReadCount() - spillReadCount) + " read].");
+            spillFileCount = runFileStream.getFileCount();
+            spillReadCount = runFileStream.getReadCount();
+            spillWriteCount = runFileStream.getWriteCount();
+        }
 
         // Finish writing
         runFileStream.flushRunFile();
