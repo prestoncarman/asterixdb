@@ -90,7 +90,13 @@ public class ProducerConsumerFrameState extends AbstractStateObject implements I
     }
 
     public void noMoreFrames() {
-        noMoreData = true;
+        lock.lock();
+        try {
+            noMoreData = true;
+            frameAvailable.signal();
+        } finally {
+            lock.unlock();
+        }
     }
 
     public boolean hasMoreFrames() {
@@ -104,7 +110,7 @@ public class ProducerConsumerFrameState extends AbstractStateObject implements I
     public ByteBuffer getFrame() {
         lock.lock();
         try {
-            while (this.buffer == null) {
+            while (this.buffer == null && !noMoreData) {
                 try {
                     frameAvailable.await();
                 } catch (InterruptedException e) {

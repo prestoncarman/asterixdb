@@ -64,8 +64,8 @@ public abstract class AbstractStreamJoiner implements IStreamJoiner {
     protected long[] frameCounts = { 0, 0 };
     protected long[] tupleCounts = { 0, 0 };
 
-    public AbstractStreamJoiner(IHyracksTaskContext ctx, int partition, IConsumerFrame leftCF,
-            IConsumerFrame rightCF) throws HyracksDataException {
+    public AbstractStreamJoiner(IHyracksTaskContext ctx, int partition, IConsumerFrame leftCF, IConsumerFrame rightCF)
+            throws HyracksDataException {
         this.partition = partition;
 
         inputAccessor = new TupleAccessor[JOIN_PARTITIONS];
@@ -106,14 +106,13 @@ public abstract class AbstractStreamJoiner implements IStreamJoiner {
     }
 
     protected boolean getNextFrame(int branch) throws HyracksDataException {
-        if (consumerFrames[branch].hasMoreFrames()) {
-            setFrame(branch, consumerFrames[branch].getFrame());
-            return true;
-        }
-        return false;
+        return setFrame(branch, consumerFrames[branch].getFrame());
     }
 
-    private void setFrame(int branch, ByteBuffer buffer) throws HyracksDataException {
+    private boolean setFrame(int branch, ByteBuffer buffer) throws HyracksDataException {
+        if (buffer == null) {
+            return false;
+        }
         inputBuffer[branch].getBuffer().clear();
         if (inputBuffer[branch].getFrameSize() < buffer.capacity()) {
             inputBuffer[branch].resize(buffer.capacity());
@@ -123,5 +122,6 @@ public abstract class AbstractStreamJoiner implements IStreamJoiner {
         inputAccessor[branch].next();
         frameCounts[branch]++;
         tupleCounts[branch] += inputAccessor[branch].getTupleCount();
+        return true;
     }
 }
