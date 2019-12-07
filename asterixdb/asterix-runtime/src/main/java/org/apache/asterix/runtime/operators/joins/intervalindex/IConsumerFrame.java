@@ -28,6 +28,4 @@ public interface IConsumerFrame {
 
     public ByteBuffer getFrame();
 
-    public boolean hasMoreFrames();
-
 }

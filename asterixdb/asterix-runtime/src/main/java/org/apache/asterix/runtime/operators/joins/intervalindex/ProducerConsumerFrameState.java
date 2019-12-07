@@ -99,10 +99,6 @@ public class ProducerConsumerFrameState extends AbstractStateObject implements I
         }
     }
 
-    public boolean hasMoreFrames() {
-        return !(noMoreData && this.buffer == null);
-    }
-
     public RecordDescriptor getRecordDescriptor() {
         return recordDescriptor;
     }
