@@ -62,6 +62,7 @@ public class ProducerConsumerFrameState extends AbstractStateObject implements I
     /**
      * Function copied from StackOverflow.
      * https://stackoverflow.com/questions/3366925/deep-copy-duplicate-of-javas-bytebuffer
+     * 
      * @param original
      */
     private void cloneByteBuffer(final ByteBuffer original) {
@@ -71,18 +72,11 @@ public class ProducerConsumerFrameState extends AbstractStateObject implements I
                     : ByteBuffer.allocate(original.capacity());
         }
 
-//        // Create a read-only copy of the original.
-//        // This allows reading from the original without modifying it.
-//        final ByteBuffer readOnlyCopy = original.asReadOnlyBuffer();
-//
-//        // Flip and read from the original.
-//        readOnlyCopy.flip();
-//        this.buffer.put(original);
-        original.rewind();//copy from the beginning
+        // Copy from the beginning
+        original.rewind();
         this.buffer.put(original);
         original.rewind();
         this.buffer.flip();
-
 
         this.buffer.position(original.position());
         this.buffer.limit(original.limit());
