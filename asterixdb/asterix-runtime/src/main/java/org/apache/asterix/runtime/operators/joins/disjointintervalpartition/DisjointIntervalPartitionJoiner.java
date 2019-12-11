@@ -34,15 +34,15 @@ import org.apache.hyracks.api.dataflow.value.RecordDescriptor;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.io.FileReference;
 import org.apache.hyracks.dataflow.common.comm.util.FrameUtils;
-//import org.apache.hyracks.dataflow.common.io.RunFileReader;
-//import org.apache.hyracks.dataflow.common.io.RunFileWriter;
-import org.apache.hyracks.dataflow.std.join.RunFileReaderDir;
-import org.apache.hyracks.dataflow.std.join.RunFileWriterDir;
 import org.apache.hyracks.dataflow.std.buffermanager.ITupleAccessor;
 import org.apache.hyracks.dataflow.std.buffermanager.TupleAccessor;
 import org.apache.hyracks.dataflow.std.join.AbstractMergeJoiner;
 import org.apache.hyracks.dataflow.std.join.MergeJoinLocks;
 import org.apache.hyracks.dataflow.std.join.MergeStatus;
+//import org.apache.hyracks.dataflow.common.io.RunFileReader;
+//import org.apache.hyracks.dataflow.common.io.RunFileWriter;
+import org.apache.hyracks.dataflow.std.join.RunFileReaderDir;
+import org.apache.hyracks.dataflow.std.join.RunFileWriterDir;
 
 public class DisjointIntervalPartitionJoiner extends AbstractMergeJoiner {
 
@@ -139,7 +139,7 @@ public class DisjointIntervalPartitionJoiner extends AbstractMergeJoiner {
         // Handle spill file.
         processSpill(partitionAndSpill, leftRunFileReaders, leftPartitionCounts);
 
-//        printPartitionCounts("Left", leftPartitionCounts);
+        printPartitionCounts("Left", leftPartitionCounts);
 
         // Probe side
         partitionAndSpill.resetForNewDataset(rightRd, rightDipc, PROBE_RUN_FILES_PREFIX, getNewSpillWriter());
@@ -157,7 +157,7 @@ public class DisjointIntervalPartitionJoiner extends AbstractMergeJoiner {
             getInMemoryTupleAccessors(partitionAndSpill, rightPartitionCounts);
             processInMemoryJoin(writer);
         }
-//        printPartitionCounts("Right", rightPartitionCounts);
+        printPartitionCounts("Right", rightPartitionCounts);
 
         partitionAndSpill.close();
         resultAppender.write(writer, true);
@@ -308,6 +308,7 @@ public class DisjointIntervalPartitionJoiner extends AbstractMergeJoiner {
     private void processSpilledJoin(IFrameWriter writer) throws HyracksDataException {
         prepareFrames(numberOfPartitions, rightRunFileReaders);
 
+        int count = 0;
         for (int offset = 0; offset < rightRunFileReaders.size(); offset += numberOfPartitions) {
             openPartitions(rightRunFileReaders, offset);
             for (int l = 0; l < leftRunFileReaders.size(); l++) {
@@ -316,7 +317,9 @@ public class DisjointIntervalPartitionJoiner extends AbstractMergeJoiner {
                 joinPartition(leftRunFileReaders.get(l), l, rightRunFileReaders, offset, writer);
             }
             closePartitions(rightRunFileReaders, offset);
+            count++;
         }
+        System.err.println("Disjoint Interval Partition Join in " + count + " passes over spilled data.");
     }
 
     private void openPartitions(List<RunFileReaderDir> partitionRunsReaders, int offset) throws HyracksDataException {
