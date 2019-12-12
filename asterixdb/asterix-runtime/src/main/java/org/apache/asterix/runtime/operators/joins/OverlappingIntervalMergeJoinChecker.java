@@ -57,7 +57,7 @@ public class OverlappingIntervalMergeJoinChecker extends AbstractIntervalMergeJo
         long end0 = IntervalJoinUtil.getIntervalEnd(accessorLeft, leftTupleIndex, idLeft);
         long start0 = IntervalJoinUtil.getIntervalStart(accessorLeft, leftTupleIndex, idLeft);
         long end1 = IntervalJoinUtil.getIntervalEnd(accessorRight, rightTupleIndex, idRight);
-        return end0 < start1;
+        return end0 <= start1;
     }
 
     /**
