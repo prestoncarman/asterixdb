@@ -30,6 +30,7 @@ import org.apache.asterix.runtime.operators.joins.IntervalJoinUtil;
 import org.apache.asterix.runtime.operators.joins.intervalindex.AbstractStreamJoiner;
 import org.apache.asterix.runtime.operators.joins.intervalindex.IConsumerFrame;
 import org.apache.asterix.runtime.operators.joins.intervalindex.TuplePrinterUtil;
+import org.apache.asterix.runtime.operators.joins.intervalindex.AbstractStreamJoiner.TupleStatus;
 import org.apache.hyracks.api.comm.IFrameTupleAccessor;
 import org.apache.hyracks.api.comm.IFrameWriter;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
@@ -196,9 +197,9 @@ public class IntervalForwardSweepJoiner extends AbstractStreamJoiner {
         //        bufferManager = new VPartitionDeletableTupleBufferManager(ctx,
         //                VPartitionDeletableTupleBufferManager.NO_CONSTRAIN, JOIN_PARTITIONS,
         //                (memorySize - 4) * ctx.getInitialFrameSize(), recordDescriptors);
-        bufferManager = new VPartitionDeletableTupleBufferManager(ctx,
-                VPartitionDeletableTupleBufferManager.NO_CONSTRAIN, JOIN_PARTITIONS,
-                memorySize * ctx.getInitialFrameSize(), recordDescriptors);
+        bufferManager =
+                new VPartitionDeletableTupleBufferManager(ctx, VPartitionDeletableTupleBufferManager.NO_CONSTRAIN,
+                        JOIN_PARTITIONS, memorySize * ctx.getInitialFrameSize(), recordDescriptors);
         memoryAccessor = new ITupleAccessor[JOIN_PARTITIONS];
         memoryAccessor[LEFT_PARTITION] = bufferManager.getTupleAccessor(leftCF.getRecordDescriptor());
         memoryAccessor[RIGHT_PARTITION] = bufferManager.getTupleAccessor(rightCF.getRecordDescriptor());
@@ -289,9 +290,9 @@ public class IntervalForwardSweepJoiner extends AbstractStreamJoiner {
         runFileStream[LEFT_PARTITION].removeRunFile();
         runFileStream[RIGHT_PARTITION].removeRunFile();
 
+        long ioCost = runFileStream[LEFT_PARTITION].getWriteCount() + runFileStream[LEFT_PARTITION].getReadCount()
+                + runFileStream[RIGHT_PARTITION].getWriteCount() + runFileStream[RIGHT_PARTITION].getReadCount();
         if (LOGGER.isLoggable(Level.WARNING)) {
-            long ioCost = runFileStream[LEFT_PARTITION].getWriteCount() + runFileStream[LEFT_PARTITION].getReadCount()
-                    + runFileStream[RIGHT_PARTITION].getWriteCount() + runFileStream[RIGHT_PARTITION].getReadCount();
             LOGGER.warning(",IntervalForwardSweepJoiner Statistics Log," + partition + ",partition," + memorySize
                     + ",memory," + joinResultCount + ",results," + joinComparisonCount + ",CPU," + ioCost + ",IO,"
                     + leftSpillCount + ",left spills," + runFileStream[LEFT_PARTITION].getWriteCount()
@@ -299,8 +300,6 @@ public class IntervalForwardSweepJoiner extends AbstractStreamJoiner {
                     + rightSpillCount + ",right spills," + runFileStream[RIGHT_PARTITION].getWriteCount()
                     + ",right frames_written," + runFileStream[RIGHT_PARTITION].getReadCount() + ",right frames_read");
         }
-        long ioCost = runFileStream[LEFT_PARTITION].getWriteCount() + runFileStream[LEFT_PARTITION].getReadCount()
-                + runFileStream[RIGHT_PARTITION].getWriteCount() + runFileStream[RIGHT_PARTITION].getReadCount();
         System.out.println(",IntervalForwardSweepJoiner Statistics Log," + partition + ",partition," + memorySize
                 + ",memory," + joinResultCount + ",results," + joinComparisonCount + ",CPU," + ioCost + ",IO,"
                 + leftSpillCount + ",left spills," + runFileStream[LEFT_PARTITION].getWriteCount()
@@ -314,16 +313,6 @@ public class IntervalForwardSweepJoiner extends AbstractStreamJoiner {
     }
 
     private void processNextTuple(IFrameWriter writer) throws HyracksDataException {
-        // Frozen.
-        if (runFileStream[LEFT_PARTITION].isWriting()) {
-            processTupleSpill(LEFT_PARTITION, RIGHT_PARTITION, false, writer);
-            //inputAccessor[LEFT_PARTITION].next();
-            return;
-        } else if (runFileStream[RIGHT_PARTITION].isWriting()) {
-            processTupleSpill(RIGHT_PARTITION, LEFT_PARTITION, true, writer);
-            //inputAccessor[RIGHT_PARTITION].next();
-            return;
-        }
         // Ensure a tuple is in memory.
         TupleStatus leftTs = loadTuple(LEFT_PARTITION);
         if (leftTs.isLoaded() && !activeManager[LEFT_PARTITION].hasRecords()) {
@@ -366,13 +355,13 @@ public class IntervalForwardSweepJoiner extends AbstractStreamJoiner {
     private boolean checkToProcessRightTuple() {
         TuplePointer leftTp = activeManager[LEFT_PARTITION].getFirst();
         memoryAccessor[LEFT_PARTITION].reset(leftTp);
-        long leftStart = IntervalJoinUtil.getIntervalStart(memoryAccessor[LEFT_PARTITION], leftTp.getTupleIndex(),
-                leftKey);
+        long leftStart =
+                IntervalJoinUtil.getIntervalStart(memoryAccessor[LEFT_PARTITION], leftTp.getTupleIndex(), leftKey);
 
         TuplePointer rightTp = activeManager[RIGHT_PARTITION].getFirst();
         memoryAccessor[RIGHT_PARTITION].reset(rightTp);
-        long rightStart = IntervalJoinUtil.getIntervalStart(memoryAccessor[RIGHT_PARTITION], rightTp.getTupleIndex(),
-                rightKey);
+        long rightStart =
+                IntervalJoinUtil.getIntervalStart(memoryAccessor[RIGHT_PARTITION], rightTp.getTupleIndex(), rightKey);
         return leftStart > rightStart;
     }
 
@@ -399,10 +388,6 @@ public class IntervalForwardSweepJoiner extends AbstractStreamJoiner {
             LOGGER.fine("Spill for " + count + " left tuples");
         }
 
-        // Memory is empty and we can start processing the run file.
-        if (activeManager[other].isEmpty() || ts.isEmpty()) {
-            unfreezeAndContinue(main, inputAccessor[main]);
-        }
     }
 
     private boolean addToTupleProcessingGroup(int main, int other) {
@@ -536,6 +521,8 @@ public class IntervalForwardSweepJoiner extends AbstractStreamJoiner {
             } else {
                 // Spill case, remove search tuple before freeze.
                 freezeAndStartSpill(writer, processingGroup);
+                processingGroup.clear();
+                return;
                 //                System.err.println("Remove search before spill -- left tuple: " + searchTp);
                 //                TuplePrinterUtil.printTuple("    left: ", memoryAccessor[LEFT_PARTITION], searchTp.getTupleIndex());
                 //                activeManager[LEFT_PARTITION].remove(searchTp);
@@ -727,13 +714,13 @@ public class IntervalForwardSweepJoiner extends AbstractStreamJoiner {
         //                + (runFileStream[RIGHT_PARTITION].getFileCount() - spillFileCount[RIGHT_PARTITION]) + " files, "
         //                + (runFileStream[RIGHT_PARTITION].getWriteCount() - spillWriteCount[RIGHT_PARTITION]) + " written, "
         //                + (runFileStream[RIGHT_PARTITION].getReadCount() - spillReadCount[RIGHT_PARTITION]) + " read].");
-
-        spillFileCount[LEFT_PARTITION] = runFileStream[LEFT_PARTITION].getFileCount();
-        spillReadCount[LEFT_PARTITION] = runFileStream[LEFT_PARTITION].getReadCount();
-        spillWriteCount[LEFT_PARTITION] = runFileStream[LEFT_PARTITION].getWriteCount();
-        spillFileCount[RIGHT_PARTITION] = runFileStream[RIGHT_PARTITION].getFileCount();
-        spillReadCount[RIGHT_PARTITION] = runFileStream[RIGHT_PARTITION].getReadCount();
-        spillWriteCount[RIGHT_PARTITION] = runFileStream[RIGHT_PARTITION].getWriteCount();
+        //
+        //        spillFileCount[LEFT_PARTITION] = runFileStream[LEFT_PARTITION].getFileCount();
+        //        spillReadCount[LEFT_PARTITION] = runFileStream[LEFT_PARTITION].getReadCount();
+        //        spillWriteCount[LEFT_PARTITION] = runFileStream[LEFT_PARTITION].getWriteCount();
+        //        spillFileCount[RIGHT_PARTITION] = runFileStream[RIGHT_PARTITION].getFileCount();
+        //        spillReadCount[RIGHT_PARTITION] = runFileStream[RIGHT_PARTITION].getReadCount();
+        //        spillWriteCount[RIGHT_PARTITION] = runFileStream[RIGHT_PARTITION].getWriteCount();
 
         // Mark where to start reading
         if (runFileStream[freezePartition].isReading()) {
@@ -754,6 +741,18 @@ public class IntervalForwardSweepJoiner extends AbstractStreamJoiner {
         }
 
         freezeAndClearMemory(writer, searchGroup);
+
+        // Frozen.
+        if (runFileStream[LEFT_PARTITION].isWriting()) {
+            processTupleSpill(LEFT_PARTITION, RIGHT_PARTITION, false, writer);
+            // Memory is empty and we can start processing the run file.
+            unfreezeAndContinue(LEFT_PARTITION, inputAccessor[LEFT_PARTITION]);
+        } else if (runFileStream[RIGHT_PARTITION].isWriting()) {
+            processTupleSpill(RIGHT_PARTITION, LEFT_PARTITION, true, writer);
+            // Memory is empty and we can start processing the run file.
+            unfreezeAndContinue(RIGHT_PARTITION, inputAccessor[RIGHT_PARTITION]);
+        }
+
     }
 
     private void continueStream(int diskPartition, ITupleAccessor accessor) throws HyracksDataException {
