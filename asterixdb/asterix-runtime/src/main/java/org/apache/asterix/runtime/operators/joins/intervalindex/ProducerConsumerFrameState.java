@@ -23,8 +23,10 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
+import org.apache.hyracks.api.comm.IFrame;
 import org.apache.hyracks.api.dataflow.TaskId;
 import org.apache.hyracks.api.dataflow.value.RecordDescriptor;
+import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.dataflow.std.base.AbstractStateObject;
 
@@ -33,6 +35,7 @@ public class ProducerConsumerFrameState extends AbstractStateObject implements I
     private final RecordDescriptor recordDescriptor;
     private ByteBuffer buffer;
     private boolean noMoreData = false;
+    private boolean consumerClosed = false;
     private Lock lock = new ReentrantLock();
     private Condition frameAvailable = this.lock.newCondition();
     private Condition frameProcessed = this.lock.newCondition();
@@ -45,15 +48,38 @@ public class ProducerConsumerFrameState extends AbstractStateObject implements I
     public void putFrame(ByteBuffer buffer) {
         lock.lock();
         try {
-            while (this.buffer != null) {
+            while (this.buffer != null && !consumerClosed) {
                 try {
                     frameProcessed.await();
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
                 }
             }
+            if (consumerClosed) {
+                return;
+            }
             cloneByteBuffer(buffer);
             frameAvailable.signal();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public void noMoreFrames() {
+        lock.lock();
+        try {
+            noMoreData = true;
+            frameAvailable.signal();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public void close() {
+        lock.lock();
+        try {
+            consumerClosed = true;
+            frameProcessed.signal();
         } finally {
             lock.unlock();
         }
@@ -83,21 +109,11 @@ public class ProducerConsumerFrameState extends AbstractStateObject implements I
         this.buffer.order(original.order());
     }
 
-    public void noMoreFrames() {
-        lock.lock();
-        try {
-            noMoreData = true;
-            frameAvailable.signal();
-        } finally {
-            lock.unlock();
-        }
-    }
-
     public RecordDescriptor getRecordDescriptor() {
         return recordDescriptor;
     }
 
-    public ByteBuffer getFrame() {
+    public boolean getFrame(IFrame returnFrame) throws HyracksDataException {
         lock.lock();
         try {
             while (this.buffer == null && !noMoreData) {
@@ -107,10 +123,18 @@ public class ProducerConsumerFrameState extends AbstractStateObject implements I
                     throw new RuntimeException(e);
                 }
             }
-            ByteBuffer returnValue = this.buffer;
-            this.buffer = null;
-            frameProcessed.signal();
-            return returnValue;
+            if (this.buffer != null) {
+                returnFrame.getBuffer().clear();
+                if (returnFrame.getFrameSize() < buffer.capacity()) {
+                    returnFrame.resize(buffer.capacity());
+                }
+                returnFrame.getBuffer().put(buffer.array(), 0, buffer.capacity());
+                this.buffer = null;
+                frameProcessed.signal();
+                return true;
+            } else {
+                return false;
+            }
         } finally {
             this.lock.unlock();
         }

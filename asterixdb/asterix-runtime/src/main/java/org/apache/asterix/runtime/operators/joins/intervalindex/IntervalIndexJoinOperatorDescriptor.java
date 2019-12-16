@@ -147,6 +147,8 @@ public class IntervalIndexJoinOperatorDescriptor extends AbstractOperatorDescrip
                             endPointComparator, imjcf, leftKeys, rightKeys, (IConsumerFrame) leftState,
                             (IConsumerFrame) rightState);
                     indexJoiner.processJoin(writer);
+                    leftState.close();
+                    rightState.close();
                 } catch (Exception ex) {
                     writer.fail();
                     throw new HyracksDataException(ex);
@@ -160,8 +162,6 @@ public class IntervalIndexJoinOperatorDescriptor extends AbstractOperatorDescrip
     private class InputDataActivityNode extends AbstractActivityNode {
         private static final long serialVersionUID = 1L;
 
-        private int partition;
-
         public InputDataActivityNode(ActivityId id) {
             super(id);
         }
@@ -170,19 +170,20 @@ public class IntervalIndexJoinOperatorDescriptor extends AbstractOperatorDescrip
         public IOperatorNodePushable createPushRuntime(IHyracksTaskContext ctx,
                 IRecordDescriptorProvider recordDescProvider, int partition, int nPartitions)
                 throws HyracksDataException {
-            this.partition = partition;
             RecordDescriptor inRecordDesc = recordDescProvider.getInputRecordDescriptor(id, 0);
-            return new InputDataOperator(ctx, inRecordDesc);
+            return new InputDataOperator(ctx, partition, inRecordDesc);
         }
 
         private class InputDataOperator extends AbstractUnaryInputSinkOperatorNodePushable {
 
-            private IHyracksTaskContext ctx;
+            private final IHyracksTaskContext ctx;
+            private final int partition;
             private final RecordDescriptor recordDescriptor;
             private ProducerConsumerFrameState state;
 
-            public InputDataOperator(IHyracksTaskContext ctx, RecordDescriptor inRecordDesc) {
+            public InputDataOperator(IHyracksTaskContext ctx, int partition, RecordDescriptor inRecordDesc) {
                 this.ctx = ctx;
+                this.partition = partition;
                 this.recordDescriptor = inRecordDesc;
             }
 

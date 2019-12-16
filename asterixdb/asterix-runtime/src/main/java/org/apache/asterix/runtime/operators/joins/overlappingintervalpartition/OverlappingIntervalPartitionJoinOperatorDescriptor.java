@@ -170,6 +170,8 @@ public class OverlappingIntervalPartitionJoinOperatorDescriptor extends Abstract
                     IStreamJoiner joiner = new OverlappingIntervalPartitionJoiner(ctx, memoryForJoin, partition, k,
                             imjc, (IConsumerFrame) leftState, (IConsumerFrame) rightState, buildHpc, probeHpc);
                     joiner.processJoin(writer);
+                    leftState.close();
+                    rightState.close();
                 } catch (Exception ex) {
                     writer.fail();
                     throw new HyracksDataException(ex);
@@ -183,8 +185,6 @@ public class OverlappingIntervalPartitionJoinOperatorDescriptor extends Abstract
     private class InputDataActivityNode extends AbstractActivityNode {
         private static final long serialVersionUID = 1L;
 
-        private int partition;
-
         public InputDataActivityNode(ActivityId id) {
             super(id);
         }
@@ -193,19 +193,20 @@ public class OverlappingIntervalPartitionJoinOperatorDescriptor extends Abstract
         public IOperatorNodePushable createPushRuntime(IHyracksTaskContext ctx,
                 IRecordDescriptorProvider recordDescProvider, int partition, int nPartitions)
                 throws HyracksDataException {
-            this.partition = partition;
             RecordDescriptor inRecordDesc = recordDescProvider.getInputRecordDescriptor(id, 0);
-            return new InputDataOperator(ctx, inRecordDesc);
+            return new InputDataOperator(ctx, partition, inRecordDesc);
         }
 
         private class InputDataOperator extends AbstractUnaryInputSinkOperatorNodePushable {
 
-            private IHyracksTaskContext ctx;
+            private final IHyracksTaskContext ctx;
+            private final int partition;
             private final RecordDescriptor recordDescriptor;
             private ProducerConsumerFrameState state;
 
-            public InputDataOperator(IHyracksTaskContext ctx, RecordDescriptor inRecordDesc) {
+            public InputDataOperator(IHyracksTaskContext ctx, int partition, RecordDescriptor inRecordDesc) {
                 this.ctx = ctx;
+                this.partition = partition;
                 this.recordDescriptor = inRecordDesc;
             }
 

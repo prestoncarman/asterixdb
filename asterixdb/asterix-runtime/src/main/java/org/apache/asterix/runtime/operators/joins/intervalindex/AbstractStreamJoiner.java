@@ -18,8 +18,6 @@
  */
 package org.apache.asterix.runtime.operators.joins.intervalindex;
 
-import java.nio.ByteBuffer;
-
 import org.apache.asterix.runtime.operators.joins.intervalmergejoin.IntervalMergeBranchStatus;
 import org.apache.hyracks.api.comm.IFrame;
 import org.apache.hyracks.api.comm.VSizeFrame;
@@ -106,22 +104,17 @@ public abstract class AbstractStreamJoiner implements IStreamJoiner {
     }
 
     protected boolean getNextFrame(int branch) throws HyracksDataException {
-        return setFrame(branch, consumerFrames[branch].getFrame());
-    }
-
-    private boolean setFrame(int branch, ByteBuffer buffer) throws HyracksDataException {
-        if (buffer == null) {
+        if (consumerFrames[branch].getFrame(inputBuffer[branch])) {
+            inputAccessor[branch].reset(inputBuffer[branch].getBuffer());
+            inputAccessor[branch].next();
+            frameCounts[branch]++;
+            tupleCounts[branch] += inputAccessor[branch].getTupleCount();
+            return true;
+        } else {
+            inputAccessor[branch] = null;
             return false;
         }
-        inputBuffer[branch].getBuffer().clear();
-        if (inputBuffer[branch].getFrameSize() < buffer.capacity()) {
-            inputBuffer[branch].resize(buffer.capacity());
-        }
-        inputBuffer[branch].getBuffer().put(buffer.array(), 0, buffer.capacity());
-        inputAccessor[branch].reset(inputBuffer[branch].getBuffer());
-        inputAccessor[branch].next();
-        frameCounts[branch]++;
-        tupleCounts[branch] += inputAccessor[branch].getTupleCount();
-        return true;
+
     }
+
 }
