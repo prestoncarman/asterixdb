@@ -143,7 +143,7 @@ public class DisjointIntervalPartitionJoiner extends AbstractMergeJoiner {
 
         // Probe side
         partitionAndSpill.resetForNewDataset(rightRd, rightDipc, PROBE_RUN_FILES_PREFIX, getNewSpillWriter());
-        while (loadRightTuple() == TupleStatus.LOADED) {
+        while (loadRightTuple() == TupleStatus.LOADED && inputAccessor[RIGHT_PARTITION].exists()) {
             partitionAndSpill.processTupleAccessor(inputAccessor[RIGHT_PARTITION]);
             inputAccessor[RIGHT_PARTITION].next();
         }

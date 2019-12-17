@@ -107,6 +107,9 @@ public abstract class AbstractStreamJoiner implements IStreamJoiner {
         if (consumerFrames[branch].getFrame(inputBuffer[branch])) {
             inputAccessor[branch].reset(inputBuffer[branch].getBuffer());
             inputAccessor[branch].next();
+            if (!inputAccessor[branch].exists()) {
+                return false;
+            }
             frameCounts[branch]++;
             tupleCounts[branch] += inputAccessor[branch].getTupleCount();
             return true;

@@ -300,8 +300,8 @@ public class OverlappingIntervalPartitionJoiner extends AbstractStreamJoiner {
     private void fillMemory() throws HyracksDataException {
         // TODO Add check this partition is needed for a join.
         int buildPid = -1;
-        TupleStatus ts;
-        for (ts = loadRightTuple(); ts.isLoaded(); ts = loadRightTuple()) {
+        TupleStatus ts = loadRightTuple();
+        while (ts.isLoaded() && inputAccessor[RIGHT_PARTITION].exists()) {
             int pid = buildHpc.partition(inputAccessor[RIGHT_PARTITION], inputAccessor[RIGHT_PARTITION].getTupleId(),
                     k);
 
@@ -324,6 +324,7 @@ public class OverlappingIntervalPartitionJoiner extends AbstractStreamJoiner {
                 buildPid = pid;
             }
             inputAccessor[RIGHT_PARTITION].next();
+            ts = loadRightTuple();
         }
         if (ts.isEmpty()) {
             moreBuildProcessing = false;
