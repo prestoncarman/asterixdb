@@ -21,16 +21,8 @@ package org.apache.asterix.runtime.operators.joins.disjointintervalpartition;
 import java.io.Serializable;
 import java.util.Comparator;
 
-public class PartitionMinItem implements Serializable {
+public class PartitionMinItem implements Serializable, Comparable<PartitionMinItem> {
     private static final long serialVersionUID = 1L;
-
-    public static final Comparator<PartitionMinItem> PartitionMinComparator = (epi1, epi2) -> {
-        int c = (int) (epi1.getPoint() - epi2.getPoint());
-        if (c == 0) {
-            c = epi1.getPartition() - epi2.getPartition();
-        }
-        return c;
-    };
 
     private int partition;
     private long point;
@@ -67,6 +59,15 @@ public class PartitionMinItem implements Serializable {
     @Override
     public String toString() {
         return "PartitionMinItem " + partition + ": " + point;
+    }
+
+    @Override
+    public int compareTo(PartitionMinItem epi2) {
+        long c = getPoint() - epi2.getPoint();
+        if (c == 0) {
+            return getPartition() - epi2.getPartition();
+        }
+        return (c > 1) ? 1 : -1;
     }
 
 }

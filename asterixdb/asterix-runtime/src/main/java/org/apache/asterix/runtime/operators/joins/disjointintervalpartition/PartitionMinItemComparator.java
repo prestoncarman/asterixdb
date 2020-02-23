@@ -32,11 +32,7 @@ public class PartitionMinItemComparator implements Comparator<PartitionMinItem> 
     @Override
     public int compare(final PartitionMinItem epi1, final PartitionMinItem epi2) {
         counter.incrementAndGet();
-        int c = (int) (epi1.getPoint() - epi2.getPoint());
-        if (c == 0) {
-            c = epi1.getPartition() - epi2.getPartition();
-        }
-        return c;
+        return epi1.compareTo(epi2);
     }
 
     public int getTotalCalled() {
