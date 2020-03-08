@@ -60,8 +60,10 @@ public class VPartitionDeletableTupleBufferManager extends VPartitionTupleBuffer
         int requiredFreeSpace = calculatePhysicalSpace(fta, idx);
         int frameId = findAvailableFrame(partition, requiredFreeSpace);
         if (frameId < 0) {
-            if (canBeInsertedAfterCleanUpFragmentation(partition, requiredFreeSpace)) {
-                reOrganizeFrames(partition);
+            // printStats("Failed insert for " + partition);
+            if (canBeInsertedAfterFreeingFrames(partition)
+                    || canBeInsertedAfterCleanUpFragmentation(partition, requiredFreeSpace)) {
+                reOrganizeFrames();
                 frameId = findAvailableFrame(partition, requiredFreeSpace);
             } else {
                 return false;
@@ -96,25 +98,55 @@ public class VPartitionDeletableTupleBufferManager extends VPartitionTupleBuffer
         super.clearPartition(partitionId);
     }
 
-    private void reOrganizeFrames(int partition) {
-//        System.err.printf("reOrganizeFrames -- %d:[", partition);
+    private boolean canBeInsertedAfterFreeingFrames(int skipPartition) {
+        for (int partition = 0; partition < partitionArray.length; ++partition) {
+            if (skipPartition == partition) {
+                continue;
+            }
+            partitionArray[partition].resetIterator();
+            int f = partitionArray[partition].next();
+            while (partitionArray[partition].exists()) {
+                partitionArray[partition].getFrame(f, tempInfo);
+                accessor[partition].reset(tempInfo.getBuffer());
+                if (accessor[partition].getTupleCount() == 0) {
+                    return true;
+                }
+                f = partitionArray[partition].next();
+            }
+        }
+        return false;
+    }
+
+    private void reOrganizeFrames() {
+        for (int p = 0; p < partitionArray.length; ++p) {
+            reOrganizeFramesForPartition(p);
+        }
+    }
+
+    private void reOrganizeFramesForPartition(int partition) {
+        //System.err.printf("reOrganizeFrames -- %d:[", partition);
         policy[partition].reset();
         partitionArray[partition].resetIterator();
         int f = partitionArray[partition].next();
         while (partitionArray[partition].exists()) {
-            partitionArray[partition].getFrame(f, tempInfo);
-            accessor[partition].reset(tempInfo.getBuffer());
-            accessor[partition].reOrganizeBuffer();
-            if (accessor[partition].getTupleCount() == 0) {
-                partitionArray[partition].removeFrame(f);
-                framePool.deAllocateBuffer(tempInfo.getBuffer());
-            } else {
-                policy[partition].pushNewFrame(f, accessor[partition].getContiguousFreeSpace());
-//                accessor[partition].printStats(System.err);
-            }
+            reOrganizeFrameForPartition(partition, f);
             f = partitionArray[partition].next();
         }
-//        System.err.println("] ");
+        // System.err.println("] ");
+    }
+
+    private void reOrganizeFrameForPartition(int partition, int f) {
+        partitionArray[partition].getFrame(f, tempInfo);
+        accessor[partition].reset(tempInfo.getBuffer());
+        accessor[partition].reOrganizeBuffer();
+        if (accessor[partition].getTupleCount() == 0) {
+            partitionArray[partition].removeFrame(f);
+            framePool.deAllocateBuffer(tempInfo.getBuffer());
+            //System.err.print("REMOVED");
+        } else {
+            policy[partition].pushNewFrame(f, accessor[partition].getContiguousFreeSpace());
+            //accessor[partition].printStats(System.err);
+        }
     }
 
     private boolean canBeInsertedAfterCleanUpFragmentation(int partition, int requiredFreeSpace) {
@@ -175,18 +207,24 @@ public class VPartitionDeletableTupleBufferManager extends VPartitionTupleBuffer
 
     @Override
     public void deleteTuple(int partition, TuplePointer tuplePointer) throws HyracksDataException {
-        partitionArray[parsePartitionId(tuplePointer.getFrameIndex())]
-                .getFrame(parseFrameIdInPartition(tuplePointer.getFrameIndex()), tempInfo);
+
+        int f = parseFrameIdInPartition(tuplePointer.getFrameIndex());
+        partitionArray[parsePartitionId(tuplePointer.getFrameIndex())].getFrame(f, tempInfo);
         accessor[partition].reset(tempInfo.getBuffer());
         accessor[partition].delete(tuplePointer.getTupleIndex());
         numTuples[partition]--;
+
+        //        // Return frame
+        //        if (accessor[partition].getTupleCount() == 0 && partitionArray[partition].getNumFrames() > 1) {
+        //            reOrganizeFrames(partition);
+        //        }
     }
 
     @Override
     public ITuplePointerAccessor getTuplePointerAccessor(final RecordDescriptor recordDescriptor) {
         return new AbstractTuplePointerAccessor() {
-            private IAppendDeletableFrameTupleAccessor innerAccessor = new AppendDeletableFrameTupleAccessor(
-                    recordDescriptor);
+            private IAppendDeletableFrameTupleAccessor innerAccessor =
+                    new AppendDeletableFrameTupleAccessor(recordDescriptor);
 
             @Override
             IFrameTupleAccessor getInnerAccessor() {
@@ -205,7 +243,8 @@ public class VPartitionDeletableTupleBufferManager extends VPartitionTupleBuffer
     @Override
     public ITupleAccessor getTupleAccessor(final RecordDescriptor recordDescriptor) {
         return new AbstractTupleAccessor() {
-            private AppendDeletableFrameTupleAccessor innerAccessor = new AppendDeletableFrameTupleAccessor(recordDescriptor);
+            private AppendDeletableFrameTupleAccessor innerAccessor =
+                    new AppendDeletableFrameTupleAccessor(recordDescriptor);
 
             @Override
             IFrameTupleAccessor getInnerAccessor() {
@@ -215,9 +254,6 @@ public class VPartitionDeletableTupleBufferManager extends VPartitionTupleBuffer
             @Override
             void resetInnerAccessor(TuplePointer tuplePointer) {
                 resetInnerAccessor(tuplePointer.getFrameIndex());
-//                partitionArray[parsePartitionId(tuplePointer.getFrameIndex())]
-//                        .getFrame(parseFrameIdInPartition(tuplePointer.getFrameIndex()), tempInfo);
-//                innerAccessor.reset(tempInfo.getBuffer());
             }
 
             @Override
@@ -283,7 +319,6 @@ public class VPartitionDeletableTupleBufferManager extends VPartitionTupleBuffer
                 }
                 return UNSET;
             }
-
 
         };
     }

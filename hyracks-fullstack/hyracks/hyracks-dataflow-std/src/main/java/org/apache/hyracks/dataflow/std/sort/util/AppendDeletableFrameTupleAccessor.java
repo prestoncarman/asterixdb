@@ -390,7 +390,7 @@ public class AppendDeletableFrameTupleAccessor implements IAppendDeletableFrameT
 
     @Override
     public int getTupleCount() {
-        return indexCount;
+        return getLiveTupleCount();
     }
 
     private int getLiveTupleCount() {
