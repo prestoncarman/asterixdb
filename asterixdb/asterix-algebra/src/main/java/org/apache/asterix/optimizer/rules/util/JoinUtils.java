@@ -57,9 +57,11 @@ import org.apache.asterix.runtime.operators.joins.overlappingintervalpartition.O
 import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.commons.lang3.mutable.MutableObject;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
+import org.apache.hyracks.algebricks.core.algebra.base.EquivalenceClass;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.base.IOptimizationContext;
+import org.apache.hyracks.algebricks.core.algebra.base.IPhysicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalExpressionTag;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import org.apache.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
@@ -70,12 +72,25 @@ import org.apache.hyracks.algebricks.core.algebra.expressions.VariableReferenceE
 import org.apache.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import org.apache.hyracks.algebricks.core.algebra.functions.IFunctionInfo;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractBinaryJoinOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.ExchangeOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.RangeForwardOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperator.IOrder.OrderKind;
 import org.apache.hyracks.algebricks.core.algebra.operators.physical.AbstractJoinPOperator.JoinPartitioningType;
+import org.apache.hyracks.algebricks.core.algebra.properties.FunctionalDependency;
+import org.apache.hyracks.algebricks.core.algebra.properties.ILocalStructuralProperty;
+import org.apache.hyracks.algebricks.core.algebra.properties.OrderColumn;
+import org.apache.hyracks.algebricks.core.algebra.properties.OrderedPartitionedProperty;
+import org.apache.hyracks.algebricks.core.algebra.properties.PropertiesUtil;
+import org.apache.hyracks.algebricks.core.algebra.util.OperatorPropertiesUtil;
+import org.apache.hyracks.algebricks.core.config.AlgebricksConfig;
+import org.apache.hyracks.algebricks.rewriter.util.PhysicalOptimizationsUtil;
 import org.apache.hyracks.algebricks.core.algebra.operators.physical.AssignPOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.physical.MergeJoinPOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.physical.RangeForwardPOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.physical.RangePartitionExchangePOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.physical.RangePartitionMergeExchangePOperator;
 import org.apache.hyracks.api.dataflow.value.IRangeMap;
 import org.apache.hyracks.dataflow.std.base.RangeId;
 import org.apache.hyracks.dataflow.std.join.IMergeJoinCheckerFactory;
@@ -84,6 +99,8 @@ public class JoinUtils {
 
     private static final int LEFT = 0;
     private static final int RIGHT = 1;
+    private static final int START = 0;
+    private static final int END = 1;
 
     private static final Logger LOGGER = Logger.getLogger(JoinUtils.class.getName());
 
@@ -185,15 +202,15 @@ public class JoinUtils {
             List<LogicalVariable> leftKeys, List<LogicalVariable> rightKeys, IntervalJoinExpressionAnnotation ijea,
             IOptimizationContext context) throws AlgebricksException {
         long leftCount = ijea.getLeftRecordCount() > 0 ? ijea.getLeftRecordCount() : getCardinality(leftKeys, context);
-        long rightCount =
-                ijea.getRightRecordCount() > 0 ? ijea.getRightRecordCount() : getCardinality(rightKeys, context);
-        long leftMaxDuration =
-                ijea.getLeftMaxDuration() > 0 ? ijea.getLeftMaxDuration() : getMaxDuration(leftKeys, context);
-        long rightMaxDuration =
-                ijea.getRightMaxDuration() > 0 ? ijea.getRightMaxDuration() : getMaxDuration(rightKeys, context);
+        long rightCount = ijea.getRightRecordCount() > 0 ? ijea.getRightRecordCount()
+                : getCardinality(rightKeys, context);
+        long leftMaxDuration = ijea.getLeftMaxDuration() > 0 ? ijea.getLeftMaxDuration()
+                : getMaxDuration(leftKeys, context);
+        long rightMaxDuration = ijea.getRightMaxDuration() > 0 ? ijea.getRightMaxDuration()
+                : getMaxDuration(rightKeys, context);
         int tuplesPerFrame = ijea.getTuplesPerFrame() > 0 ? ijea.getTuplesPerFrame()
                 : context.getPhysicalOptimizationConfig().getMaxRecordsPerFrame();
-        
+
         int k = OverlappingIntervalPartitionUtil.determineK(leftCount, leftMaxDuration, rightCount, rightMaxDuration,
                 tuplesPerFrame);
 
@@ -211,12 +228,17 @@ public class JoinUtils {
         insertRangeForward(op, LEFT, leftRangeId, ijea.getRangeMap(), context);
         insertRangeForward(op, RIGHT, rightRangeId, ijea.getRangeMap(), context);
 
+        IIntervalMergeJoinCheckerFactory mjcf = getIntervalMergeJoinCheckerFactory(fi, leftRangeId);
+        // Custom range exchange
+        insertRangeExchange(op, LEFT, leftRangeId, leftKeys, mjcf, context);
+        insertRangeExchange(op, RIGHT, rightRangeId, rightKeys, mjcf, context);
+        // Custom range exchange END
+
         List<LogicalVariable> leftPartitionVar = Arrays.asList(context.newVar(), context.newVar());
         List<LogicalVariable> rightPartitionVar = Arrays.asList(context.newVar(), context.newVar());
         insertPartitionSortKey(op, LEFT, leftPartitionVar, leftKeys.get(0), leftRangeId, k, context);
         insertPartitionSortKey(op, RIGHT, rightPartitionVar, rightKeys.get(0), rightRangeId, k, context);
 
-        IIntervalMergeJoinCheckerFactory mjcf = getIntervalMergeJoinCheckerFactory(fi, leftRangeId);
         op.setPhysicalOperator(
                 new OverlappingIntervalPartitionJoinPOperator(op.getJoinKind(), JoinPartitioningType.BROADCAST,
                         leftKeys, rightKeys, context.getPhysicalOptimizationConfig().getMaxFramesForJoin(), k, mjcf,
@@ -238,6 +260,35 @@ public class JoinUtils {
                         rightRangeId, ijea.getRangeMap()));
     }
 
+    private static void insertRangeExchange(AbstractBinaryJoinOperator op, int branch, RangeId rangeId,
+            List<LogicalVariable> keys, IIntervalMergeJoinCheckerFactory mjcf, IOptimizationContext context)
+            throws AlgebricksException {
+        ArrayList<OrderColumn> order = new ArrayList<>();
+        for (LogicalVariable v : keys) {
+            order.add(new OrderColumn(v, mjcf.isOrderAsc() ? OrderKind.ASC : OrderKind.DESC));
+        }
+        IPhysicalOperator rpe = new RangePartitionExchangePOperator(order, context.getComputationNodeDomain(), rangeId,
+                mjcf.getLeftPartitioningType());
+
+        Mutable<ILogicalOperator> ci = op.getInputs().get(branch);
+        ExchangeOperator exchg = new ExchangeOperator();
+        exchg.setPhysicalOperator(rpe);
+        setNewOp(ci, exchg, context);
+        exchg.setExecutionMode(AbstractLogicalOperator.ExecutionMode.PARTITIONED);
+        OperatorPropertiesUtil.computeSchemaAndPropertiesRecIfNull(exchg, context);
+        context.computeAndSetTypeEnvironmentForOperator(exchg);
+    }
+
+    private static void setNewOp(Mutable<ILogicalOperator> opRef, AbstractLogicalOperator newOp,
+            IOptimizationContext context) throws AlgebricksException {
+        ILogicalOperator oldOp = opRef.getValue();
+        opRef.setValue(newOp);
+        newOp.getInputs().add(new MutableObject<ILogicalOperator>(oldOp));
+        newOp.recomputeSchema();
+        context.computeAndSetTypeEnvironmentForOperator(newOp);
+        PhysicalOptimizationsUtil.computeFDsAndEquivalenceClasses(newOp, context);
+    }
+
     private static void insertRangeForward(AbstractBinaryJoinOperator op, int branch, RangeId rangeId,
             IRangeMap rangeMap, IOptimizationContext context) throws AlgebricksException {
         RangeForwardOperator rfo = new RangeForwardOperator(rangeId, rangeMap);
@@ -254,25 +305,25 @@ public class JoinUtils {
     private static void insertPartitionSortKey(AbstractBinaryJoinOperator op, int branch,
             List<LogicalVariable> partitionVars, LogicalVariable intervalVar, RangeId rangeId, int k,
             IOptimizationContext context) throws AlgebricksException {
-        MutableObject<ILogicalExpression> intervalExp =
-                new MutableObject<>(new VariableReferenceExpression(intervalVar));
-        MutableObject<ILogicalExpression> rangeIdConstant =
-                new MutableObject<>(new ConstantExpression(new AsterixConstantValue(new AInt32(rangeId.getId()))));
-        MutableObject<ILogicalExpression> kConstant =
-                new MutableObject<>(new ConstantExpression(new AsterixConstantValue(new AInt32(k))));
+        MutableObject<ILogicalExpression> intervalExp = new MutableObject<>(
+                new VariableReferenceExpression(intervalVar));
+        MutableObject<ILogicalExpression> rangeIdConstant = new MutableObject<>(
+                new ConstantExpression(new AsterixConstantValue(new AInt32(rangeId.getId()))));
+        MutableObject<ILogicalExpression> kConstant = new MutableObject<>(
+                new ConstantExpression(new AsterixConstantValue(new AInt32(k))));
 
         List<Mutable<ILogicalExpression>> assignExps = new ArrayList<>();
         // Start partition
         IFunctionInfo startFi = FunctionUtil.getFunctionInfo(AsterixBuiltinFunctions.INTERVAL_PARTITION_JOIN_START);
         @SuppressWarnings("unchecked")
-        ScalarFunctionCallExpression startPartitionExp =
-                new ScalarFunctionCallExpression(startFi, intervalExp, rangeIdConstant, kConstant);
+        ScalarFunctionCallExpression startPartitionExp = new ScalarFunctionCallExpression(startFi, intervalExp,
+                rangeIdConstant, kConstant);
         assignExps.add(new MutableObject<ILogicalExpression>(startPartitionExp));
         // End partition
         IFunctionInfo endFi = FunctionUtil.getFunctionInfo(AsterixBuiltinFunctions.INTERVAL_PARTITION_JOIN_END);
         @SuppressWarnings("unchecked")
-        ScalarFunctionCallExpression endPartitionExp =
-                new ScalarFunctionCallExpression(endFi, intervalExp, rangeIdConstant, kConstant);
+        ScalarFunctionCallExpression endPartitionExp = new ScalarFunctionCallExpression(endFi, intervalExp,
+                rangeIdConstant, kConstant);
         assignExps.add(new MutableObject<ILogicalExpression>(endPartitionExp));
 
         AssignOperator ao = new AssignOperator(partitionVars, assignExps);
