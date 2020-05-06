@@ -85,7 +85,11 @@ public class RangeForwardOperatorDescriptor extends AbstractOperatorDescriptor {
             RangeId rangeIdObject = new RangeId(rangeId, ctx);
             RangeForwardTaskState rangeState = (RangeForwardTaskState) ctx.getStateObject(rangeIdObject);
             if (rangeState == null) {
-                throw new HyracksDataException("Range state is missing for " + rangeIdObject + ".");
+                rangeIdObject = new RangeId(rangeId == 0 ? 1 : 0, ctx);
+                rangeState = (RangeForwardTaskState) ctx.getStateObject(rangeIdObject);
+                if (rangeState == null) {
+                    throw new HyracksDataException("Range state is missing for " + rangeIdObject + ".");
+                }
             }
             return rangeState;
         }
