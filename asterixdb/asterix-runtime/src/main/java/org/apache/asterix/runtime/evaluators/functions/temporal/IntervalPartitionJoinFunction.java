@@ -78,7 +78,7 @@ public class IntervalPartitionJoinFunction implements IScalarEvaluator {
     }
 
     private void setPartitionLocalPartition(int rangeId, int k) throws HyracksDataException {
-    	System.err.println("IntervalPartitionJoinFunction get RangeId " + rangeId + " on partition " + ctx.getTaskAttemptId().getTaskId().getPartition() );
+        System.err.println("IntervalPartitionJoinFunction get RangeId " + rangeId + " on partition " + partitionId );
         RangeForwardTaskState rangeState = RangeForwardTaskState.getRangeState(rangeId, ctx);
         IRangeMap rangeMap = rangeState.getRangeMap();
         int nPartitions = rangeState.getNumberOfPartitions();
@@ -86,7 +86,7 @@ public class IntervalPartitionJoinFunction implements IScalarEvaluator {
         partitionStart = OverlappingIntervalPartitionUtil.getPartitionStartValue(rangeMap, partitionId, nPartitions);
         long partitionEnd = OverlappingIntervalPartitionUtil.getPartitionEndValue(rangeMap, partitionId, nPartitions);
         partitionDuration = OverlappingIntervalPartitionUtil.getPartitionDuration(partitionStart, partitionEnd, k);
-        System.err.println("IntervalPartitionJoinFunction partitions " + nPartitions + " start " + partitionStart + " end " + partitionEnd + " duration " + partitionDuration);
+        System.err.println("IntervalPartitionJoinFunction partitions " + partitionId + ":" + nPartitions + " start " + partitionStart + " end " + partitionEnd + " duration " + partitionDuration);
     }
 
     public void evaluate(IFrameTupleReference tuple, IPointable result) throws AlgebricksException {

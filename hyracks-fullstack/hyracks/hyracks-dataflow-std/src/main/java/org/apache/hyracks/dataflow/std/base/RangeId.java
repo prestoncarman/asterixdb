@@ -28,16 +28,13 @@ import org.apache.hyracks.api.context.IHyracksTaskContext;
 public final class RangeId implements Serializable {
     private static final long serialVersionUID = 1L;
     private final int id;
-    private int partition = -1;
-
+ 
     public RangeId(int id, int partition) {
         this.id = id;
-        this.partition = partition;
     }
 
     public RangeId(int id, IHyracksTaskContext ctx) {
         this.id = id;
-        this.partition = ctx.getTaskAttemptId().getTaskId().getPartition();
     }
 
     public RangeId(int id) {
@@ -48,17 +45,9 @@ public final class RangeId implements Serializable {
         return id;
     }
 
-    public int getPartition() {
-        return partition;
-    }
-
-    public void setPartition(int partition) {
-        this.partition = partition;
-    }
-
     @Override
     public String toString() {
-        return "RangeId(" + id + (partition >= 0 ? "," + partition : "") + ")";
+        return "RangeId(" + id + ")";
     }
 
     @Override
@@ -66,7 +55,7 @@ public final class RangeId implements Serializable {
         if (!(obj instanceof RangeId)) {
             return false;
         } else {
-            return id == ((RangeId) obj).getId() && partition == ((RangeId) obj).getPartition();
+            return id == ((RangeId) obj).getId();
         }
     }
 
