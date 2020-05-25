@@ -335,6 +335,13 @@ public class DisjointIntervalPartitionJoiner extends AbstractMergeJoiner {
         // Loop over all partitions from right (adding to memory)
         for (int i = 0; i < rightRunFileReaders.size(); i++) {
             //            System.err.println("Start filling partition: " + i + " after spill called " + partitionId);
+            if (partitionId >= numberOfPartitions) {
+                // Reached maximum number of partition in memory.
+                getInMemoryTupleAccessors(buffer);
+                processInMemoryJoin(writer);
+                buffer.reset();
+                partitionId = 0;
+            }
             // Add right partition to memory
             rightRunFileReaders.get(i).open();
             while (rightRunFileReaders.get(i).nextFrame(tmpFrame2)) {
@@ -348,9 +355,6 @@ public class DisjointIntervalPartitionJoiner extends AbstractMergeJoiner {
                         count++;
                         getInMemoryTupleAccessors(buffer);
                         processInMemoryJoin(writer);
-
-                        //                        System.err.println("..Update " + partitionId + " to be 0");
-
                         // reset memory
                         buffer.reset();
                         partitionId = 0;
