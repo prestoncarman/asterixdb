@@ -36,6 +36,7 @@ import org.apache.hyracks.api.io.FileReference;
 import org.apache.hyracks.dataflow.common.comm.util.FrameUtils;
 import org.apache.hyracks.dataflow.std.buffermanager.ITupleAccessor;
 import org.apache.hyracks.dataflow.std.buffermanager.TupleAccessor;
+import org.apache.hyracks.dataflow.std.buffermanager.VPartitionTupleBufferManager;
 import org.apache.hyracks.dataflow.std.join.AbstractMergeJoiner;
 import org.apache.hyracks.dataflow.std.join.MergeJoinLocks;
 import org.apache.hyracks.dataflow.std.join.MergeStatus;
@@ -43,6 +44,7 @@ import org.apache.hyracks.dataflow.std.join.MergeStatus;
 //import org.apache.hyracks.dataflow.common.io.RunFileWriter;
 import org.apache.hyracks.dataflow.std.join.RunFileReaderDir;
 import org.apache.hyracks.dataflow.std.join.RunFileWriterDir;
+import org.apache.hyracks.dataflow.std.structures.TuplePointer;
 
 public class DisjointIntervalPartitionJoiner extends AbstractMergeJoiner {
 
@@ -63,6 +65,7 @@ public class DisjointIntervalPartitionJoiner extends AbstractMergeJoiner {
     private ITupleAccessor[] tupleAccessors;
 
     private final VSizeFrame tmpFrame;
+    private final VSizeFrame tmpFrame2;
     private final ITupleAccessor joinTupleAccessor;
 
     private final IHyracksTaskContext ctx;
@@ -97,6 +100,7 @@ public class DisjointIntervalPartitionJoiner extends AbstractMergeJoiner {
         this.memorySize = memorySize;
 
         numberOfPartitions = memorySize - 1;
+        tupleAccessors = new ITupleAccessor[numberOfPartitions];
 
         partitionAndSpill = new DisjointIntervalPartitionAndSpill(ctx, memorySize, numberOfPartitions);
         partitionAndSpill.init();
@@ -110,6 +114,7 @@ public class DisjointIntervalPartitionJoiner extends AbstractMergeJoiner {
         this.leftComparator = leftComparator;
 
         tmpFrame = new VSizeFrame(ctx);
+        tmpFrame2 = new VSizeFrame(ctx);
         joinTupleAccessor = new TupleAccessor(leftRd);
     }
 
@@ -238,8 +243,19 @@ public class DisjointIntervalPartitionJoiner extends AbstractMergeJoiner {
         }
     }
 
+    private void getInMemoryTupleAccessors(VPartitionTupleBufferManager buffer) {
+        for (int i = 0; i < buffer.getNumPartitions(); i++) {
+            if (buffer.getNumTuples(i) > 0) {
+                tupleAccessors[i] = buffer.getPartitionFrameBufferManager(i).getTupleAccessor(rightRd);
+                tupleAccessors[i].reset();
+                tupleAccessors[i].next();
+            } else {
+                tupleAccessors[i] = null;
+            }
+        }
+    }
+
     private void getInMemoryTupleAccessors(DisjointIntervalPartitionAndSpill dipas, LinkedList<Long> rpc) {
-        tupleAccessors = new ITupleAccessor[numberOfPartitions];
         for (int i = 0; i < numberOfPartitions; i++) {
             if (dipas.getPartitionSizeInTup(i) > 0) {
                 rpc.add(dipas.getPartitionSizeInTup(i));
@@ -306,6 +322,58 @@ public class DisjointIntervalPartitionJoiner extends AbstractMergeJoiner {
     }
 
     private void processSpilledJoin(IFrameWriter writer) throws HyracksDataException {
+        VPartitionTupleBufferManager buffer =
+                new VPartitionTupleBufferManager(ctx, VPartitionTupleBufferManager.NO_CONSTRAIN, numberOfPartitions,
+                        numberOfPartitions * ctx.getInitialFrameSize());
+        TuplePointer tpTemp = new TuplePointer();
+        int count = 0;
+        int countTuple = 0;
+        int countTuplePerSpill = 0;
+        int partitionId = 0;
+        TupleAccessor tupleAccessor = new TupleAccessor(rightRd);
+
+        // Loop over all partitions from right (adding to memory)
+        for (int i = 0; i < rightRunFileReaders.size(); i++) {
+            //            System.err.println("Start filling partition: " + i + " after spill called " + partitionId);
+            // Add right partition to memory
+            rightRunFileReaders.get(i).open();
+            while (rightRunFileReaders.get(i).nextFrame(tmpFrame2)) {
+                tupleAccessor.reset(tmpFrame2.getBuffer());
+                tupleAccessor.next();
+                while (tupleAccessor.exists()) {
+                    if (!buffer.insertTuple(partitionId, tupleAccessor, tupleAccessor.getTupleId(), tpTemp)) {
+                        // Memory has been filled. 
+                        // Process tuples in memory with all left partitions.
+                        //                        System.err.println("....Freeze and free memory (mid).... " + countTuplePerSpill);
+                        count++;
+                        getInMemoryTupleAccessors(buffer);
+                        processInMemoryJoin(writer);
+
+                        //                        System.err.println("..Update " + partitionId + " to be 0");
+
+                        // reset memory
+                        buffer.reset();
+                        partitionId = 0;
+                        countTuplePerSpill = 0;
+                    } else {
+                        tupleAccessor.next();
+                        countTuple++;
+                        countTuplePerSpill++;
+                    }
+                }
+                spillJoinReadCount++;
+            }
+            //            System.err.println("..Loaded " + countTuple + " from partition " + i);
+            countTuple = 0;
+            partitionId++;
+        }
+        getInMemoryTupleAccessors(buffer);
+        processInMemoryJoin(writer);
+        count++;
+        //        System.err.println("Disjoint Interval Partition Join in " + count + " passes over spilled data.");
+    }
+
+    private void processSpilledJoin2(IFrameWriter writer) throws HyracksDataException {
         prepareFrames(numberOfPartitions, rightRunFileReaders);
 
         int count = 0;
@@ -352,8 +420,9 @@ public class DisjointIntervalPartitionJoiner extends AbstractMergeJoiner {
         }
     }
 
-    private void joinPartition(RunFileReaderDir runFileReader, int leftPid, LinkedList<RunFileReaderDir> partitionRunsReaders,
-            int offset, IFrameWriter writer) throws HyracksDataException {
+    private void joinPartition(RunFileReaderDir runFileReader, int leftPid,
+            LinkedList<RunFileReaderDir> partitionRunsReaders, int offset, IFrameWriter writer)
+            throws HyracksDataException {
         // Prepare frame.
         runFileReader.open();
         if (runFileReader.nextFrame(tmpFrame)) {
