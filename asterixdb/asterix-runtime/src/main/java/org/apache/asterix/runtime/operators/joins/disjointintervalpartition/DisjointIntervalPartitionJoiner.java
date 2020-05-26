@@ -326,15 +326,11 @@ public class DisjointIntervalPartitionJoiner extends AbstractMergeJoiner {
                 new VPartitionTupleBufferManager(ctx, VPartitionTupleBufferManager.NO_CONSTRAIN, numberOfPartitions,
                         numberOfPartitions * ctx.getInitialFrameSize());
         TuplePointer tpTemp = new TuplePointer();
-        int count = 0;
-        int countTuple = 0;
-        int countTuplePerSpill = 0;
         int partitionId = 0;
         TupleAccessor tupleAccessor = new TupleAccessor(rightRd);
 
         // Loop over all partitions from right (adding to memory)
         for (int i = 0; i < rightRunFileReaders.size(); i++) {
-            //            System.err.println("Start filling partition: " + i + " after spill called " + partitionId);
             if (partitionId >= numberOfPartitions) {
                 // Reached maximum number of partition in memory.
                 getInMemoryTupleAccessors(buffer);
@@ -351,30 +347,22 @@ public class DisjointIntervalPartitionJoiner extends AbstractMergeJoiner {
                     if (!buffer.insertTuple(partitionId, tupleAccessor, tupleAccessor.getTupleId(), tpTemp)) {
                         // Memory has been filled. 
                         // Process tuples in memory with all left partitions.
-                        //                        System.err.println("....Freeze and free memory (mid).... " + countTuplePerSpill);
-                        count++;
                         getInMemoryTupleAccessors(buffer);
                         processInMemoryJoin(writer);
                         // reset memory
                         buffer.reset();
                         partitionId = 0;
-                        countTuplePerSpill = 0;
                     } else {
                         tupleAccessor.next();
-                        countTuple++;
-                        countTuplePerSpill++;
                     }
                 }
                 spillJoinReadCount++;
             }
-            //            System.err.println("..Loaded " + countTuple + " from partition " + i);
-            countTuple = 0;
+            rightRunFileReaders.get(i).close();
             partitionId++;
         }
         getInMemoryTupleAccessors(buffer);
         processInMemoryJoin(writer);
-        count++;
-        //        System.err.println("Disjoint Interval Partition Join in " + count + " passes over spilled data.");
     }
 
     private void processSpilledJoin2(IFrameWriter writer) throws HyracksDataException {
