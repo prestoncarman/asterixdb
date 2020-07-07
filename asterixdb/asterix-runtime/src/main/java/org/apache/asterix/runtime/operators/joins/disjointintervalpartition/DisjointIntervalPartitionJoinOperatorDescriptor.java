@@ -31,22 +31,31 @@ import org.apache.hyracks.api.dataflow.IActivity;
 import org.apache.hyracks.api.dataflow.IActivityGraphBuilder;
 import org.apache.hyracks.api.dataflow.IOperatorNodePushable;
 import org.apache.hyracks.api.dataflow.TaskId;
+import org.apache.hyracks.api.dataflow.value.IMissingWriter;
+import org.apache.hyracks.api.dataflow.value.IPredicateEvaluator;
 import org.apache.hyracks.api.dataflow.value.IRecordDescriptorProvider;
+import org.apache.hyracks.api.dataflow.value.ITuplePairComparator;
 import org.apache.hyracks.api.dataflow.value.RecordDescriptor;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.job.IOperatorDescriptorRegistry;
+import org.apache.hyracks.api.job.JobId;
+import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAccessor;
+import org.apache.hyracks.dataflow.common.comm.util.FrameUtils;
 import org.apache.hyracks.dataflow.std.base.AbstractActivityNode;
 import org.apache.hyracks.dataflow.std.base.AbstractOperatorDescriptor;
+import org.apache.hyracks.dataflow.std.base.AbstractStateObject;
 import org.apache.hyracks.dataflow.std.base.AbstractUnaryInputSinkOperatorNodePushable;
 import org.apache.hyracks.dataflow.std.base.AbstractUnaryInputUnaryOutputOperatorNodePushable;
 import org.apache.hyracks.dataflow.std.join.MergeBranchStatus.Stage;
+import org.apache.hyracks.dataflow.std.join.NestedLoopJoinOperatorDescriptor.JoinCacheTaskState;
 import org.apache.hyracks.dataflow.std.join.MergeJoinLocks;
+import org.apache.hyracks.dataflow.std.join.NestedLoopJoin;
 
 public class DisjointIntervalPartitionJoinOperatorDescriptor extends AbstractOperatorDescriptor {
     private static final long serialVersionUID = 1L;
 
-    private static final int LEFT_ACTIVITY_ID = 0;
-    private static final int RIGHT_ACTIVITY_ID = 1;
+    private static final int JOIN_BUILD_ACTIVITY_ID = 0;
+    private static final int JOIN_PROBE_ACTIVITY_ID = 1;
     private final int[] leftKeys;
     private final int[] rightKeys;
     private final int memoryForJoin;
@@ -73,13 +82,11 @@ public class DisjointIntervalPartitionJoinOperatorDescriptor extends AbstractOpe
 
     @Override
     public void contributeActivities(IActivityGraphBuilder builder) {
-        MergeJoinLocks locks = new MergeJoinLocks();
+        ActivityId leftAid = new ActivityId(odId, JOIN_BUILD_ACTIVITY_ID);
+        ActivityId rightAid = new ActivityId(odId, JOIN_PROBE_ACTIVITY_ID);
 
-        ActivityId leftAid = new ActivityId(odId, LEFT_ACTIVITY_ID);
-        ActivityId rightAid = new ActivityId(odId, RIGHT_ACTIVITY_ID);
-
-        IActivity leftAN = new LeftJoinerActivityNode(leftAid, rightAid, locks);
-        IActivity rightAN = new RightDataActivityNode(rightAid, leftAid, locks);
+        IActivity leftAN = new JoinProbeActivityNode(rightAid);
+        IActivity rightAN = new JoinBuildActivityNode(leftAid, rightAid);
 
         builder.addActivity(this, rightAN);
         builder.addSourceEdge(1, rightAN, 0);
@@ -87,160 +94,40 @@ public class DisjointIntervalPartitionJoinOperatorDescriptor extends AbstractOpe
         builder.addActivity(this, leftAN);
         builder.addSourceEdge(0, leftAN, 0);
         builder.addTargetEdge(0, leftAN, 0);
+        builder.addBlockingEdge(rightAN, leftAN);
     }
 
-    private class LeftJoinerActivityNode extends AbstractActivityNode {
-        private static final long serialVersionUID = 1L;
+    public static class JoinCacheTaskState extends AbstractStateObject {
+        private DisjointIntervalPartitionJoiner joiner;
 
-        private final MergeJoinLocks locks;
-
-        public LeftJoinerActivityNode(ActivityId id, ActivityId joinAid, MergeJoinLocks locks) {
-            super(id);
-            this.locks = locks;
-        }
-
-        @Override
-        public IOperatorNodePushable createPushRuntime(IHyracksTaskContext ctx,
-                IRecordDescriptorProvider recordDescProvider, int partition, int nPartitions)
-                throws HyracksDataException {
-            locks.setPartitions(nPartitions);
-            final RecordDescriptor inRecordDesc = recordDescProvider.getInputRecordDescriptor(getActivityId(), 0);
-            return new LeftJoinerOperator(ctx, partition, inRecordDesc);
-        }
-
-        private class LeftJoinerOperator extends AbstractUnaryInputUnaryOutputOperatorNodePushable {
-
-            private final IHyracksTaskContext ctx;
-            private final int partition;
-            private final RecordDescriptor leftRd;
-            private DisjointIntervalPartitionJoinTaskState state;
-            private boolean first = true;
-
-            public LeftJoinerOperator(IHyracksTaskContext ctx, int partition, RecordDescriptor inRecordDesc) {
-                this.ctx = ctx;
-                this.partition = partition;
-                this.leftRd = inRecordDesc;
-            }
-
-            @Override
-            public void open() throws HyracksDataException {
-                locks.getLock(partition).lock();
-                try {
-                    writer.open();
-                    state = new DisjointIntervalPartitionJoinTaskState(ctx.getJobletContext().getJobId(),
-                            new TaskId(getActivityId(), partition));;
-                    state.leftRd = leftRd;
-                    ctx.setStateObject(state);
-                    locks.getRight(partition).signal();
-
-                    do {
-                        // Continue after joiner created in right branch.
-                        if (state.partitionJoiner == null) {
-                            locks.getLeft(partition).await();
-                        }
-                    } while (state.partitionJoiner == null);
-                    state.status.branch[LEFT_ACTIVITY_ID].setStageOpen();
-                    locks.getRight(partition).signal();
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                } finally {
-                    locks.getLock(partition).unlock();
-                }
-            }
-
-            @Override
-            public void nextFrame(ByteBuffer buffer) throws HyracksDataException {
-                locks.getLock(partition).lock();
-                if (first) {
-                    state.status.branch[LEFT_ACTIVITY_ID].setStageData();
-                    first = false;
-                }
-                try {
-                    state.partitionJoiner.setFrame(LEFT_ACTIVITY_ID, buffer);
-                    state.partitionJoiner.processLeftFrame(writer);
-                } finally {
-                    locks.getLock(partition).unlock();
-                }
-            }
-
-            @Override
-            public void fail() throws HyracksDataException {
-                locks.getLock(partition).lock();
-                try {
-                    state.failed = true;
-                    state.partitionJoiner.failureCleanUp();
-                } finally {
-                    locks.getLock(partition).unlock();
-                }
-            }
-
-            @Override
-            public void close() throws HyracksDataException {
-                locks.getLock(partition).lock();
-                try {
-                    state.status.branch[LEFT_ACTIVITY_ID].noMore();
-                    if (state.failed) {
-                        writer.fail();
-                    } else {
-                        state.partitionJoiner.processLeftClose(writer);
-                        writer.close();
-                    }
-                    state.status.branch[LEFT_ACTIVITY_ID].setStageClose();
-                    locks.getRight(partition).signal();
-                } finally {
-                    locks.getLock(partition).unlock();
-                }
-            }
+        private JoinCacheTaskState(JobId jobId, TaskId taskId) {
+            super(jobId, taskId);
         }
     }
 
-    private class RightDataActivityNode extends AbstractActivityNode {
+    private class JoinBuildActivityNode extends AbstractActivityNode {
         private static final long serialVersionUID = 1L;
 
-        private final ActivityId joinAid;
-        private final MergeJoinLocks locks;
+        private final ActivityId nljAid;
 
-        public RightDataActivityNode(ActivityId id, ActivityId joinAid, MergeJoinLocks locks) {
+        public JoinBuildActivityNode(ActivityId id, ActivityId nljAid) {
             super(id);
-            this.joinAid = joinAid;
-            this.locks = locks;
+            this.nljAid = nljAid;
         }
 
         @Override
-        public IOperatorNodePushable createPushRuntime(IHyracksTaskContext ctx,
-                IRecordDescriptorProvider recordDescProvider, int partition, int nPartitions)
-                throws HyracksDataException {
-            locks.setPartitions(nPartitions);
-            RecordDescriptor inRecordDesc = recordDescProvider.getInputRecordDescriptor(getActivityId(), 0);
-            return new RightDataOperator(ctx, partition, inRecordDesc);
-        }
+        public IOperatorNodePushable createPushRuntime(final IHyracksTaskContext ctx,
+                IRecordDescriptorProvider recordDescProvider, final int partition, int nPartitions) {
+            final RecordDescriptor rd0 = recordDescProvider.getInputRecordDescriptor(nljAid, 0);
+            final RecordDescriptor rd1 = recordDescProvider.getInputRecordDescriptor(getActivityId(), 0);
 
-        private class RightDataOperator extends AbstractUnaryInputSinkOperatorNodePushable {
+            return new AbstractUnaryInputSinkOperatorNodePushable() {
+                private JoinCacheTaskState state;
 
-            private int partition;
-            private IHyracksTaskContext ctx;
-            private final RecordDescriptor rightRd;
-            private DisjointIntervalPartitionJoinTaskState state;
-            private boolean first = true;
-
-            public RightDataOperator(IHyracksTaskContext ctx, int partition, RecordDescriptor inRecordDesc) {
-                this.ctx = ctx;
-                this.partition = partition;
-                this.rightRd = inRecordDesc;
-            }
-
-            @Override
-            public void open() throws HyracksDataException {
-                locks.getLock(partition).lock();
-                try {
-                    do {
-                        // Wait for the state to be set in the context form Left.
-                        state = (DisjointIntervalPartitionJoinTaskState) ctx
-                                .getStateObject(new TaskId(joinAid, partition));
-                        if (state == null) {
-                            locks.getRight(partition).await();
-                        }
-                    } while (state == null);
+                @Override
+                public void open() throws HyracksDataException {
+                    state = new JoinCacheTaskState(ctx.getJobletContext().getJobId(),
+                            new TaskId(getActivityId(), partition));
 
                     PartitionMinItemComparator rightComparator = new PartitionMinItemComparator();
                     PartitionMinItemComparator leftComparator = new PartitionMinItemComparator();
@@ -256,66 +143,71 @@ public class DisjointIntervalPartitionJoinOperatorDescriptor extends AbstractOpe
                                     .createPartitioner();
                     IIntervalMergeJoinChecker imjc = imjcf.createMergeJoinChecker(leftKeys, rightKeys, ctx);
 
-                    state.rightRd = rightRd;
-                    state.partitionJoiner = new DisjointIntervalPartitionJoiner(ctx, memoryForJoin, partition,
-                            state.status, locks, imjc, buildKey, probeKey, state.leftRd, state.rightRd, leftDipc,
-                            rightDipc, rightComparator, leftComparator);
-                    state.status.branch[RIGHT_ACTIVITY_ID].setStageOpen();
-                    locks.getLeft(partition).signal();
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                } finally {
-                    locks.getLock(partition).unlock();
-                }
-            }
+                    state.joiner = new DisjointIntervalPartitionJoiner(ctx, memoryForJoin, partition, imjc, buildKey,
+                            probeKey, rd0, rd1, leftDipc, rightDipc, rightComparator, leftComparator);
 
-            @Override
-            public void nextFrame(ByteBuffer buffer) throws HyracksDataException {
-                locks.getLock(partition).lock();
-                if (first) {
-                    state.status.branch[RIGHT_ACTIVITY_ID].setStageData();
-                    first = false;
                 }
-                try {
-                    while (!state.status.continueRightLoad
-                            && state.status.branch[LEFT_ACTIVITY_ID].getStatus() != Stage.CLOSED) {
-                        // Wait for the state to request right frame unless left has finished.
-                        locks.getRight(partition).await();
+
+                @Override
+                public void nextFrame(ByteBuffer buffer) throws HyracksDataException {
+                    ByteBuffer copyBuffer = ctx.allocateFrame(buffer.capacity());
+                    FrameUtils.copyAndFlip(buffer, copyBuffer);
+                    state.joiner.processBuildFrame(copyBuffer);
+                }
+
+                @Override
+                public void close() throws HyracksDataException {
+                    state.joiner.processBuildClose();
+                    ctx.setStateObject(state);
+                }
+
+                @Override
+                public void fail() throws HyracksDataException {
+                    // No variables to update.
+                }
+            };
+        }
+    }
+
+    private class JoinProbeActivityNode extends AbstractActivityNode {
+        private static final long serialVersionUID = 1L;
+
+        public JoinProbeActivityNode(ActivityId id) {
+            super(id);
+        }
+
+        @Override
+        public IOperatorNodePushable createPushRuntime(final IHyracksTaskContext ctx,
+                IRecordDescriptorProvider recordDescProvider, final int partition, int nPartitions) {
+            return new AbstractUnaryInputUnaryOutputOperatorNodePushable() {
+                private JoinCacheTaskState state;
+
+                @Override
+                public void open() throws HyracksDataException {
+                    writer.open();
+                    state = (JoinCacheTaskState) ctx.getStateObject(
+                            new TaskId(new ActivityId(getOperatorId(), JOIN_BUILD_ACTIVITY_ID), partition));
+                }
+
+                @Override
+                public void nextFrame(ByteBuffer buffer) throws HyracksDataException {
+                    state.joiner.processProbeFrame(buffer, writer);
+                }
+
+                @Override
+                public void close() throws HyracksDataException {
+                    try {
+                        state.joiner.processProbeClose(writer);
+                    } finally {
+                        writer.close();
                     }
-                    state.partitionJoiner.setFrame(RIGHT_ACTIVITY_ID, buffer);
-                    state.status.continueRightLoad = false;
-                    locks.getLeft(partition).signal();
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                } finally {
-                    locks.getLock(partition).unlock();
                 }
-            }
 
-            @Override
-            public void fail() throws HyracksDataException {
-                locks.getLock(partition).lock();
-                try {
-                    state.failed = true;
-                    if (state.partitionJoiner != null) {
-                        state.partitionJoiner.failureCleanUp();
-                    }
-                    locks.getLeft(partition).signal();
-                } finally {
-                    locks.getLock(partition).unlock();
+                @Override
+                public void fail() throws HyracksDataException {
+                    writer.fail();
                 }
-            }
-
-            @Override
-            public void close() throws HyracksDataException {
-                locks.getLock(partition).lock();
-                try {
-                    state.status.branch[RIGHT_ACTIVITY_ID].setStageClose();
-                    locks.getLeft(partition).signal();
-                } finally {
-                    locks.getLock(partition).unlock();
-                }
-            }
+            };
         }
     }
 }
