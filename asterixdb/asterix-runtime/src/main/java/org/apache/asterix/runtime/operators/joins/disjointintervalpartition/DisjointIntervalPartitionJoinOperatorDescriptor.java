@@ -144,7 +144,7 @@ public class DisjointIntervalPartitionJoinOperatorDescriptor extends AbstractOpe
                     IIntervalMergeJoinChecker imjc = imjcf.createMergeJoinChecker(leftKeys, rightKeys, ctx);
 
                     state.joiner = new DisjointIntervalPartitionJoiner(ctx, memoryForJoin, partition, imjc, buildKey,
-                            probeKey, rd0, rd1, leftDipc, rightDipc, rightComparator, leftComparator);
+                            probeKey, rd0, rd1, leftDipc, rightDipc);
 
                 }
 

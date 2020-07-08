@@ -19,24 +19,11 @@
 package org.apache.asterix.runtime.operators.joins.disjointintervalpartition;
 
 import java.util.Comparator;
-import java.util.concurrent.atomic.AtomicInteger;
 
 public class PartitionMinItemComparator implements Comparator<PartitionMinItem> {
-
-    private final AtomicInteger counter;
-
-    public PartitionMinItemComparator() {
-        counter = new AtomicInteger();
-    }
-
     @Override
     public int compare(final PartitionMinItem epi1, final PartitionMinItem epi2) {
-        counter.incrementAndGet();
         return epi1.compareTo(epi2);
-    }
-
-    public int getTotalCalled() {
-        return counter.get();
     }
 
 }

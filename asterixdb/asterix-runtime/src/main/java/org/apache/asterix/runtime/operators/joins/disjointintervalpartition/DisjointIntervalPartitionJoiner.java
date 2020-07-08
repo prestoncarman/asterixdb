@@ -73,6 +73,7 @@ public class DisjointIntervalPartitionJoiner extends AbstractJoiner {
 
     private final IIntervalMergeJoinChecker imjc;
 
+    private long inputFrameCount = 0;
     private long joinComparisonCount = 0;
     private long joinResultCount = 0;
     private long spillPartitionWriteCount = 0;
@@ -83,14 +84,10 @@ public class DisjointIntervalPartitionJoiner extends AbstractJoiner {
     private final int memorySize;
     private DisjointIntervalPartitionComputer rightDipc;
 
-    private PartitionMinItemComparator rightComparator;
-    private PartitionMinItemComparator leftComparator;
-
     public DisjointIntervalPartitionJoiner(IHyracksTaskContext ctx, int memorySize, int partition,
             IIntervalMergeJoinChecker imjc, int leftKey, int rightKey, RecordDescriptor leftRd,
             RecordDescriptor rightRd, DisjointIntervalPartitionComputer leftDipc,
-            DisjointIntervalPartitionComputer rightDipc, PartitionMinItemComparator rightComparator,
-            PartitionMinItemComparator leftComparator) throws HyracksDataException {
+            DisjointIntervalPartitionComputer rightDipc) throws HyracksDataException {
         super(ctx, leftRd, rightRd);
         this.ctx = ctx;
         this.partition = partition;
@@ -108,9 +105,6 @@ public class DisjointIntervalPartitionJoiner extends AbstractJoiner {
         this.leftRd = leftRd;
         this.imjc = imjc;
 
-        this.rightComparator = rightComparator;
-        this.leftComparator = leftComparator;
-
         tmpFrame = new VSizeFrame(ctx);
         tmpFrame2 = new VSizeFrame(ctx);
         joinTupleAccessor = new TupleAccessor(leftRd);
@@ -126,6 +120,7 @@ public class DisjointIntervalPartitionJoiner extends AbstractJoiner {
     @Override
     public void processProbeFrame(ByteBuffer buffer, IFrameWriter writer) throws HyracksDataException {
         partitionAndSpill.processFrame(buffer);
+        inputFrameCount++;
     }
 
     @Override
@@ -149,20 +144,21 @@ public class DisjointIntervalPartitionJoiner extends AbstractJoiner {
         cleanupPartitions(leftRunFileReaders);
         cleanupPartitions(rightRunFileReaders);
         long cpu = joinComparisonCount;
+        long io = spillJoinReadCount + inputFrameCount;
         if (LOGGER.isLoggable(Level.WARNING)) {
             LOGGER.warning(",DisjointIntervalPartitionJoiner Statistics Log," + partition + ",partition," + memorySize
-                    + ",memory," + joinResultCount + ",results," + cpu + ",CPU," + spillJoinReadCount + ",IO,"
+                    + ",memory," + joinResultCount + ",results," + cpu + ",CPU," + io + ",IO,"
                     + spillPartitionWriteCount + ",partition_frames_written," + spillPartitionReadCount
                     + ",partition_frames_read," + spillJoinReadCount + ",partition_frames_read,"
-                    + leftComparator.getTotalCalled() + ",partition_comparison_left," + rightComparator.getTotalCalled()
+                    + "?" + ",partition_comparison_left," + "?" 
                     + ",partition_comparison_right," + joinComparisonCount + ",join_comparison");
         }
         System.out.println(",DisjointIntervalPartitionJoiner Statistics Log," + partition + ",partition," + memorySize
-                + ",memory," + joinResultCount + ",results," + cpu + ",CPU," + spillJoinReadCount + ",IO,"
-                + spillPartitionWriteCount + ",partition_frames_written," + spillPartitionReadCount
-                + ",partition_frames_read," + spillJoinReadCount + ",partition_frames_read,"
-                + leftComparator.getTotalCalled() + ",partition_comparison_left," + rightComparator.getTotalCalled()
-                + ",partition_comparison_right," + joinComparisonCount + ",join_comparison");
+                + ",memory," + joinResultCount + ",results," + cpu + ",CPU," + io + ",IO," + spillPartitionWriteCount
+                + ",partition_frames_written," + spillPartitionReadCount + ",partition_frames_read,"
+                + spillJoinReadCount + ",partition_frames_read," + "?" 
+                + ",partition_comparison_left," + "?"  + ",partition_comparison_right,"
+                + joinComparisonCount + ",join_comparison");
     }
 
     private void printPartitionCounts(String key, LinkedList<Long> counts) {
@@ -176,6 +172,7 @@ public class DisjointIntervalPartitionJoiner extends AbstractJoiner {
     @Override
     public void processBuildFrame(ByteBuffer buffer) throws HyracksDataException {
         partitionAndSpill.processFrame(buffer);
+        inputFrameCount++;
     }
 
     @Override
