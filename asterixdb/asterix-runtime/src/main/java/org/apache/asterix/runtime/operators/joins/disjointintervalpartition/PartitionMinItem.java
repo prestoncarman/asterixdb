@@ -19,7 +19,6 @@
 package org.apache.asterix.runtime.operators.joins.disjointintervalpartition;
 
 import java.io.Serializable;
-import java.util.Comparator;
 
 public class PartitionMinItem implements Serializable, Comparable<PartitionMinItem> {
     private static final long serialVersionUID = 1L;

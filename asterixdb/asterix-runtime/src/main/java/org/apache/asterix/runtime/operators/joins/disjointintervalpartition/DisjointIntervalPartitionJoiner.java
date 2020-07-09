@@ -324,13 +324,6 @@ public class DisjointIntervalPartitionJoiner extends AbstractJoiner {
 
         // Loop over all partitions from right (adding to memory)
         for (int i = 0; i < rightRunFileReaders.size(); i++) {
-            if (partitionId >= numberOfPartitions) {
-                // Reached maximum number of partition in memory.
-                getInMemoryTupleAccessors(buffer);
-                processInMemoryJoin(writer);
-                buffer.reset();
-                partitionId = 0;
-            }
             // Add right partition to memory
             rightRunFileReaders.get(i).open();
             while (rightRunFileReaders.get(i).nextFrame(tmpFrame2)) {

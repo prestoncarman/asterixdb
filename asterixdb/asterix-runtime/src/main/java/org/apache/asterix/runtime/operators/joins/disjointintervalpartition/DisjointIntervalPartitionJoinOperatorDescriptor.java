@@ -31,25 +31,17 @@ import org.apache.hyracks.api.dataflow.IActivity;
 import org.apache.hyracks.api.dataflow.IActivityGraphBuilder;
 import org.apache.hyracks.api.dataflow.IOperatorNodePushable;
 import org.apache.hyracks.api.dataflow.TaskId;
-import org.apache.hyracks.api.dataflow.value.IMissingWriter;
-import org.apache.hyracks.api.dataflow.value.IPredicateEvaluator;
 import org.apache.hyracks.api.dataflow.value.IRecordDescriptorProvider;
-import org.apache.hyracks.api.dataflow.value.ITuplePairComparator;
 import org.apache.hyracks.api.dataflow.value.RecordDescriptor;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.job.IOperatorDescriptorRegistry;
 import org.apache.hyracks.api.job.JobId;
-import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAccessor;
 import org.apache.hyracks.dataflow.common.comm.util.FrameUtils;
 import org.apache.hyracks.dataflow.std.base.AbstractActivityNode;
 import org.apache.hyracks.dataflow.std.base.AbstractOperatorDescriptor;
 import org.apache.hyracks.dataflow.std.base.AbstractStateObject;
 import org.apache.hyracks.dataflow.std.base.AbstractUnaryInputSinkOperatorNodePushable;
 import org.apache.hyracks.dataflow.std.base.AbstractUnaryInputUnaryOutputOperatorNodePushable;
-import org.apache.hyracks.dataflow.std.join.MergeBranchStatus.Stage;
-import org.apache.hyracks.dataflow.std.join.NestedLoopJoinOperatorDescriptor.JoinCacheTaskState;
-import org.apache.hyracks.dataflow.std.join.MergeJoinLocks;
-import org.apache.hyracks.dataflow.std.join.NestedLoopJoin;
 
 public class DisjointIntervalPartitionJoinOperatorDescriptor extends AbstractOperatorDescriptor {
     private static final long serialVersionUID = 1L;
@@ -129,11 +121,8 @@ public class DisjointIntervalPartitionJoinOperatorDescriptor extends AbstractOpe
                     state = new JoinCacheTaskState(ctx.getJobletContext().getJobId(),
                             new TaskId(getActivityId(), partition));
 
-                    PartitionMinItemComparator rightComparator = new PartitionMinItemComparator();
-                    PartitionMinItemComparator leftComparator = new PartitionMinItemComparator();
-
-                    PriorityQueue<PartitionMinItem> partitionMinRight = new PriorityQueue<>(16, rightComparator);
-                    PriorityQueue<PartitionMinItem> partitionMinLeft = new PriorityQueue<>(16, leftComparator);
+                    PriorityQueue<PartitionMinItem> partitionMinRight = new PriorityQueue<>(16);
+                    PriorityQueue<PartitionMinItem> partitionMinLeft = new PriorityQueue<>(16);
 
                     DisjointIntervalPartitionComputer leftDipc =
                             new DisjointIntervalPartitionComputerFactory(buildKey, partitionMinRight)

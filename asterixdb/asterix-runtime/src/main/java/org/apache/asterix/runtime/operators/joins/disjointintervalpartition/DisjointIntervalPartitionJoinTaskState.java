@@ -20,10 +20,10 @@ package org.apache.asterix.runtime.operators.joins.disjointintervalpartition;
 
 import org.apache.hyracks.api.dataflow.TaskId;
 import org.apache.hyracks.api.job.JobId;
-import org.apache.hyracks.dataflow.std.join.MergeJoinTaskState;
+import org.apache.hyracks.dataflow.std.base.AbstractStateObject;
 
-public class DisjointIntervalPartitionJoinTaskState extends MergeJoinTaskState {
-    protected DisjointIntervalPartitionJoiner partitionJoiner;
+public class DisjointIntervalPartitionJoinTaskState extends AbstractStateObject {
+    protected DisjointIntervalPartitionJoiner joiner;
 
     public DisjointIntervalPartitionJoinTaskState(JobId jobId, TaskId taskId) {
         super(jobId, taskId);
