@@ -79,6 +79,7 @@ public class DisjointIntervalPartitionJoiner extends AbstractJoiner {
     private long spillPartitionWriteCount = 0;
     private long spillPartitionReadCount = 0;
     private long spillJoinReadCount = 0;
+    private long ioCumulativeTime = 0;
 
     private final int partition;
     private final int memorySize;
@@ -153,13 +154,14 @@ public class DisjointIntervalPartitionJoiner extends AbstractJoiner {
                     + spillPartitionWriteCount + ",partition_frames_written," + spillPartitionReadCount
                     + ",partition_frames_read," + spillJoinReadCount + ",partition_frames_read," + "?"
                     + ",partition_comparison_left," + "?" + ",partition_comparison_right," + joinComparisonCount
-                    + ",join_comparison");
+                    + ",join_comparison, " + ioCumulativeTime + ",ioCumulativeTime");
         }
         System.out.println(",DisjointIntervalPartitionJoiner Statistics Log," + partition + ",partition," + memorySize
                 + ",memory," + joinResultCount + ",results," + cpu + ",CPU," + io + ",IO," + spillPartitionWriteCount
                 + ",partition_frames_written," + spillPartitionReadCount + ",partition_frames_read,"
                 + spillJoinReadCount + ",partition_frames_read," + "?" + ",partition_comparison_left," + "?"
-                + ",partition_comparison_right," + joinComparisonCount + ",join_comparison");
+                + ",partition_comparison_right," + joinComparisonCount + ",join_comparison, " + ioCumulativeTime
+                + ",ioCumulativeTime");
     }
 
     private void printPartitionCounts(String key, LinkedList<Long> counts) {
@@ -371,7 +373,10 @@ public class DisjointIntervalPartitionJoiner extends AbstractJoiner {
         accessor.next();
         if (!accessor.exists()) {
             // Load next frame.
-            if (reader.nextFrame(frame)) {
+            long start = System.nanoTime();
+            boolean nextFrame = reader.nextFrame(frame);
+            ioCumulativeTime += System.nanoTime() - start;
+            if (nextFrame) {
                 accessor.reset(frame.getBuffer());
                 accessor.next();
                 spillJoinReadCount++;
