@@ -334,7 +334,7 @@ public class DisjointIntervalPartitionJoiner extends AbstractJoiner {
                 while (tupleAccessor.exists()) {
                     if (partitionId >= numberOfPartitions
                             || !buffer.insertTuple(partitionId, tupleAccessor, tupleAccessor.getTupleId(), tpTemp)) {
-                        System.err.println(java.time.LocalDateTime.now() + " --- <" + partition + "> Batch: "
+                        System.out.println(java.time.LocalDateTime.now() + " --- <" + partition + "> Batch: "
                                 + countLoads++ + " Disjoint Partitions: " + partitionId);
                         // Memory has been filled. 
                         // Process tuples in memory with all left partitions.
@@ -352,11 +352,11 @@ public class DisjointIntervalPartitionJoiner extends AbstractJoiner {
             rightRunFileReaders.get(i).close();
             partitionId++;
         }
-        System.err.println(
+        System.out.println(
                 java.time.LocalDateTime.now() + " --- Final Batch: " + countLoads++ + " Partitions: " + partitionId);
         getInMemoryTupleAccessors(buffer);
         processInMemoryJoin(writer);
-        System.err.println(java.time.LocalDateTime.now() + " --- DONE");
+        System.out.println(java.time.LocalDateTime.now() + " --- DONE");
     }
 
     private void cleanupPartitions(List<RunFileReaderDir> partitionRunsReaders) throws HyracksDataException {
