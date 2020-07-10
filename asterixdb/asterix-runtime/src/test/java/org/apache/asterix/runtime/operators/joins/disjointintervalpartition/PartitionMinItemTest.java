@@ -57,22 +57,8 @@ public class PartitionMinItemTest {
         assertTrue(pmi1.compareTo(pmi2) <= 0);
         assertTrue(pmi2.compareTo(pmi3) == 0);
         assertTrue(pmi2.compareTo(pmi3) <= 0);
-
-        PartitionMinItemComparator pmic = new PartitionMinItemComparator();
-
-        assertTrue(pmic.compare(pmi1, pmi2) < 0);
-        assertTrue(pmic.compare(pmi1, pmi2) <= 0);
-        assertTrue(pmic.compare(pmi2, pmi3) == 0);
-        assertTrue(pmic.compare(pmi2, pmi3) <= 0);
     }
 
-    @Test
-    public void testPriorityQueueWithComparator() {
-        PartitionMinItemComparator pmic = new PartitionMinItemComparator();
-        PriorityQueue<PartitionMinItem> pqc = new PriorityQueue<>(16, pmic);
-        subtestPriorityQueue(pqc);
-    }
-    
     @Test
     public void testPriorityQueueWithNaturalOrdering() {
         PriorityQueue<PartitionMinItem> pq = new PriorityQueue<>(16);
