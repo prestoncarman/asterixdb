@@ -125,18 +125,20 @@ public class DisjointIntervalPartitionJoiner extends AbstractJoiner {
 
     @Override
     public void processProbeClose(IFrameWriter writer) throws HyracksDataException {
+
         // Probe side
         if (partitionAndSpill.hasSpillPartitions()) {
             // Prepare spilled partitions for join
             getRunFileReaders(partitionAndSpill, rightRunFileReaders, rightPartitionCounts);
             processSpill(partitionAndSpill, rightRunFileReaders, rightPartitionCounts);
+            printPartitionCounts("Right", rightPartitionCounts);
             processSpilledJoin(writer);
         } else {
             // Perform an in-memory join with LEFT spill files.
             getInMemoryTupleAccessors(partitionAndSpill, rightPartitionCounts);
+            printPartitionCounts("Right", rightPartitionCounts);
             processInMemoryJoin(writer);
         }
-        printPartitionCounts("Right", rightPartitionCounts);
 
         partitionAndSpill.close();
         resultAppender.write(writer, true);
@@ -149,16 +151,15 @@ public class DisjointIntervalPartitionJoiner extends AbstractJoiner {
             LOGGER.warning(",DisjointIntervalPartitionJoiner Statistics Log," + partition + ",partition," + memorySize
                     + ",memory," + joinResultCount + ",results," + cpu + ",CPU," + io + ",IO,"
                     + spillPartitionWriteCount + ",partition_frames_written," + spillPartitionReadCount
-                    + ",partition_frames_read," + spillJoinReadCount + ",partition_frames_read,"
-                    + "?" + ",partition_comparison_left," + "?" 
-                    + ",partition_comparison_right," + joinComparisonCount + ",join_comparison");
+                    + ",partition_frames_read," + spillJoinReadCount + ",partition_frames_read," + "?"
+                    + ",partition_comparison_left," + "?" + ",partition_comparison_right," + joinComparisonCount
+                    + ",join_comparison");
         }
         System.out.println(",DisjointIntervalPartitionJoiner Statistics Log," + partition + ",partition," + memorySize
                 + ",memory," + joinResultCount + ",results," + cpu + ",CPU," + io + ",IO," + spillPartitionWriteCount
                 + ",partition_frames_written," + spillPartitionReadCount + ",partition_frames_read,"
-                + spillJoinReadCount + ",partition_frames_read," + "?" 
-                + ",partition_comparison_left," + "?"  + ",partition_comparison_right,"
-                + joinComparisonCount + ",join_comparison");
+                + spillJoinReadCount + ",partition_frames_read," + "?" + ",partition_comparison_left," + "?"
+                + ",partition_comparison_right," + joinComparisonCount + ",join_comparison");
     }
 
     private void printPartitionCounts(String key, LinkedList<Long> counts) {
@@ -320,6 +321,7 @@ public class DisjointIntervalPartitionJoiner extends AbstractJoiner {
                         numberOfPartitions * ctx.getInitialFrameSize());
         TuplePointer tpTemp = new TuplePointer();
         int partitionId = 0;
+        int countLoads = 0;
         TupleAccessor tupleAccessor = new TupleAccessor(rightRd);
 
         // Loop over all partitions from right (adding to memory)
@@ -330,7 +332,10 @@ public class DisjointIntervalPartitionJoiner extends AbstractJoiner {
                 tupleAccessor.reset(tmpFrame2.getBuffer());
                 tupleAccessor.next();
                 while (tupleAccessor.exists()) {
-                    if (!buffer.insertTuple(partitionId, tupleAccessor, tupleAccessor.getTupleId(), tpTemp)) {
+                    if (partitionId >= numberOfPartitions
+                            || !buffer.insertTuple(partitionId, tupleAccessor, tupleAccessor.getTupleId(), tpTemp)) {
+                        System.err.println(java.time.LocalDateTime.now() + " --- <" + partition + "> Batch: "
+                                + countLoads++ + " Disjoint Partitions: " + partitionId);
                         // Memory has been filled. 
                         // Process tuples in memory with all left partitions.
                         getInMemoryTupleAccessors(buffer);
@@ -347,8 +352,11 @@ public class DisjointIntervalPartitionJoiner extends AbstractJoiner {
             rightRunFileReaders.get(i).close();
             partitionId++;
         }
+        System.err.println(
+                java.time.LocalDateTime.now() + " --- Final Batch: " + countLoads++ + " Partitions: " + partitionId);
         getInMemoryTupleAccessors(buffer);
         processInMemoryJoin(writer);
+        System.err.println(java.time.LocalDateTime.now() + " --- DONE");
     }
 
     private void cleanupPartitions(List<RunFileReaderDir> partitionRunsReaders) throws HyracksDataException {
