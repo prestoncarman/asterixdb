@@ -160,6 +160,7 @@ public class IntervalForwardSweepJoiner extends AbstractStreamJoiner {
     private long[] spillFileCount = { 0, 0 };
     private long[] spillReadCount = { 0, 0 };
     private long[] spillWriteCount = { 0, 0 };
+    private long[] joinSideCount = { 0, 0 };
 
     private final int partition;
     private final int memorySize;
@@ -298,7 +299,8 @@ public class IntervalForwardSweepJoiner extends AbstractStreamJoiner {
                     + leftSpillCount + ",left spills," + runFileStream[LEFT_PARTITION].getWriteCount()
                     + ",left frames_written," + runFileStream[LEFT_PARTITION].getReadCount() + ",left frames_read,"
                     + rightSpillCount + ",right spills," + runFileStream[RIGHT_PARTITION].getWriteCount()
-                    + ",right frames_written," + runFileStream[RIGHT_PARTITION].getReadCount() + ",right frames_read");
+                    + ",right frames_written," + runFileStream[RIGHT_PARTITION].getReadCount() + ",right frames_read,"
+                    + joinSideCount[LEFT_PARTITION] + ",left join," + joinSideCount[RIGHT_PARTITION] + ",right join");
         }
         System.out.println(",IntervalForwardSweepJoiner Statistics Log," + partition + ",partition," + memorySize
                 + ",memory," + joinResultCount + ",results," + joinComparisonCount + ",CPU," + ioCost + ",IO,"
@@ -307,7 +309,8 @@ public class IntervalForwardSweepJoiner extends AbstractStreamJoiner {
                 + rightSpillCount + ",right spills," + runFileStream[RIGHT_PARTITION].getWriteCount()
                 + ",right frames_written," + runFileStream[RIGHT_PARTITION].getReadCount() + ",right frames_read,"
                 + runFileStream[LEFT_PARTITION].getTupleCount() + ",left tuple_count,"
-                + runFileStream[RIGHT_PARTITION].getTupleCount() + ",right tuple_count");
+                + runFileStream[RIGHT_PARTITION].getTupleCount() + ",right tuple_count," + joinSideCount[LEFT_PARTITION]
+                + ",left join," + joinSideCount[RIGHT_PARTITION] + ",right join");
         //        System.out.println("left=" + frameCounts[0] + ", right=" + frameCounts[1]);
 
     }
@@ -505,6 +508,7 @@ public class IntervalForwardSweepJoiner extends AbstractStreamJoiner {
                     // Add to result if matched.
                     if (memoryTuple[LEFT_PARTITION].compareJoin(memoryTuple[RIGHT_PARTITION])) {
                         //                      memoryAccessor[LEFT_PARTITION].reset(groupTp);
+                        joinSideCount[inner]++;
                         addToResult(memoryTuple[LEFT_PARTITION].getAccessor(),
                                 memoryTuple[LEFT_PARTITION].getTupleIndex(), memoryTuple[RIGHT_PARTITION].getAccessor(),
                                 memoryTuple[RIGHT_PARTITION].getTupleIndex(), false, writer);
@@ -594,6 +598,7 @@ public class IntervalForwardSweepJoiner extends AbstractStreamJoiner {
                 // No more possible comparisons
                 break;
             } else if (memoryTuple[LEFT_PARTITION].compareJoin(memoryTuple[RIGHT_PARTITION])) {
+                joinSideCount[inner]++;
                 addToResult(memoryTuple[LEFT_PARTITION].getAccessor(), memoryTuple[LEFT_PARTITION].getTupleIndex(),
                         memoryTuple[RIGHT_PARTITION].getAccessor(), memoryTuple[RIGHT_PARTITION].getTupleIndex(), false,
                         writer);
@@ -660,6 +665,7 @@ public class IntervalForwardSweepJoiner extends AbstractStreamJoiner {
                 break;
             } else if (testTuple.compareJoin(memoryTuple[inner])) {
                 // Add to result if matched.
+                joinSideCount[inner]++;
                 addToResult(testTuple.getAccessor(), testTuple.getTupleIndex(), memoryTuple[inner].getAccessor(),
                         memoryTuple[inner].getTupleIndex(), reversed, writer);
                 if (DEBUG) {
@@ -705,25 +711,25 @@ public class IntervalForwardSweepJoiner extends AbstractStreamJoiner {
             freezePartition = LEFT_PARTITION;
         }
         if (DEBUG) {
-                System.err.println("freeze snapshot(" + freezePartition + "): " + frameCounts[RIGHT_PARTITION] + " right, "
-                        + frameCounts[LEFT_PARTITION] + " left, left[" + bufferManager.getNumTuples(LEFT_PARTITION)
-                        + " memory, " + leftSpillCount + " spills, "
-                        + (runFileStream[LEFT_PARTITION].getFileCount() - spillFileCount[LEFT_PARTITION]) + " files, "
-                        + (runFileStream[LEFT_PARTITION].getWriteCount() - spillWriteCount[LEFT_PARTITION]) + " written, "
-                        + (runFileStream[LEFT_PARTITION].getReadCount() - spillReadCount[LEFT_PARTITION]) + " read]. right["
-                        + bufferManager.getNumTuples(RIGHT_PARTITION) + " memory, " + +rightSpillCount + " spills, "
-                        + (runFileStream[RIGHT_PARTITION].getFileCount() - spillFileCount[RIGHT_PARTITION]) + " files, "
-                        + (runFileStream[RIGHT_PARTITION].getWriteCount() - spillWriteCount[RIGHT_PARTITION]) + " written, "
-                        + (runFileStream[RIGHT_PARTITION].getReadCount() - spillReadCount[RIGHT_PARTITION]) + " read].");
-//        
-//                spillFileCount[LEFT_PARTITION] = runFileStream[LEFT_PARTITION].getFileCount();
-//                spillReadCount[LEFT_PARTITION] = runFileStream[LEFT_PARTITION].getReadCount();
-//                spillWriteCount[LEFT_PARTITION] = runFileStream[LEFT_PARTITION].getWriteCount();
-//                spillFileCount[RIGHT_PARTITION] = runFileStream[RIGHT_PARTITION].getFileCount();
-//                spillReadCount[RIGHT_PARTITION] = runFileStream[RIGHT_PARTITION].getReadCount();
-//                spillWriteCount[RIGHT_PARTITION] = runFileStream[RIGHT_PARTITION].getWriteCount();
+            System.err.println("freeze snapshot(" + freezePartition + "): " + frameCounts[RIGHT_PARTITION] + " right, "
+                    + frameCounts[LEFT_PARTITION] + " left, left[" + bufferManager.getNumTuples(LEFT_PARTITION)
+                    + " memory, " + leftSpillCount + " spills, "
+                    + (runFileStream[LEFT_PARTITION].getFileCount() - spillFileCount[LEFT_PARTITION]) + " files, "
+                    + (runFileStream[LEFT_PARTITION].getWriteCount() - spillWriteCount[LEFT_PARTITION]) + " written, "
+                    + (runFileStream[LEFT_PARTITION].getReadCount() - spillReadCount[LEFT_PARTITION]) + " read]. right["
+                    + bufferManager.getNumTuples(RIGHT_PARTITION) + " memory, " + +rightSpillCount + " spills, "
+                    + (runFileStream[RIGHT_PARTITION].getFileCount() - spillFileCount[RIGHT_PARTITION]) + " files, "
+                    + (runFileStream[RIGHT_PARTITION].getWriteCount() - spillWriteCount[RIGHT_PARTITION]) + " written, "
+                    + (runFileStream[RIGHT_PARTITION].getReadCount() - spillReadCount[RIGHT_PARTITION]) + " read].");
+            //        
+            //                spillFileCount[LEFT_PARTITION] = runFileStream[LEFT_PARTITION].getFileCount();
+            //                spillReadCount[LEFT_PARTITION] = runFileStream[LEFT_PARTITION].getReadCount();
+            //                spillWriteCount[LEFT_PARTITION] = runFileStream[LEFT_PARTITION].getWriteCount();
+            //                spillFileCount[RIGHT_PARTITION] = runFileStream[RIGHT_PARTITION].getFileCount();
+            //                spillReadCount[RIGHT_PARTITION] = runFileStream[RIGHT_PARTITION].getReadCount();
+            //                spillWriteCount[RIGHT_PARTITION] = runFileStream[RIGHT_PARTITION].getWriteCount();
         }
-        
+
         // Mark where to start reading
         if (runFileStream[freezePartition].isReading()) {
             runFilePointer[freezePartition].reset(runFileStream[freezePartition].getReadPointer(),
