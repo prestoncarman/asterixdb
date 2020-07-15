@@ -36,8 +36,10 @@ import org.apache.hyracks.dataflow.common.comm.io.ArrayTupleBuilder;
 import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAccessor;
 import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAppender;
 import org.apache.hyracks.dataflow.common.comm.util.FrameUtils;
-import org.apache.hyracks.dataflow.common.io.RunFileReader;
-import org.apache.hyracks.dataflow.common.io.RunFileWriter;
+//import org.apache.hyracks.dataflow.common.io.RunFileReader;
+//import org.apache.hyracks.dataflow.common.io.RunFileWriter;
+import org.apache.hyracks.dataflow.std.join.RunFileReaderDir;
+import org.apache.hyracks.dataflow.std.join.RunFileWriterDir;
 import org.apache.hyracks.dataflow.std.buffermanager.BufferInfo;
 import org.apache.hyracks.dataflow.std.buffermanager.EnumFreeSlotPolicy;
 import org.apache.hyracks.dataflow.std.buffermanager.FrameFreeSlotPolicyFactory;
@@ -54,8 +56,8 @@ public class NestedLoopJoin {
     private final IFrame outBuffer;
     private final IFrame innerBuffer;
     private final VariableFrameMemoryManager outerBufferMngr;
-    private RunFileReader runFileReader;
-    private final RunFileWriter runFileWriter;
+    private RunFileReaderDir runFileReader;
+    private final RunFileWriterDir runFileWriter;
     private final boolean isLeftOuter;
     private final ArrayTupleBuilder missingTupleBuilder;
     private final IPredicateEvaluator predEvaluator;
@@ -67,6 +69,7 @@ public class NestedLoopJoin {
     private long joinResultCount = 0;
     private long spillWriteCount = 0;
     private long spillReadCount = 0;
+    private long countLoads = 0;
 
     public NestedLoopJoin(IHyracksTaskContext ctx, FrameTupleAccessor accessorOuter, FrameTupleAccessor accessorInner,
             ITuplePairComparator comparatorsOuter2Inner, int memSize, IPredicateEvaluator predEval, boolean isLeftOuter,
@@ -104,7 +107,7 @@ public class NestedLoopJoin {
 
         FileReference file = ctx.getJobletContext()
                 .createManagedWorkspaceFile(this.getClass().getSimpleName() + this.toString());
-        runFileWriter = new RunFileWriter(file, ctx.getIOManager());
+        runFileWriter = new RunFileWriterDir(file, ctx.getIOManager());
         runFileWriter.open();
 
         partition = ctx.getTaskAttemptId().getTaskId().getPartition();
@@ -125,6 +128,8 @@ public class NestedLoopJoin {
                 }
                 spillReadCount++;
             }
+            System.out.println(
+                    java.time.LocalDateTime.now() + " --- <" + partition + "> Batch: " + countLoads++);
             runFileReader.close();
             outerBufferMngr.reset();
             if (outerBufferMngr.insertFrame(outerBuffer) < 0) {
@@ -202,6 +207,8 @@ public class NestedLoopJoin {
         }
         runFileReader.close();
         outerBufferMngr.reset();
+        System.out.println(
+                java.time.LocalDateTime.now() + " --- <" + partition + "> Batch: " + countLoads++);
 
         appender.write(writer, true);
 
@@ -210,7 +217,10 @@ public class NestedLoopJoin {
                     + " comparisons, " + joinResultCount + " results, " + spillWriteCount + " frames written, "
                     + spillReadCount + " frames read.");
         }
-    }
+        System.out.println("NestedLoopJoin statitics: " + partition + " partition, " + joinComparisonCount
+                + " comparisons, " + joinResultCount + " results, " + spillWriteCount + " frames written, "
+                + spillReadCount + " frames read.");
+   }
 
     private int compare(FrameTupleAccessor accessor0, int tIndex0, FrameTupleAccessor accessor1, int tIndex1)
             throws HyracksDataException {
