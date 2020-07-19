@@ -18,6 +18,7 @@
  */
 package org.apache.asterix.runtime.operators.joins.disjointintervalpartition;
 
+import java.io.PrintStream;
 import java.nio.ByteBuffer;
 import java.util.LinkedList;
 import java.util.List;
@@ -39,10 +40,10 @@ import org.apache.hyracks.dataflow.common.comm.util.FrameUtils;
 import org.apache.hyracks.dataflow.std.buffermanager.ITupleAccessor;
 import org.apache.hyracks.dataflow.std.buffermanager.TupleAccessor;
 import org.apache.hyracks.dataflow.std.buffermanager.VPartitionTupleBufferManager;
-import org.apache.hyracks.dataflow.common.io.RunFileReader;
-import org.apache.hyracks.dataflow.common.io.RunFileWriter;
-//import org.apache.hyracks.dataflow.std.join.RunFileReaderDir;
-//import org.apache.hyracks.dataflow.std.join.RunFileWriterDir;
+//import org.apache.hyracks.dataflow.common.io.RunFileReader;
+//import org.apache.hyracks.dataflow.common.io.RunFileWriter;
+import org.apache.hyracks.dataflow.std.join.RunFileReaderDir;
+import org.apache.hyracks.dataflow.std.join.RunFileWriterDir;
 import org.apache.hyracks.dataflow.std.structures.TuplePointer;
 
 public class DisjointIntervalPartitionJoiner extends AbstractJoiner {
@@ -55,9 +56,9 @@ public class DisjointIntervalPartitionJoiner extends AbstractJoiner {
 
     private final DisjointIntervalPartitionAndSpill partitionAndSpill;
     private final int numberOfPartitions;
-    private final LinkedList<RunFileReader> leftRunFileReaders = new LinkedList<>();
+    private final LinkedList<RunFileReaderDir> leftRunFileReaders = new LinkedList<>();
     private final LinkedList<Long> leftPartitionCounts = new LinkedList<>();
-    private final LinkedList<RunFileReader> rightRunFileReaders = new LinkedList<>();
+    private final LinkedList<RunFileReaderDir> rightRunFileReaders = new LinkedList<>();
     private final LinkedList<Long> rightPartitionCounts = new LinkedList<>();
 
     private ITupleAccessor[] tupleAccessors;
@@ -80,6 +81,7 @@ public class DisjointIntervalPartitionJoiner extends AbstractJoiner {
     private long spillPartitionReadCount = 0;
     private long spillJoinReadCount = 0;
     private long ioCumulativeTime = 0;
+    private final String[] statsStream;
 
     private final int partition;
     private final int memorySize;
@@ -109,11 +111,16 @@ public class DisjointIntervalPartitionJoiner extends AbstractJoiner {
         tmpFrame = new VSizeFrame(ctx);
         tmpFrame2 = new VSizeFrame(ctx);
         joinTupleAccessor = new TupleAccessor(leftRd);
+
+        statsStream = new String[numberOfPartitions];
+        for (int i = 0; i < numberOfPartitions; i++) {
+            statsStream[i] = "";
+        }
     }
 
-    private RunFileWriter getNewSpillWriter() throws HyracksDataException {
+    private RunFileWriterDir getNewSpillWriter() throws HyracksDataException {
         FileReference file = ctx.getJobletContext().createManagedWorkspaceFile(SPILL_RUN_FILES_PREFIX);
-        RunFileWriter writer = new RunFileWriter(file, ctx.getIOManager());
+        RunFileWriterDir writer = new RunFileWriterDir(file, ctx.getIOManager());
         writer.open();
         return writer;
     }
@@ -200,7 +207,7 @@ public class DisjointIntervalPartitionJoiner extends AbstractJoiner {
         }
     }
 
-    private void joinInMemoryPartitions(RunFileReader runFileReader, int leftPid, IFrameWriter writer)
+    private void joinInMemoryPartitions(RunFileReaderDir runFileReader, int leftPid, IFrameWriter writer)
             throws HyracksDataException {
         // Prepare frame.
         runFileReader.open();
@@ -272,10 +279,10 @@ public class DisjointIntervalPartitionJoiner extends AbstractJoiner {
         }
     }
 
-    private void processSpill(DisjointIntervalPartitionAndSpill dipas, LinkedList<RunFileReader> rfrs,
+    private void processSpill(DisjointIntervalPartitionAndSpill dipas, LinkedList<RunFileReaderDir> rfrs,
             LinkedList<Long> rpc) throws HyracksDataException {
         while (dipas.getSpillSizeInTup() > 0) {
-            RunFileReader rfr = dipas.getSpillRFReader();
+            RunFileReaderDir rfr = dipas.getSpillRFReader();
             dipas.reset(getNewSpillWriter());
             rfr.open();
             while (rfr.nextFrame(tmpFrame)) {
@@ -287,7 +294,7 @@ public class DisjointIntervalPartitionJoiner extends AbstractJoiner {
         }
     }
 
-    private void getRunFileReaders(DisjointIntervalPartitionAndSpill dipas, LinkedList<RunFileReader> rfrs,
+    private void getRunFileReaders(DisjointIntervalPartitionAndSpill dipas, LinkedList<RunFileReaderDir> rfrs,
             LinkedList<Long> rpc) throws HyracksDataException {
         //        int offset = rfrs.size();
         dipas.spillAllPartitions();
@@ -303,7 +310,7 @@ public class DisjointIntervalPartitionJoiner extends AbstractJoiner {
         }
     }
 
-    private void printRunFileTuples(String message, RunFileReader rfReader) throws HyracksDataException {
+    private void printRunFileTuples(String message, RunFileReaderDir rfReader) throws HyracksDataException {
         rfReader.open();
         rfReader.reset();
         if (rfReader.nextFrame(tmpFrame)) {
@@ -336,8 +343,8 @@ public class DisjointIntervalPartitionJoiner extends AbstractJoiner {
                 while (tupleAccessor.exists()) {
                     if (partitionId >= numberOfPartitions
                             || !buffer.insertTuple(partitionId, tupleAccessor, tupleAccessor.getTupleId(), tpTemp)) {
-                        System.out.println(java.time.LocalDateTime.now() + " --- <" + partition + "> Batch: "
-                                + countLoads++ + " Load Partitions: " + partitionId);
+                        statsStream[partition] += (java.time.LocalDateTime.now() + " --- <" + partition + "> Batch: "
+                                + countLoads++ + " Load Partitions: " + partitionId + "\n");
                         // Memory has been filled. 
                         // Process tuples in memory with all left partitions.
                         getInMemoryTupleAccessors(buffer);
@@ -355,21 +362,22 @@ public class DisjointIntervalPartitionJoiner extends AbstractJoiner {
             rightRunFileReaders.get(i).close();
             partitionId++;
         }
-        System.out.println(java.time.LocalDateTime.now() + " --- <" + partition + "> Batch: " + countLoads++
-                + " Load Partitions: " + partitionId);
+        statsStream[partition] += (java.time.LocalDateTime.now() + " --- <" + partition + "> Batch: " + countLoads++
+                + " Load Partitions: " + partitionId + "\n");
         getInMemoryTupleAccessors(buffer);
         processInMemoryJoin(writer);
-        System.out.println(java.time.LocalDateTime.now() + " --- <" + partition + "> Batch: " + countLoads + " DONE");
+        statsStream[partition] += (java.time.LocalDateTime.now() + " --- <" + partition + "> Batch: " + countLoads + " DONE" + "\n");
+        System.out.println(statsStream[partition]);
     }
 
-    private void cleanupPartitions(List<RunFileReader> partitionRunsReaders) throws HyracksDataException {
+    private void cleanupPartitions(List<RunFileReaderDir> partitionRunsReaders) throws HyracksDataException {
         for (int i = 0; i < partitionRunsReaders.size(); i++) {
             partitionRunsReaders.get(i).close();
             partitionRunsReaders.get(i).delete();
         }
     }
 
-    private void loadNextTuple(ITupleAccessor accessor, RunFileReader reader, IFrame frame)
+    private void loadNextTuple(ITupleAccessor accessor, RunFileReaderDir reader, IFrame frame)
             throws HyracksDataException {
         accessor.next();
         if (!accessor.exists()) {

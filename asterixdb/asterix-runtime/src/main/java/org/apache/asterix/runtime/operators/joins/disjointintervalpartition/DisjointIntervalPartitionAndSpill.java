@@ -30,10 +30,10 @@ import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.io.FileReference;
 import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAccessor;
 import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAppender;
-import org.apache.hyracks.dataflow.common.io.RunFileReader;
-import org.apache.hyracks.dataflow.common.io.RunFileWriter;
-//import org.apache.hyracks.dataflow.std.join.RunFileReaderDir;
-//import org.apache.hyracks.dataflow.std.join.RunFileWriterDir;
+//import org.apache.hyracks.dataflow.common.io.RunFileReader;
+//import org.apache.hyracks.dataflow.common.io.RunFileWriter;
+import org.apache.hyracks.dataflow.std.join.RunFileReaderDir;
+import org.apache.hyracks.dataflow.std.join.RunFileWriterDir;
 import org.apache.hyracks.dataflow.std.buffermanager.IFrameBufferManager;
 import org.apache.hyracks.dataflow.std.buffermanager.ITupleAccessor;
 import org.apache.hyracks.dataflow.std.buffermanager.PreferToSpillFullyOccupiedFramePolicy;
@@ -52,7 +52,7 @@ public class DisjointIntervalPartitionAndSpill {
 
     private DisjointIntervalPartitionComputer dipc;
 
-    private RunFileWriter[] runFileWriters; //writing spilled build partitions
+    private RunFileWriterDir[] runFileWriters; //writing spilled build partitions
 
     private final BitSet spilledStatus; //0=resident, 1=spilled
     private final int numOfPartitions;
@@ -73,7 +73,7 @@ public class DisjointIntervalPartitionAndSpill {
     private TuplePointer tempPtr = new TuplePointer();
 
     private final FrameTupleAppender spillAppender;
-    private RunFileWriter spillWriter;
+    private RunFileWriterDir spillWriter;
 
     private RecordDescriptor rd;
 
@@ -83,7 +83,7 @@ public class DisjointIntervalPartitionAndSpill {
         this.memoryForPartitioning = memory - 1;
         this.numOfPartitions = numOfPartitions;
 
-        runFileWriters = new RunFileWriter[numOfPartitions];
+        runFileWriters = new RunFileWriterDir[numOfPartitions];
         spilledStatus = new BitSet(numOfPartitions);
 
         spillAppender = new FrameTupleAppender(new VSizeFrame(ctx));
@@ -100,7 +100,7 @@ public class DisjointIntervalPartitionAndSpill {
     }
 
     public void resetForNewDataset(RecordDescriptor rd, DisjointIntervalPartitionComputer dipc, String runFilePrefix,
-            RunFileWriter writer) throws HyracksDataException {
+            RunFileWriterDir writer) throws HyracksDataException {
         this.rd = rd;
         this.dipc = dipc;
         this.runFilePrefix = runFilePrefix;
@@ -108,7 +108,7 @@ public class DisjointIntervalPartitionAndSpill {
         reset(writer);
     }
 
-    public void reset(RunFileWriter writer) throws HyracksDataException {
+    public void reset(RunFileWriterDir writer) throws HyracksDataException {
         // Make sure all file handles are closed
         close();
         // reset variables.
@@ -170,18 +170,18 @@ public class DisjointIntervalPartitionAndSpill {
     }
 
     private void spillPartition(int pid) throws HyracksDataException {
-        RunFileWriter writer = getSpillWriterOrCreateNewOneIfNotExist(pid);
+        RunFileWriterDir writer = getSpillWriterOrCreateNewOneIfNotExist(pid);
         spillWriteCount += bufferManager.getNumFrames(pid);
         bufferManager.flushPartition(pid, writer);
         bufferManager.clearPartition(pid);
         spilledStatus.set(pid);
     }
 
-    private RunFileWriter getSpillWriterOrCreateNewOneIfNotExist(int pid) throws HyracksDataException {
-        RunFileWriter writer = runFileWriters[pid];
+    private RunFileWriterDir getSpillWriterOrCreateNewOneIfNotExist(int pid) throws HyracksDataException {
+        RunFileWriterDir writer = runFileWriters[pid];
         if (writer == null) {
             FileReference file = ctx.getJobletContext().createManagedWorkspaceFile(runFilePrefix);
-            writer = new RunFileWriter(file, ctx.getIOManager());
+            writer = new RunFileWriterDir(file, ctx.getIOManager());
             writer.open();
             runFileWriters[pid] = writer;
         }
@@ -216,7 +216,7 @@ public class DisjointIntervalPartitionAndSpill {
         }
     }
 
-    public RunFileReader getRFReader(int pid) throws HyracksDataException {
+    public RunFileReaderDir getRFReader(int pid) throws HyracksDataException {
         return (runFileWriters[pid] == null) ? null : (runFileWriters[pid]).createReader();
     }
 
@@ -224,7 +224,7 @@ public class DisjointIntervalPartitionAndSpill {
         return partitionSizeInTups[pid];
     }
 
-    public RunFileReader getSpillRFReader() throws HyracksDataException {
+    public RunFileReaderDir getSpillRFReader() throws HyracksDataException {
         return (spillWriter == null) ? null : spillWriter.createDeleteOnCloseReader();
     }
 
