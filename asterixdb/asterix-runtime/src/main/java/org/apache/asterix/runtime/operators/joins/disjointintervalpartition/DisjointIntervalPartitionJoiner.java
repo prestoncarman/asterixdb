@@ -144,7 +144,7 @@ public class DisjointIntervalPartitionJoiner extends AbstractJoiner {
         } else {
             // Perform an in-memory join with LEFT spill files.
             getInMemoryTupleAccessors(partitionAndSpill, rightPartitionCounts);
-            printPartitionCounts("Right", rightPartitionCounts);
+//            printPartitionCounts("Right", rightPartitionCounts);
             processInMemoryJoin(writer);
         }
 
@@ -190,6 +190,7 @@ public class DisjointIntervalPartitionJoiner extends AbstractJoiner {
         getRunFileReaders(partitionAndSpill, leftRunFileReaders, leftPartitionCounts);
         // Handle spill file.
         processSpill(partitionAndSpill, leftRunFileReaders, leftPartitionCounts);
+//        printPartitionCounts("Left", leftPartitionCounts);
 
         printPartitionCounts("Left", leftPartitionCounts);
 
@@ -318,7 +319,7 @@ public class DisjointIntervalPartitionJoiner extends AbstractJoiner {
             joinTupleAccessor.next();
         }
         while (joinTupleAccessor.exists()) {
-            TuplePrinterUtil.printTuple("RunFile: " + message, joinTupleAccessor);
+//            TuplePrinterUtil.printTuple("RunFile: " + message, joinTupleAccessor);
             loadNextTuple(joinTupleAccessor, rfReader, tmpFrame);
         }
         rfReader.close();
