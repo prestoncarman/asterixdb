@@ -77,12 +77,11 @@ public class DisjointIntervalPartitionJoinOperatorDescriptor extends AbstractOpe
         ActivityId leftAid = new ActivityId(odId, JOIN_BUILD_ACTIVITY_ID);
         ActivityId rightAid = new ActivityId(odId, JOIN_PROBE_ACTIVITY_ID);
 
-        IActivity leftAN = new JoinProbeActivityNode(rightAid);
         IActivity rightAN = new JoinBuildActivityNode(leftAid, rightAid);
-
         builder.addActivity(this, rightAN);
         builder.addSourceEdge(1, rightAN, 0);
 
+        IActivity leftAN = new JoinProbeActivityNode(rightAid);
         builder.addActivity(this, leftAN);
         builder.addSourceEdge(0, leftAN, 0);
         builder.addTargetEdge(0, leftAN, 0);
