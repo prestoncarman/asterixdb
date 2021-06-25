@@ -20,7 +20,6 @@
 package org.apache.asterix.optimizer.rules.util;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -32,6 +31,7 @@ import org.apache.asterix.common.exceptions.CompilationException;
 import org.apache.asterix.common.exceptions.ErrorCode;
 import org.apache.asterix.lang.common.util.FunctionUtil;
 import org.apache.asterix.om.functions.BuiltinFunctions;
+import org.apache.asterix.om.types.ATypeTag;
 import org.apache.asterix.runtime.operators.joins.interval.utils.AfterIntervalJoinUtilFactory;
 import org.apache.asterix.runtime.operators.joins.interval.utils.BeforeIntervalJoinUtilFactory;
 import org.apache.asterix.runtime.operators.joins.interval.utils.CoveredByIntervalJoinUtilFactory;
@@ -60,6 +60,8 @@ import org.apache.hyracks.algebricks.core.algebra.operators.physical.AbstractJoi
 import org.apache.hyracks.algebricks.core.algebra.operators.physical.AssignPOperator;
 import org.apache.hyracks.algebricks.core.algebra.properties.IPartitioningProperty.PartitioningType;
 import org.apache.hyracks.algebricks.core.algebra.properties.IntervalColumn;
+import org.apache.hyracks.api.exceptions.IWarningCollector;
+import org.apache.hyracks.api.exceptions.Warning;
 import org.apache.hyracks.dataflow.common.data.partition.range.RangeMap;
 
 public class IntervalJoinUtils {
@@ -78,6 +80,102 @@ public class IntervalJoinUtils {
 
     protected static RangeAnnotation findRangeAnnotation(AbstractFunctionCallExpression fexp) {
         return fexp.getAnnotation(RangeAnnotation.class);
+    }
+
+    protected static void tryIntervalJoinAssignment(AbstractBinaryJoinOperator op, IOptimizationContext context,
+            ILogicalExpression joinCondition, int left, int right) throws AlgebricksException {
+
+        AbstractFunctionCallExpression fexp = (AbstractFunctionCallExpression) joinCondition;
+
+        RangeAnnotation rangeAnnotation = IntervalJoinUtils.findRangeAnnotation(fexp);
+        IntervalJoinUtils.updateJoinPlan(op, context, fexp, left, right, rangeAnnotation);
+    }
+
+    protected static void updateJoinPlan(AbstractBinaryJoinOperator op, IOptimizationContext context,
+            AbstractFunctionCallExpression fexp, int left, int right, RangeAnnotation rangeAnnotation)
+            throws AlgebricksException {
+
+        List<LogicalVariable> varsLeft = op.getInputs().get(left).getValue().getSchema();
+        List<LogicalVariable> varsRight = op.getInputs().get(right).getValue().getSchema();
+        List<LogicalVariable> sideLeft = new ArrayList<>(1);
+        List<LogicalVariable> sideRight = new ArrayList<>(1);
+
+        boolean switchArguments = false;
+        if (fexp.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
+            return;
+        }
+
+        FunctionIdentifier fi = fexp.getFunctionIdentifier();
+        if (!isIntervalFunction(fi)) {
+            return;
+        }
+
+        ILogicalExpression opLeft = fexp.getArguments().get(left).getValue();
+        ILogicalExpression opRight = fexp.getArguments().get(right).getValue();
+
+        if (opLeft.getExpressionTag() != LogicalExpressionTag.VARIABLE
+                || opRight.getExpressionTag() != LogicalExpressionTag.VARIABLE) {
+            return;
+        }
+
+        LogicalVariable var1 = ((VariableReferenceExpression) opLeft).getVariableReference();
+        if (varsLeft.contains(var1)) {
+            sideLeft.add(var1);
+        } else if (varsRight.contains(var1)) {
+            sideRight.add(var1);
+            fi = getInverseIntervalFunction(fi);
+            switchArguments = true;
+        } else {
+            return;
+        }
+
+        LogicalVariable var2 = ((VariableReferenceExpression) opRight).getVariableReference();
+        if (varsLeft.contains(var2) && !sideLeft.contains(var2) && switchArguments) {
+            sideLeft.add(var2);
+        } else if (varsRight.contains(var2) && !sideRight.contains(var2) && !switchArguments) {
+            sideRight.add(var2);
+        } else {
+            return;
+        }
+
+        if (fi == null || rangeAnnotation == null) {
+            return;
+        }
+
+        if (rangeAnnotation == null) {
+            buildSortMergeIntervalPlanWithDynamicHint(op, context, fi, sideLeft, sideRight, left, right);
+        } else {
+            buildSortMergeIntervalPlanWithStaticHint(op, context, fi, sideLeft, sideRight, left, right,
+                    rangeAnnotation);
+        }
+    }
+
+    protected static void buildSortMergeIntervalPlanWithDynamicHint(AbstractBinaryJoinOperator op,
+            IOptimizationContext context, FunctionIdentifier fi, List<LogicalVariable> sideLeft,
+            List<LogicalVariable> sideRight, int left, int right) {
+        return;
+    }
+
+    protected static void buildSortMergeIntervalPlanWithStaticHint(AbstractBinaryJoinOperator op,
+            IOptimizationContext context, FunctionIdentifier fi, List<LogicalVariable> sideLeft,
+            List<LogicalVariable> sideRight, int left, int right, RangeAnnotation rangeAnnotation)
+            throws AlgebricksException {
+        //Check RangeMap type
+        RangeMap rangeMap = rangeAnnotation.getRangeMap();
+        if (rangeMap.getTag(0, 0) != ATypeTag.DATETIME.serialize() && rangeMap.getTag(0, 0) != ATypeTag.DATE.serialize()
+                && rangeMap.getTag(0, 0) != ATypeTag.TIME.serialize()) {
+            IWarningCollector warningCollector = context.getWarningCollector();
+            if (warningCollector.shouldWarn()) {
+                warningCollector.warn(Warning.of(op.getSourceLocation(),
+                        org.apache.hyracks.api.exceptions.ErrorCode.INAPPLICABLE_HINT,
+                        "Date, DateTime, and Time are only range hints types supported for interval joins"));
+            }
+            return;
+        }
+
+        IntervalPartitions intervalPartitions =
+                createIntervalPartitions(op, fi, sideLeft, sideRight, rangeMap, context, left, right);
+        setSortMergeIntervalJoinOp(op, fi, sideLeft, sideRight, context, intervalPartitions);
     }
 
     protected static void setSortMergeIntervalJoinOp(AbstractBinaryJoinOperator op, FunctionIdentifier fi,
@@ -134,49 +232,6 @@ public class IntervalJoinUtils {
             throw new CompilationException(ErrorCode.COMPILATION_ILLEGAL_STATE, fi.getName());
         }
         return new IntervalPartitions(rangeMap, leftIC, rightIC, leftPartitioningType, rightPartitioningType);
-    }
-
-    protected static FunctionIdentifier isIntervalJoinCondition(ILogicalExpression e,
-            Collection<LogicalVariable> inLeftAll, Collection<LogicalVariable> inRightAll,
-            Collection<LogicalVariable> outLeftFields, Collection<LogicalVariable> outRightFields, int left,
-            int right) {
-        FunctionIdentifier fiReturn;
-        boolean switchArguments = false;
-        if (e.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
-            return null;
-        }
-        AbstractFunctionCallExpression fexp = (AbstractFunctionCallExpression) e;
-        FunctionIdentifier fi = fexp.getFunctionIdentifier();
-        if (isIntervalFunction(fi)) {
-            fiReturn = fi;
-        } else {
-            return null;
-        }
-        ILogicalExpression opLeft = fexp.getArguments().get(left).getValue();
-        ILogicalExpression opRight = fexp.getArguments().get(right).getValue();
-        if (opLeft.getExpressionTag() != LogicalExpressionTag.VARIABLE
-                || opRight.getExpressionTag() != LogicalExpressionTag.VARIABLE) {
-            return null;
-        }
-        LogicalVariable var1 = ((VariableReferenceExpression) opLeft).getVariableReference();
-        if (inLeftAll.contains(var1) && !outLeftFields.contains(var1)) {
-            outLeftFields.add(var1);
-        } else if (inRightAll.contains(var1) && !outRightFields.contains(var1)) {
-            outRightFields.add(var1);
-            fiReturn = getInverseIntervalFunction(fi);
-            switchArguments = true;
-        } else {
-            return null;
-        }
-        LogicalVariable var2 = ((VariableReferenceExpression) opRight).getVariableReference();
-        if (inLeftAll.contains(var2) && !outLeftFields.contains(var2) && switchArguments) {
-            outLeftFields.add(var2);
-        } else if (inRightAll.contains(var2) && !outRightFields.contains(var2) && !switchArguments) {
-            outRightFields.add(var2);
-        } else {
-            return null;
-        }
-        return fiReturn;
     }
 
     /**
