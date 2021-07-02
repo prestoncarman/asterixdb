@@ -187,6 +187,7 @@ import org.apache.asterix.runtime.aggregates.std.IntermediateVarAggregateDescrip
 import org.apache.asterix.runtime.aggregates.std.IntermediateVarPopAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.KurtosisAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.LocalAvgAggregateDescriptor;
+import org.apache.asterix.runtime.aggregates.std.LocalIntervalRangeAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.LocalKurtosisAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.LocalMaxAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.LocalMinAggregateDescriptor;
@@ -677,6 +678,7 @@ public final class FunctionCollection implements IFunctionCollection {
         fc.add(EmptyStreamAggregateDescriptor.FACTORY);
         fc.add(NonEmptyStreamAggregateDescriptor.FACTORY);
         fc.add(NullWriterAggregateDescriptor.FACTORY);
+        fc.add(LocalIntervalRangeAggregateDescriptor.FACTORY);
 
         // serializable aggregates
         fc.add(SerializableCountAggregateDescriptor.FACTORY);
