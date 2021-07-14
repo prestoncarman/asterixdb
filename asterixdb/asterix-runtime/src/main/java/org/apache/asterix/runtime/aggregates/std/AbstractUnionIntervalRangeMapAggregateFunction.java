@@ -21,11 +21,16 @@ package org.apache.asterix.runtime.aggregates.std;
 import java.io.ByteArrayInputStream;
 import java.io.DataInput;
 import java.io.DataInputStream;
+import java.io.DataOutput;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.apache.asterix.dataflow.data.nontagged.serde.AIntervalSerializerDeserializer;
 import org.apache.asterix.formats.nontagged.SerializerDeserializerProvider;
+import org.apache.asterix.om.base.ABinary;
 import org.apache.asterix.om.base.AInterval;
+import org.apache.asterix.om.base.AMutableBinary;
 import org.apache.asterix.om.functions.BuiltinFunctions;
 import org.apache.asterix.om.types.ATypeTag;
 import org.apache.asterix.om.types.BuiltinType;
@@ -41,8 +46,12 @@ import org.apache.hyracks.data.std.api.IPointable;
 import org.apache.hyracks.data.std.primitive.VoidPointable;
 import org.apache.hyracks.data.std.util.ArrayBackedValueStorage;
 import org.apache.hyracks.dataflow.common.data.accessors.IFrameTupleReference;
+import org.apache.hyracks.dataflow.common.data.marshalling.ByteArraySerializerDeserializer;
+import org.apache.hyracks.dataflow.common.data.marshalling.DoubleArraySerializerDeserializer;
+import org.apache.hyracks.dataflow.common.data.marshalling.IntArraySerializerDeserializer;
+import org.apache.hyracks.dataflow.common.data.marshalling.IntegerSerializerDeserializer;
 
-public abstract class AbstractIntervalAggregateFunction extends AbstractAggregateFunction {
+public abstract class AbstractUnionIntervalRangeMapAggregateFunction extends AbstractAggregateFunction {
 
     private ArrayBackedValueStorage resultStorage = new ArrayBackedValueStorage();
     private IPointable inputVal = new VoidPointable();
@@ -52,14 +61,25 @@ public abstract class AbstractIntervalAggregateFunction extends AbstractAggregat
     protected long currentMaxEnd;
     protected byte intervalType;
 
-    private ISerializerDeserializer<AInterval> intervalSerde =
-            SerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.AINTERVAL);
+    private ISerializerDeserializer<ABinary> binarySerde =
+            SerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.ABINARY);
+    private final AMutableBinary binary = new AMutableBinary(null, 0, 0);
+    private final List<List<byte[]>> finalSamples = new ArrayList<>();
+    private final ArrayBackedValueStorage storage = new ArrayBackedValueStorage();
+    private final int numOfPartitions;
+    private final int numOrderByFields;
+    private final byte[] splitPoints;
+    private final double[] percentages;
 
-    public AbstractIntervalAggregateFunction(IScalarEvaluatorFactory[] args, IEvaluatorContext context,
-            SourceLocation sourceLoc) throws HyracksDataException {
+    public AbstractUnionIntervalRangeMapAggregateFunction(IScalarEvaluatorFactory[] args, IEvaluatorContext context,
+            int numOfPartitions, int numOrderByFields, SourceLocation sourceLoc) throws HyracksDataException {
         super(sourceLoc);
         this.eval = args[0].createScalarEvaluator(context);
         this.context = context;
+        this.numOfPartitions = numOfPartitions;
+        this.numOrderByFields = numOrderByFields;
+        this.splitPoints = new byte[numOfPartitions - 1];
+        this.percentages = new double[numOfPartitions - 1];
     }
 
     @Override
@@ -92,13 +112,29 @@ public abstract class AbstractIntervalAggregateFunction extends AbstractAggregat
     @Override
     public void finish(IPointable result) throws HyracksDataException {
         resultStorage.reset();
+        DataOutput allSplitValuesOut = storage.getDataOutput();
+        int[] endOffsets;
         try {
-            AInterval intervalRange = new AInterval(currentMinStart, currentMaxEnd, intervalType);
-            intervalSerde.serialize(intervalRange, resultStorage.getDataOutput());
+            long range = currentMaxEnd - currentMinStart;
+            long length = range / numOfPartitions;
+            for (int i = 0; i < numOfPartitions - 1; i++) {
+                splitPoints[i] = (byte) (currentMinStart + ((i + 1) * (length)));
+            }
+            // check if empty dataset, i.e. no samples have been received from any partition
+            List<byte[]> sample;
+            int endOffsetsCounter = 0;
+            endOffsets = new int[splitPoints.length * numOrderByFields];
+            for (int i = 0; i < splitPoints.length; i++) {
+                sample = finalSamples.get(splitPoints[i]);
+                for (byte[] column : sample) {
+                    allSplitValuesOut.write(column);
+                    endOffsets[endOffsetsCounter++] = resultStorage.getLength();
+                }
+            }
         } catch (IOException e) {
             throw HyracksDataException.create(e);
         }
-        result.set(resultStorage);
+        serializeRangeMap(numOrderByFields, resultStorage.getByteArray(), endOffsets, result);
     }
 
     @Override
@@ -115,5 +151,18 @@ public abstract class AbstractIntervalAggregateFunction extends AbstractAggregat
 
     private boolean isValidCoordinates(double minX, double minY) {
         return (minX != Double.POSITIVE_INFINITY) && (minY != Double.POSITIVE_INFINITY);
+    }
+
+    private void serializeRangeMap(int numberFields, byte[] splitValues, int[] endOffsets, IPointable result)
+            throws HyracksDataException {
+        ArrayBackedValueStorage serRangeMap = new ArrayBackedValueStorage();
+        IntegerSerializerDeserializer.write(numberFields, serRangeMap.getDataOutput());
+        ByteArraySerializerDeserializer.write(splitValues, serRangeMap.getDataOutput());
+        IntArraySerializerDeserializer.write(endOffsets, serRangeMap.getDataOutput());
+        DoubleArraySerializerDeserializer.write(percentages, serRangeMap.getDataOutput());
+        binary.setValue(serRangeMap.getByteArray(), serRangeMap.getStartOffset(), serRangeMap.getLength());
+        resultStorage.reset();
+        binarySerde.serialize(binary, resultStorage.getDataOutput());
+        result.set(resultStorage);
     }
 }

@@ -163,6 +163,8 @@ import org.apache.asterix.runtime.aggregates.std.GlobalSqlVarPopAggregateDescrip
 import org.apache.asterix.runtime.aggregates.std.GlobalStddevAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.GlobalStddevPopAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.GlobalSumAggregateDescriptor;
+import org.apache.asterix.runtime.aggregates.std.GlobalUnionIntervalRangeAggregateDescriptor;
+import org.apache.asterix.runtime.aggregates.std.GlobalUnionIntervalRangeMapAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.GlobalVarAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.GlobalVarPopAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.IntermediateAvgAggregateDescriptor;
@@ -187,7 +189,6 @@ import org.apache.asterix.runtime.aggregates.std.IntermediateVarAggregateDescrip
 import org.apache.asterix.runtime.aggregates.std.IntermediateVarPopAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.KurtosisAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.LocalAvgAggregateDescriptor;
-import org.apache.asterix.runtime.aggregates.std.LocalIntervalRangeAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.LocalKurtosisAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.LocalMaxAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.LocalMinAggregateDescriptor;
@@ -206,6 +207,7 @@ import org.apache.asterix.runtime.aggregates.std.LocalSqlVarPopAggregateDescript
 import org.apache.asterix.runtime.aggregates.std.LocalStddevAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.LocalStddevPopAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.LocalSumAggregateDescriptor;
+import org.apache.asterix.runtime.aggregates.std.LocalUnionIntervalRangeAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.LocalVarAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.LocalVarPopAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.MaxAggregateDescriptor;
@@ -678,7 +680,9 @@ public final class FunctionCollection implements IFunctionCollection {
         fc.add(EmptyStreamAggregateDescriptor.FACTORY);
         fc.add(NonEmptyStreamAggregateDescriptor.FACTORY);
         fc.add(NullWriterAggregateDescriptor.FACTORY);
-        fc.add(LocalIntervalRangeAggregateDescriptor.FACTORY);
+        fc.add(LocalUnionIntervalRangeAggregateDescriptor.FACTORY);
+        fc.add(GlobalUnionIntervalRangeAggregateDescriptor.FACTORY);
+        fc.add(GlobalUnionIntervalRangeMapAggregateDescriptor.FACTORY);
 
         // serializable aggregates
         fc.add(SerializableCountAggregateDescriptor.FACTORY);

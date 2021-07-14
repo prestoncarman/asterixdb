@@ -609,8 +609,10 @@ public class BuiltinFunctions {
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "agg-interval-range", 1);
     public static final FunctionIdentifier LOCAL_INTERVAL_RANGE =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "agg-local-interval_range", 1);
-    public static final FunctionIdentifier GLOBAL_INTERVAL_RANGE =
+    public static final FunctionIdentifier GLOBAL_UNION_INTERVAL_RANGE =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "agg-global-interval-range", 1);
+    public static final FunctionIdentifier GLOBAL_INTERVAL_RANGE_MAP =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "agg-global-interval-range-map", 1);
     public static final FunctionIdentifier SCALAR_ARRAYAGG =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "arrayagg", 1);
     public static final FunctionIdentifier SCALAR_AVG = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "avg", 1);
@@ -1883,7 +1885,8 @@ public class BuiltinFunctions {
         addPrivateFunction(GLOBAL_KURTOSIS, NullableDoubleTypeComputer.INSTANCE, true);
         addPrivateFunction(NULL_WRITER, PropagateTypeComputer.INSTANCE_NULLABLE, true);
         addPrivateFunction(LOCAL_INTERVAL_RANGE, AIntervalTypeComputer.INSTANCE, true);
-        addPrivateFunction(GLOBAL_INTERVAL_RANGE, AIntervalTypeComputer.INSTANCE, true);
+        addPrivateFunction(GLOBAL_UNION_INTERVAL_RANGE, AIntervalTypeComputer.INSTANCE, true);
+        addPrivateFunction(GLOBAL_INTERVAL_RANGE_MAP, AIntervalTypeComputer.INSTANCE, true);
 
         // SUM
         addFunction(SUM, NumericSumAggTypeComputer.INSTANCE, true);

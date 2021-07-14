@@ -73,6 +73,7 @@ public class RangeMapBuilder {
             throw new CompilationException(ErrorCode.RANGE_MAP_ERROR, expression.getSourceLocation());
         }
 
+        /// Copy
         ArrayBackedValueStorage abvs = new ArrayBackedValueStorage();
         DataOutput out = abvs.getDataOutput();
 
