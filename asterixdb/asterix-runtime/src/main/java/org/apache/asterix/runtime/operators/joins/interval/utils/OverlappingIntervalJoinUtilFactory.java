@@ -41,7 +41,7 @@ public class OverlappingIntervalJoinUtilFactory implements IIntervalJoinUtilFact
     @Override
     public IIntervalJoinUtil createIntervalMergeJoinUtil(int buildKey, int probeKey, IHyracksTaskContext ctx,
             int nPartitions) throws HyracksDataException {
-
+        // May have to happen in the util
         if (rangeMap.equals(null)) {
             RangeMapSupplier rangeMapSupplier = new DynamicRangeMapSupplier(rangeMapKey);
             this.rangeMap = rangeMapSupplier.getRangeMap(ctx);

@@ -580,6 +580,7 @@ public class EnforceStructuralPropertiesRule implements IAlgebraicRewriteRule {
     private void addPartitioningEnforcers(ILogicalOperator op, int i, IPartitioningProperty pp,
             IPhysicalPropertiesVector required, IPhysicalPropertiesVector deliveredByChild, INodeDomain domain,
             IOptimizationContext context) throws AlgebricksException {
+        // See this as an example
         if (pp != null) {
             IPhysicalOperator pop;
             switch (pp.getPartitioningType()) {
@@ -749,6 +750,8 @@ public class EnforceStructuralPropertiesRule implements IAlgebraicRewriteRule {
         parentOp.getInputs().set(childIndex, forwardRef);
         parentOp.recomputeSchema();
         ctx.computeAndSetTypeEnvironmentForOperator(parentOp);
+
+        // Use this one
         return new RangePartitionExchangePOperator(partitioningColumns, targetDomain, rangeMapKey);
     }
 

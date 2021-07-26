@@ -500,6 +500,8 @@ public class IntervalJoinUtils {
         op.getInputs().get(left).setValue(leftForwardRef.getValue());
         op.getInputs().get(right).setValue(rightForwardRef.getValue());
 
+        // Range Connector
+
         IntervalPartitions intervalPartitions =
                 createIntervalPartitions(op, fi, sideLeft, sideRight, context, left, right, null, rangeMapKeyRight);
 

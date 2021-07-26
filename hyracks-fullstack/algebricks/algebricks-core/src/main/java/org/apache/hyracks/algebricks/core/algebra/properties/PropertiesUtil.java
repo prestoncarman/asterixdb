@@ -167,9 +167,17 @@ public class PropertiesUtil {
                         OrderedPartitionedProperty or = (OrderedPartitionedProperty) reqd;
                         OrderedPartitionedProperty od = (OrderedPartitionedProperty) dlvd;
                         //TODO: support non-null range maps
+
+                        // Continue if  Range maps are equal or both are equal to null
                         if (or.getRangeMap() != null || od.getRangeMap() != null) {
-                            return false;
+                            if (or.getRangeMap() == null || od.getRangeMap() == null) {
+                                return false;
+                            }
+                            if(!(or.getRangeMap().equals(od.getRangeMap()))) {
+                                return false;
+                            }
                         }
+
                         if (mayExpandProperties) {
                             return isPrefixOf(od.getOrderColumns().iterator(), or.getOrderColumns().iterator());
                         } else {
@@ -186,8 +194,18 @@ public class PropertiesUtil {
                     case PARTIAL_BROADCAST_ORDERED_FOLLOWING: {
                         PartialBroadcastOrderedFollowingProperty pr = (PartialBroadcastOrderedFollowingProperty) reqd;
                         PartialBroadcastOrderedFollowingProperty pd = (PartialBroadcastOrderedFollowingProperty) dlvd;
-                        return pr.getOrderColumns().equals(pd.getOrderColumns())
-                                && pr.getRangeMap().equals(pd.getRangeMap());
+
+                        // First Case: Both are null - compare ordered properties
+                        // Second Case: One is null - return false
+                        // Third Case: Both not null && range map is equal && order columns are equal
+                        if (pd.getRangeMap() == null && pr.getRangeMap() == null) {
+                            return pr.getOrderColumns().equals(pd.getOrderColumns());
+                        } else if (pd.getRangeMap() == null || pr.getRangeMap() == null) {
+                            return false;
+                        } else {
+                            return pr.getOrderColumns().equals(pd.getOrderColumns())
+                                    && pr.getRangeMap().equals(pd.getRangeMap());
+                        }
                     }
                     default: {
                         return false;
@@ -199,8 +217,18 @@ public class PropertiesUtil {
                     case PARTIAL_BROADCAST_ORDERED_INTERSECT: {
                         PartialBroadcastOrderedIntersectProperty pr = (PartialBroadcastOrderedIntersectProperty) reqd;
                         PartialBroadcastOrderedIntersectProperty pd = (PartialBroadcastOrderedIntersectProperty) dlvd;
-                        return pr.getIntervalColumns().equals(pd.getIntervalColumns())
-                                && pr.getRangeMap().equals(pd.getRangeMap());
+
+                        // First Case: Both are null - compare ordered properties
+                        // Second Case: One is null - return false
+                        // Third Case: Both not null && range map is equal && order columns are equal
+                        if (pd.getRangeMap() == null && pr.getRangeMap() == null) {
+                            return pr.getIntervalColumns().equals(pd.getIntervalColumns());
+                        } else if (pd.getRangeMap() == null || pr.getRangeMap() == null) {
+                            return false;
+                        } else {
+                            return pr.getIntervalColumns().equals(pd.getIntervalColumns())
+                                    && pr.getRangeMap().equals(pd.getRangeMap());
+                        }
                     }
                     default: {
                         return false;
