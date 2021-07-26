@@ -24,19 +24,28 @@ import org.apache.asterix.dataflow.data.nontagged.serde.ATimeSerializerDeseriali
 import org.apache.asterix.om.types.ATypeTag;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
+import org.apache.hyracks.dataflow.common.data.partition.range.DynamicRangeMapSupplier;
 import org.apache.hyracks.dataflow.common.data.partition.range.RangeMap;
+import org.apache.hyracks.dataflow.common.data.partition.range.RangeMapSupplier;
 
 public class OverlappingIntervalJoinUtilFactory implements IIntervalJoinUtilFactory {
     private static final long serialVersionUID = 1L;
-    private final RangeMap rangeMap;
+    private RangeMap rangeMap;
+    private final String rangeMapKey;
 
-    public OverlappingIntervalJoinUtilFactory(RangeMap rangeMap) {
+    public OverlappingIntervalJoinUtilFactory(RangeMap rangeMap, String rangeMapKey) {
         this.rangeMap = rangeMap;
+        this.rangeMapKey = rangeMapKey;
     }
 
     @Override
     public IIntervalJoinUtil createIntervalMergeJoinUtil(int buildKey, int probeKey, IHyracksTaskContext ctx,
             int nPartitions) throws HyracksDataException {
+
+        if (rangeMap.equals(null)) {
+            RangeMapSupplier rangeMapSupplier = new DynamicRangeMapSupplier(rangeMapKey);
+            this.rangeMap = rangeMapSupplier.getRangeMap(ctx);
+        }
         int fieldIndex = 0;
         int partition = ctx.getTaskAttemptId().getTaskId().getPartition();
         //Calculate Partitions slot

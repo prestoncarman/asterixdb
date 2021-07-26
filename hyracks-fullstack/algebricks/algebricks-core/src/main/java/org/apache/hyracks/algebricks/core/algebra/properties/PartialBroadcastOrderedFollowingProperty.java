@@ -33,6 +33,10 @@ public final class PartialBroadcastOrderedFollowingProperty extends AbstractOrde
         super(orderColumns, domain, rangeMap);
     }
 
+    public PartialBroadcastOrderedFollowingProperty(List<OrderColumn> orderColumns, INodeDomain domain) {
+        super(orderColumns, domain);
+    }
+
     @Override
     public PartitioningType getPartitioningType() {
         return PartitioningType.PARTIAL_BROADCAST_ORDERED_FOLLOWING;

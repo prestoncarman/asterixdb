@@ -31,23 +31,29 @@ import org.apache.hyracks.dataflow.common.data.partition.range.RangeMap;
 public class IntervalPartitions {
 
     private final RangeMap rangeMap;
+    private final String rangeMapKey;
     private final List<IntervalColumn> leftIntervalColumn;
     private final List<IntervalColumn> rightIntervalColumn;
     private final PartitioningType leftPartitioningType;
     private final PartitioningType rightPartitioningType;
 
-    IntervalPartitions(RangeMap rangeMap, List<IntervalColumn> leftIntervalColumn,
-            List<IntervalColumn> rightIntervalColumn, PartitioningType leftPartitioningType,
-            PartitioningType rightPartitioningType) {
+    IntervalPartitions(List<IntervalColumn> leftIntervalColumn, List<IntervalColumn> rightIntervalColumn,
+            PartitioningType leftPartitioningType, PartitioningType rightPartitioningType, RangeMap rangeMap,
+            String rangeMapKey) {
         this.rangeMap = rangeMap;
         this.leftIntervalColumn = leftIntervalColumn;
         this.rightIntervalColumn = rightIntervalColumn;
         this.leftPartitioningType = leftPartitioningType;
         this.rightPartitioningType = rightPartitioningType;
+        this.rangeMapKey = rangeMapKey;
     }
 
     public RangeMap getRangeMap() {
         return rangeMap;
+    }
+
+    public String getRangeMapKey() {
+        return rangeMapKey;
     }
 
     public PartitioningType getLeftPartitioningType() {

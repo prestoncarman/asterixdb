@@ -23,8 +23,6 @@ import java.io.DataInput;
 import java.io.DataInputStream;
 import java.io.DataOutput;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
 
 import org.apache.asterix.dataflow.data.nontagged.serde.AIntervalSerializerDeserializer;
 import org.apache.asterix.formats.nontagged.SerializerDeserializerProvider;
@@ -64,7 +62,6 @@ public abstract class AbstractUnionIntervalRangeMapAggregateFunction extends Abs
     private ISerializerDeserializer<ABinary> binarySerde =
             SerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.ABINARY);
     private final AMutableBinary binary = new AMutableBinary(null, 0, 0);
-    private final List<List<byte[]>> finalSamples = new ArrayList<>();
     private final ArrayBackedValueStorage storage = new ArrayBackedValueStorage();
     private final int numOfPartitions;
     private final int numOrderByFields;
@@ -120,16 +117,11 @@ public abstract class AbstractUnionIntervalRangeMapAggregateFunction extends Abs
             for (int i = 0; i < numOfPartitions - 1; i++) {
                 splitPoints[i] = (byte) (currentMinStart + ((i + 1) * (length)));
             }
-            // check if empty dataset, i.e. no samples have been received from any partition
-            List<byte[]> sample;
             int endOffsetsCounter = 0;
             endOffsets = new int[splitPoints.length * numOrderByFields];
             for (int i = 0; i < splitPoints.length; i++) {
-                sample = finalSamples.get(splitPoints[i]);
-                for (byte[] column : sample) {
-                    allSplitValuesOut.write(column);
-                    endOffsets[endOffsetsCounter++] = resultStorage.getLength();
-                }
+                allSplitValuesOut.write(splitPoints[i]);
+                endOffsets[endOffsetsCounter++] = resultStorage.getLength();
             }
         } catch (IOException e) {
             throw HyracksDataException.create(e);

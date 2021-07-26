@@ -95,7 +95,12 @@ public class IntervalMergeJoinPOperator extends AbstractJoinPOperator {
     @Override
     public void computeDeliveredProperties(ILogicalOperator iop, IOptimizationContext context) {
         List<OrderColumn> order = intervalPartitions.getLeftStartColumn();
-        IPartitioningProperty pp = new OrderedPartitionedProperty(order, null, intervalPartitions.getRangeMap());
+        IPartitioningProperty pp;
+        if (intervalPartitions.getRangeMap() == null) {
+            pp = new OrderedPartitionedProperty(order, null);
+        } else {
+            pp = new OrderedPartitionedProperty(order, null, intervalPartitions.getRangeMap());
+        }
         List<ILocalStructuralProperty> propsLocal = new ArrayList<>();
         propsLocal.add(new LocalOrderProperty(intervalPartitions.getLeftStartColumn()));
         deliveredProperties = new StructuralPropertiesVector(pp, propsLocal);
@@ -129,35 +134,67 @@ public class IntervalMergeJoinPOperator extends AbstractJoinPOperator {
         if (op.getExecutionMode() == AbstractLogicalOperator.ExecutionMode.PARTITIONED) {
             INodeDomain targetNodeDomain = context.getComputationNodeDomain();
 
+            boolean rangeMapNull = intervalPartitions.getRangeMap() == null;
             RangeMap rangeMapHint = intervalPartitions.getRangeMap();
 
             //Assign Property
             switch (intervalPartitions.getLeftPartitioningType()) {
                 case ORDERED_PARTITIONED:
-                    ppLeft = new OrderedPartitionedProperty(intervalPartitions.getLeftStartColumn(), targetNodeDomain,
-                            rangeMapHint);
+                    if (rangeMapNull) {
+                        ppLeft = new OrderedPartitionedProperty(intervalPartitions.getLeftStartColumn(),
+                                targetNodeDomain);
+                    } else {
+                        ppLeft = new OrderedPartitionedProperty(intervalPartitions.getLeftStartColumn(),
+                                targetNodeDomain, rangeMapHint);
+                    }
                     break;
                 case PARTIAL_BROADCAST_ORDERED_FOLLOWING:
-                    ppLeft = new PartialBroadcastOrderedFollowingProperty(intervalPartitions.getLeftStartColumn(),
-                            targetNodeDomain, rangeMapHint);
+                    if (rangeMapNull) {
+                        ppLeft = new PartialBroadcastOrderedFollowingProperty(intervalPartitions.getLeftStartColumn(),
+                                targetNodeDomain);
+                    } else {
+                        ppLeft = new PartialBroadcastOrderedFollowingProperty(intervalPartitions.getLeftStartColumn(),
+                                targetNodeDomain, rangeMapHint);
+                    }
                     break;
                 case PARTIAL_BROADCAST_ORDERED_INTERSECT:
-                    ppLeft = new PartialBroadcastOrderedIntersectProperty(intervalPartitions.getLeftIntervalColumn(),
-                            targetNodeDomain, rangeMapHint);
+                    if (rangeMapNull) {
+                        ppLeft = new PartialBroadcastOrderedIntersectProperty(
+                                intervalPartitions.getLeftIntervalColumn(), targetNodeDomain);
+                    } else {
+                        ppLeft = new PartialBroadcastOrderedIntersectProperty(
+                                intervalPartitions.getLeftIntervalColumn(), targetNodeDomain, rangeMapHint);
+                    }
                     break;
             }
             switch (intervalPartitions.getRightPartitioningType()) {
                 case ORDERED_PARTITIONED:
-                    ppRight = new OrderedPartitionedProperty(intervalPartitions.getRightStartColumn(), targetNodeDomain,
-                            rangeMapHint);
+                    if (rangeMapNull) {
+                        ppRight = new OrderedPartitionedProperty(intervalPartitions.getRightStartColumn(),
+                                targetNodeDomain);
+                    } else {
+                        ppRight = new OrderedPartitionedProperty(intervalPartitions.getRightStartColumn(),
+                                targetNodeDomain, rangeMapHint);
+                    }
+
                     break;
                 case PARTIAL_BROADCAST_ORDERED_FOLLOWING:
-                    ppRight = new PartialBroadcastOrderedFollowingProperty(intervalPartitions.getRightStartColumn(),
-                            targetNodeDomain, rangeMapHint);
+                    if (rangeMapNull) {
+                        ppRight = new PartialBroadcastOrderedFollowingProperty(intervalPartitions.getRightStartColumn(),
+                                targetNodeDomain);
+                    } else {
+                        ppRight = new PartialBroadcastOrderedFollowingProperty(intervalPartitions.getRightStartColumn(),
+                                targetNodeDomain, rangeMapHint);
+                    }
                     break;
                 case PARTIAL_BROADCAST_ORDERED_INTERSECT:
-                    ppRight = new PartialBroadcastOrderedIntersectProperty(intervalPartitions.getRightIntervalColumn(),
-                            targetNodeDomain, rangeMapHint);
+                    if (rangeMapNull) {
+                        ppRight = new PartialBroadcastOrderedIntersectProperty(
+                                intervalPartitions.getRightIntervalColumn(), targetNodeDomain);
+                    } else {
+                        ppRight = new PartialBroadcastOrderedIntersectProperty(
+                                intervalPartitions.getRightIntervalColumn(), targetNodeDomain, rangeMapHint);
+                    }
                     break;
             }
         }
