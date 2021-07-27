@@ -173,7 +173,7 @@ public class PropertiesUtil {
                             if (or.getRangeMap() == null || od.getRangeMap() == null) {
                                 return false;
                             }
-                            if(!(or.getRangeMap().equals(od.getRangeMap()))) {
+                            if (!(or.getRangeMap().equals(od.getRangeMap()))) {
                                 return false;
                             }
                         }
@@ -200,12 +200,12 @@ public class PropertiesUtil {
                         // Third Case: Both not null && range map is equal && order columns are equal
                         if (pd.getRangeMap() == null && pr.getRangeMap() == null) {
                             return pr.getOrderColumns().equals(pd.getOrderColumns());
-                        } else if (pd.getRangeMap() == null || pr.getRangeMap() == null) {
-                            return false;
-                        } else {
-                            return pr.getOrderColumns().equals(pd.getOrderColumns())
-                                    && pr.getRangeMap().equals(pd.getRangeMap());
                         }
+                        if (pd.getRangeMap() == null || pr.getRangeMap() == null) {
+                            return false;
+                        }
+                        return pr.getOrderColumns().equals(pd.getOrderColumns())
+                                && pr.getRangeMap().equals(pd.getRangeMap());
                     }
                     default: {
                         return false;
@@ -223,12 +223,12 @@ public class PropertiesUtil {
                         // Third Case: Both not null && range map is equal && order columns are equal
                         if (pd.getRangeMap() == null && pr.getRangeMap() == null) {
                             return pr.getIntervalColumns().equals(pd.getIntervalColumns());
-                        } else if (pd.getRangeMap() == null || pr.getRangeMap() == null) {
-                            return false;
-                        } else {
-                            return pr.getIntervalColumns().equals(pd.getIntervalColumns())
-                                    && pr.getRangeMap().equals(pd.getRangeMap());
                         }
+                        if (pd.getRangeMap() == null || pr.getRangeMap() == null) {
+                            return false;
+                        }
+                        return pr.getIntervalColumns().equals(pd.getIntervalColumns())
+                                && pr.getRangeMap().equals(pd.getRangeMap());
                     }
                     default: {
                         return false;
