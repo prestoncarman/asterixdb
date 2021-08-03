@@ -47,8 +47,10 @@ import org.apache.hyracks.api.dataflow.IConnectorDescriptor;
 import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import org.apache.hyracks.api.dataflow.value.ITupleMultiPartitionComputerFactory;
 import org.apache.hyracks.api.job.IConnectorDescriptorRegistry;
+import org.apache.hyracks.dataflow.common.data.partition.range.DynamicRangeMapSupplier;
 import org.apache.hyracks.dataflow.common.data.partition.range.FieldRangeIntersectPartitionComputerFactory;
 import org.apache.hyracks.dataflow.common.data.partition.range.RangeMap;
+import org.apache.hyracks.dataflow.common.data.partition.range.RangeMapSupplier;
 import org.apache.hyracks.dataflow.common.data.partition.range.StaticRangeMapSupplier;
 import org.apache.hyracks.dataflow.std.connectors.MToNPartialBroadcastConnectorDescriptor;
 
@@ -64,11 +66,26 @@ public class PartialBroadcastRangeIntersectExchangePOperator extends AbstractExc
 
     private final RangeMap rangeMap;
 
+    private final boolean rangeMapIsComputedAtRunTime;
+
+    private final String rangeMapKeyInContext;
+
+    public PartialBroadcastRangeIntersectExchangePOperator(List<IntervalColumn> intervalFields, INodeDomain domain,
+            String rangeMapKeyInContext) {
+        this.intervalFields = intervalFields;
+        this.domain = domain;
+        this.rangeMap = null;
+        this.rangeMapIsComputedAtRunTime = true;
+        this.rangeMapKeyInContext = rangeMapKeyInContext;
+    }
+
     public PartialBroadcastRangeIntersectExchangePOperator(List<IntervalColumn> intervalFields, INodeDomain domain,
             RangeMap rangeMap) {
         this.intervalFields = intervalFields;
         this.domain = domain;
         this.rangeMap = rangeMap;
+        this.rangeMapIsComputedAtRunTime = false;
+        this.rangeMapKeyInContext = null;
     }
 
     @Override
@@ -86,7 +103,12 @@ public class PartialBroadcastRangeIntersectExchangePOperator extends AbstractExc
 
     @Override
     public void computeDeliveredProperties(ILogicalOperator op, IOptimizationContext context) {
-        IPartitioningProperty pp = new PartialBroadcastOrderedIntersectProperty(intervalFields, domain, rangeMap);
+        IPartitioningProperty pp;
+        if (rangeMapIsComputedAtRunTime) {
+            pp = new PartialBroadcastOrderedIntersectProperty(intervalFields, domain);
+        } else {
+            pp = new PartialBroadcastOrderedIntersectProperty(intervalFields, domain, rangeMap);
+        }
         // Broadcasts destroy input's local properties.
         this.deliveredProperties = new StructuralPropertiesVector(pp, Collections.emptyList());
     }
@@ -103,9 +125,11 @@ public class PartialBroadcastRangeIntersectExchangePOperator extends AbstractExc
             throws AlgebricksException {
         Triple<int[], int[], IBinaryComparatorFactory[]> pIntervalColumns =
                 createIntervalColumnsAndComparators(op, opSchema, context);
+        RangeMapSupplier rangeMapSupplier = rangeMapIsComputedAtRunTime
+                ? new DynamicRangeMapSupplier(rangeMapKeyInContext) : new StaticRangeMapSupplier(rangeMap);
         ITupleMultiPartitionComputerFactory tpcf =
                 new FieldRangeIntersectPartitionComputerFactory(pIntervalColumns.first, pIntervalColumns.second,
-                        pIntervalColumns.third, new StaticRangeMapSupplier(rangeMap), op.getSourceLocation());
+                        pIntervalColumns.third, rangeMapSupplier, op.getSourceLocation());
         IConnectorDescriptor conn = new MToNPartialBroadcastConnectorDescriptor(spec, tpcf);
         return new Pair<>(conn, null);
     }

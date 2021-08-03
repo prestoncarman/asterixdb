@@ -42,7 +42,7 @@ import org.apache.hyracks.data.std.primitive.VoidPointable;
 import org.apache.hyracks.data.std.util.ArrayBackedValueStorage;
 import org.apache.hyracks.dataflow.common.data.accessors.IFrameTupleReference;
 
-public abstract class AbstractUnionIntervalRangeAggregateFunction extends AbstractAggregateFunction {
+public abstract class AbstractIntervalRangeAggregateFunction extends AbstractAggregateFunction {
 
     private ArrayBackedValueStorage resultStorage = new ArrayBackedValueStorage();
     private IPointable inputVal = new VoidPointable();
@@ -55,7 +55,7 @@ public abstract class AbstractUnionIntervalRangeAggregateFunction extends Abstra
     private ISerializerDeserializer<AInterval> intervalSerde =
             SerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.AINTERVAL);
 
-    public AbstractUnionIntervalRangeAggregateFunction(IScalarEvaluatorFactory[] args, IEvaluatorContext context,
+    public AbstractIntervalRangeAggregateFunction(IScalarEvaluatorFactory[] args, IEvaluatorContext context,
             SourceLocation sourceLoc) throws HyracksDataException {
         super(sourceLoc);
         this.eval = args[0].createScalarEvaluator(context);

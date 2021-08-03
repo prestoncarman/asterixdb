@@ -146,6 +146,7 @@ import org.apache.asterix.runtime.aggregates.serializable.std.SerializableVarPop
 import org.apache.asterix.runtime.aggregates.std.AvgAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.CountAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.GlobalAvgAggregateDescriptor;
+import org.apache.asterix.runtime.aggregates.std.GlobalIntervalRangeAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.GlobalKurtosisAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.GlobalMaxAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.GlobalMinAggregateDescriptor;
@@ -163,7 +164,6 @@ import org.apache.asterix.runtime.aggregates.std.GlobalSqlVarPopAggregateDescrip
 import org.apache.asterix.runtime.aggregates.std.GlobalStddevAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.GlobalStddevPopAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.GlobalSumAggregateDescriptor;
-import org.apache.asterix.runtime.aggregates.std.GlobalUnionIntervalRangeAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.GlobalUnionIntervalRangeMapAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.GlobalVarAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.GlobalVarPopAggregateDescriptor;
@@ -684,7 +684,7 @@ public final class FunctionCollection implements IFunctionCollection {
         fc.add(NonEmptyStreamAggregateDescriptor.FACTORY);
         fc.add(NullWriterAggregateDescriptor.FACTORY);
         fc.add(LocalUnionIntervalRangeAggregateDescriptor.FACTORY);
-        fc.add(GlobalUnionIntervalRangeAggregateDescriptor.FACTORY);
+        fc.add(GlobalIntervalRangeAggregateDescriptor.FACTORY);
         fc.add(GlobalUnionIntervalRangeMapAggregateDescriptor.FACTORY);
 
         // serializable aggregates

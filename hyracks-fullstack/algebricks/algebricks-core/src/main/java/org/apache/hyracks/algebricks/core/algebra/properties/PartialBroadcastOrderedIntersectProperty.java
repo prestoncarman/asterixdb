@@ -43,6 +43,12 @@ public final class PartialBroadcastOrderedIntersectProperty implements IPartitio
         this.rangeMap = rangeMap;
     }
 
+    public PartialBroadcastOrderedIntersectProperty(List<IntervalColumn> intervalColumns, INodeDomain domain) {
+        this.intervalColumns = intervalColumns;
+        this.domain = domain;
+        this.rangeMap = null;
+    }
+
     @Override
     public PartitioningType getPartitioningType() {
         return PartitioningType.PARTIAL_BROADCAST_ORDERED_INTERSECT;

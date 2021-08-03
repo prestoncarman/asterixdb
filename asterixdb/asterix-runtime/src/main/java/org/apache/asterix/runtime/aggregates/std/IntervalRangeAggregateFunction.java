@@ -23,9 +23,9 @@ import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluatorFactory;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.exceptions.SourceLocation;
 
-public class UnionIntervalRangeAggregateFunction extends AbstractUnionIntervalRangeAggregateFunction {
+public class IntervalRangeAggregateFunction extends AbstractIntervalRangeAggregateFunction {
 
-    public UnionIntervalRangeAggregateFunction(IScalarEvaluatorFactory[] args, IEvaluatorContext context,
+    public IntervalRangeAggregateFunction(IScalarEvaluatorFactory[] args, IEvaluatorContext context,
             SourceLocation sourceLoc) throws HyracksDataException {
         super(args, context, sourceLoc);
     }

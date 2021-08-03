@@ -52,6 +52,11 @@ import org.apache.hyracks.dataflow.std.connectors.MToNPartialBroadcastConnectorD
 public final class PartialBroadcastRangeFollowingExchangePOperator extends AbstractRangeExchangePOperator {
 
     public PartialBroadcastRangeFollowingExchangePOperator(List<OrderColumn> partitioningFields, INodeDomain domain,
+            String rangeMapKeyInContext) {
+        super(partitioningFields, domain, rangeMapKeyInContext);
+    }
+
+    public PartialBroadcastRangeFollowingExchangePOperator(List<OrderColumn> partitioningFields, INodeDomain domain,
             RangeMap rangeMap) {
         super(partitioningFields, domain, rangeMap);
     }

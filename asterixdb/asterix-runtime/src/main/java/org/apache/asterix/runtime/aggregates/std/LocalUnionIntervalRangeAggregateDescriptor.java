@@ -46,7 +46,7 @@ public class LocalUnionIntervalRangeAggregateDescriptor extends AbstractUnionInt
             @Override
             public IAggregateEvaluator createAggregateEvaluator(final IEvaluatorContext ctx)
                     throws HyracksDataException {
-                return new UnionIntervalRangeAggregateFunction(args, ctx, sourceLoc);
+                return new IntervalRangeAggregateFunction(args, ctx, sourceLoc);
             }
         };
     }

@@ -28,14 +28,14 @@ import org.apache.hyracks.algebricks.runtime.base.IEvaluatorContext;
 import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluatorFactory;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 
-public class GlobalUnionIntervalRangeAggregateDescriptor extends AbstractUnionIntervalRangeAggregateDescriptor {
+public class GlobalIntervalRangeAggregateDescriptor extends AbstractUnionIntervalRangeAggregateDescriptor {
     private static final long serialVersionUID = 1L;
     public static final IFunctionDescriptorFactory FACTORY =
-            AbstractAggregateFunctionDynamicDescriptor.createFactory(GlobalUnionIntervalRangeAggregateDescriptor::new);
+            AbstractAggregateFunctionDynamicDescriptor.createFactory(GlobalIntervalRangeAggregateDescriptor::new);
 
     @Override
     public FunctionIdentifier getIdentifier() {
-        return BuiltinFunctions.GLOBAL_UNION_INTERVAL_RANGE;
+        return BuiltinFunctions.GLOBAL_INTERVAL_RANGE;
     }
 
     @Override
@@ -46,7 +46,7 @@ public class GlobalUnionIntervalRangeAggregateDescriptor extends AbstractUnionIn
             @Override
             public IAggregateEvaluator createAggregateEvaluator(final IEvaluatorContext ctx)
                     throws HyracksDataException {
-                return new UnionIntervalRangeAggregateFunction(args, ctx, sourceLoc);
+                return new IntervalRangeAggregateFunction(args, ctx, sourceLoc);
             }
         };
     }
