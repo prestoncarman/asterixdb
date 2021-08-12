@@ -187,47 +187,6 @@ public class IntervalJoinUtils {
      * Certain Relations not yet supported as seen below. Will default to regular join.
      * Inserts partition sort key.
      */
-    protected static Triple<List<LogicalVariable>, List<LogicalVariable>, IntervalPartitions> createIntervalPartitionsDynamic(
-            FunctionIdentifier fi, IOptimizationContext context, RangeMap rangeMap, String rangeMapKey)
-            throws AlgebricksException {
-
-        List<LogicalVariable> leftPartitionVar = new ArrayList<>(2);
-        leftPartitionVar.add(context.newVar());
-        leftPartitionVar.add(context.newVar());
-        List<LogicalVariable> rightPartitionVar = new ArrayList<>(2);
-        rightPartitionVar.add(context.newVar());
-        rightPartitionVar.add(context.newVar());
-
-        List<IntervalColumn> leftIC = Collections.singletonList(new IntervalColumn(leftPartitionVar.get(0),
-                leftPartitionVar.get(1), OrderOperator.IOrder.OrderKind.ASC));
-        List<IntervalColumn> rightIC = Collections.singletonList(new IntervalColumn(rightPartitionVar.get(0),
-                rightPartitionVar.get(1), OrderOperator.IOrder.OrderKind.ASC));
-
-        //Set Partitioning Types
-        PartitioningType leftPartitioningType = ORDERED_PARTITIONED;
-        PartitioningType rightPartitioningType = ORDERED_PARTITIONED;
-        if (fi.equals(BuiltinFunctions.INTERVAL_OVERLAPPED_BY)) {
-            rightPartitioningType = PARTIAL_BROADCAST_ORDERED_INTERSECT;
-        } else if (fi.equals(BuiltinFunctions.INTERVAL_OVERLAPS)) {
-            leftPartitioningType = PARTIAL_BROADCAST_ORDERED_INTERSECT;
-        } else if (fi.equals(BuiltinFunctions.INTERVAL_OVERLAPPING)) {
-            leftPartitioningType = PARTIAL_BROADCAST_ORDERED_INTERSECT;
-            rightPartitioningType = PARTIAL_BROADCAST_ORDERED_INTERSECT;
-        } else if (fi.equals(BuiltinFunctions.INTERVAL_COVERS)) {
-            leftPartitioningType = PARTIAL_BROADCAST_ORDERED_INTERSECT;
-        } else if (fi.equals(BuiltinFunctions.INTERVAL_COVERED_BY)) {
-            rightPartitioningType = PARTIAL_BROADCAST_ORDERED_INTERSECT;
-        } else if (fi.equals(BuiltinFunctions.INTERVAL_BEFORE)) {
-            leftPartitioningType = PARTIAL_BROADCAST_ORDERED_FOLLOWING;
-        } else if (fi.equals(BuiltinFunctions.INTERVAL_AFTER)) {
-            rightPartitioningType = PARTIAL_BROADCAST_ORDERED_FOLLOWING;
-        } else {
-            throw new CompilationException(ErrorCode.COMPILATION_ILLEGAL_STATE, fi.getName());
-        }
-        return new Triple<>(leftPartitionVar, rightPartitionVar, new IntervalPartitions(leftIC, rightIC,
-                leftPartitioningType, rightPartitioningType, rangeMap, rangeMapKey));
-    }
-
     protected static IntervalPartitions createIntervalPartitions(AbstractBinaryJoinOperator op, FunctionIdentifier fi,
             List<LogicalVariable> sideLeft, List<LogicalVariable> sideRight, IOptimizationContext context, int left,
             int right, RangeMap rangeMap, String rangeMapKey) throws AlgebricksException {
@@ -434,18 +393,8 @@ public class IntervalJoinUtils {
         MutableObject<ILogicalOperator> rightForwardRef = new MutableObject<>(rightForward);
         rightInputOp.setValue(rightForwardRef.getValue());
 
-        //Set up partitioning
-        Triple<List<LogicalVariable>, List<LogicalVariable>, IntervalPartitions> partitionInformation =
-                createIntervalPartitionsDynamic(fi, context, null, leftRangeMapKey);
-        List<LogicalVariable> leftPartitionVar = partitionInformation.first;
-        List<LogicalVariable> rightPartitionVar = partitionInformation.second;
-        IntervalPartitions intervalPartitions = partitionInformation.third;
-
-        //        insertPartitionSortKeyDynamic(leftInputOp, context, op.getSourceLocation(), leftPartitionVar, sideLeft.get(0));
-        //        insertPartitionSortKeyDynamic(rightInputOp, context, op.getSourceLocation(), rightPartitionVar,
-        //                sideRight.get(0));
-        insertPartitionSortKey(op, left, leftPartitionVar, sideLeft.get(0), context);
-        insertPartitionSortKey(op, right, rightPartitionVar, sideRight.get(0), context);
+        IntervalPartitions intervalPartitions =
+                createIntervalPartitions(op, fi, sideLeft, sideRight, context, left, right, null, leftRangeMapKey);
 
         leftInputOp = op.getInputs().get(left);
         rightInputOp = op.getInputs().get(right);
@@ -480,39 +429,6 @@ public class IntervalJoinUtils {
         op.setPhysicalOperator(new IntervalMergeJoinPOperator(op.getJoinKind(),
                 AbstractJoinPOperator.JoinPartitioningType.BROADCAST, sideLeft, sideRight,
                 context.getPhysicalOptimizationConfig().getMaxFramesForJoin(), mjcf, intervalPartitions));
-    }
-
-    private static void insertPartitionSortKeyDynamic(Mutable<ILogicalOperator> inputOp, IOptimizationContext context,
-            SourceLocation sourceLocation, List<LogicalVariable> partitionVars, LogicalVariable intervalVar)
-            throws AlgebricksException {
-        List<Mutable<ILogicalExpression>> assignExps = new ArrayList<>();
-        // Start partition
-        VariableReferenceExpression intervalVarRef1 = new VariableReferenceExpression(intervalVar);
-        intervalVarRef1.setSourceLocation(sourceLocation);
-        IFunctionInfo startFi = FunctionUtil.getFunctionInfo(BuiltinFunctions.ACCESSOR_TEMPORAL_INTERVAL_START);
-        ScalarFunctionCallExpression startPartitionExp =
-                new ScalarFunctionCallExpression(startFi, new MutableObject<>(intervalVarRef1));
-        startPartitionExp.setSourceLocation(sourceLocation);
-        assignExps.add(new MutableObject<>(startPartitionExp));
-        // End partition
-        VariableReferenceExpression intervalVarRef2 = new VariableReferenceExpression(intervalVar);
-        intervalVarRef2.setSourceLocation(sourceLocation);
-        IFunctionInfo endFi = FunctionUtil.getFunctionInfo(BuiltinFunctions.ACCESSOR_TEMPORAL_INTERVAL_END);
-        ScalarFunctionCallExpression endPartitionExp =
-                new ScalarFunctionCallExpression(endFi, new MutableObject<>(intervalVarRef2));
-        endPartitionExp.setSourceLocation(sourceLocation);
-        assignExps.add(new MutableObject<>(endPartitionExp));
-
-        AssignOperator ao = new AssignOperator(partitionVars, assignExps);
-        ao.setSourceLocation(sourceLocation);
-        ao.setExecutionMode(AbstractLogicalOperator.ExecutionMode.PARTITIONED);
-        AssignPOperator apo = new AssignPOperator();
-        ao.setPhysicalOperator(apo);
-        ao.getInputs().add(inputOp);
-        inputOp.setValue(ao);
-
-        context.computeAndSetTypeEnvironmentForOperator(ao);
-        ao.recomputeSchema();
     }
 
     private static Quadruple<MutableObject<ILogicalOperator>, MutableObject<ILogicalOperator>, MutableObject<ILogicalOperator>, MutableObject<ILogicalOperator>> replicateRangeMap(
@@ -567,7 +483,13 @@ public class IntervalJoinUtils {
 
         ExchangeOperator exchg = new ExchangeOperator();
         exchg.setPhysicalOperator(pop);
-        setNewOp(inputOp, exchg, context);
+        ILogicalOperator oldOp = inputOp.getValue();
+        inputOp.setValue(exchg);
+        exchg.getInputs().add(new MutableObject<>(oldOp));
+        exchg.recomputeSchema();
+        exchg.computeDeliveredPhysicalProperties(context);
+        context.computeAndSetTypeEnvironmentForOperator(exchg);
+        PhysicalOptimizationsUtil.computeFDsAndEquivalenceClasses(exchg, context);
         exchg.setExecutionMode(AbstractLogicalOperator.ExecutionMode.PARTITIONED);
         OperatorPropertiesUtil.computeSchemaAndPropertiesRecIfNull(exchg, context);
         context.computeAndSetTypeEnvironmentForOperator(exchg);
@@ -745,16 +667,5 @@ public class IntervalJoinUtils {
         exchangeOperator.setSchema(replicateOperator.getSchema());
         context.computeAndSetTypeEnvironmentForOperator(exchangeOperator);
         return exchangeOperator;
-    }
-
-    private static void setNewOp(Mutable<ILogicalOperator> opRef, AbstractLogicalOperator newOp,
-            IOptimizationContext context) throws AlgebricksException {
-        ILogicalOperator oldOp = opRef.getValue();
-        opRef.setValue(newOp);
-        newOp.getInputs().add(new MutableObject<>(oldOp));
-        newOp.recomputeSchema();
-        newOp.computeDeliveredPhysicalProperties(context);
-        context.computeAndSetTypeEnvironmentForOperator(newOp);
-        PhysicalOptimizationsUtil.computeFDsAndEquivalenceClasses(newOp, context);
     }
 }
