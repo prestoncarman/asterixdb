@@ -62,9 +62,11 @@ public interface IClusterStateManager {
      * @param nodeId
      * @param active
      * @param ncLocalCounters
+     * @param activePartitions
      * @throws HyracksDataException
      */
-    void updateNodeState(String nodeId, boolean active, NcLocalCounters ncLocalCounters) throws HyracksDataException;
+    void updateNodeState(String nodeId, boolean active, NcLocalCounters ncLocalCounters, Set<Integer> activePartitions)
+            throws HyracksDataException;
 
     /**
      * Updates the active node and active state of the cluster partition with id {@code partitionNum}
@@ -263,4 +265,11 @@ public interface IClusterStateManager {
      * @param rebalanceRequired
      */
     void setRebalanceRequired(boolean rebalanceRequired) throws HyracksDataException;
+
+    /**
+     * Gets a map of the cluster partitions
+     *
+     * @return the cluster partitions map
+     */
+    Map<Integer, ClusterPartition> getClusterPartitions();
 }

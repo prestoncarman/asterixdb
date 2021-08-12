@@ -26,19 +26,18 @@ import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import org.apache.asterix.app.nc.task.BindMetadataNodeTask;
 import org.apache.asterix.app.nc.task.CheckpointTask;
 import org.apache.asterix.app.nc.task.ExportMetadataNodeTask;
 import org.apache.asterix.app.nc.task.LocalRecoveryTask;
+import org.apache.asterix.app.nc.task.LocalStorageCleanupTask;
 import org.apache.asterix.app.nc.task.MetadataBootstrapTask;
 import org.apache.asterix.app.nc.task.RetrieveLibrariesTask;
 import org.apache.asterix.app.nc.task.StartLifecycleComponentsTask;
@@ -51,7 +50,6 @@ import org.apache.asterix.app.replication.message.RegistrationTasksRequestMessag
 import org.apache.asterix.app.replication.message.RegistrationTasksResponseMessage;
 import org.apache.asterix.common.api.IClusterManagementWork.ClusterState;
 import org.apache.asterix.common.api.INCLifecycleTask;
-import org.apache.asterix.common.cluster.ClusterPartition;
 import org.apache.asterix.common.cluster.IClusterStateManager;
 import org.apache.asterix.common.exceptions.ErrorCode;
 import org.apache.asterix.common.exceptions.RuntimeDataException;
@@ -102,7 +100,7 @@ public class NcLifecycleCoordinator implements INcLifecycleCoordinator {
     @Override
     public void notifyNodeFailure(String nodeId, InetSocketAddress replicaAddress) throws HyracksDataException {
         pendingStartupCompletionNodes.remove(nodeId);
-        clusterManager.updateNodeState(nodeId, false, null);
+        clusterManager.updateNodeState(nodeId, false, null, null);
         if (nodeId.equals(metadataNodeId)) {
             clusterManager.updateMetadataNode(metadataNodeId, false);
         }
@@ -138,7 +136,8 @@ public class NcLifecycleCoordinator implements INcLifecycleCoordinator {
     private void process(RegistrationTasksRequestMessage msg) throws HyracksDataException {
         final String nodeId = msg.getNodeId();
         nodeSecretsMap.put(nodeId, msg.getSecrets());
-        List<INCLifecycleTask> tasks = buildNCRegTasks(msg.getNodeId(), msg.getNodeStatus(), msg.getState());
+        List<INCLifecycleTask> tasks =
+                buildNCRegTasks(msg.getNodeId(), msg.getNodeStatus(), msg.getState(), msg.getActivePartitions());
         RegistrationTasksResponseMessage response = new RegistrationTasksResponseMessage(nodeId, tasks);
         try {
             messageBroker.sendApplicationMessageToNC(response, msg.getNodeId());
@@ -157,7 +156,7 @@ public class NcLifecycleCoordinator implements INcLifecycleCoordinator {
             return;
         }
         if (msg.isSuccess()) {
-            clusterManager.updateNodeState(msg.getNodeId(), true, msg.getLocalCounters());
+            clusterManager.updateNodeState(msg.getNodeId(), true, msg.getLocalCounters(), msg.getActivePartitions());
             if (msg.getNodeId().equals(metadataNodeId)) {
                 clusterManager.updateMetadataNode(metadataNodeId, true);
             }
@@ -167,7 +166,8 @@ public class NcLifecycleCoordinator implements INcLifecycleCoordinator {
         }
     }
 
-    protected List<INCLifecycleTask> buildNCRegTasks(String nodeId, NodeStatus nodeStatus, SystemState state) {
+    protected List<INCLifecycleTask> buildNCRegTasks(String nodeId, NodeStatus nodeStatus, SystemState state,
+            Set<Integer> activePartitions) {
         LOGGER.info("Building registration tasks for node {} with status {} and system state: {}", nodeId, nodeStatus,
                 state);
         final boolean isMetadataNode = nodeId.equals(metadataNodeId);
@@ -175,7 +175,7 @@ public class NcLifecycleCoordinator implements INcLifecycleCoordinator {
             case ACTIVE:
                 return buildActiveNCRegTasks(isMetadataNode);
             case IDLE:
-                return buildIdleNcRegTasks(nodeId, isMetadataNode, state);
+                return buildIdleNcRegTasks(nodeId, isMetadataNode, state, activePartitions);
             default:
                 return new ArrayList<>();
         }
@@ -210,20 +210,22 @@ public class NcLifecycleCoordinator implements INcLifecycleCoordinator {
         }
     }
 
-    protected List<INCLifecycleTask> buildIdleNcRegTasks(String newNodeId, boolean metadataNode, SystemState state) {
+    protected List<INCLifecycleTask> buildIdleNcRegTasks(String newNodeId, boolean metadataNode, SystemState state,
+            Set<Integer> activePartitions) {
         final List<INCLifecycleTask> tasks = new ArrayList<>();
         tasks.add(new UpdateNodeStatusTask(NodeStatus.BOOTING));
+        int metadataPartitionId = clusterManager.getMetadataPartition().getPartitionId();
+        tasks.add(new LocalStorageCleanupTask(metadataPartitionId));
         if (state == SystemState.CORRUPTED) {
-            // need to perform local recovery for node partitions
-            LocalRecoveryTask rt = new LocalRecoveryTask(Arrays.stream(clusterManager.getNodePartitions(newNodeId))
-                    .map(ClusterPartition::getPartitionId).collect(Collectors.toSet()));
+            // need to perform local recovery for node active partitions
+            LocalRecoveryTask rt = new LocalRecoveryTask(activePartitions);
             tasks.add(rt);
         }
         if (replicationEnabled) {
             tasks.add(new StartReplicationServiceTask());
         }
         if (metadataNode) {
-            tasks.add(new MetadataBootstrapTask(clusterManager.getMetadataPartition().getPartitionId()));
+            tasks.add(new MetadataBootstrapTask(metadataPartitionId));
         }
         tasks.add(new CheckpointTask());
         tasks.add(new StartLifecycleComponentsTask());

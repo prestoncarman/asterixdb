@@ -18,7 +18,6 @@
  */
 package org.apache.asterix.app.nc;
 
-import java.net.InetSocketAddress;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -37,9 +36,7 @@ import org.apache.asterix.common.transactions.IRecoveryManager;
 import org.apache.asterix.replication.api.PartitionReplica;
 import org.apache.asterix.transaction.management.resource.PersistentLocalResourceRepository;
 import org.apache.hyracks.api.client.NodeStatus;
-import org.apache.hyracks.api.config.IApplicationConfig;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
-import org.apache.hyracks.control.common.controllers.NCConfig;
 import org.apache.hyracks.control.nc.NodeControllerService;
 import org.apache.hyracks.storage.common.LocalResource;
 import org.apache.hyracks.util.annotations.ThreadSafe;
@@ -126,8 +123,6 @@ public class ReplicaManager implements IReplicaManager {
         if (!partitions.contains(partition)) {
             return;
         }
-        final IDatasetLifecycleManager datasetLifecycleManager = appCtx.getDatasetLifecycleManager();
-        datasetLifecycleManager.flushDataset(appCtx.getReplicationManager().getReplicationStrategy());
         closePartitionResources(partition);
         final List<IPartitionReplica> partitionReplicas = getReplicas(partition);
         for (IPartitionReplica replica : partitionReplicas) {
@@ -141,22 +136,21 @@ public class ReplicaManager implements IReplicaManager {
         return replicaSyncLock;
     }
 
-    private void closePartitionResources(int partition) throws HyracksDataException {
+    public void closePartitionResources(int partition) throws HyracksDataException {
+        final IDatasetLifecycleManager datasetLifecycleManager = appCtx.getDatasetLifecycleManager();
+        //TODO(mhubail) we can flush only datasets of the requested partition
+        datasetLifecycleManager.flushAllDatasets();
         final PersistentLocalResourceRepository resourceRepository =
                 (PersistentLocalResourceRepository) appCtx.getLocalResourceRepository();
         final Map<Long, LocalResource> partitionResources = resourceRepository.getPartitionResources(partition);
-        final IDatasetLifecycleManager datasetLifecycleManager = appCtx.getDatasetLifecycleManager();
         for (LocalResource resource : partitionResources.values()) {
-            datasetLifecycleManager.close(resource.getPath());
+            datasetLifecycleManager.closeIfOpen(resource.getPath());
         }
+        datasetLifecycleManager.closePartition(partition);
     }
 
     private boolean isSelf(ReplicaIdentifier id) {
-        IApplicationConfig appConfig = appCtx.getServiceContext().getAppConfig();
-        String host = appConfig.getString(NCConfig.Option.REPLICATION_LISTEN_ADDRESS);
-        int port = appConfig.getInt(NCConfig.Option.REPLICATION_LISTEN_PORT);
-
-        final InetSocketAddress replicaAddress = new InetSocketAddress(host, port);
-        return id.equals(ReplicaIdentifier.of(id.getPartition(), replicaAddress));
+        String nodeId = appCtx.getServiceContext().getNodeId();
+        return id.getNodeId().equals(nodeId);
     }
 }

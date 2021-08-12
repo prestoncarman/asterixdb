@@ -42,6 +42,7 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Collectors;
 
 import org.apache.asterix.active.ActivityState;
@@ -283,6 +284,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
     protected final IMetadataLockUtil lockUtil;
     protected final IResponsePrinter responsePrinter;
     protected final WarningCollector warningCollector;
+    protected final ReentrantReadWriteLock compilationLock;
 
     public QueryTranslator(ICcApplicationContext appCtx, List<Statement> statements, SessionOutput output,
             ILangCompilationProvider compilationProvider, ExecutorService executorService,
@@ -301,6 +303,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         this.executorService = executorService;
         this.responsePrinter = responsePrinter;
         this.warningCollector = new WarningCollector();
+        this.compilationLock = appCtx.getCompilationLock();
         if (appCtx.getServiceContext().getAppConfig().getBoolean(CCConfig.Option.ENFORCE_FRAME_WRITER_PROTOCOL)) {
             this.jobFlags.add(JobFlag.ENFORCE_CONTRACT);
         }
@@ -1231,6 +1234,11 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                 indexFieldTypes.add(fieldTypes);
             }
 
+            boolean unknownKeyOptionAllowed = indexType == IndexType.BTREE && !isSecondaryPrimary;
+            if (stmtCreateIndex.hasExcludeUnknownKey() && !unknownKeyOptionAllowed) {
+                throw new CompilationException(ErrorCode.COMPILATION_ERROR, sourceLoc,
+                        "can only specify exclude/include unknown key for B-Tree indexes");
+            }
             Index.IIndexDetails indexDetails;
             if (Index.IndexCategory.of(indexType) == Index.IndexCategory.ARRAY) {
                 if (!hadUnnest) {
@@ -1277,7 +1285,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                 switch (Index.IndexCategory.of(indexType)) {
                     case VALUE:
                         indexDetails = new Index.ValueIndexDetails(keyFieldNames, keyFieldSourceIndicators,
-                                keyFieldTypes, overridesFieldTypes);
+                                keyFieldTypes, overridesFieldTypes, stmtCreateIndex.isExcludeUnknownKey());
                         break;
                     case TEXT:
                         indexDetails = new Index.TextIndexDetails(keyFieldNames, keyFieldSourceIndicators,
@@ -1485,10 +1493,15 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                     // Get snapshot from External File System
                     externalFilesSnapshot = ExternalIndexingOperations.getSnapshotFromExternalFileSystem(ds);
                     // Add an entry for the files index
+                    Index.IndexCategory indexCategory = Index.IndexCategory.of(index.getIndexType());
+                    Boolean excludeUnknownKey = null;
+                    if (indexCategory == Index.IndexCategory.VALUE) {
+                        excludeUnknownKey = ((Index.ValueIndexDetails) index.getIndexDetails()).isExcludeUnknownKey();
+                    }
                     filesIndex = new Index(index.getDataverseName(), index.getDatasetName(),
                             IndexingConstants.getFilesIndexName(index.getDatasetName()), IndexType.BTREE,
                             new Index.ValueIndexDetails(ExternalIndexingOperations.FILE_INDEX_FIELD_NAMES, null,
-                                    ExternalIndexingOperations.FILE_INDEX_FIELD_TYPES, false),
+                                    ExternalIndexingOperations.FILE_INDEX_FIELD_TYPES, false, excludeUnknownKey),
                             false, false, MetadataUtil.PENDING_ADD_OP);
                     MetadataManager.INSTANCE.addIndex(metadataProvider.getMetadataTxnContext(), filesIndex);
                     // Add files to the external files index
@@ -3392,12 +3405,14 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         final IMetadataLocker locker = new IMetadataLocker() {
             @Override
             public void lock() throws AlgebricksException {
+                compilationLock.readLock().lock();
                 lockUtil.insertDeleteUpsertBegin(lockManager, metadataProvider.getLocks(), dataverseName, datasetName);
             }
 
             @Override
             public void unlock() {
                 metadataProvider.getLocks().unlock();
+                compilationLock.readLock().unlock();
             }
         };
         final IStatementCompiler compiler = () -> {
@@ -3987,6 +4002,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
         final IMetadataLocker locker = new IMetadataLocker() {
             @Override
             public void lock() {
+                compilationLock.readLock().lock();
             }
 
             @Override
@@ -3994,6 +4010,7 @@ public class QueryTranslator extends AbstractLangTranslator implements IStatemen
                 metadataProvider.getLocks().unlock();
                 // release external datasets' locks acquired during compilation of the query
                 ExternalDatasetsRegistry.INSTANCE.releaseAcquiredLocks(metadataProvider);
+                compilationLock.readLock().unlock();
             }
         };
         final IStatementCompiler compiler = () -> {

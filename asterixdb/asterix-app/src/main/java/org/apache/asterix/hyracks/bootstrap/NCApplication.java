@@ -300,7 +300,8 @@ public class NCApplication extends BaseNCApplication {
                 apiServer != null ? Collections.singletonMap(SYS_AUTH_HEADER, apiServer.ctx().get(SYS_AUTH_HEADER))
                         : Collections.emptyMap();
         RegistrationTasksRequestMessage.send(ccId, (NodeControllerService) ncServiceCtx.getControllerService(),
-                currentStatus, systemState, httpSecrets);
+                currentStatus, systemState, httpSecrets,
+                runtimeContext.getMetadataProperties().getNodeActivePartitions(nodeId));
     }
 
     @Override
@@ -340,7 +341,11 @@ public class NCApplication extends BaseNCApplication {
     @Override
     public IFileDeviceResolver getFileDeviceResolver() {
         return (relPath, devices) -> {
-            int ioDeviceIndex = Math.abs(StoragePathUtil.getPartitionNumFromRelativePath(relPath) % devices.size());
+            int partition = StoragePathUtil.getPartitionNumFromRelativePath(relPath);
+            if (partition < 0) {
+                return devices.get(0);
+            }
+            int ioDeviceIndex = Math.abs(partition % devices.size());
             return devices.get(ioDeviceIndex);
         };
     }
