@@ -153,8 +153,8 @@ public abstract class AbstractUnionIntervalRangeMapAggregateFunction extends Abs
         IntArraySerializerDeserializer.write(endOffsets, serRangeMap.getDataOutput());
         DoubleArraySerializerDeserializer.write(percentages, serRangeMap.getDataOutput());
         binary.setValue(serRangeMap.getByteArray(), serRangeMap.getStartOffset(), serRangeMap.getLength());
-        resultStorage.reset();
-        binarySerde.serialize(binary, resultStorage.getDataOutput());
-        result.set(resultStorage);
+        storage.reset();
+        binarySerde.serialize(binary, storage.getDataOutput());
+        result.set(storage);
     }
 }

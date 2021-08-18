@@ -19,10 +19,9 @@
 package org.apache.asterix.runtime.aggregates.std;
 
 import org.apache.asterix.om.types.IAType;
-import org.apache.asterix.runtime.runningaggregates.base.AbstractRunningAggregateFunctionDynamicDescriptor;
+import org.apache.asterix.runtime.aggregates.base.AbstractAggregateFunctionDynamicDescriptor;
 
-public abstract class AbstractUnionIntervalRangeAggregateDescriptor
-        extends AbstractRunningAggregateFunctionDynamicDescriptor {
+public abstract class AbstractUnionIntervalRangeAggregateDescriptor extends AbstractAggregateFunctionDynamicDescriptor {
     private static final long serialVersionUID = 1L;
     IAType aggFieldType;
 

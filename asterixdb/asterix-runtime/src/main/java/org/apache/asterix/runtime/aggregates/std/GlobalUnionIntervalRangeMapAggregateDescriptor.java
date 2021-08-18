@@ -19,9 +19,12 @@
 package org.apache.asterix.runtime.aggregates.std;
 
 import org.apache.asterix.om.functions.BuiltinFunctions;
+import org.apache.asterix.om.functions.IFunctionDescriptor;
 import org.apache.asterix.om.functions.IFunctionDescriptorFactory;
+import org.apache.asterix.om.functions.IFunctionTypeInferer;
 import org.apache.asterix.om.types.IAType;
 import org.apache.asterix.runtime.aggregates.base.AbstractAggregateFunctionDynamicDescriptor;
+import org.apache.asterix.runtime.functions.FunctionTypeInferers;
 import org.apache.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import org.apache.hyracks.algebricks.runtime.base.IAggregateEvaluator;
 import org.apache.hyracks.algebricks.runtime.base.IAggregateEvaluatorFactory;
@@ -36,8 +39,17 @@ public class GlobalUnionIntervalRangeMapAggregateDescriptor extends AbstractAggr
     private int numOrderFields;
     private IAType[] aggFieldType;
 
-    public static final IFunctionDescriptorFactory FACTORY = AbstractAggregateFunctionDynamicDescriptor
-            .createFactory(GlobalUnionIntervalRangeMapAggregateDescriptor::new);
+    public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
+        @Override
+        public IFunctionDescriptor createFunctionDescriptor() {
+            return new GlobalUnionIntervalRangeMapAggregateDescriptor();
+        }
+
+        @Override
+        public IFunctionTypeInferer createFunctionTypeInferer() {
+            return FunctionTypeInferers.SET_SORTING_PARAMETERS;
+        }
+    };
 
     @Override
     public FunctionIdentifier getIdentifier() {
