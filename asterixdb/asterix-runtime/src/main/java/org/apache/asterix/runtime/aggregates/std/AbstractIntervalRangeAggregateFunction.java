@@ -113,7 +113,7 @@ public abstract class AbstractIntervalRangeAggregateFunction extends AbstractAgg
                 ATypeTag.SERIALIZED_SYSTEM_NULL_TYPE_TAG);
     }
 
-    private boolean isValidCoordinates(double minX, double minY) {
-        return (minX != Double.POSITIVE_INFINITY) && (minY != Double.POSITIVE_INFINITY);
+    private boolean isValidCoordinates(long currentStartPoint, long currentEndPoint) {
+        return (currentStartPoint != Long.MIN_VALUE) && (currentEndPoint != Long.MAX_VALUE);
     }
 }

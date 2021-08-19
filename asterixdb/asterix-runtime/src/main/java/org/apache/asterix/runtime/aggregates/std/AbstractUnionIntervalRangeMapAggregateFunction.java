@@ -65,7 +65,7 @@ public abstract class AbstractUnionIntervalRangeMapAggregateFunction extends Abs
     private final ArrayBackedValueStorage storage = new ArrayBackedValueStorage();
     private final int numOfPartitions;
     private final int numOrderByFields;
-    private final byte[] splitPoints;
+    private final int[] splitPoints;
     private final double[] percentages;
 
     public AbstractUnionIntervalRangeMapAggregateFunction(IScalarEvaluatorFactory[] args, IEvaluatorContext context,
@@ -75,7 +75,7 @@ public abstract class AbstractUnionIntervalRangeMapAggregateFunction extends Abs
         this.context = context;
         this.numOfPartitions = numOfPartitions;
         this.numOrderByFields = numOrderByFields;
-        this.splitPoints = new byte[numOfPartitions - 1];
+        this.splitPoints = new int[numOfPartitions - 1];
         this.percentages = new double[numOfPartitions - 1];
     }
 
@@ -108,21 +108,28 @@ public abstract class AbstractUnionIntervalRangeMapAggregateFunction extends Abs
 
     @Override
     public void finish(IPointable result) throws HyracksDataException {
+
         resultStorage.reset();
         DataOutput allSplitValuesOut = storage.getDataOutput();
-        int[] endOffsets;
+        int[] endOffsets = new int[splitPoints.length];
         try {
+
+            double percentage = 1 / (double) percentages.length;
             long range = currentMaxEnd - currentMinStart;
-            long length = range / numOfPartitions;
-            for (int i = 0; i < numOfPartitions - 1; i++) {
-                splitPoints[i] = (byte) (currentMinStart + ((i + 1) * (length)));
+            int nextSplitOffset = (int) range / numOfPartitions;
+            int nextSplitIndex = nextSplitOffset - 1;
+
+            for (int split = 0; split < splitPoints.length; split++) {
+                splitPoints[split] = nextSplitIndex;
+                percentages[split] = percentage;
+                nextSplitIndex += nextSplitOffset;
             }
-            int endOffsetsCounter = 0;
-            endOffsets = new int[splitPoints.length * numOrderByFields];
+
             for (int i = 0; i < splitPoints.length; i++) {
-                allSplitValuesOut.write(splitPoints[i]);
-                endOffsets[endOffsetsCounter++] = resultStorage.getLength();
+                allSplitValuesOut.write((byte) splitPoints[i]);
+                endOffsets[i] = storage.getLength();
             }
+
         } catch (IOException e) {
             throw HyracksDataException.create(e);
         }
