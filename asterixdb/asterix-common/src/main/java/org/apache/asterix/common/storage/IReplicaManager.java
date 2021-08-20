@@ -57,6 +57,13 @@ public interface IReplicaManager {
     Set<Integer> getPartitions();
 
     /**
+     * Sets the node active partitions
+     *
+     * @param activePartitions
+     */
+    void setActivePartitions(Set<Integer> activePartitions);
+
+    /**
      * Promotes a partition by making this node its master replica
      *
      * @param partition
@@ -79,4 +86,18 @@ public interface IReplicaManager {
      * @return the synchronization lock
      */
     Object getReplicaSyncLock();
+
+    /**
+     * Gets the partition replicas matching {@code id}
+     * @param id
+     * @return The partition replica if found. Otherwise, null.
+     */
+    IPartitionReplica getReplica(ReplicaIdentifier id);
+
+    /**
+     * Gets the list of replicas
+     *
+     * @return the list of replicas
+     */
+    List<IPartitionReplica> getReplicas();
 }

@@ -3431,6 +3431,11 @@
       </compilation-unit>
     </test-case>
     <test-case FilePath="comparison">
+      <compilation-unit name="is_distinct_01">
+        <output-dir compare="Text">is_distinct_01</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="comparison">
       <compilation-unit name="like">
         <output-dir compare="Text">like</output-dir>
       </compilation-unit>
@@ -6144,6 +6149,11 @@
         <output-dir compare="Text">rtree-spatial-self-intersect-point</output-dir>
       </compilation-unit>
     </test-case>
+    <test-case FilePath="index-join">
+      <compilation-unit name="btree-multiple-join">
+        <output-dir compare="Text">btree-multiple-join</output-dir>
+      </compilation-unit>
+    </test-case>
   </test-group>
   <test-group name="index-selection">
     <test-case FilePath="index-selection">
@@ -6550,6 +6560,17 @@
     </test-case>
   </test-group>
   <test-group name="join">
+    <test-case FilePath="join">
+      <compilation-unit name="cross-join-01">
+        <output-dir compare="Text">cross-join-01</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="join">
+      <compilation-unit name="cross-join-02-negative">
+        <output-dir compare="Text">none</output-dir>
+        <expected-error>ASX1077: Cannot find dataset x in dataverse Default nor an alias with name x (in line 26, at column 39)</expected-error>
+      </compilation-unit>
+    </test-case>
     <test-case FilePath="join">
       <compilation-unit name="hash_join_array">
         <output-dir compare="Text">hash_join_array</output-dir>
@@ -8301,6 +8322,28 @@
         </compilation-unit>
       </test-case>
     </test-group>
+    <test-group name="array-index/join-quantified-queries">
+      <test-case FilePath="array-index/join-quantified-queries">
+        <compilation-unit name="use-case-1">
+          <output-dir compare="Text">use-case-1</output-dir>
+        </compilation-unit>
+      </test-case>
+      <test-case FilePath="array-index/join-quantified-queries">
+        <compilation-unit name="use-case-2">
+          <output-dir compare="Text">use-case-2</output-dir>
+        </compilation-unit>
+      </test-case>
+      <test-case FilePath="array-index/join-quantified-queries">
+        <compilation-unit name="use-case-3">
+          <output-dir compare="Text">use-case-3</output-dir>
+        </compilation-unit>
+      </test-case>
+      <test-case FilePath="array-index/join-quantified-queries">
+        <compilation-unit name="use-case-4">
+          <output-dir compare="Text">use-case-4</output-dir>
+        </compilation-unit>
+      </test-case>
+    </test-group>
     <test-group name="array-index/join-unnest-queries">
       <test-case FilePath="array-index/join-unnest-queries">
         <compilation-unit name="use-case-1">
@@ -9438,6 +9481,11 @@
     <test-case FilePath="quantifiers">
       <compilation-unit name="query-ASTERIXDB-2696">
         <output-dir compare="Text">query-ASTERIXDB-2696</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="quantifiers">
+      <compilation-unit name="query-ASTERIXDB-2947">
+        <output-dir compare="Text">query-ASTERIXDB-2947</output-dir>
       </compilation-unit>
     </test-case>
     <!--

@@ -18,6 +18,7 @@
  */
 package org.apache.asterix.app.nc;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -101,8 +102,19 @@ public class ReplicaManager implements IReplicaManager {
     }
 
     @Override
+    public synchronized IPartitionReplica getReplica(ReplicaIdentifier id) {
+        return replicas.get(id);
+    }
+
+    @Override
     public synchronized Set<Integer> getPartitions() {
         return Collections.unmodifiableSet(partitions);
+    }
+
+    @Override
+    public synchronized void setActivePartitions(Set<Integer> activePartitions) {
+        partitions.clear();
+        partitions.addAll(activePartitions);
     }
 
     @Override
@@ -110,6 +122,7 @@ public class ReplicaManager implements IReplicaManager {
         if (partitions.contains(partition)) {
             return;
         }
+        LOGGER.warn("promoting partition {}", partition);
         final PersistentLocalResourceRepository localResourceRepository =
                 (PersistentLocalResourceRepository) appCtx.getLocalResourceRepository();
         localResourceRepository.cleanup(partition);
@@ -134,6 +147,11 @@ public class ReplicaManager implements IReplicaManager {
     @Override
     public Object getReplicaSyncLock() {
         return replicaSyncLock;
+    }
+
+    @Override
+    public synchronized List<IPartitionReplica> getReplicas() {
+        return new ArrayList<>(replicas.values());
     }
 
     public void closePartitionResources(int partition) throws HyracksDataException {

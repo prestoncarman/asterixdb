@@ -31,4 +31,11 @@ public interface IAType extends IAObject, Serializable, IJsonSerializable {
 
     public String getTypeName();
 
+    /**
+     * Allow for additional traversal and processing for {@link IAType}
+     *
+     * @param visitor visitor
+     * @param arg     visitor's argument
+     */
+    <R, T> R accept(IATypeVisitor<R, T> visitor, T arg);
 }
