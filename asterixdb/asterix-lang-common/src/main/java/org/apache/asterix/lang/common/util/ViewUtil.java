@@ -19,9 +19,10 @@
 
 package org.apache.asterix.lang.common.util;
 
+import static org.apache.asterix.metadata.utils.TypeUtil.getTemporalFormat;
+
 import java.io.StringReader;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -37,42 +38,27 @@ import org.apache.asterix.lang.common.base.IQueryRewriter;
 import org.apache.asterix.lang.common.expression.CallExpr;
 import org.apache.asterix.lang.common.expression.FieldAccessor;
 import org.apache.asterix.lang.common.expression.LiteralExpr;
-import org.apache.asterix.lang.common.expression.RecordConstructor;
 import org.apache.asterix.lang.common.expression.VariableExpr;
-import org.apache.asterix.lang.common.literal.NullLiteral;
 import org.apache.asterix.lang.common.literal.StringLiteral;
 import org.apache.asterix.lang.common.statement.ViewDecl;
 import org.apache.asterix.lang.common.struct.Identifier;
 import org.apache.asterix.lang.common.struct.VarIdentifier;
 import org.apache.asterix.metadata.entities.ViewDetails;
-import org.apache.asterix.object.base.AdmObjectNode;
+import org.apache.asterix.metadata.utils.TypeUtil;
 import org.apache.asterix.om.functions.BuiltinFunctions;
 import org.apache.asterix.om.types.ARecordType;
 import org.apache.asterix.om.types.ATypeTag;
 import org.apache.asterix.om.types.AUnionType;
-import org.apache.asterix.om.types.BuiltinType;
 import org.apache.asterix.om.types.IAType;
 import org.apache.hyracks.algebricks.common.utils.Triple;
 import org.apache.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import org.apache.hyracks.api.exceptions.IWarningCollector;
 import org.apache.hyracks.api.exceptions.SourceLocation;
+import org.apache.hyracks.util.LogRedactionUtil;
 
 public final class ViewUtil {
 
-    public static final String DATETIME_PARAMETER_NAME = BuiltinType.ADATETIME.getTypeName();
-    public static final String DATE_PARAMETER_NAME = BuiltinType.ADATE.getTypeName();
-    public static final String TIME_PARAMETER_NAME = BuiltinType.ATIME.getTypeName();
-
-    private static final ARecordType WITH_OBJECT_TYPE_FOR_TYPED_VIEW = getWithObjectTypeForTypedView();
-
     private ViewUtil() {
-    }
-
-    private static ARecordType getWithObjectTypeForTypedView() {
-        String[] fieldNames = { DATETIME_PARAMETER_NAME, DATE_PARAMETER_NAME, TIME_PARAMETER_NAME };
-        IAType[] fieldTypes = new IAType[fieldNames.length];
-        Arrays.fill(fieldTypes, AUnionType.createUnknownableType(BuiltinType.ASTRING));
-        return new ARecordType("withObject", fieldNames, fieldTypes, false);
     }
 
     public static ViewDecl parseStoredView(DatasetFullyQualifiedName viewName, ViewDetails view,
@@ -93,7 +79,7 @@ public final class ViewUtil {
     }
 
     public static List<List<Triple<DataverseName, String, String>>> getViewDependencies(ViewDecl viewDecl,
-            IQueryRewriter rewriter) throws CompilationException {
+            List<ViewDetails.ForeignKey> foreignKeys, IQueryRewriter rewriter) throws CompilationException {
         Expression normBody = viewDecl.getNormalizedViewBody();
         if (normBody == null) {
             throw new CompilationException(ErrorCode.COMPILATION_ILLEGAL_STATE, viewDecl.getSourceLocation(),
@@ -107,9 +93,31 @@ public final class ViewUtil {
         ExpressionUtils.collectDependencies(normBody, rewriter, datasetDependencies, synonymDependencies,
                 functionDependencies);
 
+        if (foreignKeys != null) {
+            DatasetFullyQualifiedName viewName = viewDecl.getViewName();
+            for (ViewDetails.ForeignKey foreignKey : foreignKeys) {
+                DatasetFullyQualifiedName refName = foreignKey.getReferencedDatasetName();
+                boolean isSelfReference = refName.equals(viewName);
+                if (isSelfReference || containsDependency(datasetDependencies, refName)) {
+                    continue;
+                }
+                datasetDependencies.add(new Triple<>(refName.getDataverseName(), refName.getDatasetName(), null));
+            }
+        }
+
         List<Triple<DataverseName, String, String>> typeDependencies = Collections.emptyList();
         return ViewDetails.createDependencies(datasetDependencies, functionDependencies, typeDependencies,
                 synonymDependencies);
+    }
+
+    private static boolean containsDependency(List<Triple<DataverseName, String, String>> inList,
+            DatasetFullyQualifiedName searchName) {
+        for (Triple<DataverseName, String, String> d : inList) {
+            if (d.first.equals(searchName.getDataverseName()) && d.second.equals(searchName.getDatasetName())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public static void validateViewItemType(ARecordType recordType, SourceLocation sourceLoc)
@@ -121,38 +129,22 @@ public final class ViewUtil {
         IAType[] fieldTypes = recordType.getFieldTypes();
         for (int i = 0, n = fieldNames.length; i < n; i++) {
             IAType fieldType = fieldTypes[i];
-            if (fieldType.getTypeTag() != ATypeTag.UNION) {
-                throw new CompilationException(ErrorCode.COMPILATION_ERROR, sourceLoc, String
-                        .format("Invalid type for field %s. The type must allow MISSING and NULL", fieldNames[i]));
+            IAType primeType;
+            if (fieldType.getTypeTag() == ATypeTag.UNION) {
+                AUnionType unionType = (AUnionType) fieldType;
+                if (!unionType.isNullableType()) {
+                    throw new CompilationException(ErrorCode.COMPILATION_ERROR, sourceLoc,
+                            String.format("Invalid type for field %s. Optional type must allow NULL",
+                                    LogRedactionUtil.userData(fieldNames[i])));
+                }
+                primeType = unionType.getActualType();
+            } else {
+                primeType = fieldType;
             }
-            AUnionType unionType = (AUnionType) fieldType;
-            if (!unionType.isMissableType() || !unionType.isNullableType()) {
-                throw new CompilationException(ErrorCode.COMPILATION_ERROR, sourceLoc, String
-                        .format("Invalid type for field %s. The type must allow MISSING and NULL", fieldNames[i]));
-            }
-            IAType primeType = unionType.getActualType();
-            if (getTypeConstructor(primeType) == null) {
+            if (TypeUtil.getTypeConstructorDefaultNull(primeType, false) == null) {
                 throw new CompilationException(ErrorCode.COMPILATION_TYPE_UNSUPPORTED, sourceLoc, "view",
                         primeType.getTypeName());
             }
-        }
-    }
-
-    public static AdmObjectNode validateAndGetWithObjectNode(RecordConstructor withRecord, boolean hasItemType)
-            throws CompilationException {
-        if (withRecord == null) {
-            return DatasetDeclParametersUtil.EMPTY_WITH_OBJECT;
-        }
-        AdmObjectNode node = ExpressionUtils.toNode(withRecord);
-        if (node.isEmpty()) {
-            return DatasetDeclParametersUtil.EMPTY_WITH_OBJECT;
-        }
-        if (hasItemType) {
-            ConfigurationTypeValidator validator = new ConfigurationTypeValidator();
-            validator.validateType(WITH_OBJECT_TYPE_FOR_TYPED_VIEW, node);
-            return node;
-        } else {
-            throw new CompilationException(ErrorCode.COMPILATION_ERROR, "Invalid WITH clause in view definition");
         }
     }
 
@@ -161,8 +153,7 @@ public final class ViewUtil {
             SourceLocation sourceLoc) throws CompilationException {
         String format = temporalDataFormat != null ? getTemporalFormat(targetType, temporalDataFormat) : null;
         boolean withFormat = format != null;
-        FunctionIdentifier constrFid =
-                withFormat ? getTypeConstructorWithFormat(targetType) : getTypeConstructor(targetType);
+        FunctionIdentifier constrFid = TypeUtil.getTypeConstructorDefaultNull(targetType, withFormat);
         if (constrFid == null) {
             throw new CompilationException(ErrorCode.COMPILATION_TYPE_UNSUPPORTED, sourceLoc, viewName.toString(),
                     targetType.getTypeName());
@@ -179,13 +170,16 @@ public final class ViewUtil {
         return convertExpr;
     }
 
-    public static Expression createMissingToNullExpression(Expression inExpr, SourceLocation sourceLoc) {
-        List<Expression> missing2NullArgs = new ArrayList<>(2);
-        missing2NullArgs.add(inExpr);
-        missing2NullArgs.add(new LiteralExpr(NullLiteral.INSTANCE));
-        CallExpr missing2NullExpr = new CallExpr(new FunctionSignature(BuiltinFunctions.IF_MISSING), missing2NullArgs);
-        missing2NullExpr.setSourceLocation(sourceLoc);
-        return missing2NullExpr;
+    public static Expression createNotIsNullExpression(Expression inExpr, SourceLocation sourceLoc) {
+        List<Expression> isNullArgs = new ArrayList<>(1);
+        isNullArgs.add(inExpr);
+        CallExpr isNullExpr = new CallExpr(new FunctionSignature(BuiltinFunctions.IS_NULL), isNullArgs);
+        isNullExpr.setSourceLocation(sourceLoc);
+        List<Expression> notExprArgs = new ArrayList<>(1);
+        notExprArgs.add(isNullExpr);
+        CallExpr notExpr = new CallExpr(new FunctionSignature(BuiltinFunctions.NOT), notExprArgs);
+        notExpr.setSourceLocation(sourceLoc);
+        return notExpr;
     }
 
     public static Expression createFieldAccessExpression(VarIdentifier inVar, String fieldName,
@@ -197,68 +191,4 @@ public final class ViewUtil {
         return fa;
     }
 
-    public static FunctionIdentifier getTypeConstructor(IAType type) {
-        switch (type.getTypeTag()) {
-            case TINYINT:
-                return BuiltinFunctions.INT8_CONSTRUCTOR;
-            case SMALLINT:
-                return BuiltinFunctions.INT16_CONSTRUCTOR;
-            case INTEGER:
-                return BuiltinFunctions.INT32_CONSTRUCTOR;
-            case BIGINT:
-                return BuiltinFunctions.INT64_CONSTRUCTOR;
-            case FLOAT:
-                return BuiltinFunctions.FLOAT_CONSTRUCTOR;
-            case DOUBLE:
-                return BuiltinFunctions.DOUBLE_CONSTRUCTOR;
-            case BOOLEAN:
-                return BuiltinFunctions.BOOLEAN_CONSTRUCTOR;
-            case STRING:
-                return BuiltinFunctions.STRING_CONSTRUCTOR;
-            case DATE:
-                return BuiltinFunctions.DATE_CONSTRUCTOR;
-            case TIME:
-                return BuiltinFunctions.TIME_CONSTRUCTOR;
-            case DATETIME:
-                return BuiltinFunctions.DATETIME_CONSTRUCTOR;
-            case YEARMONTHDURATION:
-                return BuiltinFunctions.YEAR_MONTH_DURATION_CONSTRUCTOR;
-            case DAYTIMEDURATION:
-                return BuiltinFunctions.DAY_TIME_DURATION_CONSTRUCTOR;
-            case DURATION:
-                return BuiltinFunctions.DURATION_CONSTRUCTOR;
-            case UUID:
-                return BuiltinFunctions.UUID_CONSTRUCTOR;
-            case BINARY:
-                return BuiltinFunctions.BINARY_BASE64_CONSTRUCTOR;
-            default:
-                return null;
-        }
-    }
-
-    public static FunctionIdentifier getTypeConstructorWithFormat(IAType type) {
-        switch (type.getTypeTag()) {
-            case DATE:
-                return BuiltinFunctions.DATE_CONSTRUCTOR_WITH_FORMAT;
-            case TIME:
-                return BuiltinFunctions.TIME_CONSTRUCTOR_WITH_FORMAT;
-            case DATETIME:
-                return BuiltinFunctions.DATETIME_CONSTRUCTOR_WITH_FORMAT;
-            default:
-                return null;
-        }
-    }
-
-    public static String getTemporalFormat(IAType targetType, Triple<String, String, String> temporalFormatByType) {
-        switch (targetType.getTypeTag()) {
-            case DATETIME:
-                return temporalFormatByType.first;
-            case DATE:
-                return temporalFormatByType.second;
-            case TIME:
-                return temporalFormatByType.third;
-            default:
-                return null;
-        }
-    }
 }

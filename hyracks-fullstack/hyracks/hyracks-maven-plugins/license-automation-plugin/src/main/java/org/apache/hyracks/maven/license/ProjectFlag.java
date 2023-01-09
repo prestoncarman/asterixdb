@@ -20,8 +20,8 @@ package org.apache.hyracks.maven.license;
 
 import static org.apache.hyracks.maven.license.LicenseUtil.toGav;
 
+import java.util.Arrays;
 import java.util.Properties;
-import java.util.stream.Stream;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
@@ -33,6 +33,8 @@ enum ProjectFlag {
     IGNORE_MISSING_EMBEDDED_NOTICE,
     IGNORE_LICENSE_OVERRIDE,
     IGNORE_NOTICE_OVERRIDE,
+    ON_MULTIPLE_EMBEDDED_LICENSE,
+    ON_MULTIPLE_EMBEDDED_NOTICE,
     ALTERNATE_LICENSE_FILE,
     ALTERNATE_NOTICE_FILE;
 
@@ -50,7 +52,7 @@ enum ProjectFlag {
             case IGNORE_MISSING_EMBEDDED_NOTICE:
             case IGNORE_LICENSE_OVERRIDE:
             case IGNORE_NOTICE_OVERRIDE:
-                if (Stream.of(StringUtils.split(value, ",")).anyMatch(depObj.getVersion()::equals)) {
+                if (Arrays.asList(StringUtils.split(value, ",")).contains(depObj.getVersion())) {
                     licenseMojo.getProjectFlags().put(Pair.of(toGav(depObj), this), Boolean.TRUE);
                 } else {
                     licenseMojo.getLog().info(propName() + " defined on versions that *do not* match: " + value
@@ -59,6 +61,9 @@ enum ProjectFlag {
                 break;
             case ALTERNATE_LICENSE_FILE:
             case ALTERNATE_NOTICE_FILE:
+            case ON_MULTIPLE_EMBEDDED_NOTICE:
+            case ON_MULTIPLE_EMBEDDED_LICENSE:
+                boolean found = false;
                 for (String spec : StringUtils.split(value, ",")) {
                     String[] specSplit = StringUtils.split(spec, ":");
                     if (specSplit.length != 2) {
@@ -66,7 +71,12 @@ enum ProjectFlag {
                     }
                     if (specSplit[0].equals(depObj.getVersion())) {
                         licenseMojo.getProjectFlags().put(Pair.of(toGav(depObj), this), specSplit[1]);
+                        found = true;
                     }
+                }
+                if (!found) {
+                    licenseMojo.getLog().info(propName() + " defined on versions that *do not* match: " + value
+                            + " for " + toGav(depObj));
                 }
                 break;
             default:

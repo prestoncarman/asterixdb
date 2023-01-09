@@ -22,6 +22,7 @@ package org.apache.asterix.metadata.entities;
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 import org.apache.asterix.common.config.DatasetConfig.IndexType;
@@ -32,12 +33,14 @@ import org.apache.asterix.common.metadata.DataverseName;
 import org.apache.asterix.common.transactions.IRecoveryManager.ResourceType;
 import org.apache.asterix.metadata.MetadataCache;
 import org.apache.asterix.metadata.api.IMetadataEntity;
+import org.apache.asterix.metadata.utils.IndexUtil;
 import org.apache.asterix.om.types.ARecordType;
 import org.apache.asterix.om.types.AUnionType;
 import org.apache.asterix.om.types.IAType;
 import org.apache.asterix.om.utils.NonTaggedFormatUtil;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.common.utils.Pair;
+import org.apache.hyracks.api.job.profiling.IndexStats;
 import org.apache.hyracks.util.OptionalBoolean;
 
 /**
@@ -93,9 +96,9 @@ public class Index implements IMetadataEntity<Index>, Comparable<Index> {
     public static Index createPrimaryIndex(DataverseName dataverseName, String datasetName,
             List<List<String>> keyFieldNames, List<Integer> keyFieldSourceIndicators, List<IAType> keyFieldTypes,
             int pendingOp) {
-        return new Index(dataverseName,
-                datasetName, datasetName, IndexType.BTREE, new ValueIndexDetails(keyFieldNames,
-                        keyFieldSourceIndicators, keyFieldTypes, false, OptionalBoolean.empty()),
+        return new Index(dataverseName, datasetName,
+                datasetName, IndexType.BTREE, new ValueIndexDetails(keyFieldNames, keyFieldSourceIndicators,
+                        keyFieldTypes, false, OptionalBoolean.empty(), OptionalBoolean.empty(), null, null, null),
                 false, true, pendingOp);
     }
 
@@ -154,8 +157,13 @@ public class Index implements IMetadataEntity<Index>, Comparable<Index> {
         return new Pair<>(actualKeyType, nullable);
     }
 
-    public static Pair<IAType, Boolean> getNonNullableOpenFieldType(IAType fieldType, List<String> fieldName,
-            ARecordType recType) throws AlgebricksException {
+    public static Pair<IAType, Boolean> getNonNullableOpenFieldType(Index index, IAType fieldType,
+            List<String> fieldName, ARecordType recType) throws AlgebricksException {
+        if (IndexUtil.castDefaultNull(index)) {
+            Pair<IAType, Boolean> nonNullableType = getNonNullableType(fieldType);
+            nonNullableType.second = true;
+            return nonNullableType;
+        }
         Pair<IAType, Boolean> keyPairType = null;
         IAType subType = recType;
         boolean nullable = false;
@@ -229,7 +237,7 @@ public class Index implements IMetadataEntity<Index>, Comparable<Index> {
 
     @Override
     public int compareTo(Index otherIndex) {
-        /** Gives a primary index first priority. */
+        /* Gives a primary index first priority. */
         if (isPrimaryIndex && !otherIndex.isPrimaryIndex) {
             return -1;
         }
@@ -237,7 +245,7 @@ public class Index implements IMetadataEntity<Index>, Comparable<Index> {
             return 1;
         }
 
-        /** Gives a B-Tree index the second priority. */
+        /* Gives a B-Tree index the second priority. */
         if (indexType == IndexType.BTREE && otherIndex.indexType != IndexType.BTREE) {
             return -1;
         }
@@ -245,7 +253,7 @@ public class Index implements IMetadataEntity<Index>, Comparable<Index> {
             return 1;
         }
 
-        /** Gives a R-Tree index the third priority */
+        /* Gives a R-Tree index the third priority */
         if (indexType == IndexType.RTREE && otherIndex.indexType != IndexType.RTREE) {
             return -1;
         }
@@ -253,7 +261,7 @@ public class Index implements IMetadataEntity<Index>, Comparable<Index> {
             return 1;
         }
 
-        /** Finally, compares based on names. */
+        /* Finally, compares based on names. */
         int result = indexName.compareTo(otherIndex.getIndexName());
         if (result != 0) {
             return result;
@@ -269,6 +277,7 @@ public class Index implements IMetadataEntity<Index>, Comparable<Index> {
         switch (indexType) {
             case ARRAY:
             case BTREE:
+            case SAMPLE:
                 return ResourceType.LSM_BTREE;
             case RTREE:
                 return ResourceType.LSM_RTREE;
@@ -290,7 +299,8 @@ public class Index implements IMetadataEntity<Index>, Comparable<Index> {
     public enum IndexCategory {
         VALUE,
         TEXT,
-        ARRAY;
+        ARRAY,
+        SAMPLE;
 
         public static IndexCategory of(IndexType indexType) {
             switch (indexType) {
@@ -304,6 +314,8 @@ public class Index implements IMetadataEntity<Index>, Comparable<Index> {
                     return TEXT;
                 case ARRAY:
                     return ARRAY;
+                case SAMPLE:
+                    return SAMPLE;
                 default:
                     throw new IllegalArgumentException(String.valueOf(indexType));
             }
@@ -335,13 +347,27 @@ public class Index implements IMetadataEntity<Index>, Comparable<Index> {
 
         private final Boolean excludeUnknownKey;
 
+        private final Boolean castDefaultNull;
+
+        private final String castDatetimeFormat;
+
+        private final String castDateFormat;
+
+        private final String castTimeFormat;
+
         public ValueIndexDetails(List<List<String>> keyFieldNames, List<Integer> keyFieldSourceIndicators,
-                List<IAType> keyFieldTypes, boolean overrideKeyFieldTypes, OptionalBoolean excludeUnknownKey) {
+                List<IAType> keyFieldTypes, boolean overrideKeyFieldTypes, OptionalBoolean excludeUnknownKey,
+                OptionalBoolean castDefaultNull, String castDatetimeFormat, String castDateFormat,
+                String castTimeFormat) {
             this.keyFieldNames = keyFieldNames;
             this.keyFieldSourceIndicators = keyFieldSourceIndicators;
             this.keyFieldTypes = keyFieldTypes;
             this.overrideKeyFieldTypes = overrideKeyFieldTypes;
             this.excludeUnknownKey = excludeUnknownKey.isEmpty() ? null : excludeUnknownKey.get();
+            this.castDefaultNull = castDefaultNull.isEmpty() ? null : castDefaultNull.get();
+            this.castDatetimeFormat = castDatetimeFormat;
+            this.castDateFormat = castDateFormat;
+            this.castTimeFormat = castTimeFormat;
         }
 
         @Override
@@ -361,8 +387,24 @@ public class Index implements IMetadataEntity<Index>, Comparable<Index> {
             return keyFieldTypes;
         }
 
-        public OptionalBoolean isExcludeUnknownKey() {
+        public OptionalBoolean getExcludeUnknownKey() {
             return OptionalBoolean.ofNullable(excludeUnknownKey);
+        }
+
+        public OptionalBoolean getCastDefaultNull() {
+            return OptionalBoolean.ofNullable(castDefaultNull);
+        }
+
+        public String getCastDatetimeFormat() {
+            return castDatetimeFormat;
+        }
+
+        public String getCastDateFormat() {
+            return castDateFormat;
+        }
+
+        public String getCastTimeFormat() {
+            return castTimeFormat;
         }
 
         @Override
@@ -497,6 +539,81 @@ public class Index implements IMetadataEntity<Index>, Comparable<Index> {
         }
     }
 
+    public static class SampleIndexDetails extends AbstractIndexDetails {
+
+        private static final long serialVersionUID = 1L;
+
+        private final List<List<String>> keyFieldNames;
+
+        private final List<Integer> keyFieldSourceIndicators;
+
+        private final List<IAType> keyFieldTypes;
+
+        private final int sampleCardinalityTarget;
+
+        private final long sourceCardinality;
+
+        private final int sourceAvgItemSize;
+
+        private final long sampleSeed;
+        private final Map<String, IndexStats> indexesStats;
+
+        public SampleIndexDetails(List<List<String>> keyFieldNames, List<Integer> keyFieldSourceIndicators,
+                List<IAType> keyFieldTypes, int sampleCardinalityTarget, long sourceCardinality, int sourceAvgItemSize,
+                long sampleSeed, Map<String, IndexStats> indexesStats) {
+            this.keyFieldNames = keyFieldNames;
+            this.keyFieldSourceIndicators = keyFieldSourceIndicators;
+            this.keyFieldTypes = keyFieldTypes;
+            this.sampleCardinalityTarget = sampleCardinalityTarget;
+            this.sourceCardinality = sourceCardinality;
+            this.sourceAvgItemSize = sourceAvgItemSize;
+            this.sampleSeed = sampleSeed;
+            this.indexesStats = indexesStats;
+        }
+
+        @Override
+        IndexCategory getIndexCategory() {
+            return IndexCategory.SAMPLE;
+        }
+
+        public List<List<String>> getKeyFieldNames() {
+            return keyFieldNames;
+        }
+
+        public List<Integer> getKeyFieldSourceIndicators() {
+            return keyFieldSourceIndicators;
+        }
+
+        public List<IAType> getKeyFieldTypes() {
+            return keyFieldTypes;
+        }
+
+        @Override
+        public boolean isOverridingKeyFieldTypes() {
+            return false;
+        }
+
+        public int getSampleCardinalityTarget() {
+            return sampleCardinalityTarget;
+        }
+
+        public long getSourceCardinality() {
+            return sourceCardinality;
+        }
+
+        public int getSourceAvgItemSize() {
+            return sourceAvgItemSize;
+        }
+
+        public long getSampleSeed() {
+            return sampleSeed;
+        }
+
+        public Map<String, IndexStats> getIndexesStats() {
+            return indexesStats;
+        }
+    }
+
     @Deprecated
     private static Index.IIndexDetails createSimpleIndexDetails(IndexType indexType, List<List<String>> keyFieldNames,
             List<Integer> keyFieldSourceIndicators, List<IAType> keyFieldTypes, boolean overrideKeyFieldTypes,
@@ -507,7 +624,7 @@ public class Index implements IMetadataEntity<Index>, Comparable<Index> {
         switch (Index.IndexCategory.of(indexType)) {
             case VALUE:
                 return new ValueIndexDetails(keyFieldNames, keyFieldSourceIndicators, keyFieldTypes,
-                        overrideKeyFieldTypes, excludeUnknownKey);
+                        overrideKeyFieldTypes, excludeUnknownKey, OptionalBoolean.empty(), null, null, null);
             case TEXT:
                 if (excludeUnknownKey.isPresent()) {
                     throw new IllegalArgumentException("excludeUnknownKey");

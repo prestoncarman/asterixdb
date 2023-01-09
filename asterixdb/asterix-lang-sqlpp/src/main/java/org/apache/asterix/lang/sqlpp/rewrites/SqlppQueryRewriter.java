@@ -58,7 +58,9 @@ import org.apache.asterix.lang.sqlpp.rewrites.visitor.GenerateColumnNameVisitor;
 import org.apache.asterix.lang.sqlpp.rewrites.visitor.InlineColumnAliasVisitor;
 import org.apache.asterix.lang.sqlpp.rewrites.visitor.InlineWithExpressionVisitor;
 import org.apache.asterix.lang.sqlpp.rewrites.visitor.OperatorExpressionVisitor;
+import org.apache.asterix.lang.sqlpp.rewrites.visitor.SelectExcludeRewriteSugarVisitor;
 import org.apache.asterix.lang.sqlpp.rewrites.visitor.SetOperationVisitor;
+import org.apache.asterix.lang.sqlpp.rewrites.visitor.SqlCompatRewriteVisitor;
 import org.apache.asterix.lang.sqlpp.rewrites.visitor.SqlppCaseAggregateExtractionVisitor;
 import org.apache.asterix.lang.sqlpp.rewrites.visitor.SqlppCaseExpressionVisitor;
 import org.apache.asterix.lang.sqlpp.rewrites.visitor.SqlppFunctionCallResolverVisitor;
@@ -100,6 +102,10 @@ public class SqlppQueryRewriter implements IQueryRewriter {
 
     public static final String INLINE_WITH_OPTION = "inline_with";
     private static final boolean INLINE_WITH_OPTION_DEFAULT = true;
+
+    public static final String SQL_COMPAT_OPTION = "sql_compat";
+    private static final boolean SQL_COMPAT_OPTION_DEFAULT = false;
+
     private final IParserFactory parserFactory;
     private SqlppFunctionBodyRewriter functionAndViewBodyRewriter;
     private IReturningStatement topStatement;
@@ -140,6 +146,11 @@ public class SqlppQueryRewriter implements IQueryRewriter {
         // Generates column names.
         generateColumnNames();
 
+        // SQL-compat mode rewrites
+        // Must run after generateColumnNames() because it might need to generate new column names
+        // for the new projections that it introduces
+        rewriteSqlCompat();
+
         // Substitutes group-by key expressions.
         substituteGroupbyKeyExpression();
 
@@ -151,6 +162,9 @@ public class SqlppQueryRewriter implements IQueryRewriter {
 
         // Inlines column aliases.
         inlineColumnAlias();
+
+        // Rewrite SELECT EXCLUDE to use OBJECT_REMOVE_FIELDS.
+        rewriteSelectExcludeSugar();
 
         // Window expression core rewrites.
         rewriteWindowExpressions();
@@ -212,6 +226,15 @@ public class SqlppQueryRewriter implements IQueryRewriter {
     protected void rewriteListInputFunctions() throws CompilationException {
         SqlppListInputFunctionRewriteVisitor listInputFunctionVisitor = new SqlppListInputFunctionRewriteVisitor();
         rewriteTopExpr(listInputFunctionVisitor, null);
+    }
+
+    protected void rewriteSqlCompat() throws CompilationException {
+        boolean sqlCompatMode = metadataProvider.getBooleanProperty(SQL_COMPAT_OPTION, SQL_COMPAT_OPTION_DEFAULT);
+        if (!sqlCompatMode) {
+            return;
+        }
+        SqlCompatRewriteVisitor visitor = new SqlCompatRewriteVisitor(context);
+        rewriteTopExpr(visitor, null);
     }
 
     protected void resolveFunctionCalls() throws CompilationException {
@@ -329,6 +352,12 @@ public class SqlppQueryRewriter implements IQueryRewriter {
                 // loop until no more changes
             }
         }
+    }
+
+    protected void rewriteSelectExcludeSugar() throws CompilationException {
+        SelectExcludeRewriteSugarVisitor selectExcludeRewriteSugarVisitor =
+                new SelectExcludeRewriteSugarVisitor(context);
+        rewriteTopExpr(selectExcludeRewriteSugarVisitor, null);
     }
 
     private <R, T> R rewriteTopExpr(ILangVisitor<R, T> visitor, T arg) throws CompilationException {

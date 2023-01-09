@@ -138,9 +138,12 @@ public class RemoveRedundantVariablesRule implements IAlgebraicRewriteRule {
                 if (expr.getExpressionTag() != LogicalExpressionTag.VARIABLE) {
                     continue;
                 }
-                VariableReferenceExpression rhsVarRefExpr = (VariableReferenceExpression) expr;
-                // Update equivalence class map.
                 LogicalVariable lhs = assignOp.getVariables().get(i);
+                if (context.shouldNotBeInlined(lhs)) {
+                    continue;
+                }
+                // Update equivalence class map.
+                VariableReferenceExpression rhsVarRefExpr = (VariableReferenceExpression) expr;
                 LogicalVariable rhs = rhsVarRefExpr.getVariableReference();
                 updateEquivalenceClassMap(lhs, rhs);
             }

@@ -18,6 +18,8 @@
  */
 package org.apache.asterix.replication.messaging;
 
+import static org.apache.hyracks.storage.am.lsm.common.impls.AbstractLSMIndexFileManager.UNINITIALIZED_COMPONENT_SEQ;
+
 import java.io.DataInput;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -37,6 +39,8 @@ import org.apache.asterix.common.utils.StorageConstants;
 import org.apache.asterix.replication.api.IReplicaTask;
 import org.apache.asterix.replication.api.IReplicationWorker;
 import org.apache.asterix.replication.management.NetworkingUtil;
+import org.apache.asterix.transaction.management.resource.PersistentLocalResourceRepository;
+import org.apache.commons.io.FileUtils;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.io.FileReference;
 import org.apache.hyracks.api.io.IIOManager;
@@ -53,26 +57,33 @@ public class ReplicateFileTask implements IReplicaTask {
     private final String file;
     private final long size;
     private final boolean indexMetadata;
+    private final String masterNodeId;
 
-    public ReplicateFileTask(String file, long size, boolean indexMetadata) {
+    public ReplicateFileTask(String file, long size, boolean indexMetadata, String masterNodeId) {
         this.file = file;
         this.size = size;
         this.indexMetadata = indexMetadata;
+        this.masterNodeId = masterNodeId;
     }
 
     @Override
     public void perform(INcApplicationContext appCtx, IReplicationWorker worker) {
         try {
-            LOGGER.info("attempting to replicate {}", this);
+            LOGGER.debug("attempting to receive file {} from master", this);
             final IIOManager ioManager = appCtx.getIoManager();
             // resolve path
             final FileReference localPath = ioManager.resolve(file);
             final Path resourceDir = Files.createDirectories(localPath.getFile().getParentFile().toPath());
+            if (indexMetadata) {
+                // ensure clean index directory
+                FileUtils.cleanDirectory(resourceDir.toFile());
+                ((PersistentLocalResourceRepository) appCtx.getLocalResourceRepository())
+                        .invalidateResource(ResourceReference.of(file).getRelativePath().toString());
+            }
             // create mask
             final Path maskPath = Paths.get(resourceDir.toString(),
                     StorageConstants.MASK_FILE_PREFIX + localPath.getFile().getName());
             Files.createFile(maskPath);
-
             // receive actual file
             final Path filePath = Paths.get(resourceDir.toString(), localPath.getFile().getName());
             Files.createFile(filePath);
@@ -87,7 +98,7 @@ public class ReplicateFileTask implements IReplicaTask {
             }
             //delete mask
             Files.delete(maskPath);
-            LOGGER.info(() -> "Replicated file: " + localPath);
+            LOGGER.debug("received file {} from master", localPath);
             ReplicationProtocol.sendAck(worker.getChannel(), worker.getReusableBuffer());
         } catch (IOException e) {
             throw new ReplicationException(e);
@@ -100,8 +111,8 @@ public class ReplicateFileTask implements IReplicaTask {
         final IIndexCheckpointManager indexCheckpointManager = checkpointManagerProvider.get(indexRef);
         final long currentLSN = appCtx.getTransactionSubsystem().getLogManager().getAppendLSN();
         indexCheckpointManager.delete();
-        indexCheckpointManager.init(Long.MIN_VALUE, currentLSN,
-                LSMComponentId.EMPTY_INDEX_LAST_COMPONENT_ID.getMaxId());
+        indexCheckpointManager.init(UNINITIALIZED_COMPONENT_SEQ, currentLSN,
+                LSMComponentId.EMPTY_INDEX_LAST_COMPONENT_ID.getMaxId(), masterNodeId);
         LOGGER.info(() -> "Checkpoint index: " + indexRef);
     }
 
@@ -117,6 +128,11 @@ public class ReplicateFileTask implements IReplicaTask {
             dos.writeUTF(file);
             dos.writeLong(size);
             dos.writeBoolean(indexMetadata);
+            boolean hasMaster = masterNodeId != null;
+            dos.writeBoolean(hasMaster);
+            if (hasMaster) {
+                dos.writeUTF(masterNodeId);
+            }
         } catch (IOException e) {
             throw HyracksDataException.create(e);
         }
@@ -126,7 +142,9 @@ public class ReplicateFileTask implements IReplicaTask {
         final String s = input.readUTF();
         final long i = input.readLong();
         final boolean isMetadata = input.readBoolean();
-        return new ReplicateFileTask(s, i, isMetadata);
+        final boolean hasMaster = input.readBoolean();
+        final String masterNodeId = hasMaster ? input.readUTF() : null;
+        return new ReplicateFileTask(s, i, isMetadata, masterNodeId);
     }
 
     @Override

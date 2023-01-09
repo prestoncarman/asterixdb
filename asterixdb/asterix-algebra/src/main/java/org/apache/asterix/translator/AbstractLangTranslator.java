@@ -40,6 +40,8 @@ import org.apache.asterix.common.functions.FunctionConstants;
 import org.apache.asterix.common.functions.FunctionSignature;
 import org.apache.asterix.common.metadata.DataverseName;
 import org.apache.asterix.lang.common.base.Statement;
+import org.apache.asterix.lang.common.statement.AnalyzeDropStatement;
+import org.apache.asterix.lang.common.statement.AnalyzeStatement;
 import org.apache.asterix.lang.common.statement.CreateAdapterStatement;
 import org.apache.asterix.lang.common.statement.CreateDataverseStatement;
 import org.apache.asterix.lang.common.statement.CreateFeedStatement;
@@ -369,6 +371,27 @@ public abstract class AbstractLangTranslator {
                 if (invalidOperation) {
                     message = String.format(BAD_DATAVERSE_OBJECT_DDL_MESSAGE, "create", "ingestion policy",
                             dataverseName);
+                }
+                break;
+
+            case ANALYZE:
+                AnalyzeStatement analyzeStmt = (AnalyzeStatement) stmt;
+                if (analyzeStmt.getDataverseName() != null) {
+                    dataverseName = analyzeStmt.getDataverseName();
+                }
+                invalidOperation = isMetadataDataverse(dataverseName);
+                if (invalidOperation) {
+                    message = String.format(BAD_DATAVERSE_OBJECT_DDL_MESSAGE, "analyze", dataset(), dataverseName);
+                }
+                break;
+            case ANALYZE_DROP:
+                AnalyzeDropStatement analyzeDropStmt = (AnalyzeDropStatement) stmt;
+                if (analyzeDropStmt.getDataverseName() != null) {
+                    dataverseName = analyzeDropStmt.getDataverseName();
+                }
+                invalidOperation = isMetadataDataverse(dataverseName);
+                if (invalidOperation) {
+                    message = String.format(BAD_DATAVERSE_OBJECT_DDL_MESSAGE, "analyze drop", dataset(), dataverseName);
                 }
                 break;
         }

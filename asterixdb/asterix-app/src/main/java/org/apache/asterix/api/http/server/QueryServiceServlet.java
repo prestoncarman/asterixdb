@@ -46,7 +46,6 @@ import org.apache.asterix.app.result.fields.ParseOnlyResultPrinter;
 import org.apache.asterix.app.result.fields.PlansPrinter;
 import org.apache.asterix.app.result.fields.ProfilePrinter;
 import org.apache.asterix.app.result.fields.RequestIdPrinter;
-import org.apache.asterix.app.result.fields.SignaturePrinter;
 import org.apache.asterix.app.result.fields.StatusPrinter;
 import org.apache.asterix.app.result.fields.TypePrinter;
 import org.apache.asterix.app.result.fields.WarningsPrinter;
@@ -63,6 +62,7 @@ import org.apache.asterix.common.exceptions.CompilationException;
 import org.apache.asterix.common.exceptions.ErrorCode;
 import org.apache.asterix.common.exceptions.RuntimeDataException;
 import org.apache.asterix.compiler.provider.ILangCompilationProvider;
+import org.apache.asterix.hyracks.bootstrap.ApplicationConfigurator;
 import org.apache.asterix.lang.common.base.IParser;
 import org.apache.asterix.lang.common.base.IParserFactory;
 import org.apache.asterix.lang.common.base.Statement;
@@ -145,6 +145,10 @@ public class QueryServiceServlet extends AbstractQueryApiServlet {
             response.setHeader("Access-Control-Allow-Origin", request.getHeader("Origin"));
         }
         response.setHeader("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+        String server = getServerHeaderValue();
+        if (server != null) {
+            HttpUtil.setServerHeader(response, server);
+        }
         response.setStatus(HttpResponseStatus.OK);
     }
 
@@ -292,7 +296,7 @@ public class QueryServiceServlet extends AbstractQueryApiServlet {
                 responsePrinter.addResultPrinter(new ParseOnlyResultPrinter(parseOnlyResult));
             } else {
                 Map<String, byte[]> statementParams = org.apache.asterix.app.translator.RequestParameters
-                        .serializeParameterValues(param.getStatementParams());
+                        .serializeParameterValues(param.getStatementParams(), sessionOutput.config().fmt());
                 setAccessControlHeaders(request, response);
                 stats.setProfileType(param.getProfileType());
                 IStatementExecutor.StatementProperties statementProperties =
@@ -330,9 +334,6 @@ public class QueryServiceServlet extends AbstractQueryApiServlet {
         if (param.getClientContextID() != null && !param.getClientContextID().isEmpty()) {
             responsePrinter.addHeaderPrinter(new ClientContextIdPrinter(param.getClientContextID()));
         }
-        if (param.isSignature() && delivery != ResultDelivery.ASYNC && !param.isParseOnly()) {
-            responsePrinter.addHeaderPrinter(SignaturePrinter.INSTANCE);
-        }
         if (sessionOutput.config().fmt() == SessionConfig.OutputFormat.ADM
                 || sessionOutput.config().fmt() == SessionConfig.OutputFormat.CSV) {
             responsePrinter.addHeaderPrinter(new TypePrinter(sessionOutput.config()));
@@ -356,9 +357,9 @@ public class QueryServiceServlet extends AbstractQueryApiServlet {
             // in case of ASYNC delivery, the status is printed by query translator
             responsePrinter.addFooterPrinter(new StatusPrinter(executionState.getResultStatus()));
         }
-        final ResponseMetrics metrics =
-                ResponseMetrics.of(System.nanoTime() - elapsedStart, executionState.duration(), stats.getCount(),
-                        stats.getSize(), stats.getProcessedObjects(), errorCount, stats.getTotalWarningsCount());
+        final ResponseMetrics metrics = ResponseMetrics.of(System.nanoTime() - elapsedStart, executionState.duration(),
+                stats.getCount(), stats.getSize(), stats.getProcessedObjects(), errorCount,
+                stats.getTotalWarningsCount(), stats.getCompileTime());
         responsePrinter.addFooterPrinter(new MetricsPrinter(metrics, resultCharset));
         if (isPrintingProfile(stats)) {
             responsePrinter.addFooterPrinter(new ProfilePrinter(stats.getJobProfile()));
@@ -479,11 +480,14 @@ public class QueryServiceServlet extends AbstractQueryApiServlet {
         String handleUrl = getHandleUrl(param.getHost(), param.getPath(), delivery);
         sessionOutput.setHandleAppender(ResultUtil.createResultHandleAppender(handleUrl));
         SessionConfig sessionConfig = sessionOutput.config();
+        SessionConfig.ClientType clientType = param.getClientType();
         SessionConfig.OutputFormat format = param.getFormat();
         SessionConfig.PlanFormat planFormat = param.getPlanFormat();
+        sessionConfig.setClientType(clientType);
         sessionConfig.setFmt(format);
         sessionConfig.setPlanFormat(planFormat);
         sessionConfig.setMaxWarnings(param.getMaxWarnings());
+        sessionConfig.setExecuteQuery(!param.isCompileOnly());
         sessionConfig.set(SessionConfig.FORMAT_WRAPPER_ARRAY, true);
         sessionConfig.set(SessionConfig.OOB_EXPR_TREE, param.isExpressionTree());
         sessionConfig.set(SessionConfig.OOB_REWRITTEN_EXPR_TREE, param.isRewrittenExpressionTree());
@@ -492,7 +496,8 @@ public class QueryServiceServlet extends AbstractQueryApiServlet {
         sessionConfig.set(SessionConfig.OOB_HYRACKS_JOB, param.isJob());
         sessionConfig.set(SessionConfig.FORMAT_INDENT_JSON, param.isPretty());
         sessionConfig.set(SessionConfig.FORMAT_QUOTE_RECORD,
-                format != SessionConfig.OutputFormat.CLEAN_JSON && format != SessionConfig.OutputFormat.LOSSLESS_JSON);
+                format != SessionConfig.OutputFormat.CLEAN_JSON && format != SessionConfig.OutputFormat.LOSSLESS_JSON
+                        && format != SessionConfig.OutputFormat.LOSSLESS_ADM_JSON);
         sessionConfig.set(SessionConfig.FORMAT_CSV_HEADER, param.isCSVWithHeader());
     }
 
@@ -510,12 +515,32 @@ public class QueryServiceServlet extends AbstractQueryApiServlet {
             IRequestReference requestReference, String statementsText, IResultSet resultSet,
             ResultProperties resultProperties, Stats stats, IStatementExecutor.StatementProperties statementProperties,
             Map<String, String> optionalParameters, Map<String, IAObject> stmtParams, int stmtCategoryRestriction) {
-        return new RequestParameters(requestReference, statementsText, resultSet, resultProperties, stats,
-                statementProperties, null, param.getClientContextID(), optionalParameters, stmtParams,
-                param.isMultiStatement(), stmtCategoryRestriction);
+        RequestParameters requestParameters = new RequestParameters(requestReference, statementsText, resultSet,
+                resultProperties, stats, statementProperties, null, param.getClientContextID(), param.getDataverse(),
+                optionalParameters, stmtParams, param.isMultiStatement(), stmtCategoryRestriction);
+        requestParameters.setPrintSignature(param.isSignature());
+        requestParameters.setSQLCompatMode(param.isSQLCompatMode());
+        return requestParameters;
     }
 
     protected static boolean isPrintingProfile(IStatementExecutor.Stats stats) {
         return stats.getProfileType() == Stats.ProfileType.FULL && stats.getJobProfile() != null;
+    }
+
+    protected final String getServerHeaderValue() {
+        String name = getApplicationName();
+        if (name == null) {
+            return null;
+        }
+        String version = getApplicationVersion();
+        return version != null ? name + "/" + version : name;
+    }
+
+    protected String getApplicationName() {
+        return ApplicationConfigurator.APPLICATION_NAME;
+    }
+
+    protected String getApplicationVersion() {
+        return ApplicationConfigurator.getApplicationVersion(appCtx.getBuildProperties());
     }
 }

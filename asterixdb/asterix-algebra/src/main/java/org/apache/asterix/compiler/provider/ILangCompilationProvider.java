@@ -18,6 +18,8 @@
  */
 package org.apache.asterix.compiler.provider;
 
+import java.util.Set;
+
 import org.apache.asterix.algebra.base.ILangExpressionToPlanTranslatorFactory;
 import org.apache.asterix.algebra.base.ILangExtension;
 import org.apache.asterix.lang.common.base.IAstPrintVisitorFactory;
@@ -54,4 +56,9 @@ public interface ILangCompilationProvider {
      * @return the rule set factory of a language implementation
      */
     IRuleSetFactory getRuleSetFactory();
+
+    /**
+     * @return all configurable parameters of a language implementation.
+     */
+    Set<String> getCompilerOptions();
 }

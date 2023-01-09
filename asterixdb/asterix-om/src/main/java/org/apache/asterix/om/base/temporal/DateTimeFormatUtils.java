@@ -37,13 +37,14 @@ import org.apache.hyracks.api.exceptions.HyracksDataException;
  * <p/>
  * - <b>Y</b>: a digit for the year field. At most 4 year format characters are allowed for a valid format string.<br/>
  * - <b>M</b>: a digit or character for the month field. At most 3 month format characters are allowed for a valid format string. When three month format characters are used, the shorten month names (like JAN, FEB etc.) are expected in the string to be parsed. Otherwise digits are expected.<br/>
+ * - <b>Q</b>: a digit for the quarter field (1-4). At most 2 format characters are allowed.<br/>
  * - <b>D</b>: a digit for the day field. At most 2 day format characters are allowed.<br/>
  * - <b>h</b>: a digit for the hour field. At most 2 hour format characters are allowed.<br/>
  * - <b>m</b>: a digit for the minute field. At most 2 minute format characters are allowed.<br/>
  * - <b>s</b>: a digit for the second field. At most 2 second format characters are allowed.<br/>
  * - <b>n</b>: a digit for the millisecond field. At most 3 millisecond format characters are allowed.<br/>
  * - <b>a</b>: the AM/PM field. At most 1 am/pm format character is allowed, and it matches with AM and PM case-insensitively. <br/>
- * - <b>z</b>: the timezone field. At most 1 timezone format characters are allowed. The valid timezone string matching with this format character include:<br/>
+ * - <b>z</b>: (parse only) the timezone field. At most 1 timezone format characters are allowed. The valid timezone string matching with this format character include:<br/>
  * -- <b>Z</b>: a single upper-case character representing the UTC timezone;<br/>
  * -- <b>[UTC|GMT]+xx[:]xx</b>: representing a timezone by providing the actual offset time from the UTC time;<br/>
  * -- A string representation of a timezone like PST, Asia/Shanghai. The names of the timezones are following the Zoneinfo database provided by the JDK library. See {@link TimeZone} for more details on this.<br/>
@@ -64,6 +65,7 @@ public class DateTimeFormatUtils {
     private static final char MINUTE_CHAR = 'm';
     private static final char SECOND_CHAR = 's';
     private static final char MILLISECOND_CHAR = 'n';
+    private static final char MILLISECOND_CHAR_ALT = 'S';
     private static final char AMPM_CHAR = 'a';
     private static final char TIMEZONE_CHAR = 'z';
 
@@ -76,6 +78,7 @@ public class DateTimeFormatUtils {
 
     private enum DateTimeProcessState {
         YEAR,
+        QUARTER,
         MONTH,
         DAY,
         WEEKDAY,
@@ -91,23 +94,37 @@ public class DateTimeFormatUtils {
 
     // For date
     private static final char YEAR_CHAR = 'Y';
+    private static final char QUARTER_CHAR = 'Q';
     private static final char MONTH_CHAR = 'M';
     private static final char DAY_CHAR = 'D';
-    private static final char WEEKDAY_CHAR = 'W';
+    private static final char WEEKDAY_CHAR = 'E';
 
     private static final int MAX_YEAR_CHARS = 4;
-    private static final int MAX_MONTH_CHARS = 3;
-    private static final int MAX_DAY_CHARS = 2;
-    private static final int MAX_WEEKDAY_CHAR = 1;
+    private static final int MAX_QUARTER_CHARS = 2;
+    private static final int MAX_MONTH_CHARS = 4;
+    private static final int MAX_DAY_CHARS_PARSE = 2;
+    private static final int MAX_DAY_CHARS_PRINT = 3; // + DDD = Day of Year
+    private static final int MIN_WEEKDAY_CHAR = 3;
+    private static final int MAX_WEEKDAY_CHAR = 4;
 
     private static final byte[][] MONTH_NAMES = new byte[][] { "jan".getBytes(ENCODING), "feb".getBytes(ENCODING),
             "mar".getBytes(ENCODING), "apr".getBytes(ENCODING), "may".getBytes(ENCODING), "jun".getBytes(ENCODING),
             "jul".getBytes(ENCODING), "aug".getBytes(ENCODING), "sep".getBytes(ENCODING), "oct".getBytes(ENCODING),
             "nov".getBytes(ENCODING), "dec".getBytes(ENCODING) };
 
-    private static final byte[][] WEEKDAY_FULL_NAMES = new byte[][] { "monday".getBytes(ENCODING),
-            "tuesday".getBytes(ENCODING), "wednesday".getBytes(ENCODING), "thursday".getBytes(ENCODING),
-            "friday".getBytes(ENCODING), "saturday".getBytes(ENCODING), "sunday".getBytes(ENCODING) };
+    private static final byte[][] MONTH_FULL_NAMES =
+            new byte[][] { "january".getBytes(ENCODING), "february".getBytes(ENCODING), "march".getBytes(ENCODING),
+                    "april".getBytes(ENCODING), "may".getBytes(ENCODING), "june".getBytes(ENCODING),
+                    "july".getBytes(ENCODING), "august".getBytes(ENCODING), "september".getBytes(ENCODING),
+                    "october".getBytes(ENCODING), "november".getBytes(ENCODING), "december".getBytes(ENCODING) };
+
+    private static final byte[][] WEEKDAY_NAMES = new byte[][] { "sun".getBytes(ENCODING), "mon".getBytes(ENCODING),
+            "tue".getBytes(ENCODING), "wed".getBytes(ENCODING), "thu".getBytes(ENCODING), "fri".getBytes(ENCODING),
+            "sat".getBytes(ENCODING) };
+
+    private static final byte[][] WEEKDAY_FULL_NAMES = new byte[][] { "sunday".getBytes(ENCODING),
+            "monday".getBytes(ENCODING), "tuesday".getBytes(ENCODING), "wednesday".getBytes(ENCODING),
+            "thursday".getBytes(ENCODING), "friday".getBytes(ENCODING), "saturday".getBytes(ENCODING) };
 
     private static final byte[] UTC_BYTEARRAY = "utc".getBytes(ENCODING);
     private static final byte[] GMT_BYTEARRAY = "gmt".getBytes(ENCODING);
@@ -175,7 +192,7 @@ public class DateTimeFormatUtils {
     }
 
     private int parseFormatField(byte[] format, int formatStart, int formatLength, int formatPointer, char formatChar,
-            int maxAllowedFormatCharCopied) {
+            int maxAllowedFormatCharCopied) throws AsterixTemporalTypeParseException {
 
         int formatCharCopies = 0;
 
@@ -186,7 +203,7 @@ public class DateTimeFormatUtils {
             formatCharCopies++;
         }
         if (formatCharCopies > maxAllowedFormatCharCopied) {
-            throw new IllegalStateException(
+            throw new AsterixTemporalTypeParseException(
                     "The format string for " + formatChar + " is too long: expected no more than "
                             + maxAllowedFormatCharCopied + " but got " + formatCharCopies);
         }
@@ -200,7 +217,7 @@ public class DateTimeFormatUtils {
         DATETIME
     }
 
-    private boolean byteArrayEqualToString(byte[] barray, int start, int length, byte[] str) {
+    public static boolean byteArrayEqualToString(byte[] barray, int start, int length, byte[] str) {
         if (length != str.length) {
             return false;
         } else {
@@ -208,7 +225,7 @@ public class DateTimeFormatUtils {
         }
     }
 
-    private boolean byteArrayBeingWithString(byte[] barray, int start, int length, byte[] str) {
+    public static boolean byteArrayBeingWithString(byte[] barray, int start, int length, byte[] str) {
         boolean beginWith = true;
         if (length <= str.length) {
             for (int i = 0; i < length; i++) {
@@ -223,18 +240,31 @@ public class DateTimeFormatUtils {
         return beginWith;
     }
 
-    private int monthIDSearch(byte[] barray, int start, int length) {
-        for (int i = 0; i < MONTH_NAMES.length; i++) {
-            if (byteArrayEqualToString(barray, start, length, MONTH_NAMES[i])) {
+    private int monthIDSearch(byte[] barray, int start, int length, boolean useShortNames) {
+        byte[][] monthNames = useShortNames ? MONTH_NAMES : MONTH_FULL_NAMES;
+        for (int i = 0; i < monthNames.length; i++) {
+            if (byteArrayEqualToString(barray, start, length, monthNames[i])) {
                 return i;
             }
         }
         return -1;
     }
 
-    private int weekdayIDSearch(byte[] barray, int start, int length) {
-        for (int i = 0; i < WEEKDAY_FULL_NAMES.length; i++) {
-            if (byteArrayBeingWithString(barray, start, length, WEEKDAY_FULL_NAMES[i])) {
+    @Deprecated
+    public static int weekdayIDSearchLax(byte[] barray, int start, int length, boolean useShortNames) {
+        byte[][] weekdayNames = useShortNames ? WEEKDAY_NAMES : WEEKDAY_FULL_NAMES;
+        for (int i = 0; i < weekdayNames.length; i++) {
+            if (byteArrayBeingWithString(barray, start, length, weekdayNames[i])) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    public static int weekdayIDSearch(byte[] barray, int start, int length, boolean useShortNames) {
+        byte[][] weekdayNames = useShortNames ? WEEKDAY_NAMES : WEEKDAY_FULL_NAMES;
+        for (int i = 0; i < weekdayNames.length; i++) {
+            if (byteArrayEqualToString(barray, start, length, weekdayNames[i])) {
                 return i;
             }
         }
@@ -257,14 +287,14 @@ public class DateTimeFormatUtils {
         return -1;
     }
 
-    private byte toLower(byte b) {
+    private static byte toLower(byte b) {
         if (b >= 'A' && b <= 'Z') {
             return (byte) (b - TO_LOWER_OFFSET);
         }
         return b;
     }
 
-    private byte toUpper(byte b) {
+    private static byte toUpper(byte b) {
         if (b >= 'a' && b <= 'z') {
             return (byte) (b + TO_LOWER_OFFSET);
         }
@@ -275,13 +305,14 @@ public class DateTimeFormatUtils {
             int formatStart, int formatLength, DateTimeParseMode parseMode, boolean raiseParseDataError)
             throws AsterixTemporalTypeParseException {
         return parseDateTime(outChronon, null, null, null, data, dataStart, dataLength, format, formatStart,
-                formatLength, parseMode, raiseParseDataError, '\0');
+                formatLength, parseMode, raiseParseDataError, '\0', false);
     }
 
     public boolean parseDateTime(AMutableInt64 outChronon, Mutable<Boolean> outTimeZoneExists,
             AMutableInt32 outTimeZone, Mutable<Character> dateTimeSeparatorOut, byte[] data, int dataStart,
             int dataLength, byte[] format, int formatStart, int formatLength, DateTimeParseMode parseMode,
-            boolean raiseParseDataError, char altSeparatorChar) throws AsterixTemporalTypeParseException {
+            boolean raiseParseDataError, char altSeparatorChar, boolean adjustChrononByTimezone)
+            throws AsterixTemporalTypeParseException {
         int year = 0, month = 0, day = 0, hour = 0, min = 0, sec = 0, ms = 0, timezone = 0;
         boolean timezoneExists = false;
 
@@ -310,6 +341,13 @@ public class DateTimeFormatUtils {
                     formatPointer += pointerMove;
                     formatCharCopies += pointerMove;
                     break;
+                case QUARTER_CHAR:
+                    processState = DateTimeProcessState.QUARTER;
+                    pointerMove = parseFormatField(format, formatStart, formatLength, formatPointer, QUARTER_CHAR,
+                            MAX_QUARTER_CHARS);
+                    formatPointer += pointerMove;
+                    formatCharCopies += pointerMove;
+                    break;
                 case MONTH_CHAR:
                     processState = DateTimeProcessState.MONTH;
                     pointerMove = parseFormatField(format, formatStart, formatLength, formatPointer, MONTH_CHAR,
@@ -319,8 +357,8 @@ public class DateTimeFormatUtils {
                     break;
                 case DAY_CHAR:
                     processState = DateTimeProcessState.DAY;
-                    pointerMove =
-                            parseFormatField(format, formatStart, formatLength, formatPointer, DAY_CHAR, MAX_DAY_CHARS);
+                    pointerMove = parseFormatField(format, formatStart, formatLength, formatPointer, DAY_CHAR,
+                            MAX_DAY_CHARS_PARSE);
                     formatPointer += pointerMove;
                     formatCharCopies += pointerMove;
                     break;
@@ -328,6 +366,11 @@ public class DateTimeFormatUtils {
                     processState = DateTimeProcessState.WEEKDAY;
                     pointerMove = parseFormatField(format, formatStart, formatLength, formatPointer, WEEKDAY_CHAR,
                             MAX_WEEKDAY_CHAR);
+                    if (pointerMove < MIN_WEEKDAY_CHAR) {
+                        throw new AsterixTemporalTypeParseException(
+                                String.format("Expected at least %d '%s' characters but got %d", MIN_WEEKDAY_CHAR,
+                                        WEEKDAY_CHAR, pointerMove));
+                    }
                     formatPointer += pointerMove;
                     formatCharCopies += pointerMove;
                     break;
@@ -359,7 +402,13 @@ public class DateTimeFormatUtils {
                     formatPointer += pointerMove;
                     formatCharCopies += pointerMove;
                     break;
-
+                case MILLISECOND_CHAR_ALT:
+                    processState = DateTimeProcessState.MILLISECOND;
+                    pointerMove = parseFormatField(format, formatStart, formatLength, formatPointer,
+                            MILLISECOND_CHAR_ALT, MAX_MILLISECOND_CHARS);
+                    formatPointer += pointerMove;
+                    formatCharCopies += pointerMove;
+                    break;
                 case AMPM_CHAR:
                     processState = DateTimeProcessState.AMPM;
                     pointerMove = parseFormatField(format, formatStart, formatLength, formatPointer, AMPM_CHAR,
@@ -403,13 +452,14 @@ public class DateTimeFormatUtils {
 
                 default:
                     throw new AsterixTemporalTypeParseException("Unexpected date format string at "
-                            + (formatStart + formatPointer) + ": " + format[formatStart + formatPointer]);
+                            + (formatStart + formatPointer) + ": " + (char) format[formatStart + formatPointer]);
             }
 
             // check whether the process state is valid for the parse mode
 
             switch (processState) {
                 case YEAR:
+                case QUARTER:
                 case MONTH:
                 case DAY:
                     if (parseMode == DateTimeParseMode.TIME_ONLY) {
@@ -441,7 +491,6 @@ public class DateTimeFormatUtils {
                 case DAY:
                     int maxAllowedFormatCharCopies = (processState == DateTimeProcessState.YEAR) ? 4 : 2;
                     int parsedValue = 0;
-
                     int processedFieldsCount = 0;
                     for (int i = 0; i < formatCharCopies; i++) {
                         if (data[dataStart + dataStringPointer] < '0' || data[dataStart + dataStringPointer] > '9') {
@@ -469,17 +518,88 @@ public class DateTimeFormatUtils {
                         if (negativeYear) {
                             year *= -1;
                         }
+                        // Allow month and day to be missing if we parsed year
+                        if (month == 0) {
+                            month = GregorianCalendarSystem.FIELD_MINS[GregorianCalendarSystem.Fields.MONTH.ordinal()];
+                        }
+                        if (day == 0) {
+                            day = GregorianCalendarSystem.FIELD_MINS[GregorianCalendarSystem.Fields.DAY.ordinal()];
+                        }
                     } else {
+                        if (parsedValue == 0) {
+                            if (raiseParseDataError) {
+                                throw new AsterixTemporalTypeParseException(
+                                        "Incorrect day value at " + (dataStart + dataStringPointer));
+                            } else {
+                                return false;
+                            }
+                        }
                         day = parsedValue;
                     }
                     break;
+                case QUARTER:
+                    // the month is in the number format
+                    parsedValue = 0;
+                    int processedQuarterFieldsCount = 0;
+                    for (int i = 0; i < formatCharCopies; i++) {
+                        if (data[dataStart + dataStringPointer] < '0' || data[dataStart + dataStringPointer] > '9') {
+                            if (raiseParseDataError) {
+                                throw new AsterixTemporalTypeParseException("Unexpected char for quarter field at "
+                                        + (dataStart + dataStringPointer) + ": " + data[dataStart + dataStringPointer]);
+                            } else {
+                                return false;
+                            }
+                        }
+                        parsedValue = parsedValue * 10 + (data[dataStart + dataStringPointer] - '0');
+                        dataStringPointer++;
+                        if (processedQuarterFieldsCount++ > 2) {
+                            if (raiseParseDataError) {
+                                throw new AsterixTemporalTypeParseException("Unexpected char for quarter field at "
+                                        + (dataStart + dataStringPointer) + ": " + data[dataStart + dataStringPointer]);
+                            } else {
+                                return false;
+                            }
+                        }
+                    }
+                    // if there are more than 2 digits for the quarter string
+                    while (processedQuarterFieldsCount < 2 && dataStringPointer < dataLength
+                            && data[dataStart + dataStringPointer] >= '0'
+                            && data[dataStart + dataStringPointer] <= '9') {
+                        parsedValue = parsedValue * 10 + (data[dataStart + dataStringPointer] - '0');
+                        dataStringPointer++;
+                        processedQuarterFieldsCount++;
+                    }
+                    if (parsedValue == 0) {
+                        if (raiseParseDataError) {
+                            throw new AsterixTemporalTypeParseException(
+                                    "Incorrect quarter value at " + (dataStart + dataStringPointer));
+                        } else {
+                            return false;
+                        }
+                    }
+                    month = (parsedValue - 1) * 3 + 1;
+                    // Allow day to be missing if we parsed quarter
+                    if (day == 0) {
+                        day = GregorianCalendarSystem.FIELD_MINS[GregorianCalendarSystem.Fields.DAY.ordinal()];
+                    }
+                    break;
                 case MONTH:
-                    if (formatCharCopies == 3) {
+                    if (formatCharCopies >= 3) {
                         // the month is in the text format
-                        int monthNameMatch = monthIDSearch(data, dataStart + dataStringPointer, 3);
+                        int processedMonthFieldsCount = 0;
+                        while (((dataStringPointer + processedMonthFieldsCount < dataLength)) && ((data[dataStart
+                                + dataStringPointer + processedMonthFieldsCount] >= 'a'
+                                && data[dataStart + dataStringPointer + processedMonthFieldsCount] <= 'z')
+                                || (data[dataStart + dataStringPointer + processedMonthFieldsCount] >= 'A'
+                                        && data[dataStart + dataStringPointer + processedMonthFieldsCount] <= 'Z'))) {
+                            processedMonthFieldsCount++;
+                        }
+                        boolean useShortNames = formatCharCopies == 3;
+                        int monthNameMatch = monthIDSearch(data, dataStart + dataStringPointer,
+                                processedMonthFieldsCount, useShortNames);
                         if (monthNameMatch >= 0) {
                             month = monthNameMatch + 1;
-                            dataStringPointer += 3;
+                            dataStringPointer += processedMonthFieldsCount;
                         } else {
                             if (raiseParseDataError) {
                                 throw new AsterixTemporalTypeParseException(
@@ -491,6 +611,8 @@ public class DateTimeFormatUtils {
                             }
                         }
                     } else {
+                        // the month is in the number format
+                        parsedValue = 0;
                         int processedMonthFieldsCount = 0;
                         for (int i = 0; i < formatCharCopies; i++) {
                             if (data[dataStart + dataStringPointer] < '0'
@@ -503,7 +625,7 @@ public class DateTimeFormatUtils {
                                     return false;
                                 }
                             }
-                            month = month * 10 + (data[dataStart + dataStringPointer] - '0');
+                            parsedValue = parsedValue * 10 + (data[dataStart + dataStringPointer] - '0');
                             dataStringPointer++;
                             if (processedMonthFieldsCount++ > 2) {
                                 if (raiseParseDataError) {
@@ -515,26 +637,43 @@ public class DateTimeFormatUtils {
                                 }
                             }
                         }
-                        // if there are more than 2 digits for the day string
+                        // if there are more than 2 digits for the month string
                         while (processedMonthFieldsCount < 2 && dataStringPointer < dataLength
                                 && data[dataStart + dataStringPointer] >= '0'
                                 && data[dataStart + dataStringPointer] <= '9') {
-                            month = month * 10 + (data[dataStart + dataStringPointer] - '0');
+                            parsedValue = parsedValue * 10 + (data[dataStart + dataStringPointer] - '0');
                             dataStringPointer++;
                             processedMonthFieldsCount++;
                         }
+                        if (parsedValue == 0) {
+                            if (raiseParseDataError) {
+                                throw new AsterixTemporalTypeParseException(
+                                        "Incorrect month value at " + (dataStart + dataStringPointer));
+                            } else {
+                                return false;
+                            }
+                        }
+                        month = parsedValue;
+                    }
+                    // Allow day to be missing if we parsed month
+                    if (day == 0) {
+                        day = GregorianCalendarSystem.FIELD_MINS[GregorianCalendarSystem.Fields.DAY.ordinal()];
                     }
                     break;
                 case WEEKDAY:
                     int processedWeekdayFieldsCount = 0;
-                    while ((data[dataStart + dataStringPointer + processedWeekdayFieldsCount] >= 'a'
+                    while ((dataStringPointer + processedWeekdayFieldsCount < dataLength) && ((data[dataStart
+                            + dataStringPointer + processedWeekdayFieldsCount] >= 'a'
                             && data[dataStart + dataStringPointer + processedWeekdayFieldsCount] <= 'z')
                             || (data[dataStart + dataStringPointer + processedWeekdayFieldsCount] >= 'A'
-                                    && data[dataStart + dataStringPointer + processedWeekdayFieldsCount] <= 'Z')) {
+                                    && data[dataStart + dataStringPointer + processedWeekdayFieldsCount] <= 'Z'))) {
                         processedWeekdayFieldsCount++;
                     }
                     // match the weekday name
-                    if (weekdayIDSearch(data, dataStart + dataStringPointer, processedWeekdayFieldsCount) < 0) {
+                    boolean useShortNames = formatCharCopies == 3;
+                    int weekdayNameMatch = weekdayIDSearch(data, dataStart + dataStringPointer,
+                            processedWeekdayFieldsCount, useShortNames);
+                    if (weekdayNameMatch < 0) {
                         if (raiseParseDataError) {
                             throw new AsterixTemporalTypeParseException("Unexpected string for day-of-week: "
                                     + new String(data, dataStart + dataStringPointer,
@@ -799,8 +938,40 @@ public class DateTimeFormatUtils {
             }
         }
 
-        long chronon = parseMode == DateTimeParseMode.TIME_ONLY ? CAL.getChronon(hour, min, sec, ms, timezone)
-                : CAL.getChronon(year, month, day, hour, min, sec, ms, timezone);
+        long chronon;
+        if (parseMode == DateTimeParseMode.TIME_ONLY) {
+            int minYear = GregorianCalendarSystem.FIELD_MINS[GregorianCalendarSystem.Fields.YEAR.ordinal()];
+            int minMonth = GregorianCalendarSystem.FIELD_MINS[GregorianCalendarSystem.Fields.MONTH.ordinal()];
+            int minDay = GregorianCalendarSystem.FIELD_MINS[GregorianCalendarSystem.Fields.DAY.ordinal()];
+            if (!CAL.validate(minYear, minMonth, minDay, hour, min, sec, ms)) {
+                if (raiseParseDataError) {
+                    throw new AsterixTemporalTypeParseException("Invalid time value");
+                } else {
+                    return false;
+                }
+            }
+            chronon = CAL.getChronon(hour, min, sec, ms);
+        } else {
+            if (!CAL.validate(year, month, day, hour, min, sec, ms)) {
+                if (raiseParseDataError) {
+                    throw new AsterixTemporalTypeParseException("Invalid date/time value");
+                } else {
+                    return false;
+                }
+            }
+            chronon = CAL.getChronon(year, month, day, hour, min, sec, ms);
+        }
+
+        if (timezoneExists && adjustChrononByTimezone) {
+            if (!CAL.validateTimeZone(timezone)) {
+                if (raiseParseDataError) {
+                    throw new AsterixTemporalTypeParseException("Invalid time zone");
+                } else {
+                    return false;
+                }
+            }
+            chronon += timezone;
+        }
 
         outChronon.setValue(chronon);
         if (dateTimeSeparatorOut != null) {
@@ -815,11 +986,13 @@ public class DateTimeFormatUtils {
         return true;
     }
 
-    public void printDateTime(long chronon, int timezone, byte[] format, int formatStart, int formatLength,
-            Appendable appender, DateTimeParseMode parseMode) throws HyracksDataException {
+    public void printDateTime(long chronon, byte[] format, int formatStart, int formatLength, Appendable appender,
+            DateTimeParseMode parseMode) throws HyracksDataException {
         int year = CAL.getYear(chronon);
         int month = CAL.getMonthOfYear(chronon, year);
         int day = CAL.getDayOfMonthYear(chronon, year, month);
+        int dayOfYear = CAL.getDayOfYear(chronon, year);
+        int dayOfWeek = CAL.getDayOfWeek(chronon);
         int hour = CAL.getHourOfDay(chronon);
         int min = CAL.getMinOfHour(chronon);
         int sec = CAL.getSecOfMin(chronon);
@@ -858,6 +1031,13 @@ public class DateTimeFormatUtils {
                     formatPointer += pointerMove;
                     formatCharCopies += pointerMove;
                     break;
+                case QUARTER_CHAR:
+                    processState = DateTimeProcessState.QUARTER;
+                    pointerMove = parseFormatField(format, formatStart, formatLength, formatPointer, QUARTER_CHAR,
+                            MAX_QUARTER_CHARS);
+                    formatPointer += pointerMove;
+                    formatCharCopies += pointerMove;
+                    break;
                 case MONTH_CHAR:
                     processState = DateTimeProcessState.MONTH;
                     pointerMove = parseFormatField(format, formatStart, formatLength, formatPointer, MONTH_CHAR,
@@ -867,8 +1047,20 @@ public class DateTimeFormatUtils {
                     break;
                 case DAY_CHAR:
                     processState = DateTimeProcessState.DAY;
-                    pointerMove =
-                            parseFormatField(format, formatStart, formatLength, formatPointer, DAY_CHAR, MAX_DAY_CHARS);
+                    pointerMove = parseFormatField(format, formatStart, formatLength, formatPointer, DAY_CHAR,
+                            MAX_DAY_CHARS_PRINT);
+                    formatPointer += pointerMove;
+                    formatCharCopies += pointerMove;
+                    break;
+                case WEEKDAY_CHAR:
+                    processState = DateTimeProcessState.WEEKDAY;
+                    pointerMove = parseFormatField(format, formatStart, formatLength, formatPointer, WEEKDAY_CHAR,
+                            MAX_WEEKDAY_CHAR);
+                    if (pointerMove < MIN_WEEKDAY_CHAR) {
+                        throw new AsterixTemporalTypeParseException(
+                                String.format("Expected at least %d '%s' characters but got %d", MIN_WEEKDAY_CHAR,
+                                        WEEKDAY_CHAR, pointerMove));
+                    }
                     formatPointer += pointerMove;
                     formatCharCopies += pointerMove;
                     break;
@@ -900,7 +1092,13 @@ public class DateTimeFormatUtils {
                     formatPointer += pointerMove;
                     formatCharCopies += pointerMove;
                     break;
-
+                case MILLISECOND_CHAR_ALT:
+                    processState = DateTimeProcessState.MILLISECOND;
+                    pointerMove = parseFormatField(format, formatStart, formatLength, formatPointer,
+                            MILLISECOND_CHAR_ALT, MAX_MILLISECOND_CHARS);
+                    formatPointer += pointerMove;
+                    formatCharCopies += pointerMove;
+                    break;
                 case AMPM_CHAR:
                     processState = DateTimeProcessState.AMPM;
                     pointerMove = parseFormatField(format, formatStart, formatLength, formatPointer, AMPM_CHAR,
@@ -909,13 +1107,6 @@ public class DateTimeFormatUtils {
                     formatCharCopies += pointerMove;
                     break;
 
-                case TIMEZONE_CHAR:
-                    processState = DateTimeProcessState.TIMEZONE;
-                    pointerMove = parseFormatField(format, formatStart, formatLength, formatPointer, TIMEZONE_CHAR,
-                            MAX_TIMEZONE_CHARS);
-                    formatPointer += pointerMove;
-                    formatCharCopies += pointerMove;
-                    break;
                 case ' ':
                 case HYPHEN_CHAR:
                 case COLON_CHAR:
@@ -937,15 +1128,17 @@ public class DateTimeFormatUtils {
 
                 default:
                     throw new HyracksDataException("Unexpected format string at " + (formatStart + formatPointer) + ": "
-                            + format[formatStart + formatPointer]);
+                            + (char) (format[formatStart + formatPointer]));
             }
 
             // check whether the process state is valid for the parse mode
 
             switch (processState) {
                 case YEAR:
+                case QUARTER:
                 case MONTH:
                 case DAY:
+                case WEEKDAY:
                     if (parseMode == DateTimeParseMode.TIME_ONLY) {
                         throw new HyracksDataException("Unexpected date format string when parsing a time value");
                     }
@@ -955,7 +1148,6 @@ public class DateTimeFormatUtils {
                 case SECOND:
                 case MILLISECOND:
                 case AMPM:
-                case TIMEZONE:
                     if (parseMode == DateTimeParseMode.DATE_ONLY) {
                         throw new HyracksDataException("Unexpected time format string when parsing a date value");
                     }
@@ -971,21 +1163,25 @@ public class DateTimeFormatUtils {
                             appender.append('-');
                             year *= -1;
                         }
+                    case QUARTER:
                     case MONTH:
-                        if (processState == DateTimeProcessState.MONTH && formatCharCopies == 3) {
-                            for (byte b : MONTH_NAMES[month - 1]) {
+                        if (processState == DateTimeProcessState.MONTH && formatCharCopies >= 3) {
+                            byte[][] monthNames = formatCharCopies > 3 ? MONTH_FULL_NAMES : MONTH_NAMES;
+                            for (byte b : monthNames[month - 1]) {
                                 appender.append((char) toUpper(b));
                             }
                             break;
                         }
                     case DAY:
-                        int val = 0;
+                        int val;
                         if (processState == DateTimeProcessState.YEAR) {
                             val = year;
+                        } else if (processState == DateTimeProcessState.QUARTER) {
+                            val = ((month - 1) / 3) + 1;
                         } else if (processState == DateTimeProcessState.MONTH) {
                             val = month;
                         } else {
-                            val = day;
+                            val = formatCharCopies == 3 ? dayOfYear : day;
                         }
                         String strVal = String.valueOf(val);
                         int valFieldCount = strVal.length();
@@ -993,6 +1189,14 @@ public class DateTimeFormatUtils {
                             appender.append('0');
                         }
                         appender.append(strVal);
+                        break;
+                    case WEEKDAY:
+                        byte[][] weekdayNames = formatCharCopies == 3 ? WEEKDAY_NAMES : WEEKDAY_FULL_NAMES;
+                        byte[] weekday = weekdayNames[dayOfWeek];
+                        for (int i = 0; i < weekday.length; i++) {
+                            byte b = weekday[i];
+                            appender.append((char) (i == 0 ? toUpper(b) : b));
+                        }
                         break;
                     case HOUR:
                     case MINUTE:
@@ -1040,6 +1244,7 @@ public class DateTimeFormatUtils {
                             appender.append(strMS);
                         }
                         break;
+                    /* TODO: enable when we support "datetime with timezone" datatype
                     case TIMEZONE:
                         if (timezone == 0) {
                             appender.append('Z');
@@ -1061,6 +1266,7 @@ public class DateTimeFormatUtils {
                         }
                         appender.append(String.valueOf(timezoneField));
                         break;
+                     */
                     case AMPM:
                         if (usePM) {
                             appender.append("PM");

@@ -23,9 +23,11 @@ import java.util.HashSet;
 import java.util.List;
 
 import org.apache.asterix.common.exceptions.CompilationException;
+import org.apache.asterix.common.exceptions.ErrorCode;
 import org.apache.asterix.lang.common.base.AbstractClause;
 import org.apache.asterix.lang.common.base.Clause.ClauseType;
 import org.apache.asterix.lang.common.base.Expression;
+import org.apache.asterix.lang.common.base.IVisitorExtension;
 import org.apache.asterix.lang.common.clause.GroupbyClause;
 import org.apache.asterix.lang.common.clause.LetClause;
 import org.apache.asterix.lang.common.clause.LimitClause;
@@ -50,6 +52,7 @@ import org.apache.asterix.lang.common.statement.Query;
 import org.apache.asterix.lang.common.struct.Identifier;
 import org.apache.asterix.lang.common.struct.QuantifiedPair;
 import org.apache.asterix.lang.sqlpp.clause.AbstractBinaryCorrelateClause;
+import org.apache.asterix.lang.sqlpp.clause.AbstractBinaryCorrelateWithConditionClause;
 import org.apache.asterix.lang.sqlpp.clause.FromClause;
 import org.apache.asterix.lang.sqlpp.clause.FromTerm;
 import org.apache.asterix.lang.sqlpp.clause.HavingClause;
@@ -107,49 +110,79 @@ public class FreeVariableVisitor extends AbstractSqlppQueryExpressionVisitor<Voi
         }
 
         // Visits join/unnest/nest clauses.
-        for (AbstractBinaryCorrelateClause correlateClause : fromTerm.getCorrelateClauses()) {
-            Collection<VariableExpr> correlateFreeVars = new HashSet<>();
-            correlateClause.accept(this, correlateFreeVars);
-            if (correlateClause.getClauseType() != ClauseType.JOIN_CLAUSE) {
-                // Correlation is allowed if the clause is not a join clause,
-                // therefore we remove left-side binding variables for these cases.
-                correlateFreeVars.removeAll(bindingVariables);
-
-                // Adds binding variables.
-                bindingVariables.add(correlateClause.getRightVariable());
-                if (correlateClause.hasPositionalVariable()) {
-                    bindingVariables.add(correlateClause.getPositionalVariable());
-                }
+        Collection<VariableExpr> clauseFreeVars = null;
+        Collection<VariableExpr> conditionFreeVars = null;
+        for (AbstractBinaryCorrelateClause clause : fromTerm.getCorrelateClauses()) {
+            if (clauseFreeVars == null) {
+                clauseFreeVars = new HashSet<>();
+            } else {
+                clauseFreeVars.clear();
             }
-            freeVars.addAll(correlateFreeVars);
+            clause.getRightExpression().accept(this, clauseFreeVars);
+
+            switch (clause.getClauseType()) {
+                case UNNEST_CLAUSE:
+                    // right branch CAN be use binding variables from prior clauses
+                    // -> these binding variables are not free vars for the whole FromTerm
+                    clauseFreeVars.removeAll(bindingVariables);
+                    break;
+                case JOIN_CLAUSE:
+                case NEST_CLAUSE:
+                    // right branch CANNOT use binding variables from prior clauses, but condition expression CAN.
+                    if (conditionFreeVars == null) {
+                        conditionFreeVars = new HashSet<>();
+                    } else {
+                        conditionFreeVars.clear();
+                    }
+                    AbstractBinaryCorrelateWithConditionClause clauseWithCondition =
+                            (AbstractBinaryCorrelateWithConditionClause) clause;
+                    clauseWithCondition.getConditionExpression().accept(this, conditionFreeVars);
+                    conditionFreeVars.removeAll(bindingVariables);
+                    conditionFreeVars.remove(clause.getRightVariable());
+                    if (clause.hasPositionalVariable()) {
+                        conditionFreeVars.remove(clause.getPositionalVariable());
+                    }
+                    clauseFreeVars.addAll(conditionFreeVars);
+                    break;
+                default:
+                    throw new CompilationException(ErrorCode.COMPILATION_ILLEGAL_STATE, clause.getSourceLocation(),
+                            clause.getClauseType().toString());
+            }
+
+            // Adds binding variables.
+            bindingVariables.add(clause.getRightVariable());
+            if (clause.hasPositionalVariable()) {
+                bindingVariables.add(clause.getPositionalVariable());
+            }
+            freeVars.addAll(clauseFreeVars);
         }
         return null;
     }
 
     @Override
-    public Void visit(JoinClause joinClause, Collection<VariableExpr> freeVars) throws CompilationException {
-        visitJoinAndNest(joinClause, joinClause.getConditionExpression(), freeVars);
-        return null;
+    public Void visit(JoinClause joinClause, Collection<VariableExpr> arg) throws CompilationException {
+        // not supposed to be invoked
+        throw new CompilationException(ErrorCode.COMPILATION_ILLEGAL_STATE, joinClause.getSourceLocation(),
+                joinClause.getClauseType().toString());
     }
 
     @Override
-    public Void visit(NestClause nestClause, Collection<VariableExpr> freeVars) throws CompilationException {
-        visitJoinAndNest(nestClause, nestClause.getConditionExpression(), freeVars);
-        return null;
+    public Void visit(NestClause nestClause, Collection<VariableExpr> arg) throws CompilationException {
+        // not supposed to be invoked
+        throw new CompilationException(ErrorCode.COMPILATION_ILLEGAL_STATE, nestClause.getSourceLocation(),
+                nestClause.getClauseType().toString());
     }
 
     @Override
-    public Void visit(UnnestClause unnestClause, Collection<VariableExpr> freeVars) throws CompilationException {
-        unnestClause.getRightExpression().accept(this, freeVars);
-        return null;
+    public Void visit(UnnestClause unnestClause, Collection<VariableExpr> arg) throws CompilationException {
+        // not supposed to be invoked
+        throw new CompilationException(ErrorCode.COMPILATION_ILLEGAL_STATE, unnestClause.getSourceLocation(),
+                unnestClause.getClauseType().toString());
     }
 
     @Override
     public Void visit(Projection projection, Collection<VariableExpr> freeVars) throws CompilationException {
-        if (!projection.star()) {
-            projection.getExpression().accept(this, freeVars);
-        }
-        return null;
+        return projection.hasExpression() ? projection.getExpression().accept(this, freeVars) : null;
     }
 
     @Override
@@ -436,6 +469,12 @@ public class FreeVariableVisitor extends AbstractSqlppQueryExpressionVisitor<Voi
     }
 
     @Override
+    public Void visit(IVisitorExtension ve, Collection<VariableExpr> arg) throws CompilationException {
+        ve.freeVariableDispatch(this, arg);
+        return null;
+    }
+
+    @Override
     public Void visit(CaseExpression caseExpr, Collection<VariableExpr> freeVars) throws CompilationException {
         caseExpr.getConditionExpr().accept(this, freeVars);
         visit(caseExpr.getWhenExprs(), freeVars);
@@ -492,20 +531,6 @@ public class FreeVariableVisitor extends AbstractSqlppQueryExpressionVisitor<Voi
                 bindingVars.add(((LetClause) clause).getVarExpr());
             }
         }
-    }
-
-    private void visitJoinAndNest(AbstractBinaryCorrelateClause clause, Expression condition,
-            Collection<VariableExpr> freeVars) throws CompilationException {
-        clause.getRightExpression().accept(this, freeVars);
-        Collection<VariableExpr> conditionFreeVars = new HashSet<>();
-        condition.accept(this, freeVars);
-
-        // The condition expression can free binding variables defined in the join clause.
-        conditionFreeVars.remove(clause.getRightVariable());
-        if (clause.hasPositionalVariable()) {
-            conditionFreeVars.remove(clause.getPositionalVariable());
-        }
-        freeVars.addAll(conditionFreeVars);
     }
 
     private void visit(List<Expression> exprs, Collection<VariableExpr> arg) throws CompilationException {

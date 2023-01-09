@@ -65,7 +65,11 @@ public interface IDataFormat {
 
     public IPrinterFactoryProvider getCleanJSONPrinterFactoryProvider();
 
+    public IPrinterFactoryProvider getLosslessADMJSONPrinterFactoryProvider();
+
     public IMissingWriterFactory getMissingWriterFactory();
+
+    public IMissingWriterFactory getNullWriterFactory();
 
     public IUnnestingPositionWriterFactory getUnnestingPositionWriterFactory();
 

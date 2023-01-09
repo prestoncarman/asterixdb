@@ -18,6 +18,12 @@
  */
 package org.apache.asterix.test.external_dataset.microsoft;
 
+import static org.apache.asterix.test.common.TestConstants.Azure.AZURITE_ACCOUNT_KEY_DEFAULT;
+import static org.apache.asterix.test.common.TestConstants.Azure.AZURITE_ACCOUNT_NAME_DEFAULT;
+import static org.apache.asterix.test.common.TestConstants.Azure.BLOB_ENDPOINT_PLACEHOLDER;
+import static org.apache.asterix.test.common.TestConstants.Azure.sasToken;
+import static org.apache.asterix.test.external_dataset.ExternalDatasetTestUtils.PARQUET_DEFINITION;
+import static org.apache.asterix.test.external_dataset.parquet.BinaryFileConverterUtil.BINARY_GEN_BASEDIR;
 import static org.apache.hyracks.util.file.FileUtil.joinPath;
 
 import java.io.ByteArrayInputStream;
@@ -40,8 +46,8 @@ import java.util.Set;
 import java.util.zip.GZIPOutputStream;
 
 import org.apache.asterix.common.api.INcApplicationContext;
-import org.apache.asterix.test.common.TestConstants;
 import org.apache.asterix.test.common.TestExecutor;
+import org.apache.asterix.test.external_dataset.ExternalDatasetTestUtils;
 import org.apache.asterix.test.runtime.ExecutionTestUtil;
 import org.apache.asterix.test.runtime.LangExecutionUtil;
 import org.apache.asterix.testframework.context.TestCaseContext;
@@ -67,6 +73,7 @@ import com.azure.storage.blob.BlobContainerClient;
 import com.azure.storage.blob.BlobServiceClient;
 import com.azure.storage.blob.BlobServiceClientBuilder;
 import com.azure.storage.blob.models.PublicAccessType;
+import com.azure.storage.common.StorageSharedKeyCredential;
 import com.azure.storage.common.sas.AccountSasPermission;
 import com.azure.storage.common.sas.AccountSasResourceType;
 import com.azure.storage.common.sas.AccountSasService;
@@ -93,10 +100,11 @@ public class AzureBlobStorageExternalDatasetTest {
     private static final String CSV_DATA_PATH = joinPath("data", "csv");
     private static final String TSV_DATA_PATH = joinPath("data", "tsv");
     private static final String MIXED_DATA_PATH = joinPath("data", "mixed");
+    private static final String PARQUET_RAW_DATA_PATH = joinPath("data", "hdfs", "parquet");
 
     // Service endpoint
-    private static final int BLOB_SERVICE_PORT = 20000;
-    private static final String BLOB_SERVICE_ENDPOINT = "http://localhost:" + BLOB_SERVICE_PORT;
+    private static final int BLOB_SERVICE_PORT = 10000;
+    private static final String BLOB_SERVICE_ENDPOINT = "http://192.168.0.100:" + BLOB_SERVICE_PORT;
 
     // Region, container and definitions
     private static final String PLAYGROUND_CONTAINER = "playground";
@@ -114,9 +122,6 @@ public class AzureBlobStorageExternalDatasetTest {
     private static final Set<String> fileNames = new HashSet<>();
 
     // Create a BlobServiceClient object which will be used to create a container client
-    private static final String connectionString = "AccountName=devstoreaccount1;"
-            + "AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;"
-            + "BlobEndpoint=" + BLOB_SERVICE_ENDPOINT + "/devstoreaccount1;";
     private static BlobServiceClient blobServiceClient;
     private static BlobContainerClient playgroundContainer;
     private static BlobContainerClient publicAccessContainer;
@@ -130,6 +135,7 @@ public class AzureBlobStorageExternalDatasetTest {
     @BeforeClass
     public static void setUp() throws Exception {
         final TestExecutor testExecutor = new AzureTestExecutor();
+        ExternalDatasetTestUtils.createBinaryFiles(PARQUET_RAW_DATA_PATH);
         LangExecutionUtil.setUp(TEST_CONFIG_FILE_NAME, testExecutor);
         setNcEndpoints(testExecutor);
         createBlobServiceClient();
@@ -171,11 +177,14 @@ public class AzureBlobStorageExternalDatasetTest {
 
     private static void createBlobServiceClient() {
         LOGGER.info("Creating Azurite Blob Service client");
-        blobServiceClient = new BlobServiceClientBuilder().connectionString(connectionString).buildClient();
+        BlobServiceClientBuilder builder = new BlobServiceClientBuilder();
+        builder.credential(new StorageSharedKeyCredential(AZURITE_ACCOUNT_NAME_DEFAULT, AZURITE_ACCOUNT_KEY_DEFAULT));
+        builder.endpoint(BLOB_ENDPOINT_PLACEHOLDER);
+        blobServiceClient = builder.buildClient();
         LOGGER.info("Azurite Blob Service client created successfully");
 
         // Generate the SAS token for the SAS test cases
-        TestConstants.sasToken = generateSasToken();
+        sasToken = generateSasToken();
 
         // Create the container and upload some json files
         PREPARE_PLAYGROUND_CONTAINER.run();
@@ -218,6 +227,10 @@ public class AzureBlobStorageExternalDatasetTest {
         LOGGER.info("Loading " + OVER_1000_OBJECTS_COUNT + " into " + OVER_1000_OBJECTS_PATH);
         loadLargeNumberOfFiles();
         LOGGER.info("Added " + OVER_1000_OBJECTS_COUNT + " files into " + OVER_1000_OBJECTS_PATH + " successfully");
+
+        LOGGER.info("Adding Parquet files to the bucket");
+        loadParquetFiles();
+        LOGGER.info("Parquet files added successfully");
     }
 
     /**
@@ -320,6 +333,21 @@ public class AzureBlobStorageExternalDatasetTest {
         loadData(dataBasePath, "", "02.tsv", definition, definitionSegment, false);
         loadGzData(dataBasePath, "", "01.tsv", definition, definitionSegment, false);
         loadGzData(dataBasePath, "", "02.tsv", definition, definitionSegment, false);
+    }
+
+    private static void loadParquetFiles() {
+        String dataBasePath = BINARY_GEN_BASEDIR;
+        String definition = PARQUET_DEFINITION;
+
+        // Normal format
+        String definitionSegment = "";
+        loadData(dataBasePath, "", "dummy_tweet.parquet", definition, definitionSegment, false, false);
+        loadData(dataBasePath, "", "id_age.parquet", definition, definitionSegment, false, false);
+        loadData(dataBasePath, "", "id_age-string.parquet", definition, definitionSegment, false, false);
+        loadData(dataBasePath, "", "id_name.parquet", definition, definitionSegment, false, false);
+        loadData(dataBasePath, "", "id_name_comment.parquet", definition, definitionSegment, false, false);
+        loadData(dataBasePath, "", "heterogeneous_1.parquet", definition, definitionSegment, false, false);
+        loadData(dataBasePath, "", "heterogeneous_2.parquet", definition, definitionSegment, false, false);
     }
 
     private static void loadData(String fileBasePath, String filePathSegment, String filename, String definition,
@@ -514,6 +542,7 @@ public class AzureBlobStorageExternalDatasetTest {
 
     static class AzureTestExecutor extends TestExecutor {
 
+        @Override
         public void executeTestFile(TestCaseContext testCaseCtx, TestFileContext ctx, Map<String, Object> variableCtx,
                 String statement, boolean isDmlRecoveryTest, ProcessBuilder pb, TestCase.CompilationUnit cUnit,
                 MutableInt queryCount, List<TestFileContext> expectedResultFileCtxs, File testFile, String actualPath)

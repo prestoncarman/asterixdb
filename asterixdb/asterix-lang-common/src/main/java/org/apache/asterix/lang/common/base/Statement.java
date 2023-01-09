@@ -46,6 +46,21 @@ public interface Statement extends ILangExpression {
 
         private Category() {
         }
+
+        public static String toString(byte category) {
+            switch (category) {
+                case QUERY:
+                    return "query";
+                case UPDATE:
+                    return "update";
+                case DDL:
+                    return "ddl";
+                case PROCEDURE:
+                    return "procedure";
+                default:
+                    throw new IllegalArgumentException(String.valueOf(category));
+            }
+        }
     }
 
     enum Kind {
@@ -92,6 +107,8 @@ public interface Statement extends ILangExpression {
         CREATE_SYNONYM,
         SYNONYM_DROP,
         VIEW_DROP,
+        ANALYZE,
+        ANALYZE_DROP,
         COMPACT,
         EXTERNAL_DATASET_REFRESH,
         SUBSCRIBE_FEED,

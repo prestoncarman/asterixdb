@@ -18,6 +18,7 @@
  */
 package org.apache.hyracks.ipc.impl;
 
+import java.io.Closeable;
 import java.io.File;
 import java.net.InetSocketAddress;
 import java.net.URL;
@@ -52,6 +53,7 @@ import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.api.job.JobInfo;
 import org.apache.hyracks.api.job.JobSpecification;
 import org.apache.hyracks.api.job.JobStatus;
+import org.apache.hyracks.api.job.profiling.IOperatorStats;
 import org.apache.hyracks.api.network.ISocketChannelFactory;
 import org.apache.hyracks.api.topology.ClusterTopology;
 import org.apache.hyracks.api.util.InvokeUtil;
@@ -70,7 +72,7 @@ import org.apache.logging.log4j.Logger;
  *
  * @author vinayakb
  */
-public final class HyracksConnection implements IHyracksClientConnection {
+public final class HyracksConnection implements Closeable, IHyracksClientConnection {
 
     private static final Logger LOGGER = LogManager.getLogger();
 
@@ -120,6 +122,11 @@ public final class HyracksConnection implements IHyracksClientConnection {
 
     public HyracksConnection(String ccHost, int ccPort) throws Exception {
         this(ccHost, ccPort, PlainSocketChannelFactory.INSTANCE);
+    }
+
+    @Override
+    public void close() {
+        ipc.stop();
     }
 
     @Override
@@ -188,6 +195,17 @@ public final class HyracksConnection implements IHyracksClientConnection {
     public void waitForCompletion(JobId jobId) throws Exception {
         try {
             hci.waitForCompletion(jobId);
+        } catch (InterruptedException e) {
+            // Cancels an on-going job if the current thread gets interrupted.
+            cancelJob(jobId);
+            throw e;
+        }
+    }
+
+    @Override
+    public List<IOperatorStats> waitForCompletion(JobId jobId, List<String> statOperatorNames) throws Exception {
+        try {
+            return hci.waitForCompletion(jobId, statOperatorNames);
         } catch (InterruptedException e) {
             // Cancels an on-going job if the current thread gets interrupted.
             cancelJob(jobId);

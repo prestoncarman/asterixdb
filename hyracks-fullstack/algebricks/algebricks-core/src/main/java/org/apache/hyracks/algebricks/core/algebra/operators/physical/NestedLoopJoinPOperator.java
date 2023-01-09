@@ -29,6 +29,7 @@ import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractBina
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractBinaryJoinOperator.JoinKind;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.IOperatorSchema;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.LeftOuterJoinOperator;
 import org.apache.hyracks.algebricks.core.algebra.properties.BroadcastPartitioningProperty;
 import org.apache.hyracks.algebricks.core.algebra.properties.IPartitioningProperty;
 import org.apache.hyracks.algebricks.core.algebra.properties.IPartitioningRequirementsCoordinator;
@@ -74,16 +75,18 @@ public class NestedLoopJoinPOperator extends AbstractJoinPOperator {
         }
 
         IPartitioningProperty pp;
-
         AbstractLogicalOperator op = (AbstractLogicalOperator) iop;
 
+        // the partitioning property of the nested loop join is the same as the left branch.
+        // it cannot be the same as the right branch (BROADCAST) because the final joined data is not replicated at
+        // all partitions, and hence the final joined data is not BROADCAST.
         if (op.getExecutionMode() == AbstractLogicalOperator.ExecutionMode.PARTITIONED) {
-            AbstractLogicalOperator op2 = (AbstractLogicalOperator) op.getInputs().get(1).getValue();
-            IPhysicalPropertiesVector pv1 = op2.getPhysicalOperator().getDeliveredProperties();
-            if (pv1 == null) {
+            AbstractLogicalOperator leftOp = (AbstractLogicalOperator) op.getInputs().get(0).getValue();
+            IPhysicalPropertiesVector leftOpProperties = leftOp.getPhysicalOperator().getDeliveredProperties();
+            if (leftOpProperties == null) {
                 pp = null;
             } else {
-                pp = pv1.getPartitioningProperty();
+                pp = leftOpProperties.getPartitioningProperty();
             }
         } else {
             pp = IPartitioningProperty.UNPARTITIONED;
@@ -135,10 +138,8 @@ public class NestedLoopJoinPOperator extends AbstractJoinPOperator {
                         null);
                 break;
             case LEFT_OUTER:
-                IMissingWriterFactory[] nonMatchWriterFactories = new IMissingWriterFactory[inputSchemas[1].getSize()];
-                for (int j = 0; j < nonMatchWriterFactories.length; j++) {
-                    nonMatchWriterFactories[j] = context.getMissingWriterFactory();
-                }
+                IMissingWriterFactory[] nonMatchWriterFactories = JobGenHelper.createMissingWriterFactories(context,
+                        ((LeftOuterJoinOperator) join).getMissingValue(), inputSchemas[1].getSize());
                 opDesc = new NestedLoopJoinOperatorDescriptor(spec, comparatorFactory, recDescriptor, memSize, true,
                         nonMatchWriterFactories);
                 break;

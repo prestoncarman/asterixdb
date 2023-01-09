@@ -19,23 +19,14 @@
 package org.apache.asterix.runtime.evaluators.constructors;
 
 import org.apache.asterix.common.annotations.MissingNullInOutFunction;
-import org.apache.asterix.formats.nontagged.SerializerDeserializerProvider;
-import org.apache.asterix.om.base.AMutableUUID;
-import org.apache.asterix.om.base.AUUID;
 import org.apache.asterix.om.functions.BuiltinFunctions;
 import org.apache.asterix.om.functions.IFunctionDescriptorFactory;
-import org.apache.asterix.om.types.ATypeTag;
-import org.apache.asterix.om.types.BuiltinType;
-import org.apache.asterix.om.types.EnumDeserializer;
 import org.apache.asterix.runtime.evaluators.base.AbstractScalarFunctionDynamicDescriptor;
 import org.apache.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import org.apache.hyracks.algebricks.runtime.base.IEvaluatorContext;
 import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluator;
 import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluatorFactory;
-import org.apache.hyracks.api.dataflow.value.ISerializerDeserializer;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
-import org.apache.hyracks.data.std.api.IPointable;
-import org.apache.hyracks.data.std.primitive.UTF8StringPointable;
 
 /**
  * Receives a canonical representation of UUID and construct a UUID value.
@@ -55,44 +46,8 @@ public class AUUIDFromStringConstructorDescriptor extends AbstractScalarFunction
 
             @Override
             public IScalarEvaluator createScalarEvaluator(IEvaluatorContext ctx) throws HyracksDataException {
-                return new AbstractConstructorEvaluator(ctx, args[0].createScalarEvaluator(ctx), sourceLoc) {
-
-                    private final AMutableUUID uuid = new AMutableUUID();
-                    @SuppressWarnings("unchecked")
-                    private final ISerializerDeserializer<AUUID> uuidSerde =
-                            SerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.AUUID);
-                    private final UTF8StringPointable utf8Ptr = new UTF8StringPointable();
-
-                    @Override
-                    protected void evaluateImpl(IPointable result) throws HyracksDataException {
-                        byte[] bytes = inputArg.getByteArray();
-                        int startOffset = inputArg.getStartOffset();
-                        int len = inputArg.getLength();
-                        ATypeTag inputType = EnumDeserializer.ATYPETAGDESERIALIZER.deserialize(bytes[startOffset]);
-                        switch (inputType) {
-                            case UUID:
-                                result.set(inputArg);
-                                break;
-                            case STRING:
-                                utf8Ptr.set(bytes, startOffset + 1, len - 1);
-                                if (parseUUID(utf8Ptr, uuid)) {
-                                    resultStorage.reset();
-                                    uuidSerde.serialize(uuid, out);
-                                    result.set(resultStorage);
-                                } else {
-                                    handleParseError(utf8Ptr, result);
-                                }
-                                break;
-                            default:
-                                handleUnsupportedType(inputType, result);
-                                break;
-                        }
-                    }
-
-                    @Override
-                    protected BuiltinType getTargetType() {
-                        return BuiltinType.AUUID;
-                    }
+                return new AbstractUUIDFromStringConstructorEvaluator(ctx, args[0].createScalarEvaluator(ctx),
+                        sourceLoc) {
 
                     @Override
                     protected FunctionIdentifier getIdentifier() {
@@ -101,16 +56,6 @@ public class AUUIDFromStringConstructorDescriptor extends AbstractScalarFunction
                 };
             }
         };
-    }
-
-    private static boolean parseUUID(UTF8StringPointable textPtr, AMutableUUID result) {
-        try {
-            // first byte: tag, next x bytes: length
-            result.parseUUIDHexBytes(textPtr.getByteArray(), textPtr.getCharStartOffset());
-            return true;
-        } catch (HyracksDataException e) {
-            return false;
-        }
     }
 
     @Override

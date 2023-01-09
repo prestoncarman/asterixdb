@@ -18,11 +18,18 @@
  */
 package org.apache.hyracks.dataflow.std.base;
 
+import org.apache.hyracks.api.dataflow.IIntrospectingOperator;
 import org.apache.hyracks.api.dataflow.IOperatorNodePushable;
+import org.apache.hyracks.api.job.profiling.IOperatorStats;
 
-public abstract class AbstractOperatorNodePushable implements IOperatorNodePushable {
+public abstract class AbstractOperatorNodePushable implements IOperatorNodePushable, IIntrospectingOperator {
     @Override
     public String getDisplayName() {
         return toString();
     }
+
+    @Override
+    public void setOperatorStats(IOperatorStats stats) {
+    }
+
 }

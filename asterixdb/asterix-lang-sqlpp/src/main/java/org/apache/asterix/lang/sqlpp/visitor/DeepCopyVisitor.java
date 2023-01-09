@@ -28,6 +28,7 @@ import org.apache.asterix.common.exceptions.CompilationException;
 import org.apache.asterix.lang.common.base.AbstractClause;
 import org.apache.asterix.lang.common.base.Expression;
 import org.apache.asterix.lang.common.base.ILangExpression;
+import org.apache.asterix.lang.common.base.IVisitorExtension;
 import org.apache.asterix.lang.common.clause.GroupbyClause;
 import org.apache.asterix.lang.common.clause.LetClause;
 import org.apache.asterix.lang.common.clause.LimitClause;
@@ -112,7 +113,7 @@ public class DeepCopyVisitor extends AbstractSqlppQueryExpressionVisitor<ILangEx
                 : (VariableExpr) joinClause.getPositionalVariable().accept(this, arg);
         Expression conditionExpresion = (Expression) joinClause.getConditionExpression().accept(this, arg);
         JoinClause copy = new JoinClause(joinClause.getJoinType(), rightExpression, rightVar, rightPositionVar,
-                conditionExpresion);
+                conditionExpresion, joinClause.getOuterJoinMissingValueType());
         copy.setSourceLocation(joinClause.getSourceLocation());
         return copy;
     }
@@ -136,16 +137,17 @@ public class DeepCopyVisitor extends AbstractSqlppQueryExpressionVisitor<ILangEx
         VariableExpr rightVar = (VariableExpr) unnestClause.getRightVariable().accept(this, arg);
         VariableExpr rightPositionVar = unnestClause.getPositionalVariable() == null ? null
                 : (VariableExpr) unnestClause.getPositionalVariable().accept(this, arg);
-        UnnestClause copy = new UnnestClause(unnestClause.getUnnestType(), rightExpression, rightVar, rightPositionVar);
+        UnnestClause copy = new UnnestClause(unnestClause.getUnnestType(), rightExpression, rightVar, rightPositionVar,
+                unnestClause.getOuterUnnestMissingValueType());
         copy.setSourceLocation(unnestClause.getSourceLocation());
         return copy;
     }
 
     @Override
     public Projection visit(Projection projection, Void arg) throws CompilationException {
-        Projection copy =
-                new Projection(projection.star() ? null : (Expression) projection.getExpression().accept(this, arg),
-                        projection.getName(), projection.star(), projection.varStar());
+        Projection copy = new Projection(projection.getKind(),
+                projection.hasExpression() ? (Expression) projection.getExpression().accept(this, arg) : null,
+                projection.getName());
         copy.setSourceLocation(projection.getSourceLocation());
         return copy;
     }
@@ -192,7 +194,14 @@ public class DeepCopyVisitor extends AbstractSqlppQueryExpressionVisitor<ILangEx
         if (selectClause.selectRegular()) {
             selectRegular = (SelectRegular) selectClause.getSelectRegular().accept(this, arg);
         }
-        SelectClause copy = new SelectClause(selectElement, selectRegular, selectClause.distinct());
+        List<List<String>> fieldExclusions = new ArrayList<>();
+        if (!selectClause.getFieldExclusions().isEmpty()) {
+            for (List<String> fieldExclusion : selectClause.getFieldExclusions()) {
+                List<String> fieldExclusionCopy = new ArrayList<>(fieldExclusion);
+                fieldExclusions.add(fieldExclusionCopy);
+            }
+        }
+        SelectClause copy = new SelectClause(selectElement, selectRegular, fieldExclusions, selectClause.distinct());
         copy.setSourceLocation(selectClause.getSourceLocation());
         return copy;
     }
@@ -503,6 +512,11 @@ public class DeepCopyVisitor extends AbstractSqlppQueryExpressionVisitor<ILangEx
         copy.setSourceLocation(expression.getSourceLocation());
         copy.addHints(expression.getHints());
         return copy;
+    }
+
+    @Override
+    public ILangExpression visit(IVisitorExtension ve, Void arg) throws CompilationException {
+        return ve.deepCopyDispatch(this);
     }
 
     @Override

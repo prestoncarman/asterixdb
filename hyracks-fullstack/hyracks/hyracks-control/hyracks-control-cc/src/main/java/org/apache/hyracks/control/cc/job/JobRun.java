@@ -86,6 +86,8 @@ public class JobRun implements IJobStatusConditionVariable {
 
     private long startTime;
 
+    private String startTimeZoneId;
+
     private long endTime;
 
     private JobStatus status;
@@ -109,10 +111,11 @@ public class JobRun implements IJobStatusConditionVariable {
         pmm = new PartitionMatchMaker();
         participatingNodeIds = new HashSet<>();
         cleanupPendingNodeIds = new HashSet<>();
-        profile = new JobProfile(jobId);
         connectorPolicyMap = new HashMap<>();
         operatorLocations = new HashMap<>();
         createTime = System.currentTimeMillis();
+        profile = new JobProfile(jobId);
+        profile.setCreateTime(createTime);
     }
 
     //Run a deployed job spec
@@ -198,6 +201,16 @@ public class JobRun implements IJobStatusConditionVariable {
 
     public void setStartTime(long startTime) {
         this.startTime = startTime;
+        this.profile.setStartTime(startTime);
+    }
+
+    public String getStartTimeZoneId() {
+        return startTimeZoneId;
+    }
+
+    public void setStartTimeZoneId(String startTimeZoneId) {
+        this.startTimeZoneId = startTimeZoneId;
+        this.profile.setStartTimeZoneId(startTimeZoneId);
     }
 
     public long getEndTime() {
@@ -206,6 +219,7 @@ public class JobRun implements IJobStatusConditionVariable {
 
     public void setEndTime(long endTime) {
         this.endTime = endTime;
+        this.profile.setEndTime(endTime);
     }
 
     public void registerOperatorLocation(OperatorDescriptorId op, int partition, String location) {

@@ -134,7 +134,7 @@ public class ApiServlet extends AbstractServlet {
         try {
             // TODO: warnings should be retrieved from warnings collectors
             IHyracksClientConnection hcc = (IHyracksClientConnection) ctx.get(HYRACKS_CONNECTION_ATTR);
-            IResultSet resultSet = ServletUtil.getResultSet(hcc, appCtx, ctx);
+            IResultSet resultSet = ServletUtil.getResultSet(appCtx, ctx);
             IParser parser = parserFactory.createParser(query);
             List<Statement> statements = parser.parse();
             SessionConfig sessionConfig = new SessionConfig(format, true, isSet(executeQuery), true, planFormat);
@@ -151,7 +151,7 @@ public class ApiServlet extends AbstractServlet {
             long startTime = System.currentTimeMillis();
             final IRequestParameters requestParameters = new RequestParameters(requestReference, query, resultSet,
                     new ResultProperties(IStatementExecutor.ResultDelivery.IMMEDIATE), new IStatementExecutor.Stats(),
-                    new IStatementExecutor.StatementProperties(), null, null, null, null, true);
+                    new IStatementExecutor.StatementProperties(), null, null, null, null, null, true);
             translator.compileAndExecute(hcc, requestParameters);
             long endTime = System.currentTimeMillis();
             duration = (endTime - startTime) / 1000.00;

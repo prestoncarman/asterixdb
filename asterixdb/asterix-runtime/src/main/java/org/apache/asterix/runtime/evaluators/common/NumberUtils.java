@@ -25,7 +25,9 @@ import org.apache.asterix.om.base.AMutableInt16;
 import org.apache.asterix.om.base.AMutableInt32;
 import org.apache.asterix.om.base.AMutableInt64;
 import org.apache.asterix.om.base.AMutableInt8;
+import org.apache.commons.lang3.mutable.MutableBoolean;
 import org.apache.hyracks.data.std.primitive.UTF8StringPointable;
+import org.apache.hyracks.util.StringUtil;
 
 /**
  * Utility methods for number handling
@@ -98,33 +100,49 @@ public final class NumberUtils {
      * Parses string as bigint
      * @param textPtr input string
      * @param result placeholder for the result
+     * @param maybeNumeric if parsing was unsuccessful indicates whether the input string might
+     *                     contain a non-integer numeric value
      * @return {@code true} if parsing was successful, {@code false} otherwise
      */
-    public static boolean parseInt64(UTF8StringPointable textPtr, AMutableInt64 result) {
+    public static boolean parseInt64(UTF8StringPointable textPtr, AMutableInt64 result, MutableBoolean maybeNumeric) {
         byte[] bytes = textPtr.getByteArray();
         int offset = textPtr.getCharStartOffset();
+        int end = textPtr.getStartOffset() + textPtr.getLength();
+        return parseInt64(bytes, offset, end, StringUtil.getByteArrayAsCharAccessor(), result, maybeNumeric);
+    }
+
+    public static <T> boolean parseInt64(T input, int begin, int end, StringUtil.ICharAccessor<T> charAccessor,
+            AMutableInt64 result, MutableBoolean maybeNumeric) {
+        if (maybeNumeric != null) {
+            maybeNumeric.setFalse();
+        }
+        int offset = begin;
         //accumulating value in negative domain
         //otherwise Long.MIN_VALUE = -(Long.MAX_VALUE + 1) would have caused overflow
         long value = 0;
         boolean positive = true;
         long limit = -Long.MAX_VALUE;
-        if (bytes[offset] == '+') {
+        char c = charAccessor.charAt(input, offset);
+        if (c == '+') {
             offset++;
-        } else if (bytes[offset] == '-') {
+        } else if (c == '-') {
             offset++;
             positive = false;
             limit = Long.MIN_VALUE;
         }
-        int end = textPtr.getStartOffset() + textPtr.getLength();
         for (; offset < end; offset++) {
             int digit;
-            if (bytes[offset] >= '0' && bytes[offset] <= '9') {
+            c = charAccessor.charAt(input, offset);
+            if (c >= '0' && c <= '9') {
                 value *= 10;
-                digit = bytes[offset] - '0';
-            } else if (bytes[offset] == 'i' && bytes[offset + 1] == '6' && bytes[offset + 2] == '4'
-                    && offset + 3 == end) {
+                digit = c - '0';
+            } else if (c == 'i' && charAccessor.charAt(input, offset + 1) == '6'
+                    && charAccessor.charAt(input, offset + 2) == '4' && offset + 3 == end) {
                 break;
             } else {
+                if (maybeNumeric != null) {
+                    maybeNumeric.setValue(isNumericNonDigitOrSignChar(c));
+                }
                 return false;
             }
             if (value < limit + digit) {
@@ -146,9 +164,14 @@ public final class NumberUtils {
      * Parses string as integer
      * @param textPtr input string
      * @param result placeholder for the result
+     * @param maybeNumeric if parsing was unsuccessful indicates whether the input string might
+     *                     contain a non-integer numeric value
      * @return {@code true} if parsing was successful, {@code false} otherwise
      */
-    public static boolean parseInt32(UTF8StringPointable textPtr, AMutableInt32 result) {
+    public static boolean parseInt32(UTF8StringPointable textPtr, AMutableInt32 result, MutableBoolean maybeNumeric) {
+        if (maybeNumeric != null) {
+            maybeNumeric.setFalse();
+        }
         byte[] bytes = textPtr.getByteArray();
         int offset = textPtr.getCharStartOffset();
         //accumulating value in negative domain
@@ -173,6 +196,9 @@ public final class NumberUtils {
                     && offset + 3 == end) {
                 break;
             } else {
+                if (maybeNumeric != null) {
+                    maybeNumeric.setValue(isNumericNonDigitOrSignChar(bytes[offset]));
+                }
                 return false;
             }
             if (value < limit + digit) {
@@ -194,9 +220,14 @@ public final class NumberUtils {
      * Parses string as smallint
      * @param textPtr input string
      * @param result placeholder for the result
+     * @param maybeNumeric if parsing was unsuccessful indicates whether the input string might
+     *                     contain a non-integer numeric value
      * @return {@code true} if parsing was successful, {@code false} otherwise
      */
-    public static boolean parseInt16(UTF8StringPointable textPtr, AMutableInt16 result) {
+    public static boolean parseInt16(UTF8StringPointable textPtr, AMutableInt16 result, MutableBoolean maybeNumeric) {
+        if (maybeNumeric != null) {
+            maybeNumeric.setFalse();
+        }
         byte[] bytes = textPtr.getByteArray();
         int offset = textPtr.getCharStartOffset();
         //accumulating value in negative domain
@@ -221,6 +252,9 @@ public final class NumberUtils {
                     && offset + 3 == end) {
                 break;
             } else {
+                if (maybeNumeric != null) {
+                    maybeNumeric.setValue(isNumericNonDigitOrSignChar(bytes[offset]));
+                }
                 return false;
             }
             if (value < limit + digit) {
@@ -242,9 +276,14 @@ public final class NumberUtils {
      * Parses string as tinyint
      * @param textPtr input string
      * @param result placeholder for the result
+     * @param maybeNumeric if parsing was unsuccessful indicates whether the input string might
+     *                     contain a non-integer numeric value
      * @return {@code true} if parsing was successful, {@code false} otherwise
      */
-    public static boolean parseInt8(UTF8StringPointable textPtr, AMutableInt8 result) {
+    public static boolean parseInt8(UTF8StringPointable textPtr, AMutableInt8 result, MutableBoolean maybeNumeric) {
+        if (maybeNumeric != null) {
+            maybeNumeric.setFalse();
+        }
         byte[] bytes = textPtr.getByteArray();
         int offset = textPtr.getCharStartOffset();
         //accumulating value in negative domain
@@ -268,6 +307,9 @@ public final class NumberUtils {
             } else if (bytes[offset] == 'i' && bytes[offset + 1] == '8' && offset + 2 == end) {
                 break;
             } else {
+                if (maybeNumeric != null) {
+                    maybeNumeric.setValue(isNumericNonDigitOrSignChar(bytes[offset]));
+                }
                 return false;
             }
             if (value < limit + digit) {
@@ -331,5 +373,22 @@ public final class NumberUtils {
         } catch (NumberFormatException ignored) {
             return false;
         }
+    }
+
+    private static boolean isNumericNonDigitOrSignChar(char v) {
+        switch (v) {
+            case '.':
+            case 'E':
+            case 'e':
+            case 'I': // INF
+            case 'N': // NaN
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private static boolean isNumericNonDigitOrSignChar(byte v) {
+        return isNumericNonDigitOrSignChar((char) v);
     }
 }

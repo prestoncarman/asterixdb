@@ -37,6 +37,7 @@ import org.apache.hyracks.api.client.IHyracksClientConnection;
 import org.apache.hyracks.api.client.NodeControllerInfo;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.exceptions.HyracksException;
+import org.apache.hyracks.api.network.ISocketChannelFactory;
 import org.apache.hyracks.api.topology.ClusterTopology;
 import org.apache.hyracks.hdfs.api.INcCollection;
 import org.apache.hyracks.hdfs.api.INcCollectionBuilder;
@@ -49,18 +50,31 @@ import org.apache.logging.log4j.Logger;
  * class works for Hadoop old API.
  */
 public class Scheduler {
+    /**
+     * Empty input splits
+     */
+    public static final InputSplit[] EMPTY_INPUT_SPLITS = {};
+
     private static final Logger LOGGER = LogManager.getLogger();
 
-    /** a list of NCs */
+    /**
+     * a list of NCs
+     */
     private String[] NCs;
 
-    /** a map from ip to NCs */
-    private Map<String, List<String>> ipToNcMapping = new HashMap<String, List<String>>();
+    /**
+     * a map from ip to NCs
+     */
+    private Map<String, List<String>> ipToNcMapping = new HashMap<>();
 
-    /** a map from the NC name to the index */
-    private Map<String, Integer> ncNameToIndex = new HashMap<String, Integer>();
+    /**
+     * a map from the NC name to the index
+     */
+    private Map<String, Integer> ncNameToIndex = new HashMap<>();
 
-    /** a map from NC name to the NodeControllerInfo */
+    /**
+     * a map from NC name to the NodeControllerInfo
+     */
     private Map<String, NodeControllerInfo> ncNameToNcInfos;
 
     /**
@@ -71,13 +85,15 @@ public class Scheduler {
     /**
      * The constructor of the scheduler.
      *
-     * @param ncNameToNcInfos
+     * @param ipAddress      IP address
+     * @param port           Port
+     * @param channelFactory Channel Factory
      * @throws HyracksException
      */
 
-    public Scheduler(String ipAddress, int port) throws HyracksException {
+    public Scheduler(String ipAddress, int port, ISocketChannelFactory channelFactory) throws HyracksException {
         try {
-            IHyracksClientConnection hcc = new HyracksConnection(ipAddress, port);
+            IHyracksClientConnection hcc = new HyracksConnection(ipAddress, port, channelFactory);
             this.ncNameToNcInfos = hcc.getNodeControllerInfos();
             ClusterTopology topology = hcc.getClusterTopology();
             this.ncCollectionBuilder = topology == null ? new IPProximityNcCollectionBuilder()
@@ -91,25 +107,7 @@ public class Scheduler {
     /**
      * The constructor of the scheduler.
      *
-     * @param ncNameToNcInfos
-     * @throws HyracksException
-     */
-    public Scheduler(String ipAddress, int port, INcCollectionBuilder ncCollectionBuilder) throws HyracksException {
-        try {
-            IHyracksClientConnection hcc = new HyracksConnection(ipAddress, port);
-            this.ncNameToNcInfos = hcc.getNodeControllerInfos();
-            this.ncCollectionBuilder = ncCollectionBuilder;
-            loadIPAddressToNCMap(ncNameToNcInfos);
-        } catch (Exception e) {
-            throw HyracksException.create(e);
-        }
-    }
-
-    /**
-     * The constructor of the scheduler.
-     *
-     * @param ncNameToNcInfos
-     *            the mapping from nc names to nc infos
+     * @param ncNameToNcInfos the mapping from nc names to nc infos
      * @throws HyracksException
      */
     public Scheduler(Map<String, NodeControllerInfo> ncNameToNcInfos) throws HyracksException {
@@ -121,10 +119,8 @@ public class Scheduler {
     /**
      * The constructor of the scheduler.
      *
-     * @param ncNameToNcInfos
-     *            the mapping from nc names to nc infos
-     * @param topology
-     *            the hyracks cluster toplogy
+     * @param ncNameToNcInfos the mapping from nc names to nc infos
+     * @param topology        the hyracks cluster toplogy
      * @throws HyracksException
      */
     public Scheduler(Map<String, NodeControllerInfo> ncNameToNcInfos, ClusterTopology topology)
@@ -137,8 +133,7 @@ public class Scheduler {
     /**
      * The constructor of the scheduler.
      *
-     * @param ncNameToNcInfos
-     *            the mapping from nc names to nc infos
+     * @param ncNameToNcInfos the mapping from nc names to nc infos
      * @throws HyracksException
      */
     public Scheduler(Map<String, NodeControllerInfo> ncNameToNcInfos, INcCollectionBuilder ncCollectionBuilder)
@@ -156,14 +151,14 @@ public class Scheduler {
      * @throws HyracksDataException
      */
     public String[] getLocationConstraints(InputSplit[] splits) throws HyracksException {
-        if (splits == null) {
+        if (splits == null || splits == EMPTY_INPUT_SPLITS) {
             /** deal the case when the splits array is null */
             return new String[] {};
         }
         int[] workloads = new int[NCs.length];
         Arrays.fill(workloads, 0);
         String[] locations = new String[splits.length];
-        Map<String, IntWritable> locationToNumOfSplits = new HashMap<String, IntWritable>();
+        Map<String, IntWritable> locationToNumOfSplits = new HashMap<>();
         /**
          * upper bound number of slots that a machine can get
          */
@@ -217,16 +212,11 @@ public class Scheduler {
     /**
      * Schedule non-local slots to each machine
      *
-     * @param splits
-     *            The HDFS file splits.
-     * @param workloads
-     *            The current capacity of each machine.
-     * @param locations
-     *            The result schedule.
-     * @param slotLimit
-     *            The maximum slots of each machine.
-     * @param scheduled
-     *            Indicate which slot is scheduled.
+     * @param splits    The HDFS file splits.
+     * @param workloads The current capacity of each machine.
+     * @param locations The result schedule.
+     * @param slotLimit The maximum slots of each machine.
+     * @param scheduled Indicate which slot is scheduled.
      */
     private void scheduleNonLocalSlots(InputSplit[] splits, int[] workloads, String[] locations, int slotLimit,
             boolean[] scheduled) throws IOException, UnknownHostException {
@@ -259,18 +249,12 @@ public class Scheduler {
     /**
      * Schedule data-local slots to each machine.
      *
-     * @param splits
-     *            The HDFS file splits.
-     * @param workloads
-     *            The current capacity of each machine.
-     * @param locations
-     *            The result schedule.
-     * @param slots
-     *            The maximum slots of each machine.
-     * @param random
-     *            The random generator.
-     * @param scheduled
-     *            Indicate which slot is scheduled.
+     * @param splits    The HDFS file splits.
+     * @param workloads The current capacity of each machine.
+     * @param locations The result schedule.
+     * @param slots     The maximum slots of each machine.
+     * @param random    The random generator.
+     * @param scheduled Indicate which slot is scheduled.
      * @throws IOException
      * @throws UnknownHostException
      */
@@ -278,7 +262,7 @@ public class Scheduler {
             boolean[] scheduled, final Map<String, IntWritable> locationToNumSplits)
             throws IOException, UnknownHostException {
         /** scheduling candidates will be ordered inversely according to their popularity */
-        PriorityQueue<String> scheduleCadndiates = new PriorityQueue<String>(3, new Comparator<String>() {
+        PriorityQueue<String> scheduleCadndiates = new PriorityQueue<>(3, new Comparator<>() {
 
             @Override
             public int compare(String s1, String s2) {
@@ -346,10 +330,8 @@ public class Scheduler {
     /**
      * Scan the splits once and build a popularity map
      *
-     * @param splits
-     *            the split array
-     * @param locationToNumOfSplits
-     *            the map to be built
+     * @param splits                the split array
+     * @param locationToNumOfSplits the map to be built
      * @throws IOException
      */
     private void buildPopularityMap(InputSplit[] splits, Map<String, IntWritable> locationToNumOfSplits)

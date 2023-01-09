@@ -35,6 +35,7 @@ import org.apache.hyracks.algebricks.core.algebra.metadata.IMetadataProvider;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.IOperatorSchema;
 import org.apache.hyracks.algebricks.core.algebra.typing.ITypingContext;
 import org.apache.hyracks.algebricks.core.rewriter.base.PhysicalOptimizationConfig;
+import org.apache.hyracks.algebricks.data.IAWriterFactory;
 import org.apache.hyracks.algebricks.data.IBinaryBooleanInspectorFactory;
 import org.apache.hyracks.algebricks.data.IBinaryComparatorFactoryProvider;
 import org.apache.hyracks.algebricks.data.IBinaryHashFunctionFactoryProvider;
@@ -42,6 +43,7 @@ import org.apache.hyracks.algebricks.data.IBinaryHashFunctionFamilyProvider;
 import org.apache.hyracks.algebricks.data.IBinaryIntegerInspectorFactory;
 import org.apache.hyracks.algebricks.data.INormalizedKeyComputerFactoryProvider;
 import org.apache.hyracks.algebricks.data.IPrinterFactoryProvider;
+import org.apache.hyracks.algebricks.data.IResultSerializerFactoryProvider;
 import org.apache.hyracks.algebricks.data.ISerializerDeserializerProvider;
 import org.apache.hyracks.algebricks.data.ITypeTraitProvider;
 import org.apache.hyracks.algebricks.data.IUnnestingPositionWriterFactory;
@@ -57,9 +59,12 @@ public class JobGenContext {
     private final IBinaryHashFunctionFamilyProvider hashFunctionFamilyProvider;
     private final IBinaryComparatorFactoryProvider comparatorFactoryProvider;
     private final IPrinterFactoryProvider printerFactoryProvider;
+    private final IAWriterFactory writerFactory;
+    private final IResultSerializerFactoryProvider resultSerializerFactoryProvider;
     private final ITypeTraitProvider typeTraitProvider;
     private final IMetadataProvider<?, ?> metadataProvider;
     private final IMissingWriterFactory missingWriterFactory;
+    private final IMissingWriterFactory nullWriterFactory;
     private final IUnnestingPositionWriterFactory unnestingPositionWriterFactory;
     private final INormalizedKeyComputerFactoryProvider normalizedKeyComputerFactoryProvider;
     private final Object appContext;
@@ -85,7 +90,9 @@ public class JobGenContext {
             IBinaryComparatorFactoryProvider comparatorFactoryProvider, ITypeTraitProvider typeTraitProvider,
             IBinaryBooleanInspectorFactory booleanInspectorFactory,
             IBinaryIntegerInspectorFactory integerInspectorFactory, IPrinterFactoryProvider printerFactoryProvider,
-            IMissingWriterFactory missingWriterFactory, IUnnestingPositionWriterFactory unnestingPositionWriterFactory,
+            IAWriterFactory writerFactory, IResultSerializerFactoryProvider resultSerializerFactoryProvider,
+            IMissingWriterFactory missingWriterFactory, IMissingWriterFactory nullWriterFactory,
+            IUnnestingPositionWriterFactory unnestingPositionWriterFactory,
             INormalizedKeyComputerFactoryProvider normalizedKeyComputerFactoryProvider,
             IExpressionRuntimeProvider expressionRuntimeProvider, IExpressionTypeComputer expressionTypeComputer,
             ITypingContext typingContext, IExpressionEvalSizeComputer expressionEvalSizeComputer,
@@ -104,9 +111,12 @@ public class JobGenContext {
         this.booleanInspectorFactory = booleanInspectorFactory;
         this.integerInspectorFactory = integerInspectorFactory;
         this.printerFactoryProvider = printerFactoryProvider;
+        this.writerFactory = writerFactory;
+        this.resultSerializerFactoryProvider = resultSerializerFactoryProvider;
         this.clusterLocations = clusterLocations;
         this.normalizedKeyComputerFactoryProvider = normalizedKeyComputerFactoryProvider;
         this.missingWriterFactory = missingWriterFactory;
+        this.nullWriterFactory = nullWriterFactory;
         this.unnestingPositionWriterFactory = unnestingPositionWriterFactory;
         this.expressionRuntimeProvider = expressionRuntimeProvider;
         this.expressionTypeComputer = expressionTypeComputer;
@@ -169,6 +179,14 @@ public class JobGenContext {
         return printerFactoryProvider;
     }
 
+    public IAWriterFactory getWriterFactory() {
+        return writerFactory;
+    }
+
+    public IResultSerializerFactoryProvider getResultSerializerFactoryProvider() {
+        return resultSerializerFactoryProvider;
+    }
+
     public IPredicateEvaluatorFactoryProvider getPredicateEvaluatorFactoryProvider() {
         return predEvaluatorFactoryProvider;
     }
@@ -197,6 +215,10 @@ public class JobGenContext {
 
     public IMissingWriterFactory getMissingWriterFactory() {
         return missingWriterFactory;
+    }
+
+    public IMissingWriterFactory getNullWriterFactory() {
+        return nullWriterFactory;
     }
 
     public IUnnestingPositionWriterFactory getUnnestingPositionWriterFactory() {

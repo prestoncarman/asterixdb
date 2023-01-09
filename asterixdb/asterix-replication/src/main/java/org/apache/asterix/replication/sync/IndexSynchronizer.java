@@ -94,8 +94,10 @@ public class IndexSynchronizer {
         final FileSynchronizer fileSynchronizer = new FileSynchronizer(appCtx, replica);
         job.getJobFiles().stream().map(StoragePathUtil::getFileRelativePath).forEach(fileSynchronizer::replicate);
         // send mark component valid
-        MarkComponentValidTask markValidTask =
-                new MarkComponentValidTask(indexFile, getReplicatedComponentLsn(), getReplicatedComponentId());
+        String masterNode = appCtx.getReplicaManager().isPartitionOrigin(replica.getIdentifier().getPartition())
+                ? appCtx.getServiceContext().getNodeId() : null;
+        MarkComponentValidTask markValidTask = new MarkComponentValidTask(indexFile, getReplicatedComponentLsn(),
+                getReplicatedComponentId(), masterNode);
         ReplicationProtocol.sendTo(replica, markValidTask);
         ReplicationProtocol.waitForAck(replica);
         LOGGER.debug("Replicated component ({}) to replica {}", indexFile, replica);
@@ -139,11 +141,12 @@ public class IndexSynchronizer {
 
     private long getReplicatedComponentId() throws HyracksDataException {
         final ILSMIndexReplicationJob indexReplJob = (ILSMIndexReplicationJob) job;
-        if (indexReplJob.getLSMOpType() != LSMOperationType.FLUSH) {
+        if (indexReplJob.getLSMOpType() != LSMOperationType.FLUSH
+                && indexReplJob.getLSMOpType() != LSMOperationType.LOAD) {
             return -1L;
         }
         final ILSMIndexOperationContext ctx = indexReplJob.getLSMIndexOperationContext();
         LSMComponentId id = (LSMComponentId) ctx.getComponentsToBeReplicated().get(0).getId();
-        return id.getMinId();
+        return id.getMaxId();
     }
 }

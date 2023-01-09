@@ -21,9 +21,11 @@ package org.apache.asterix.external.util;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.TimeZone;
 import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 
+import org.apache.asterix.om.types.ATypeTag;
 import org.apache.hyracks.util.StorageUtil;
 
 public class ExternalDataConstants {
@@ -60,6 +62,12 @@ public class ExternalDataConstants {
     public static final String KEY_HADOOP_SHORT_CIRCUIT = "dfs.client.read.shortcircuit";
     public static final String KEY_HADOOP_SOCKET_PATH = "dfs.domain.socket.path";
     public static final String KEY_HADOOP_BUFFER_SIZE = "io.file.buffer.size";
+    //Base64 encoded warnings issued from Hadoop
+    public static final String KEY_HADOOP_ASTERIX_WARNINGS_LIST = "org.apache.asterix.warnings.list";
+    //Disable caching FileSystem for Hadoop
+    public static final String KEY_HADOOP_DISABLE_FS_CACHE_TEMPLATE = "fs.%s.impl.disable.cache";
+    //Base64 encoded function call information
+    public static final String KEY_HADOOP_ASTERIX_FUNCTION_CALL_INFORMATION = "org.apache.asterix.function.info";
     public static final String KEY_SOURCE_DATATYPE = "type-name";
     public static final String KEY_DELIMITER = "delimiter";
     public static final String KEY_PARSER_FACTORY = "parser-factory";
@@ -79,7 +87,6 @@ public class ExternalDataConstants {
     public static final String KEY_ESCAPE = "escape";
     public static final String KEY_PARSER = "parser";
     public static final String KEY_DATASET_RECORD = "dataset-record";
-    public static final String KEY_HIVE_SERDE = "hive-serde";
     public static final String KEY_RSS_URL = "url";
     public static final String KEY_INTERVAL = "interval";
     public static final String KEY_IS_FEED = "is-feed";
@@ -136,13 +143,14 @@ public class ExternalDataConstants {
     public static final String KEY_ADAPTER_NAME_HTTP = "http_adapter";
     public static final String KEY_ADAPTER_NAME_AWS_S3 = "S3";
     public static final String KEY_ADAPTER_NAME_AZURE_BLOB = "AZUREBLOB";
+    public static final String KEY_ADAPTER_NAME_AZURE_DATA_LAKE = "AZUREDATALAKE";
+    public static final String KEY_ADAPTER_NAME_GCS = "GCS";
 
     /**
      * HDFS class names
      */
     public static final String CLASS_NAME_TEXT_INPUT_FORMAT = "org.apache.hadoop.mapred.TextInputFormat";
     public static final String CLASS_NAME_SEQUENCE_INPUT_FORMAT = "org.apache.hadoop.mapred.SequenceFileInputFormat";
-    public static final String CLASS_NAME_RC_INPUT_FORMAT = "org.apache.asterix.hivecompat.io.RCFileInputFormat";
     public static final String CLASS_NAME_PARQUET_INPUT_FORMAT =
             "org.apache.asterix.external.input.record.reader.hdfs.parquet.MapredParquetInputFormat";
     public static final String CLASS_NAME_HDFS_FILESYSTEM = "org.apache.hadoop.hdfs.DistributedFileSystem";
@@ -151,7 +159,6 @@ public class ExternalDataConstants {
      */
     public static final String INPUT_FORMAT_TEXT = "text-input-format";
     public static final String INPUT_FORMAT_SEQUENCE = "sequence-input-format";
-    public static final String INPUT_FORMAT_RC = "rc-input-format";
     public static final String INPUT_FORMAT_PARQUET = "parquet-input-format";
     /**
      * Builtin streams
@@ -164,7 +171,6 @@ public class ExternalDataConstants {
 
     public static final String CLUSTER_LOCATIONS = "cluster-locations";
     public static final String SCHEDULER = "hdfs-scheduler";
-    public static final String PARSER_HIVE = "hive-parser";
     public static final String HAS_HEADER = "has.header";
     public static final String TIME_TRACKING = "time.tracking";
     public static final String DEFAULT_QUOTE = "\"";
@@ -175,7 +181,6 @@ public class ExternalDataConstants {
     /**
      * supported builtin record formats
      */
-    public static final String FORMAT_HIVE = "hive";
     public static final String FORMAT_BINARY = "binary";
     public static final String FORMAT_ADM = "adm";
     public static final String FORMAT_JSON_LOWER_CASE = "json";
@@ -195,7 +200,6 @@ public class ExternalDataConstants {
 
     static {
         Set<String> formats = new HashSet<>(14);
-        formats.add(FORMAT_HIVE);
         formats.add(FORMAT_BINARY);
         formats.add(FORMAT_ADM);
         formats.add(FORMAT_JSON_LOWER_CASE);
@@ -253,6 +257,7 @@ public class ExternalDataConstants {
     public static final char OPEN_BRACKET = '[';
     public static final char CLOSING_BRACKET = ']';
     public static final char COMMA = ',';
+    public static final char BYTE_ORDER_MARK = '\uFEFF';
 
     /**
      * Constant byte characters
@@ -293,65 +298,39 @@ public class ExternalDataConstants {
     public static final String DEFINITION_FIELD_NAME = "definition";
     public static final String CONTAINER_NAME_FIELD_NAME = "container";
 
-    public static class AwsS3 {
-        private AwsS3() {
-            throw new AssertionError("do not instantiate");
+    public static class ParquetOptions {
+        private ParquetOptions() {
         }
 
-        public static final String REGION_FIELD_NAME = "region";
-        public static final String ACCESS_KEY_ID_FIELD_NAME = "accessKeyId";
-        public static final String SECRET_ACCESS_KEY_FIELD_NAME = "secretAccessKey";
-        public static final String SESSION_TOKEN_FIELD_NAME = "sessionToken";
-        public static final String SERVICE_END_POINT_FIELD_NAME = "serviceEndpoint";
+        //Prefix for hadoop configurations
+        private static final String ASTERIX_HADOOP_PREFIX = "org.apache.asterix.";
 
-        // AWS S3 specific error codes
-        public static final String ERROR_INTERNAL_ERROR = "InternalError";
-        public static final String ERROR_SLOW_DOWN = "SlowDown";
-        public static final String ERROR_METHOD_NOT_IMPLEMENTED = "NotImplemented";
-
-        public static boolean isRetryableError(String errorCode) {
-            return errorCode.equals(ERROR_INTERNAL_ERROR) || errorCode.equals(ERROR_SLOW_DOWN);
-        }
-
-        /*
-         * Hadoop-AWS
-         * AWS connectors for s3 and s3n are deprecated.
+        /**
+         * Parse Parquet's String JSON type into ADM
+         * Default: false
          */
-        public static final String HADOOP_ACCESS_KEY_ID = "fs.s3a.access.key";
-        public static final String HADOOP_SECRET_ACCESS_KEY = "fs.s3a.secret.key";
-        public static final String HADOOP_SESSION_TOKEN = "fs.s3a.session.token";
-        public static final String HADOOP_REGION = "fs.s3a.region";
-        public static final String HADOOP_SERVICE_END_POINT = "fs.s3a.endpoint";
+        public static final String PARSE_JSON_STRING = "parse-json-string";
+        public static final String HADOOP_PARSE_JSON_STRING = ASTERIX_HADOOP_PREFIX + PARSE_JSON_STRING;
 
-        /*
-         * Internal configurations
+        /**
+         * Rebase Decimal and parse it as {@link ATypeTag#DOUBLE}
+         * Default: false
          */
-        //Allows accessing directories as file system path
-        public static final String HADOOP_PATH_STYLE_ACCESS = "fs.s3a.path.style.access";
-        //The number of maximum HTTP connections in connection pool
-        public static final String HADOOP_S3_CONNECTION_POOL_SIZE = "fs.s3a.connection.maximum";
-        //S3 used protocol
-        public static final String HADOOP_S3_PROTOCOL = "s3a";
+        public static final String DECIMAL_TO_DOUBLE = "decimal-to-double";
+        public static final String HADOOP_DECIMAL_TO_DOUBLE = ASTERIX_HADOOP_PREFIX + DECIMAL_TO_DOUBLE;
 
-        //Hadoop credentials provider key
-        public static final String HADOOP_CREDENTIAL_PROVIDER_KEY = "fs.s3a.aws.credentials.provider";
-        //Anonymous credential provider
-        public static final String HADOOP_ANONYMOUS_ACCESS = "org.apache.hadoop.fs.s3a.AnonymousAWSCredentialsProvider";
-        //Temporary credential provider
-        public static final String HADOOP_TEMP_ACCESS = "org.apache.hadoop.fs.s3a.TemporaryAWSCredentialsProvider";
+        /**
+         * Time Zone ID to convert UTC time and timestamp {@link ATypeTag#TIME} and {@link ATypeTag#DATETIME}
+         * Default: ""
+         * Note: If a UTC adjusted time and/or timestamp exist in the parquet file, and no time zone id is provided,
+         * then we will return the UTC time and issue a warning about that.
+         */
+        public static final String TIMEZONE = "timezone";
+        public static final String HADOOP_TIMEZONE = ASTERIX_HADOOP_PREFIX + TIMEZONE;
 
-    }
-
-    public static class AzureBlob {
-        private AzureBlob() {
-            throw new AssertionError("do not instantiate");
-        }
-
-        public static final String CONNECTION_STRING_FIELD_NAME = "connectionString";
-        public static final String TENANT_ID_FIELD_NAME = "tenantId";
-        public static final String CLIENT_ID_FIELD_NAME = "clientId";
-        public static final String CLIENT_SECRET_FIELD_NAME = "clientSecret";
-        public static final String CLIENT_CERTIFICATE_FIELD_NAME = "clientCertificate";
-        public static final String CLIENT_CERTIFICATE_PASSWORD_FIELD_NAME = "clientCertificatePassword";
+        /**
+         * Valid time zones that are supported by Java
+         */
+        public static final Set<String> VALID_TIME_ZONES = Set.of(TimeZone.getAvailableIDs());
     }
 }

@@ -2804,6 +2804,11 @@
       </compilation-unit>
     </test-case>
     <test-case FilePath="list">
+      <compilation-unit name="ordered-list-constructor_05">
+        <output-dir compare="AST">ordered-list-constructor_05</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="list">
       <compilation-unit name="scan-collection_01">
         <output-dir compare="AST">scan-collection_01</output-dir>
       </compilation-unit>
@@ -4402,11 +4407,6 @@
     <test-case FilePath="scan">
       <compilation-unit name="30">
         <output-dir compare="AST">30</output-dir>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="scan">
-      <compilation-unit name="alltypes_01">
-        <output-dir compare="AST">alltypes_01</output-dir>
       </compilation-unit>
     </test-case>
     <test-case FilePath="scan">

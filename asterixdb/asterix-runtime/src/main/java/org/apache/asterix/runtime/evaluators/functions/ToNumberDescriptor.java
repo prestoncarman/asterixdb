@@ -29,13 +29,13 @@ import org.apache.asterix.om.base.AInt64;
 import org.apache.asterix.om.base.AMutableDouble;
 import org.apache.asterix.om.base.AMutableInt64;
 import org.apache.asterix.om.functions.BuiltinFunctions;
-import org.apache.asterix.om.functions.IFunctionDescriptor;
 import org.apache.asterix.om.functions.IFunctionDescriptorFactory;
 import org.apache.asterix.om.types.ATypeTag;
 import org.apache.asterix.om.types.BuiltinType;
 import org.apache.asterix.runtime.evaluators.base.AbstractScalarFunctionDynamicDescriptor;
 import org.apache.asterix.runtime.evaluators.common.NumberUtils;
 import org.apache.asterix.runtime.exceptions.TypeMismatchException;
+import org.apache.commons.lang3.mutable.MutableBoolean;
 import org.apache.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import org.apache.hyracks.algebricks.runtime.base.IEvaluatorContext;
 import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluator;
@@ -51,12 +51,7 @@ import org.apache.hyracks.dataflow.common.data.accessors.IFrameTupleReference;
 @MissingNullInOutFunction
 public class ToNumberDescriptor extends AbstractScalarFunctionDynamicDescriptor {
     private static final long serialVersionUID = 1L;
-    public static final IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
-        @Override
-        public IFunctionDescriptor createFunctionDescriptor() {
-            return new ToNumberDescriptor();
-        }
-    };
+    public static final IFunctionDescriptorFactory FACTORY = ToNumberDescriptor::new;
 
     @Override
     public IScalarEvaluatorFactory createEvaluatorFactory(final IScalarEvaluatorFactory[] args) {
@@ -73,6 +68,7 @@ public class ToNumberDescriptor extends AbstractScalarFunctionDynamicDescriptor 
                 final AMutableInt64 aInt64 = new AMutableInt64(0);
                 final AMutableDouble aDouble = new AMutableDouble(0);
                 final UTF8StringPointable utf8Ptr = new UTF8StringPointable();
+                final MutableBoolean maybeNumeric = new MutableBoolean();
 
                 @SuppressWarnings("unchecked")
                 final ISerializerDeserializer<AInt64> INT64_SERDE =
@@ -114,10 +110,10 @@ public class ToNumberDescriptor extends AbstractScalarFunctionDynamicDescriptor 
 
                             case STRING:
                                 utf8Ptr.set(bytes, startOffset + 1, inputArg.getLength() - 1);
-                                if (NumberUtils.parseInt64(utf8Ptr, aInt64)) {
+                                if (NumberUtils.parseInt64(utf8Ptr, aInt64, maybeNumeric)) {
                                     INT64_SERDE.serialize(aInt64, out);
                                     result.set(resultStorage);
-                                } else if (NumberUtils.parseDouble(utf8Ptr, aDouble)) {
+                                } else if (maybeNumeric.booleanValue() && NumberUtils.parseDouble(utf8Ptr, aDouble)) {
                                     DOUBLE_SERDE.serialize(aDouble, out);
                                     result.set(resultStorage);
                                 } else {

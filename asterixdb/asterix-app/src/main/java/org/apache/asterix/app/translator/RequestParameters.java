@@ -25,6 +25,7 @@ import java.util.Map;
 
 import org.apache.asterix.common.api.IRequestReference;
 import org.apache.asterix.external.parser.JSONDataParser;
+import org.apache.asterix.external.parser.LosslessADMJSONDataParser;
 import org.apache.asterix.formats.nontagged.SerializerDeserializerProvider;
 import org.apache.asterix.lang.common.base.Statement;
 import org.apache.asterix.om.base.IAObject;
@@ -34,6 +35,7 @@ import org.apache.asterix.translator.IStatementExecutor;
 import org.apache.asterix.translator.IStatementExecutor.StatementProperties;
 import org.apache.asterix.translator.IStatementExecutor.Stats;
 import org.apache.asterix.translator.ResultProperties;
+import org.apache.asterix.translator.SessionConfig;
 import org.apache.hyracks.api.dataflow.value.ISerializerDeserializer;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.result.IResultSet;
@@ -58,40 +60,44 @@ public class RequestParameters implements IRequestParameters {
     private final boolean multiStatement;
     private final int statementCategoryRestrictionMask;
     private final String statement;
+    private final String defaultDataverseName;
     private final boolean forceDropDataset;
     private final boolean skipAdmissionPolicy;
+    private boolean printSignature;
+    private boolean sqlCompatMode;
 
     public RequestParameters(IRequestReference requestReference, String statement, IResultSet resultSet,
             ResultProperties resultProperties, Stats stats, StatementProperties statementProperties,
-            IStatementExecutor.ResultMetadata outMetadata, String clientContextId,
+            IStatementExecutor.ResultMetadata outMetadata, String clientContextId, String defaultDataverseName,
             Map<String, String> optionalParameters, Map<String, IAObject> statementParameters, boolean multiStatement) {
         this(requestReference, statement, resultSet, resultProperties, stats, statementProperties, outMetadata,
-                clientContextId, optionalParameters, statementParameters, multiStatement, NO_CATEGORY_RESTRICTION_MASK);
+                clientContextId, defaultDataverseName, optionalParameters, statementParameters, multiStatement,
+                NO_CATEGORY_RESTRICTION_MASK);
     }
 
     public RequestParameters(IRequestReference requestReference, String statement, IResultSet resultSet,
             ResultProperties resultProperties, Stats stats, StatementProperties statementProperties,
-            IStatementExecutor.ResultMetadata outMetadata, String clientContextId,
+            IStatementExecutor.ResultMetadata outMetadata, String clientContextId, String defaultDataverseName,
             Map<String, String> optionalParameters, Map<String, IAObject> statementParameters, boolean multiStatement,
             int statementCategoryRestrictionMask) {
         this(requestReference, statement, resultSet, resultProperties, stats, statementProperties, outMetadata,
-                clientContextId, optionalParameters, statementParameters, multiStatement,
+                clientContextId, defaultDataverseName, optionalParameters, statementParameters, multiStatement,
                 statementCategoryRestrictionMask, false);
     }
 
     public RequestParameters(IRequestReference requestReference, String statement, IResultSet resultSet,
             ResultProperties resultProperties, Stats stats, StatementProperties statementProperties,
-            IStatementExecutor.ResultMetadata outMetadata, String clientContextId,
+            IStatementExecutor.ResultMetadata outMetadata, String clientContextId, String defaultDataverseName,
             Map<String, String> optionalParameters, Map<String, IAObject> statementParameters, boolean multiStatement,
             int statementCategoryRestrictionMask, boolean forceDropDataset) {
         this(requestReference, statement, resultSet, resultProperties, stats, statementProperties, outMetadata,
-                clientContextId, optionalParameters, statementParameters, multiStatement,
+                clientContextId, defaultDataverseName, optionalParameters, statementParameters, multiStatement,
                 statementCategoryRestrictionMask, forceDropDataset, false);
     }
 
     public RequestParameters(IRequestReference requestReference, String statement, IResultSet resultSet,
             ResultProperties resultProperties, Stats stats, StatementProperties statementProperties,
-            IStatementExecutor.ResultMetadata outMetadata, String clientContextId,
+            IStatementExecutor.ResultMetadata outMetadata, String clientContextId, String defaultDataverseName,
             Map<String, String> optionalParameters, Map<String, IAObject> statementParameters, boolean multiStatement,
             int statementCategoryRestrictionMask, boolean forceDropDataset, boolean skipAdmissionPolicy) {
         this.requestReference = requestReference;
@@ -107,6 +113,7 @@ public class RequestParameters implements IRequestParameters {
         this.multiStatement = multiStatement;
         this.statementCategoryRestrictionMask = statementCategoryRestrictionMask;
         this.forceDropDataset = forceDropDataset;
+        this.defaultDataverseName = defaultDataverseName;
         this.skipAdmissionPolicy = skipAdmissionPolicy;
     }
 
@@ -180,12 +187,35 @@ public class RequestParameters implements IRequestParameters {
         return requestReference;
     }
 
-    public static Map<String, byte[]> serializeParameterValues(Map<String, JsonNode> inParams)
-            throws HyracksDataException {
+    @Override
+    public String getDefaultDataverseName() {
+        return defaultDataverseName;
+    }
+
+    public boolean isPrintSignature() {
+        return printSignature;
+    }
+
+    public void setPrintSignature(boolean printSignature) {
+        this.printSignature = printSignature;
+    }
+
+    @Override
+    public boolean isSQLCompatMode() {
+        return sqlCompatMode;
+    }
+
+    public void setSQLCompatMode(boolean sqlCompatMode) {
+        this.sqlCompatMode = sqlCompatMode;
+    }
+
+    public static Map<String, byte[]> serializeParameterValues(Map<String, JsonNode> inParams,
+            SessionConfig.OutputFormat format) throws HyracksDataException {
         if (inParams == null || inParams.isEmpty()) {
             return null;
         }
-        JSONDataParser parser = new JSONDataParser(null, null);
+        JSONDataParser parser = format == SessionConfig.OutputFormat.LOSSLESS_ADM_JSON
+                ? new LosslessADMJSONDataParser(null) : new JSONDataParser(null, null);
         ByteArrayAccessibleOutputStream buffer = new ByteArrayAccessibleOutputStream();
         DataOutputStream bufferDataOutput = new DataOutputStream(buffer);
         Map<String, byte[]> m = new HashMap<>();

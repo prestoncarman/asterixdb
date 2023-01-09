@@ -19,6 +19,8 @@
 
 package org.apache.asterix.lang.common.statement;
 
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 import org.apache.asterix.common.exceptions.CompilationException;
@@ -26,11 +28,9 @@ import org.apache.asterix.common.metadata.DataverseName;
 import org.apache.asterix.lang.common.base.AbstractStatement;
 import org.apache.asterix.lang.common.base.Expression;
 import org.apache.asterix.lang.common.base.Statement;
-import org.apache.asterix.lang.common.expression.RecordConstructor;
 import org.apache.asterix.lang.common.expression.TypeExpression;
-import org.apache.asterix.lang.common.util.ViewUtil;
+import org.apache.asterix.lang.common.struct.Identifier;
 import org.apache.asterix.lang.common.visitor.base.ILangVisitor;
-import org.apache.asterix.object.base.AdmObjectNode;
 
 public final class CreateViewStatement extends AbstractStatement {
 
@@ -44,7 +44,11 @@ public final class CreateViewStatement extends AbstractStatement {
 
     private final Expression viewBodyExpression;
 
-    private final AdmObjectNode withObjectNode;
+    private final Map<String, String> viewConfig;
+
+    private final KeyDecl primaryKeyDecl;
+
+    private final List<ForeignKeyDecl> foreignKeyDecls;
 
     private final Boolean defaultNull;
 
@@ -53,15 +57,17 @@ public final class CreateViewStatement extends AbstractStatement {
     private final boolean ifNotExists;
 
     public CreateViewStatement(DataverseName dataverseName, String viewName, TypeExpression itemType, String viewBody,
-            Expression viewBodyExpression, Boolean defaultNull, RecordConstructor withRecord, boolean replaceIfExists,
-            boolean ifNotExists) throws CompilationException {
+            Expression viewBodyExpression, Boolean defaultNull, Map<String, String> viewConfig, KeyDecl primaryKeyDecl,
+            List<ForeignKeyDecl> foreignKeyDecls, boolean replaceIfExists, boolean ifNotExists) {
         this.dataverseName = dataverseName;
         this.viewName = Objects.requireNonNull(viewName);
         this.itemType = itemType;
         this.viewBody = Objects.requireNonNull(viewBody);
         this.viewBodyExpression = Objects.requireNonNull(viewBodyExpression);
         this.defaultNull = defaultNull;
-        this.withObjectNode = ViewUtil.validateAndGetWithObjectNode(withRecord, itemType != null);
+        this.viewConfig = viewConfig;
+        this.primaryKeyDecl = primaryKeyDecl;
+        this.foreignKeyDecls = foreignKeyDecls;
         this.replaceIfExists = replaceIfExists;
         this.ifNotExists = ifNotExists;
     }
@@ -114,20 +120,62 @@ public final class CreateViewStatement extends AbstractStatement {
         return defaultNull;
     }
 
-    public String getDatetimeFormat() {
-        return withObjectNode.getOptionalString(ViewUtil.DATETIME_PARAMETER_NAME);
+    public KeyDecl getPrimaryKeyDecl() {
+        return primaryKeyDecl;
     }
 
-    public String getDateFormat() {
-        return withObjectNode.getOptionalString(ViewUtil.DATE_PARAMETER_NAME);
+    public List<ForeignKeyDecl> getForeignKeyDecls() {
+        return foreignKeyDecls;
     }
 
-    public String getTimeFormat() {
-        return withObjectNode.getOptionalString(ViewUtil.TIME_PARAMETER_NAME);
+    public Map<String, String> getViewConfiguration() {
+        return viewConfig;
     }
 
     @Override
     public <R, T> R accept(ILangVisitor<R, T> visitor, T arg) throws CompilationException {
         return visitor.visit(this, arg);
+    }
+
+    public static class KeyDecl {
+
+        protected final List<List<String>> fields;
+
+        protected final List<Integer> sourceIndicators;
+
+        public KeyDecl(List<List<String>> fields, List<Integer> sourceIndicators) {
+            this.fields = fields;
+            this.sourceIndicators = sourceIndicators;
+        }
+
+        public List<List<String>> getFields() {
+            return fields;
+        }
+
+        public List<Integer> getSourceIndicators() {
+            return sourceIndicators;
+        }
+    }
+
+    public static class ForeignKeyDecl extends KeyDecl {
+
+        private final DataverseName referencedDataverseName;
+
+        private final Identifier referencedDatasetName;
+
+        public ForeignKeyDecl(List<List<String>> fields, List<Integer> sourceIndicators,
+                DataverseName referencedDataverseName, Identifier referencedDatasetName) {
+            super(fields, sourceIndicators);
+            this.referencedDataverseName = referencedDataverseName;
+            this.referencedDatasetName = referencedDatasetName;
+        }
+
+        public DataverseName getReferencedDataverseName() {
+            return referencedDataverseName;
+        }
+
+        public Identifier getReferencedDatasetName() {
+            return referencedDatasetName;
+        }
     }
 }

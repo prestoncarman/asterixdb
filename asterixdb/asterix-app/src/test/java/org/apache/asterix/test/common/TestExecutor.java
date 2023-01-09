@@ -19,6 +19,28 @@
 package org.apache.asterix.test.common;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.apache.asterix.test.common.TestConstants.Azure.ACCOUNT_KEY_PLACEHOLDER;
+import static org.apache.asterix.test.common.TestConstants.Azure.ACCOUNT_NAME_PLACEHOLDER;
+import static org.apache.asterix.test.common.TestConstants.Azure.AZURITE_ACCOUNT_KEY_DEFAULT;
+import static org.apache.asterix.test.common.TestConstants.Azure.AZURITE_ACCOUNT_NAME_DEFAULT;
+import static org.apache.asterix.test.common.TestConstants.Azure.BLOB_ENDPOINT_DEFAULT;
+import static org.apache.asterix.test.common.TestConstants.Azure.BLOB_ENDPOINT_PLACEHOLDER;
+import static org.apache.asterix.test.common.TestConstants.Azure.CLIENT_CERTIFICATE_DEFAULT;
+import static org.apache.asterix.test.common.TestConstants.Azure.CLIENT_CERTIFICATE_PASSWORD_DEFAULT;
+import static org.apache.asterix.test.common.TestConstants.Azure.CLIENT_CERTIFICATE_PASSWORD_PLACEHOLDER;
+import static org.apache.asterix.test.common.TestConstants.Azure.CLIENT_CERTIFICATE_PLACEHOLDER;
+import static org.apache.asterix.test.common.TestConstants.Azure.CLIENT_ID_DEFAULT;
+import static org.apache.asterix.test.common.TestConstants.Azure.CLIENT_ID_PLACEHOLDER;
+import static org.apache.asterix.test.common.TestConstants.Azure.CLIENT_SECRET_DEFAULT;
+import static org.apache.asterix.test.common.TestConstants.Azure.CLIENT_SECRET_PLACEHOLDER;
+import static org.apache.asterix.test.common.TestConstants.Azure.MANAGED_IDENTITY_ID_DEFAULT;
+import static org.apache.asterix.test.common.TestConstants.Azure.MANAGED_IDENTITY_ID_PLACEHOLDER;
+import static org.apache.asterix.test.common.TestConstants.Azure.SAS_TOKEN_PLACEHOLDER;
+import static org.apache.asterix.test.common.TestConstants.Azure.TEMPLATE;
+import static org.apache.asterix.test.common.TestConstants.Azure.TEMPLATE_DEFAULT;
+import static org.apache.asterix.test.common.TestConstants.Azure.TENANT_ID_DEFAULT;
+import static org.apache.asterix.test.common.TestConstants.Azure.TENANT_ID_PLACEHOLDER;
+import static org.apache.asterix.test.common.TestConstants.Azure.sasToken;
 import static org.apache.hyracks.util.NetworkUtil.toHostPort;
 import static org.apache.hyracks.util.file.FileUtil.canonicalize;
 
@@ -81,6 +103,7 @@ import java.util.stream.Stream;
 import org.apache.asterix.api.http.server.QueryServiceRequestParameters;
 import org.apache.asterix.app.external.IExternalUDFLibrarian;
 import org.apache.asterix.common.api.Duration;
+import org.apache.asterix.common.config.DatasetConfig;
 import org.apache.asterix.common.config.GlobalConfig;
 import org.apache.asterix.common.metadata.DataverseName;
 import org.apache.asterix.common.utils.Servlets;
@@ -106,14 +129,22 @@ import org.apache.commons.io.IOUtils;
 import org.apache.commons.io.output.ByteArrayOutputStream;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.mutable.MutableInt;
+import org.apache.http.Consts;
+import org.apache.http.HttpException;
+import org.apache.http.HttpHost;
+import org.apache.http.HttpRequest;
+import org.apache.http.HttpRequestInterceptor;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
 import org.apache.http.NameValuePair;
 import org.apache.http.auth.AuthScope;
+import org.apache.http.auth.AuthState;
+import org.apache.http.auth.Credentials;
 import org.apache.http.auth.UsernamePasswordCredentials;
 import org.apache.http.client.AuthCache;
 import org.apache.http.client.CredentialsProvider;
 import org.apache.http.client.HttpClient;
+import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.http.client.methods.RequestBuilder;
@@ -130,7 +161,9 @@ import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.impl.client.StandardHttpRequestRetryHandler;
+import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.protocol.HttpContext;
+import org.apache.http.protocol.HttpCoreContext;
 import org.apache.http.util.EntityUtils;
 import org.apache.hyracks.algebricks.common.utils.Pair;
 import org.apache.hyracks.http.server.utils.HttpUtil;
@@ -149,6 +182,8 @@ import com.fasterxml.jackson.databind.ObjectReader;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.util.RawValue;
+
+import io.netty.handler.codec.http.HttpMethod;
 
 public class TestExecutor {
 
@@ -216,6 +251,7 @@ public class TestExecutor {
     private static final String METRICS_QUERY_TYPE = "metrics";
     private static final String PROFILE_QUERY_TYPE = "profile";
     private static final String PLANS_QUERY_TYPE = "plans";
+    private static final String SIGNATURE_QUERY_TYPE = "signature";
 
     private static final HashMap<Integer, ITestServer> runningTestServers = new HashMap<>();
     private static Map<String, InetSocketAddress> ncEndPoints;
@@ -290,7 +326,7 @@ public class TestExecutor {
 
     public void runScriptAndCompareWithResult(File scriptFile, File expectedFile, File actualFile,
             ComparisonEnum compare, Charset actualEncoding, String statement) throws Exception {
-        LOGGER.info("Expected results file: {} ", canonicalize(expectedFile));
+        LOGGER.info("Expected results file: {} ", canonicalize(expectedFile.getAbsolutePath()));
         boolean regex = false;
         if (expectedFile.getName().endsWith(".ignore")) {
             return; //skip the comparison
@@ -368,9 +404,10 @@ public class TestExecutor {
             }
         } catch (Exception e) {
             if (!actualEncoding.equals(UTF_8)) {
-                LOGGER.info("Actual results file: {} encoding: {}", canonicalize(actualFile), actualEncoding);
+                LOGGER.info("Actual results file: {} encoding: {}", canonicalize(actualFile.getAbsolutePath()),
+                        actualEncoding);
             } else {
-                LOGGER.info("Actual results file: {}", canonicalize(actualFile));
+                LOGGER.info("Actual results file: {}", canonicalize(actualFile.getAbsolutePath()));
             }
             throw e;
         }
@@ -644,8 +681,8 @@ public class TestExecutor {
     protected HttpResponse executeHttpRequest(HttpUriRequest method) throws Exception {
         // https://issues.apache.org/jira/browse/ASTERIXDB-2315
         ExecutorService executor = Executors.newSingleThreadExecutor();
-        CloseableHttpClient client =
-                HttpClients.custom().setRetryHandler(StandardHttpRequestRetryHandler.INSTANCE).build();
+        CloseableHttpClient client = HttpClients.custom().addInterceptorFirst(new PreemptiveAuthInterceptor())
+                .setRetryHandler(StandardHttpRequestRetryHandler.INSTANCE).build();
         Future<HttpResponse> future = executor.submit(() -> {
             try {
                 return client.execute(method, getHttpContext());
@@ -841,7 +878,8 @@ public class TestExecutor {
     }
 
     private static boolean setFormatInAccept(OutputFormat fmt) {
-        return fmt == OutputFormat.LOSSLESS_JSON || fmt == OutputFormat.CSV_HEADER;
+        return fmt == OutputFormat.LOSSLESS_JSON || fmt == OutputFormat.LOSSLESS_ADM_JSON
+                || fmt == OutputFormat.CSV_HEADER;
     }
 
     public void setAvailableCharsets(Charset... charsets) {
@@ -905,20 +943,6 @@ public class TestExecutor {
         return result;
     }
 
-    private HttpUriRequest constructHttpMethod(String statement, URI uri, String stmtParam, boolean postStmtAsParam,
-            List<Parameter> otherParams) {
-        String stmtParamName = (postStmtAsParam ? stmtParam : null);
-        return constructPostMethodUrl(statement, uri, stmtParamName, otherParams);
-    }
-
-    private HttpUriRequest constructGetMethod(URI endpoint, List<Parameter> params) {
-        RequestBuilder builder = RequestBuilder.get(endpoint);
-        for (Parameter param : params) {
-            builder.addParameter(param.getName(), param.getValue());
-        }
-        return builder.build();
-    }
-
     private boolean isMultipart(Parameter p) {
         return p != null && (ParameterTypeEnum.MULTIPART_TEXT == p.getType()
                 || ParameterTypeEnum.MULTIPART_BINARY == p.getType());
@@ -942,16 +966,30 @@ public class TestExecutor {
                         || p.getType() == ParameterTypeEnum.MULTIPART_TEXT)
                                 ? Optional.of(MultipartEntityBuilder.create().setMode(HttpMultipartMode.STRICT))
                                 : Optional.empty();
+        List<NameValuePair> parameters = new ArrayList<>();
         for (Parameter param : params) {
             if (isMultipart(param)) {
                 addMultipart(mPartBuilder.get(), param);
             } else {
-                builder.addParameter(param.getName(), param.getValue());
+                parameters.add(new BasicNameValuePair(param.getName(), param.getValue()));
             }
         }
         builder.setCharset(UTF_8);
         mPartBuilder.ifPresent(mpb -> builder.setEntity(mpb.build()));
-        body.ifPresent(s -> builder.setEntity(new StringEntity(s, contentType)));
+        if (body.isPresent()) {
+            builder.addParameters(parameters.toArray(new NameValuePair[0]));
+            builder.setEntity(new StringEntity(body.get(), contentType));
+        } else if (mPartBuilder.isPresent()) {
+            builder.addParameters(parameters.toArray(new NameValuePair[0]));
+            builder.setEntity(mPartBuilder.get().build());
+        } else {
+            boolean formParams = HttpUtil.ignoreQueryParameters(HttpMethod.valueOf(method));
+            if (formParams) {
+                builder.setEntity(new UrlEncodedFormEntity(parameters, Consts.UTF_8));
+            } else {
+                builder.addParameters(parameters.toArray(new NameValuePair[0]));
+            }
+        }
         return builder.build();
     }
 
@@ -968,6 +1006,27 @@ public class TestExecutor {
         // Set accepted output response type
         method.setHeader("Accept", fmt.mimeType());
         return method;
+    }
+
+    public static HttpUriRequest constructGetMethod(URI endpoint, List<Parameter> params) {
+        RequestBuilder builder = RequestBuilder.get(endpoint);
+        for (Parameter param : params) {
+            builder.addParameter(param.getName(), param.getValue());
+        }
+        return builder.build();
+    }
+
+    public static HttpUriRequest constructDeleteMethod(URI uri, List<Parameter> params) {
+        List<NameValuePair> form = new ArrayList<>();
+        for (Parameter param : params) {
+            form.add(new BasicNameValuePair(param.getName(), param.getValue()));
+        }
+        return constructDeleteRequest(uri, form);
+    }
+
+    public static HttpUriRequest constructDeleteRequest(URI uri, List<NameValuePair> params) {
+        RequestBuilder builder = RequestBuilder.delete(uri);
+        return builder.setEntity(new UrlEncodedFormEntity(params, Consts.UTF_8)).setCharset(UTF_8).build();
     }
 
     private HttpUriRequest constructPostMethod(URI uri, List<Parameter> params) {
@@ -1038,12 +1097,6 @@ public class TestExecutor {
 
     public InputStream executeJSON(OutputFormat fmt, String method, URI uri, List<Parameter> params) throws Exception {
         return executeJSON(fmt, method, uri, params, code -> code == HttpStatus.SC_OK, Optional.empty(),
-                TEXT_PLAIN_UTF8);
-    }
-
-    public InputStream executeJSON(OutputFormat fmt, String method, URI uri, Predicate<Integer> responseCodeValidator)
-            throws Exception {
-        return executeJSON(fmt, method, uri, Collections.emptyList(), responseCodeValidator, Optional.empty(),
                 TEXT_PLAIN_UTF8);
     }
 
@@ -1179,6 +1232,7 @@ public class TestExecutor {
             case "metrics":
             case "profile":
             case "plans":
+            case "signature":
                 // isDmlRecoveryTest: insert Crash and Recovery
                 if (isDmlRecoveryTest) {
                     executeScript(pb, pb.environment().get("SCRIPT_HOME") + File.separator + "dml_recovery"
@@ -1466,24 +1520,23 @@ public class TestExecutor {
         final String mimeReqType = extractHttpRequestType(statement);
         final String saveResponseVar = getResultVariable(statement);
         ContentType contentType = mimeReqType != null ? ContentType.create(mimeReqType, UTF_8) : TEXT_PLAIN_UTF8;
-        if (!body.isPresent()) {
+        if (body.isEmpty()) {
             body = getBodyFromReference(statement, variableCtx);
         }
         final Pair<String, String> credentials = extractCredentials(statement);
         InputStream resultStream;
+        URI uri;
         if ("http".equals(extension)) {
-            if (credentials != null) {
-                resultStream = executeHttp(reqType, variablesReplaced, fmt, params, statusCodePredicate, body,
-                        contentType, credentials);
-            } else {
-                resultStream =
-                        executeHttp(reqType, variablesReplaced, fmt, params, statusCodePredicate, body, contentType);
-            }
+            uri = createEndpointURI(variablesReplaced);
         } else if ("uri".equals(extension)) {
-            resultStream = executeURI(reqType, URI.create(variablesReplaced), fmt, params, statusCodePredicate, body,
-                    contentType);
+            uri = URI.create(variablesReplaced);
         } else {
             throw new IllegalArgumentException("Unexpected format for method " + reqType + ": " + extension);
+        }
+        if (credentials != null) {
+            resultStream = executeURI(reqType, uri, fmt, params, statusCodePredicate, body, contentType, credentials);
+        } else {
+            resultStream = executeURI(reqType, uri, fmt, params, statusCodePredicate, body, contentType);
         }
         if (extracResult) {
             resultStream = ResultExtractor.extract(resultStream, UTF_8).getResult();
@@ -1505,8 +1558,8 @@ public class TestExecutor {
                     LOGGER.info("Diagnostic output: {}", IOUtils.toString(resultStream, UTF_8));
                 } else {
                     LOGGER.info("Unexpected output: {}", IOUtils.toString(resultStream, UTF_8));
-                    Assert.fail("no result file for " + testFile.toString() + "; queryCount: " + queryCount
-                            + ", filectxs.size: " + numResultFiles);
+                    Assert.fail("no result file for " + testFile + "; queryCount: " + queryCount + ", filectxs.size: "
+                            + numResultFiles);
                 }
             } else {
                 writeOutputToFile(actualResultFile, resultStream);
@@ -1553,6 +1606,9 @@ public class TestExecutor {
                 case PLANS_QUERY_TYPE:
                     String[] plans = plans(statement);
                     resultStream = ResultExtractor.extractPlans(resultStream, responseCharset, plans);
+                    break;
+                case SIGNATURE_QUERY_TYPE:
+                    resultStream = ResultExtractor.extractSignature(resultStream, responseCharset);
                     break;
                 default:
                     extractedResult = ResultExtractor.extract(resultStream, responseCharset, fmt);
@@ -1960,9 +2016,8 @@ public class TestExecutor {
     }
 
     public static Pair<String, String> extractCredentials(String statement) {
-        List<Parameter> params = new ArrayList<>();
         final Matcher m = HTTP_AUTH_PATTERN.matcher(statement);
-        while (m.find()) {
+        if (m.find()) {
             String username = m.group("username");
             String password = m.group("password");
             return new Pair<>(username, password);
@@ -2011,23 +2066,6 @@ public class TestExecutor {
         } else {
             return codes::contains;
         }
-    }
-
-    protected InputStream executeHttp(String ctxType, String endpoint, OutputFormat fmt, List<Parameter> params,
-            Predicate<Integer> statusCodePredicate, Optional<String> body, ContentType contentType) throws Exception {
-        URI uri = createEndpointURI(endpoint);
-        return executeURI(ctxType, uri, fmt, params, statusCodePredicate, body, contentType);
-    }
-
-    private InputStream executeHttp(String ctxType, String endpoint, OutputFormat fmt, List<Parameter> params,
-            Predicate<Integer> statusCodePredicate, Optional<String> body, ContentType contentType,
-            Pair<String, String> credentials) throws Exception {
-        URI uri = createEndpointURI(endpoint);
-        return executeURI(ctxType, uri, fmt, params, statusCodePredicate, body, contentType, credentials);
-    }
-
-    private InputStream executeURI(String ctxType, URI uri, OutputFormat fmt, List<Parameter> params) throws Exception {
-        return executeJSON(fmt, ctxType.toUpperCase(), uri, params);
     }
 
     private InputStream executeURI(String ctxType, URI uri, OutputFormat fmt, List<Parameter> params,
@@ -2300,21 +2338,22 @@ public class TestExecutor {
         }
 
         // This replaces specific external dataset placeholders
-        str = str.replace(TestConstants.AZURE_CONNECTION_STRING_ACCOUNT_KEY_PLACEHOLDER,
-                TestConstants.AZURE_CONNECTION_STRING_ACCOUNT_KEY);
-        str = str.replace(TestConstants.AZURE_CONNECTION_STRING_SAS_TOKEN_PLACEHOLDER,
-                TestConstants.AZURE_CONNECTION_STRING_SAS_TOKEN);
-        str = str.replace(TestConstants.AZURE_ACCOUNT_NAME_PLACEHOLDER,
-                TestConstants.AZURE_AZURITE_ACCOUNT_NAME_DEFAULT);
-        str = str.replace(TestConstants.AZURE_ACCOUNT_KEY_PLACEHOLDER, TestConstants.AZURE_AZURITE_ACCOUNT_KEY_DEFAULT);
-        str = str.replace(TestConstants.AZURE_SAS_TOKEN_PLACEHOLDER, TestConstants.sasToken);
+        str = str.replace(ACCOUNT_NAME_PLACEHOLDER, AZURITE_ACCOUNT_NAME_DEFAULT);
+        str = str.replace(ACCOUNT_KEY_PLACEHOLDER, AZURITE_ACCOUNT_KEY_DEFAULT);
+        str = str.replace(SAS_TOKEN_PLACEHOLDER, sasToken);
+        str = str.replace(MANAGED_IDENTITY_ID_PLACEHOLDER, MANAGED_IDENTITY_ID_DEFAULT);
+        str = str.replace(CLIENT_ID_PLACEHOLDER, CLIENT_ID_DEFAULT);
+        str = str.replace(CLIENT_SECRET_PLACEHOLDER, CLIENT_SECRET_DEFAULT);
+        str = str.replace(CLIENT_CERTIFICATE_PLACEHOLDER, CLIENT_CERTIFICATE_DEFAULT);
+        str = str.replace(CLIENT_CERTIFICATE_PASSWORD_PLACEHOLDER, CLIENT_CERTIFICATE_PASSWORD_DEFAULT);
+        str = str.replace(TENANT_ID_PLACEHOLDER, TENANT_ID_DEFAULT);
         str = replaceExternalEndpoint(str);
 
         return str;
     }
 
     protected String replaceExternalEndpoint(String str) {
-        return str.replace(TestConstants.AZURE_BLOB_ENDPOINT_PLACEHOLDER, TestConstants.AZURE_BLOB_ENDPOINT_DEFAULT);
+        return str.replace(BLOB_ENDPOINT_PLACEHOLDER, BLOB_ENDPOINT_DEFAULT);
     }
 
     protected boolean noTemplateRequired(String str) {
@@ -2374,17 +2413,17 @@ public class TestExecutor {
 
     protected String applyAzureSubstitution(String str, List<Placeholder> placeholders) {
         boolean isReplaced = false;
-        boolean hasBlobEndpoint = false;
+        boolean hasEndpoint = false;
 
         for (Placeholder placeholder : placeholders) {
             // Stop if all parameters are met
-            if (hasBlobEndpoint) {
+            if (hasEndpoint) {
                 break;
-            } else if (placeholder.getName().equals("blobEndpoint")) {
-                hasBlobEndpoint = true;
+            } else if (placeholder.getName().equals("endpoint")) {
+                hasEndpoint = true;
                 isReplaced = true;
                 str = setAzureTemplate(str);
-                str = str.replace(TestConstants.AZURE_BLOB_ENDPOINT_PLACEHOLDER, placeholder.getValue());
+                str = str.replace(BLOB_ENDPOINT_PLACEHOLDER, placeholder.getValue());
             }
         }
 
@@ -2397,11 +2436,11 @@ public class TestExecutor {
     }
 
     protected String setAzureTemplate(String str) {
-        return str.replace("%template%", TestConstants.AZURE_TEMPLATE);
+        return str.replace("%template%", TEMPLATE);
     }
 
     protected String setAzureTemplateDefault(String str) {
-        return str.replace("%template%", TestConstants.AZURE_TEMPLATE_DEFAULT);
+        return str.replace("%template%", TEMPLATE_DEFAULT);
     }
 
     protected void fail(boolean runDiagnostics, TestCaseContext testCaseCtx, CompilationUnit cUnit,
@@ -2540,37 +2579,65 @@ public class TestExecutor {
     public void cleanup(String testCase, List<String> badtestcases) throws Exception {
         try {
             List<DataverseName> toBeDropped = new ArrayList<>();
-            InputStream resultStream = executeQueryService(
-                    "select dv.DataverseName from Metadata.`Dataverse` as dv order by dv.DataverseName;",
-                    getEndpoint(Servlets.QUERY_SERVICE), OutputFormat.CLEAN_JSON);
-            JsonNode result = extractResult(IOUtils.toString(resultStream, UTF_8));
-            for (int i = 0; i < result.size(); i++) {
-                JsonNode json = result.get(i);
-                if (json != null) {
-                    DataverseName dvName = DataverseName.createFromCanonicalForm(json.get("DataverseName").asText());
-                    if (!dvName.equals(MetadataConstants.METADATA_DATAVERSE_NAME)
-                            && !dvName.equals(MetadataBuiltinEntities.DEFAULT_DATAVERSE_NAME)) {
-                        toBeDropped.add(dvName);
-                    }
-                }
-            }
+            listUserDefinedDataverses(toBeDropped);
             if (!toBeDropped.isEmpty()) {
                 badtestcases.add(testCase);
                 LOGGER.info("Last test left some garbage. Dropping dataverses: " + StringUtils.join(toBeDropped, ','));
-                StringBuilder dropStatement = new StringBuilder();
                 for (DataverseName dv : toBeDropped) {
-                    dropStatement.setLength(0);
-                    dropStatement.append("drop dataverse ");
-                    SqlppStatementUtil.encloseDataverseName(dropStatement, dv);
-                    dropStatement.append(";\n");
-                    resultStream = executeQueryService(dropStatement.toString(), getEndpoint(Servlets.QUERY_SERVICE),
-                            OutputFormat.CLEAN_JSON, UTF_8);
-                    ResultExtractor.extract(resultStream, UTF_8, OutputFormat.CLEAN_JSON);
+                    dropDataverse(dv);
                 }
             }
         } catch (Throwable th) {
             th.printStackTrace();
             throw th;
+        }
+    }
+
+    protected void listUserDefinedDataverses(List<DataverseName> outDataverses) throws Exception {
+        String query = "select dv.DataverseName from Metadata.`Dataverse` as dv order by dv.DataverseName";
+        InputStream resultStream =
+                executeQueryService(query, getEndpoint(Servlets.QUERY_SERVICE), OutputFormat.CLEAN_JSON);
+        JsonNode result = extractResult(IOUtils.toString(resultStream, UTF_8));
+        for (int i = 0; i < result.size(); i++) {
+            JsonNode json = result.get(i);
+            if (json != null) {
+                DataverseName dvName = DataverseName.createFromCanonicalForm(json.get("DataverseName").asText());
+                if (!dvName.equals(MetadataConstants.METADATA_DATAVERSE_NAME)
+                        && !dvName.equals(MetadataBuiltinEntities.DEFAULT_DATAVERSE_NAME)) {
+                    outDataverses.add(dvName);
+                }
+            }
+        }
+    }
+
+    protected void dropDataverse(DataverseName dv) throws Exception {
+        StringBuilder dropStatement = new StringBuilder();
+        dropStatement.append("drop dataverse ");
+        SqlppStatementUtil.encloseDataverseName(dropStatement, dv);
+        dropStatement.append(";\n");
+        InputStream resultStream = executeQueryService(dropStatement.toString(), getEndpoint(Servlets.QUERY_SERVICE),
+                OutputFormat.CLEAN_JSON, UTF_8);
+        ResultExtractor.extract(resultStream, UTF_8, OutputFormat.CLEAN_JSON);
+    }
+
+    protected void listDatasets(DataverseName dataverseName, List<Pair<String, DatasetConfig.DatasetType>> outDatasets)
+            throws Exception {
+        String query = "select d.DatasetName, d.DatasetType from Metadata.`Dataset` d where d.DataverseName = '"
+                + dataverseName.getCanonicalForm() + "'";
+        InputStream resultStream = executeQueryService(query, getEndpoint(Servlets.QUERY_SERVICE),
+                TestCaseContext.OutputFormat.CLEAN_JSON);
+        JsonNode result = extractResult(IOUtils.toString(resultStream, UTF_8));
+        for (int i = 0; i < result.size(); i++) {
+            JsonNode json = result.get(i);
+            String datasetName = json.get("DatasetName").asText();
+            String datasetTypeText = json.get("DatasetType").asText();
+            DatasetConfig.DatasetType datasetType;
+            try {
+                datasetType = DatasetConfig.DatasetType.valueOf(datasetTypeText);
+            } catch (IllegalArgumentException e) {
+                throw new Exception("Unexpected dataset type: " + datasetTypeText);
+            }
+            outDatasets.add(new Pair<>(datasetName, datasetType));
         }
     }
 
@@ -2842,5 +2909,26 @@ public class TestExecutor {
 
     private static boolean containsPort(String endPoint) {
         return StringUtils.contains(endPoint, ':');
+    }
+
+    // adapted from https://stackoverflow.com/questions/2014700/preemptive-basic-authentication-with-apache-httpclient-4
+    static class PreemptiveAuthInterceptor implements HttpRequestInterceptor {
+
+        public void process(final HttpRequest request, final HttpContext context) throws HttpException, IOException {
+            AuthState authState = (AuthState) context.getAttribute(HttpClientContext.TARGET_AUTH_STATE);
+            // if no auth scheme available yet, try to initialize it preemptively
+            if (authState.getAuthScheme() == null) {
+                CredentialsProvider credsProvider =
+                        (CredentialsProvider) context.getAttribute(HttpClientContext.CREDS_PROVIDER);
+                if (credsProvider != null) {
+                    HttpHost targetHost = (HttpHost) context.getAttribute(HttpCoreContext.HTTP_TARGET_HOST);
+                    Credentials creds =
+                            credsProvider.getCredentials(new AuthScope(targetHost.getHostName(), targetHost.getPort()));
+                    if (creds != null) {
+                        authState.update(new BasicScheme(), creds);
+                    }
+                }
+            }
+        }
     }
 }

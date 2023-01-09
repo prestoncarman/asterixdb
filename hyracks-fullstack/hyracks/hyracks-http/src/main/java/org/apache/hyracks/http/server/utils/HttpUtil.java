@@ -38,7 +38,9 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import org.apache.commons.lang3.StringUtils;
+import org.apache.http.NameValuePair;
 import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.utils.URLEncodedUtils;
 import org.apache.hyracks.http.api.IServletRequest;
 import org.apache.hyracks.http.api.IServletResponse;
 import org.apache.hyracks.http.server.BaseRequest;
@@ -71,10 +73,15 @@ public class HttpUtil {
     }
 
     public static IServletRequest toServletRequest(ChannelHandlerContext ctx, FullHttpRequest request,
-            HttpScheme scheme) {
+            HttpScheme scheme, boolean ignoreQueryParameters) {
         return ContentType.APPLICATION_X_WWW_FORM_URLENCODED.equals(getContentTypeOnly(request))
-                && !HttpMethod.GET.equals(request.method()) ? FormUrlEncodedRequest.create(ctx, request, scheme)
-                        : BaseRequest.create(ctx, request, scheme);
+                && !HttpMethod.GET.equals(request.method())
+                        ? FormUrlEncodedRequest.create(ctx, request, scheme, ignoreQueryParameters)
+                        : BaseRequest.create(ctx, request, scheme, ignoreQueryParameters);
+    }
+
+    public static boolean ignoreQueryParameters(HttpMethod method) {
+        return HttpMethod.POST.equals(method) || HttpMethod.DELETE.equals(method) || HttpMethod.PUT.equals(method);
     }
 
     public static String getContentTypeOnly(IServletRequest request) {
@@ -108,6 +115,10 @@ public class HttpUtil {
 
     public static void setContentType(IServletResponse response, String type) throws IOException {
         response.setHeader(HttpHeaderNames.CONTENT_TYPE, type);
+    }
+
+    public static void setServerHeader(IServletResponse response, String value) throws IOException {
+        response.setHeader(HttpHeaderNames.SERVER, value);
     }
 
     public static Map<String, String> getRequestHeaders(IServletRequest request) {
@@ -225,7 +236,13 @@ public class HttpUtil {
         try {
             return readFuture.get();
         } catch (InterruptedException ex) { // NOSONAR -- interrupt or rethrow
-            response.close();
+            executor.submit(() -> {
+                try {
+                    response.close();
+                } catch (IOException e) {
+                    LOGGER.debug("{} ignoring exception thrown on stream close due to interrupt", description, e);
+                }
+            });
             try {
                 readFuture.get(1, TimeUnit.SECONDS);
             } catch (TimeoutException te) {
@@ -241,6 +258,23 @@ public class HttpUtil {
     public static HttpScheme getScheme(HttpServer server, FullHttpRequest request) {
         return server.getScheme() == HttpScheme.HTTPS || "https".equals(request.headers().get(X_FORWARDED_PROTO))
                 ? HttpScheme.HTTPS : HttpScheme.HTTP;
+    }
+
+    /**
+     * @return the first parameter value of the supplied parameter name, or {@link Optional#empty()}
+     */
+    public static Optional<String> extractQueryParameter(String uri, String parameterName) {
+        return extractQueryParameters(uri, parameterName).map(values -> values[0]);
+    }
+
+    /**
+     * @return all parameter values of the supplied parameter name, or {@link Optional#empty()}
+     */
+    public static Optional<String[]> extractQueryParameters(String uri, String parameterName) {
+        String[] values = URLEncodedUtils.parse(uri, StandardCharsets.UTF_8, '?', '&').stream()
+                .filter(pair -> pair.getName().equals(parameterName)).map(NameValuePair::getValue)
+                .toArray(String[]::new);
+        return values.length == 0 ? Optional.empty() : Optional.of(values);
     }
 
     public static class ContentType {

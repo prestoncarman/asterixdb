@@ -48,13 +48,11 @@ import org.apache.hyracks.api.dataflow.value.ITypeTraits;
 import org.apache.hyracks.api.dataflow.value.RecordDescriptor;
 import org.apache.hyracks.api.exceptions.SourceLocation;
 import org.apache.hyracks.api.job.JobSpecification;
-import org.apache.hyracks.dataflow.std.base.AbstractOperatorDescriptor;
 import org.apache.hyracks.dataflow.std.base.AbstractSingleActivityOperatorDescriptor;
 import org.apache.hyracks.dataflow.std.connectors.OneToOneConnectorDescriptor;
 import org.apache.hyracks.dataflow.std.sort.ExternalSortOperatorDescriptor;
 import org.apache.hyracks.storage.am.common.dataflow.IIndexDataflowHelperFactory;
 import org.apache.hyracks.storage.am.common.dataflow.IndexDataflowHelperFactory;
-import org.apache.hyracks.util.OptionalBoolean;
 
 public class SecondaryBTreeOperationsHelper extends SecondaryTreeIndexOperationsHelper {
 
@@ -67,12 +65,10 @@ public class SecondaryBTreeOperationsHelper extends SecondaryTreeIndexOperations
     public JobSpecification buildLoadingJobSpec() throws AlgebricksException {
         JobSpecification spec = RuntimeUtils.createJobSpecification(metadataProvider.getApplicationContext());
         Index.ValueIndexDetails indexDetails = (Index.ValueIndexDetails) index.getIndexDetails();
-        boolean isOverridingKeyFieldTypes = indexDetails.isOverridingKeyFieldTypes();
         int[] fieldPermutation = createFieldPermutationForBulkLoadOp(indexDetails.getKeyFieldNames().size());
         IIndexDataflowHelperFactory dataflowHelperFactory = new IndexDataflowHelperFactory(
                 metadataProvider.getStorageComponentProvider().getStorageManager(), secondaryFileSplitProvider);
-        boolean excludeUnknown =
-                excludeUnknowns(index, indexDetails) && (anySecondaryKeyIsNullable || isOverridingKeyFieldTypes);
+        boolean excludeUnknown = excludeUnknownKeys(index, indexDetails, anySecondaryKeyIsNullable);
         if (dataset.getDatasetType() == DatasetType.EXTERNAL) {
             /*
              * In case of external data,
@@ -84,11 +80,6 @@ public class SecondaryBTreeOperationsHelper extends SecondaryTreeIndexOperations
             ExternalScanOperatorDescriptor primaryScanOp = createExternalIndexingOp(spec);
 
             // Assign op.
-            AbstractOperatorDescriptor sourceOp = primaryScanOp;
-            if (isOverridingKeyFieldTypes && !enforcedItemType.equals(itemType)) {
-                sourceOp = createCastOp(spec, dataset.getDatasetType(), index.isEnforced());
-                spec.connect(new OneToOneConnectorDescriptor(spec), primaryScanOp, 0, sourceOp, 0);
-            }
             AlgebricksMetaOperatorDescriptor asterixAssignOp =
                     createExternalAssignOp(spec, indexDetails.getKeyFieldNames().size(), secondaryRecDesc);
 
@@ -119,7 +110,7 @@ public class SecondaryBTreeOperationsHelper extends SecondaryTreeIndexOperations
             metaOp.setSourceLocation(sourceLoc);
             spec.connect(new OneToOneConnectorDescriptor(spec), secondaryBulkLoadOp, 0, metaOp, 0);
             root = metaOp;
-            spec.connect(new OneToOneConnectorDescriptor(spec), sourceOp, 0, asterixAssignOp, 0);
+            spec.connect(new OneToOneConnectorDescriptor(spec), primaryScanOp, 0, asterixAssignOp, 0);
             if (excludeUnknown) {
                 spec.connect(new OneToOneConnectorDescriptor(spec), asterixAssignOp, 0, selectOp, 0);
                 spec.connect(new OneToOneConnectorDescriptor(spec), selectOp, 0, sortOp, 0);
@@ -132,7 +123,7 @@ public class SecondaryBTreeOperationsHelper extends SecondaryTreeIndexOperations
             return spec;
         } else {
             // job spec:
-            // key provider -> primary idx -> (cast assign)? -> assign -> (select)? -> (sort)? -> bulk load -> sink
+            // key provider -> primary idx scan -> cast assign -> (select)? -> (sort)? -> bulk load -> sink
             IndexUtil.bindJobEventListener(spec, metadataProvider);
 
             // dummy key provider ----> primary index scan
@@ -141,13 +132,7 @@ public class SecondaryBTreeOperationsHelper extends SecondaryTreeIndexOperations
             spec.connect(new OneToOneConnectorDescriptor(spec), sourceOp, 0, targetOp, 0);
 
             sourceOp = targetOp;
-            if (isOverridingKeyFieldTypes && !enforcedItemType.equals(itemType)) {
-                // primary index scan ----> cast assign
-                targetOp = createCastOp(spec, dataset.getDatasetType(), index.isEnforced());
-                spec.connect(new OneToOneConnectorDescriptor(spec), sourceOp, 0, targetOp, 0);
-                sourceOp = targetOp;
-            }
-            // primary index OR cast assign ----> assign op
+            // primary index ----> cast assign op (produces the secondary index entry)
             targetOp = createAssignOp(spec, indexDetails.getKeyFieldNames().size(), secondaryRecDesc);
             spec.connect(new OneToOneConnectorDescriptor(spec), sourceOp, 0, targetOp, 0);
 
@@ -162,14 +147,13 @@ public class SecondaryBTreeOperationsHelper extends SecondaryTreeIndexOperations
             }
             // no need to sort if the index is secondary primary index
             if (!indexDetails.getKeyFieldNames().isEmpty()) {
-                // sort by secondary keys.
-                // assign op OR select op ----> sort op
+                // sort by <SKs,PKs>. cast assign op OR select op ----> sort op
                 targetOp = createSortOp(spec, secondaryComparatorFactories, secondaryRecDesc);
                 spec.connect(new OneToOneConnectorDescriptor(spec), sourceOp, 0, targetOp, 0);
                 sourceOp = targetOp;
             }
 
-            // assign op OR select op OR sort op ----> bulk load op
+            // cast assign op OR select op OR sort op ----> bulk load op
             targetOp = createTreeIndexBulkLoadOp(spec, fieldPermutation, dataflowHelperFactory,
                     StorageConstants.DEFAULT_TREE_FILL_FACTOR);
             spec.connect(new OneToOneConnectorDescriptor(spec), sourceOp, 0, targetOp, 0);
@@ -213,12 +197,12 @@ public class SecondaryBTreeOperationsHelper extends SecondaryTreeIndexOperations
     @Override
     protected void setSecondaryRecDescAndComparators() throws AlgebricksException {
         Index.ValueIndexDetails indexDetails = (Index.ValueIndexDetails) index.getIndexDetails();
-        int numSecondaryKeys = indexDetails.getKeyFieldNames().size();
+        int numSecondaryKeys = getNumSecondaryKeys();
         secondaryFieldAccessEvalFactories = new IScalarEvaluatorFactory[numSecondaryKeys + numFilterFields];
         secondaryComparatorFactories = new IBinaryComparatorFactory[numSecondaryKeys + numPrimaryKeys];
         secondaryBloomFilterKeyFields = new int[numSecondaryKeys];
         ISerializerDeserializer[] secondaryRecFields =
-                new ISerializerDeserializer[numPrimaryKeys + numSecondaryKeys + numFilterFields];
+                new ISerializerDeserializer[numSecondaryKeys + numPrimaryKeys + numFilterFields];
         ISerializerDeserializer[] enforcedRecFields =
                 new ISerializerDeserializer[1 + numPrimaryKeys + (dataset.hasMetaPart() ? 1 : 0) + numFilterFields];
         ITypeTraits[] enforcedTypeTraits =
@@ -233,24 +217,28 @@ public class SecondaryBTreeOperationsHelper extends SecondaryTreeIndexOperations
         boolean isOverridingKeyFieldTypes = indexDetails.isOverridingKeyFieldTypes();
         for (int i = 0; i < numSecondaryKeys; i++) {
             ARecordType sourceType;
+            ARecordType enforcedType;
             int sourceColumn;
             List<Integer> keySourceIndicators = indexDetails.getKeyFieldSourceIndicators();
             if (keySourceIndicators == null || keySourceIndicators.get(i) == 0) {
                 sourceType = itemType;
                 sourceColumn = recordColumn;
+                enforcedType = enforcedItemType;
             } else {
                 sourceType = metaType;
                 sourceColumn = recordColumn + 1;
+                enforcedType = enforcedMetaType;
             }
-            secondaryFieldAccessEvalFactories[i] = metadataProvider.getDataFormat().getFieldAccessEvaluatorFactory(
-                    metadataProvider.getFunctionManager(), isOverridingKeyFieldTypes ? enforcedItemType : sourceType,
-                    indexDetails.getKeyFieldNames().get(i), sourceColumn, sourceLoc);
-            Pair<IAType, Boolean> keyTypePair = Index.getNonNullableOpenFieldType(
-                    indexDetails.getKeyFieldTypes().get(i), indexDetails.getKeyFieldNames().get(i), sourceType);
+            List<String> secFieldName = indexDetails.getKeyFieldNames().get(i);
+            IAType secFieldType = indexDetails.getKeyFieldTypes().get(i);
+            Pair<IAType, Boolean> keyTypePair =
+                    Index.getNonNullableOpenFieldType(index, secFieldType, secFieldName, sourceType);
             IAType keyType = keyTypePair.first;
+            IScalarEvaluatorFactory secFieldAccessor = createFieldAccessor(sourceType, sourceColumn, secFieldName);
+            secondaryFieldAccessEvalFactories[i] =
+                    createFieldCast(secFieldAccessor, isOverridingKeyFieldTypes, enforcedType, sourceType, keyType);
             anySecondaryKeyIsNullable = anySecondaryKeyIsNullable || keyTypePair.second;
-            ISerializerDeserializer keySerde = serdeProvider.getSerializerDeserializer(keyType);
-            secondaryRecFields[i] = keySerde;
+            secondaryRecFields[i] = serdeProvider.getSerializerDeserializer(keyType);
             secondaryComparatorFactories[i] = comparatorFactoryProvider.getBinaryComparatorFactory(keyType, true);
             secondaryTypeTraits[i] = typeTraitProvider.getTypeTrait(keyType);
             secondaryBloomFilterKeyFields[i] = i;
@@ -282,20 +270,29 @@ public class SecondaryBTreeOperationsHelper extends SecondaryTreeIndexOperations
         }
 
         if (numFilterFields > 0) {
-            ARecordType filterItemType =
-                    ((InternalDatasetDetails) dataset.getDatasetDetails()).getFilterSourceIndicator() == 0 ? itemType
-                            : metaType;
-            secondaryFieldAccessEvalFactories[numSecondaryKeys] = metadataProvider.getDataFormat()
-                    .getFieldAccessEvaluatorFactory(metadataProvider.getFunctionManager(), filterItemType,
-                            filterFieldName, numPrimaryKeys, sourceLoc);
-            Pair<IAType, Boolean> keyTypePair;
-            keyTypePair = Index.getNonNullableKeyFieldType(filterFieldName, filterItemType);
-            IAType type = keyTypePair.first;
-            ISerializerDeserializer serde = serdeProvider.getSerializerDeserializer(type);
+            Integer filterSourceIndicator =
+                    ((InternalDatasetDetails) dataset.getDatasetDetails()).getFilterSourceIndicator();
+            ARecordType sourceType;
+            ARecordType enforcedType;
+            int sourceColumn;
+            if (filterSourceIndicator == null || filterSourceIndicator == 0) {
+                sourceType = itemType;
+                sourceColumn = recordColumn;
+                enforcedType = enforcedItemType;
+            } else {
+                sourceType = metaType;
+                sourceColumn = recordColumn + 1;
+                enforcedType = enforcedMetaType;
+            }
+            IAType filterType = Index.getNonNullableKeyFieldType(filterFieldName, sourceType).first;
+            IScalarEvaluatorFactory filterAccessor = createFieldAccessor(sourceType, sourceColumn, filterFieldName);
+            secondaryFieldAccessEvalFactories[numSecondaryKeys] =
+                    createFieldCast(filterAccessor, isOverridingKeyFieldTypes, enforcedType, sourceType, filterType);
+            ISerializerDeserializer serde = serdeProvider.getSerializerDeserializer(filterType);
             secondaryRecFields[numPrimaryKeys + numSecondaryKeys] = serde;
             enforcedRecFields[numPrimaryKeys + 1 + (dataset.hasMetaPart() ? 1 : 0)] = serde;
             enforcedTypeTraits[numPrimaryKeys + 1 + (dataset.hasMetaPart() ? 1 : 0)] =
-                    typeTraitProvider.getTypeTrait(type);
+                    typeTraitProvider.getTypeTrait(filterType);
         }
         secondaryRecDesc = new RecordDescriptor(secondaryRecFields, secondaryTypeTraits);
         enforcedRecDesc = new RecordDescriptor(enforcedRecFields, enforcedTypeTraits);
@@ -308,14 +305,5 @@ public class SecondaryBTreeOperationsHelper extends SecondaryTreeIndexOperations
             fieldPermutation[i] = i;
         }
         return fieldPermutation;
-    }
-
-    private static boolean excludeUnknowns(Index index, Index.ValueIndexDetails details) {
-        if (index.isPrimaryKeyIndex()) {
-            return true;
-        } else {
-            OptionalBoolean excludeUnknownKey = details.isExcludeUnknownKey();
-            return excludeUnknownKey.isPresent() && excludeUnknownKey.get();
-        }
     }
 }

@@ -27,10 +27,10 @@ import org.apache.asterix.lang.common.visitor.base.ILangVisitor;
 
 public class IndexDropStatement extends AbstractStatement {
 
-    private DataverseName dataverseName;
-    private Identifier datasetName;
-    private Identifier indexName;
-    private boolean ifExists;
+    private final DataverseName dataverseName;
+    private final Identifier datasetName;
+    private final Identifier indexName;
+    private final boolean ifExists;
 
     public IndexDropStatement(DataverseName dataverseName, Identifier datasetName, Identifier indexName,
             boolean ifExists) {

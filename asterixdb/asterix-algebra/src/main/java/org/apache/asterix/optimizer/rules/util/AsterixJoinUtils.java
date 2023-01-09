@@ -26,9 +26,6 @@ import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractBina
 
 public class AsterixJoinUtils {
 
-    private static final int LEFT = 0;
-    private static final int RIGHT = 1;
-
     private AsterixJoinUtils() {
     }
 
@@ -42,6 +39,9 @@ public class AsterixJoinUtils {
             return;
         }
 
-        IntervalJoinUtils.tryIntervalJoinAssignment(op, context, joinCondition, LEFT, RIGHT);
+        boolean intervalJoinChosen = IntervalJoinUtils.tryIntervalJoinAssignment(op, context, joinCondition, 0, 1);
+        if (!intervalJoinChosen) {
+            SpatialJoinUtils.trySpatialJoinAssignment(op, context, joinCondition, 0, 1);
+        }
     }
 }

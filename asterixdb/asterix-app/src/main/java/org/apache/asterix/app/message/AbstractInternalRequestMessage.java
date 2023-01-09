@@ -80,8 +80,7 @@ public abstract class AbstractInternalRequestMessage implements ICcAddressedMess
         final RuntimeDataException rejectionReason =
                 ExecuteStatementRequestMessage.getRejectionReason(ccSrv, nodeRequestId);
         if (rejectionReason != null) {
-            ExecuteStatementRequestMessage.sendRejection(rejectionReason, messageBroker, requestMessageId,
-                    nodeRequestId);
+            sendRejection(rejectionReason, messageBroker, requestMessageId, nodeRequestId);
             return;
         }
         CCExtensionManager ccExtMgr = (CCExtensionManager) ccAppCtx.getExtensionManager();
@@ -94,7 +93,7 @@ public abstract class AbstractInternalRequestMessage implements ICcAddressedMess
         ResponsePrinter printer = new ResponsePrinter(sessionOutput);
         ResultProperties resultProperties = new ResultProperties(IStatementExecutor.ResultDelivery.IMMEDIATE, 1);
         IRequestParameters requestParams = new RequestParameters(requestReference, "", null, resultProperties,
-                new IStatementExecutor.Stats(), new IStatementExecutor.StatementProperties(), null, null,
+                new IStatementExecutor.Stats(), new IStatementExecutor.StatementProperties(), null, null, null,
                 additionalParams, Collections.emptyMap(), false);
         MetadataManager.INSTANCE.init();
         IStatementExecutor translator =
@@ -120,4 +119,14 @@ public abstract class AbstractInternalRequestMessage implements ICcAddressedMess
 
     protected abstract Statement produceStatement();
 
+    private void sendRejection(Exception reason, CCMessageBroker messageBroker, long requestMessageId,
+            String requestNodeId) {
+        InternalRequestResponse msg = new InternalRequestResponse(requestMessageId);
+        msg.setError(reason);
+        try {
+            messageBroker.sendApplicationMessageToNC(msg, requestNodeId);
+        } catch (Exception e) {
+            LOGGER.log(Level.WARN, e.toString(), e);
+        }
+    }
 }

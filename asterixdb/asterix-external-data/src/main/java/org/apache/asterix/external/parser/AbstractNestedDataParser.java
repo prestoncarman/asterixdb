@@ -35,6 +35,7 @@ import org.apache.asterix.om.types.IAType;
 import org.apache.asterix.om.types.hierachy.ATypeHierarchy;
 import org.apache.asterix.om.utils.RecordUtil;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
+import org.apache.hyracks.util.LogRedactionUtil;
 
 /**
  * Abstract class for nested formats (ADM, JSON, XML ... etc)
@@ -117,7 +118,7 @@ public abstract class AbstractNestedDataParser<T> extends AbstractDataParser {
         for (int i = 0; i < recordType.getFieldTypes().length; i++) {
             if (!nullBitmap.get(i) && !isMissableType(recordType.getFieldTypes()[i])) {
                 throw new RuntimeDataException(ErrorCode.PARSER_EXT_DATA_PARSER_CLOSED_FIELD_NULL,
-                        recordType.getFieldNames()[i]);
+                        LogRedactionUtil.userData(recordType.getFieldNames()[i]));
             }
         }
     }
@@ -183,8 +184,10 @@ public abstract class AbstractNestedDataParser<T> extends AbstractDataParser {
     protected boolean isConvertable(ATypeTag parsedTypeTag, ATypeTag definedTypeTag) {
         boolean convertable = parsedTypeTag == ATypeTag.STRING;
 
-        convertable &= definedTypeTag == ATypeTag.UUID || definedTypeTag == ATypeTag.DATE
-                || definedTypeTag == ATypeTag.TIME || definedTypeTag == ATypeTag.DATETIME;
+        convertable &=
+                definedTypeTag == ATypeTag.UUID || definedTypeTag == ATypeTag.DATE || definedTypeTag == ATypeTag.TIME
+                        || definedTypeTag == ATypeTag.DATETIME || definedTypeTag == ATypeTag.YEARMONTHDURATION
+                        || definedTypeTag == ATypeTag.DAYTIMEDURATION || definedTypeTag == ATypeTag.DURATION;
 
         return convertable || ATypeHierarchy.canPromote(parsedTypeTag, definedTypeTag)
                 || ATypeHierarchy.canDemote(parsedTypeTag, definedTypeTag);

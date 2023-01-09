@@ -24,6 +24,7 @@ import java.util.List;
 
 import org.apache.asterix.common.config.GlobalConfig;
 import org.apache.asterix.dataflow.data.nontagged.MissingWriterFactory;
+import org.apache.asterix.dataflow.data.nontagged.NullWriterFactory;
 import org.apache.asterix.formats.base.IDataFormat;
 import org.apache.asterix.formats.nontagged.ADMPrinterFactoryProvider;
 import org.apache.asterix.formats.nontagged.BinaryBooleanInspector;
@@ -33,6 +34,7 @@ import org.apache.asterix.formats.nontagged.BinaryHashFunctionFamilyProvider;
 import org.apache.asterix.formats.nontagged.BinaryIntegerInspector;
 import org.apache.asterix.formats.nontagged.CSVPrinterFactoryProvider;
 import org.apache.asterix.formats.nontagged.CleanJSONPrinterFactoryProvider;
+import org.apache.asterix.formats.nontagged.LosslessADMJSONPrinterFactoryProvider;
 import org.apache.asterix.formats.nontagged.LosslessJSONPrinterFactoryProvider;
 import org.apache.asterix.formats.nontagged.NormalizedKeyComputerFactoryProvider;
 import org.apache.asterix.formats.nontagged.PredicateEvaluatorFactoryProvider;
@@ -300,6 +302,11 @@ public class NonTaggedDataFormat implements IDataFormat {
     }
 
     @Override
+    public IPrinterFactoryProvider getLosslessADMJSONPrinterFactoryProvider() {
+        return LosslessADMJSONPrinterFactoryProvider.INSTANCE;
+    }
+
+    @Override
     public IPrinterFactoryProvider getCleanJSONPrinterFactoryProvider() {
         return CleanJSONPrinterFactoryProvider.INSTANCE;
     }
@@ -343,6 +350,11 @@ public class NonTaggedDataFormat implements IDataFormat {
     @Override
     public IMissingWriterFactory getMissingWriterFactory() {
         return MissingWriterFactory.INSTANCE;
+    }
+
+    @Override
+    public IMissingWriterFactory getNullWriterFactory() {
+        return NullWriterFactory.INSTANCE;
     }
 
     @Override

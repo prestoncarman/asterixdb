@@ -17,6 +17,7 @@
  * under the License.
  */
 
-SELECT D.SearchKey, D.SearchKeyElements, D.SearchKeyType
-FROM Metadata.`Index` D
-WHERE D.IndexName = "IdxYelpBusinessCheckinDates" AND D.DataverseName = "TestYelp";
+FROM       Metadata.`Index` D
+WHERE      D.IndexName LIKE "IdxYelp%" AND D.DataverseName = "TestYelp"
+SELECT     D.SearchKey, D.SearchKeyElements, D.SearchKeyType
+ORDER BY   D.IndexName;

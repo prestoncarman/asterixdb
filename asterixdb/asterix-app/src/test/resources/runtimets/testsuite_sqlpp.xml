@@ -29,6 +29,16 @@
   &TemporalQueries;
   <test-group name="api">
     <test-case FilePath="api">
+      <compilation-unit name="compileonly">
+        <output-dir compare="Text">compileonly</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="api">
+      <compilation-unit name="compileonly-2">
+        <output-dir compare="Text">compileonly-2</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="api">
       <compilation-unit name="multiple-param-values">
         <output-dir compare="Text">multiple-param-values</output-dir>
       </compilation-unit>
@@ -47,34 +57,41 @@
         <expected-error>ASX0044: DELETE statement is not supported in read-only mode</expected-error>
       </compilation-unit>
     </test-case>
+    <test-case FilePath="api" check-warnings="true">
+      <compilation-unit name="request-dataverse">
+        <output-dir compare="Text">request-dataverse</output-dir>
+        <expected-warn>ASX1063: Cannot find dataverse with name testUnknown</expected-warn>
+        <source-location>false</source-location>
+      </compilation-unit>
+    </test-case>
     <test-case FilePath="api">
       <compilation-unit name="request-param-validation">
         <output-dir compare="Text">request-param-validation</output-dir>
-        <expected-error>Invalid value for parameter "format": foo</expected-error>
-        <expected-error>Invalid value for parameter "pretty": bar</expected-error>
-        <expected-error>Invalid value for parameter "plan-format": blah</expected-error>
-        <expected-error>Invalid value for parameter "max-result-reads": foo</expected-error>
-        <expected-error>Invalid value for parameter "max-result-reads": 9999999999999999999999999999999999999999</expected-error>
-        <expected-error>Invalid value for parameter "max-warnings": baz</expected-error>
-        <expected-error>Invalid value for parameter "max-warnings": 1.5</expected-error>
-        <expected-error>Invalid value for parameter "mode": asyn</expected-error>
-        <expected-error>Invalid value for parameter "timeout": 12</expected-error>
-        <expected-error>Invalid value for parameter "args": 12</expected-error>
+        <expected-error>Invalid value for parameter 'format': foo</expected-error>
+        <expected-error>Invalid value for parameter 'pretty': bar</expected-error>
+        <expected-error>Invalid value for parameter 'plan-format': blah</expected-error>
+        <expected-error>Invalid value for parameter 'max-result-reads': foo</expected-error>
+        <expected-error>Invalid value for parameter 'max-result-reads': 9999999999999999999999999999999999999999</expected-error>
+        <expected-error>Invalid value for parameter 'max-warnings': baz</expected-error>
+        <expected-error>Invalid value for parameter 'max-warnings': 1.5</expected-error>
+        <expected-error>Invalid value for parameter 'mode': asyn</expected-error>
+        <expected-error>Invalid value for parameter 'timeout': 12</expected-error>
+        <expected-error>Invalid value for parameter 'args': 12</expected-error>
         <expected-error>Unable to process JSON content in request</expected-error>
         <expected-error>Unable to process JSON content in request</expected-error>
-        <expected-error>Invalid value for parameter "format": foo</expected-error>
-        <expected-error>Invalid value for parameter "pretty": bar</expected-error>
-        <expected-error>Invalid value for parameter "plan-format": blah</expected-error>
-        <expected-error>Invalid value for parameter "max-result-reads": foo</expected-error>
-        <expected-error>Invalid value for parameter "max-warnings": baz</expected-error>
-        <expected-error>Invalid value for parameter "mode": asyn</expected-error>
-        <expected-error>Invalid value for parameter "args": 12</expected-error>
+        <expected-error>Invalid value for parameter 'format': foo</expected-error>
+        <expected-error>Invalid value for parameter 'pretty': bar</expected-error>
+        <expected-error>Invalid value for parameter 'plan-format': blah</expected-error>
+        <expected-error>Invalid value for parameter 'max-result-reads': foo</expected-error>
+        <expected-error>Invalid value for parameter 'max-warnings': baz</expected-error>
+        <expected-error>Invalid value for parameter 'mode': asyn</expected-error>
+        <expected-error>Invalid value for parameter 'args': 12</expected-error>
         <expected-error>Unable to process JSON content in request</expected-error>
         <expected-error>Unable to process JSON content in request</expected-error>
-        <expected-error>Invalid value for parameter "profile": true</expected-error>
-        <expected-error>Invalid value for parameter "profile": true</expected-error>
-        <expected-error>Invalid value for parameter "profile": foo</expected-error>
-        <expected-error>Invalid value for parameter "profile": foo</expected-error>
+        <expected-error>Invalid value for parameter 'profile': true</expected-error>
+        <expected-error>Invalid value for parameter 'profile': true</expected-error>
+        <expected-error>Invalid value for parameter 'profile': foo</expected-error>
+        <expected-error>Invalid value for parameter 'profile': foo</expected-error>
         <source-location>false</source-location>
       </compilation-unit>
     </test-case>
@@ -130,6 +147,11 @@
       <compilation-unit name="post-non-query">
         <output-dir compare="Text">post-non-query</output-dir>
         <expected-error>TYPE_DECL statement is not supported in read-only mode</expected-error>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="api">
+      <compilation-unit name="signature">
+        <output-dir compare="Text">signature</output-dir>
       </compilation-unit>
     </test-case>
     <test-case FilePath="api">
@@ -215,21 +237,21 @@
     <test-case FilePath="flwor" check-warnings="true">
       <compilation-unit name="query-ASTERIXDB-2446">
         <output-dir compare="Text">query-ASTERIXDB-2446</output-dir>
-        <expected-error>ASX0013: Duplicate field name "a"</expected-error>
-        <expected-warn>Duplicate field name "c" (in line 28, at column 84)</expected-warn>
-        <expected-warn>Duplicate field name "e" (in line 28, at column 116)</expected-warn>
+        <expected-error>ASX0013: Duplicate field name 'a'</expected-error>
+        <expected-warn>Duplicate field name 'c' (in line 28, at column 84)</expected-warn>
+        <expected-warn>Duplicate field name 'e' (in line 28, at column 116)</expected-warn>
       </compilation-unit>
     </test-case>
     <test-case FilePath="flwor">
       <compilation-unit name="query-ASTERIXDB-2446-2">
         <output-dir compare="Text">query-ASTERIXDB-883</output-dir>
-        <expected-error>ASX0013: Duplicate field name "a" (in line 27, at column 20)</expected-error>
-        <expected-error>ASX0013: Duplicate field name "b" (in line 27, at column 20)</expected-error>
-        <expected-error>ASX0013: Duplicate field name "c" (in line 27, at column 11)</expected-error>
-        <expected-error>ASX0013: Duplicate field name "d" (in line 27, at column 11)</expected-error>
-        <expected-error>ASX0013: Duplicate field name "e" (in line 27, at column 14)</expected-error>
-        <expected-error>ASX0013: Duplicate field name "f" (in line 27, at column 11)</expected-error>
-        <expected-error>ASX0013: Duplicate field name "g" (in line 27, at column 11)</expected-error>
+        <expected-error>ASX0013: Duplicate field name 'a' (in line 27, at column 20)</expected-error>
+        <expected-error>ASX0013: Duplicate field name 'b' (in line 27, at column 20)</expected-error>
+        <expected-error>ASX0013: Duplicate field name 'c' (in line 27, at column 11)</expected-error>
+        <expected-error>ASX0013: Duplicate field name 'd' (in line 27, at column 11)</expected-error>
+        <expected-error>ASX0013: Duplicate field name 'e' (in line 27, at column 14)</expected-error>
+        <expected-error>ASX0013: Duplicate field name 'f' (in line 27, at column 11)</expected-error>
+        <expected-error>ASX0013: Duplicate field name 'g' (in line 27, at column 11)</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="flwor">
@@ -2866,6 +2888,14 @@
         <expected-error>ASX1079: Compilation error: arrayagg is a SQL-92 aggregate function. The SQL++ core aggregate function strict_arrayagg could potentially express the intent.</expected-error>
       </compilation-unit>
     </test-case>
+    <test-case FilePath="aggregate-sql-sugar" check-warnings="true">
+      <compilation-unit name="avg_mixed">
+        <output-dir compare="Text">avg_mixed</output-dir>
+        <expected-warn>ASX0004: Unsupported type: agg-avg cannot process input type string (in line 26, at column 12)</expected-warn>
+        <expected-warn>ASX0004: Unsupported type: agg-avg cannot process input type string (in line 28, at column 19)</expected-warn>
+        <expected-warn>ASX0004: Unsupported type: agg-avg cannot process input type string (in line 29, at column 19)</expected-warn>
+      </compilation-unit>
+    </test-case>
     <test-case FilePath="aggregate-sql-sugar">
       <compilation-unit name="distinct_mixed">
         <output-dir compare="Text">distinct_mixed</output-dir>
@@ -3578,10 +3608,10 @@
     <test-case FilePath="comparison" check-warnings="true">
       <compilation-unit name="incomparable_types">
         <output-dir compare="Text">incomparable_types</output-dir>
-          <expected-warn>Incomparable input types: string and bigint (in line 25, at column 13)</expected-warn>
+          <expected-warn>Incomparable input types: string and bigint (in line 26, at column 13)</expected-warn>
           <expected-warn>Incomparable input types: array and bigint (in line 23, at column 7)</expected-warn>
           <expected-warn>Incomparable input types: point and point (in line 24, at column 18)</expected-warn>
-          <expected-warn>Incomparable input types: bigint and string (in line 24, at column 46)</expected-warn>
+          <expected-warn>Incomparable input types: bigint and string (in line 25, at column 46)</expected-warn>
       </compilation-unit>
     </test-case>
   </test-group>
@@ -3657,10 +3687,9 @@
         <expected-warn>ASX0006: Invalid format for datetime in @#! (in line 24, at column 13)</expected-warn>
         <expected-warn>ASX0004: Unsupported type: datetime() cannot process input type boolean (in line 25, at column 13)</expected-warn>
         <expected-warn>ASX0004: Unsupported type: datetime() cannot process input type bigint (in line 26, at column 13)</expected-warn>
-        <expected-warn>ASX0004: Unsupported type: datetime() cannot process input type time (in line 27, at column 13)</expected-warn>
-        <expected-warn>ASX0004: Unsupported type: datetime() cannot process input type array (in line 28, at column 13)</expected-warn>
-        <expected-warn>ASX0004: Unsupported type: datetime() cannot process input type object (in line 29, at column 13)</expected-warn>
-        <expected-warn>ASX0006: Invalid format for datetime in 1951-12-27T12:20:15Z (in line 30, at column 13)</expected-warn>
+        <expected-warn>ASX0004: Unsupported type: datetime() cannot process input type array (in line 27, at column 13)</expected-warn>
+        <expected-warn>ASX0004: Unsupported type: datetime() cannot process input type object (in line 28, at column 13)</expected-warn>
+        <expected-warn>ASX0006: Invalid format for datetime in 1951-12-27T12:20:15Z (in line 29, at column 13)</expected-warn>
       </compilation-unit>
     </test-case>
     <test-case FilePath="constructor">
@@ -4096,6 +4125,11 @@
         -->
   </test-group>
   <test-group name="ddl">
+    <test-case FilePath="ddl">
+      <compilation-unit name="analyze-dataset-1">
+        <output-dir compare="Text">analyze-dataset-1</output-dir>
+      </compilation-unit>
+    </test-case>
     <test-case FilePath="ddl/create-index">
       <compilation-unit name="create-index-1">
         <output-dir compare="Text">create-index-1</output-dir>
@@ -4141,6 +4175,7 @@
       <compilation-unit name="bad-type-ddl">
         <output-dir compare="Text">none</output-dir>
         <expected-error>ASX1079: Compilation error: Reserved type name $x</expected-error>
+        <expected-error>ASX0013: Duplicate field name 'c' (in line 29, at column 19)</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="ddl">
@@ -4154,12 +4189,13 @@
         <expected-error>ASX1082: Cannot find datatype with name test.$d$t$i$Cust1</expected-error>
         <expected-error>ASX1082: Cannot find datatype with name test.$d$t$i$Cust2</expected-error>
         <expected-error>ASX1082: Cannot find datatype with name my_unknown_type</expected-error>
+        <expected-error>ASX0013: Duplicate field name 'c_name' (in line 25, at column 22)</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="ddl">
       <compilation-unit name="drop-primary-index">
         <output-dir compare="Text">drop-primary-index</output-dir>
-        <expected-error>Cannot drop index "ds". Drop dataset "ds" to remove this index</expected-error>
+        <expected-error>Cannot drop index 'ds'. Drop dataset 'ds' to remove this index</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="ddl" check-warnings="true">
@@ -4178,89 +4214,89 @@
     <test-case FilePath="ddl">
       <compilation-unit name="invalid-dataverse-name">
         <output-dir compare="Text">none</output-dir>
-        <expected-error>ASX1115: Invalid name for a database object: ""</expected-error>
-        <expected-error>ASX1115: Invalid name for a database object: " a"</expected-error>
-        <expected-error>ASX1115: Invalid name for a database object: " invalid"</expected-error>
+        <expected-error>ASX1115: Invalid name for a database object: ''</expected-error>
+        <expected-error>ASX1115: Invalid name for a database object: ' a'</expected-error>
+        <expected-error>ASX1115: Invalid name for a database object: ' invalid'</expected-error>
         <expected-error>ASX1079: Compilation error: Invalid operation - Cannot create dataverse: asterix</expected-error>
         <expected-error>ASX1079: Compilation error: Invalid operation - Cannot create dataverse: algebricks</expected-error>
-        <expected-error>ASX1115: Invalid name for a database object: "" (in line 24, at column 16)</expected-error>
-        <expected-error>ASX1115: Invalid name for a database object: "a/b" (in line 27, at column 16)</expected-error>
+        <expected-error>ASX1115: Invalid name for a database object: '' (in line 24, at column 16)</expected-error>
+        <expected-error>ASX1115: Invalid name for a database object: 'a/b' (in line 27, at column 16)</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="ddl">
       <compilation-unit name="invalid-dataset-name">
         <output-dir compare="Text">none</output-dir>
-        <expected-error>ASX1115: Invalid name for a database object: ""</expected-error>
-        <expected-error>ASX1115: Invalid name for a database object: " a"</expected-error>
-        <expected-error>ASX1115: Invalid name for a database object: " invalid"</expected-error>
-        <expected-error>ASX1115: Invalid name for a database object: "a/b" (in line 29, at column 16)</expected-error>
-        <expected-error>ASX1115: Invalid name for a database object: "c/d" (in line 31, at column 14)</expected-error>
+        <expected-error>ASX1115: Invalid name for a database object: ''</expected-error>
+        <expected-error>ASX1115: Invalid name for a database object: ' a'</expected-error>
+        <expected-error>ASX1115: Invalid name for a database object: ' invalid'</expected-error>
+        <expected-error>ASX1115: Invalid name for a database object: 'a/b' (in line 29, at column 16)</expected-error>
+        <expected-error>ASX1115: Invalid name for a database object: 'c/d' (in line 31, at column 14)</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="ddl">
       <compilation-unit name="invalid-feed-name">
         <output-dir compare="Text">none</output-dir>
-        <expected-error>ASX1115: Invalid name for a database object: ""</expected-error>
-        <expected-error>ASX1115: Invalid name for a database object: " a"</expected-error>
-        <expected-error>ASX1115: Invalid name for a database object: " invalid"</expected-error>
-        <expected-error>ASX1115: Invalid name for a database object: "a/b" (in line 34, at column 13)</expected-error>
-        <expected-error>ASX1115: Invalid name for a database object: "c/d" (in line 42, at column 11)</expected-error>
+        <expected-error>ASX1115: Invalid name for a database object: ''</expected-error>
+        <expected-error>ASX1115: Invalid name for a database object: ' a'</expected-error>
+        <expected-error>ASX1115: Invalid name for a database object: ' invalid'</expected-error>
+        <expected-error>ASX1115: Invalid name for a database object: 'a/b' (in line 34, at column 13)</expected-error>
+        <expected-error>ASX1115: Invalid name for a database object: 'c/d' (in line 42, at column 11)</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="ddl">
       <compilation-unit name="invalid-feed-policy-name">
         <output-dir compare="Text">none</output-dir>
-        <expected-error>ASX1115: Invalid name for a database object: ""</expected-error>
-        <expected-error>ASX1115: Invalid name for a database object: " a"</expected-error>
-        <expected-error>ASX1115: Invalid name for a database object: "a/b" (in line 29, at column 1)</expected-error>
-        <expected-error>ASX1115: Invalid name for a database object: "c/d" (in line 32, at column 23)</expected-error>
+        <expected-error>ASX1115: Invalid name for a database object: ''</expected-error>
+        <expected-error>ASX1115: Invalid name for a database object: ' a'</expected-error>
+        <expected-error>ASX1115: Invalid name for a database object: 'a/b' (in line 29, at column 1)</expected-error>
+        <expected-error>ASX1115: Invalid name for a database object: 'c/d' (in line 32, at column 23)</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="ddl">
       <compilation-unit name="invalid-index-name">
         <output-dir compare="Text">none</output-dir>
-        <expected-error>ASX1115: Invalid name for a database object: ""</expected-error>
-        <expected-error>ASX1115: Invalid name for a database object: " a"</expected-error>
-        <expected-error>ASX1115: Invalid name for a database object: " invalid"</expected-error>
-        <expected-error>ASX1115: Invalid name for a database object: "a/b" (in line 29, at column 19)</expected-error>
-        <expected-error>ASX1115: Invalid name for a database object: "c/d" (in line 33, at column 12)</expected-error>
+        <expected-error>ASX1115: Invalid name for a database object: ''</expected-error>
+        <expected-error>ASX1115: Invalid name for a database object: ' a'</expected-error>
+        <expected-error>ASX1115: Invalid name for a database object: ' invalid'</expected-error>
+        <expected-error>ASX1115: Invalid name for a database object: 'a/b' (in line 29, at column 19)</expected-error>
+        <expected-error>ASX1115: Invalid name for a database object: 'c/d' (in line 33, at column 12)</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="ddl">
       <compilation-unit name="invalid-nodegroup-name">
         <output-dir compare="Text">none</output-dir>
-        <expected-error>ASX1115: Invalid name for a database object: ""</expected-error>
-        <expected-error>ASX1115: Invalid name for a database object: " a"</expected-error>
+        <expected-error>ASX1115: Invalid name for a database object: ''</expected-error>
+        <expected-error>ASX1115: Invalid name for a database object: ' a'</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="ddl">
       <compilation-unit name="invalid-type-name">
         <output-dir compare="Text">none</output-dir>
-        <expected-error>ASX1115: Invalid name for a database object: ""</expected-error>
-        <expected-error>ASX1115: Invalid name for a database object: " a"</expected-error>
-        <expected-error>ASX1115: Invalid name for a database object: " invalid"</expected-error>
-        <expected-error>ASX1115: Invalid name for a database object: "a/b" (in line 29, at column 13)</expected-error>
-        <expected-error>ASX1115: Invalid name for a database object: "c/d" (in line 33, at column 11)</expected-error>
+        <expected-error>ASX1115: Invalid name for a database object: ''</expected-error>
+        <expected-error>ASX1115: Invalid name for a database object: ' a'</expected-error>
+        <expected-error>ASX1115: Invalid name for a database object: ' invalid'</expected-error>
+        <expected-error>ASX1115: Invalid name for a database object: 'a/b' (in line 29, at column 13)</expected-error>
+        <expected-error>ASX1115: Invalid name for a database object: 'c/d' (in line 33, at column 11)</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="ddl">
       <compilation-unit name="invalid-udf-name">
         <output-dir compare="Text">none</output-dir>
-        <expected-error>ASX1115: Invalid name for a database object: ""</expected-error>
-        <expected-error>ASX1115: Invalid name for a database object: " a"</expected-error>
-        <expected-error>ASX1115: Invalid name for a database object: " invalid"</expected-error>
-        <expected-error>ASX1115: Invalid name for a database object: "a/b" (in line 29, at column 17)</expected-error>
-        <expected-error>ASX1115: Invalid name for a database object: "c/d" (in line 33, at column 15)</expected-error>
+        <expected-error>ASX1115: Invalid name for a database object: ''</expected-error>
+        <expected-error>ASX1115: Invalid name for a database object: ' a'</expected-error>
+        <expected-error>ASX1115: Invalid name for a database object: ' invalid'</expected-error>
+        <expected-error>ASX1115: Invalid name for a database object: 'a/b' (in line 29, at column 17)</expected-error>
+        <expected-error>ASX1115: Invalid name for a database object: 'c/d' (in line 33, at column 15)</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="ddl">
       <compilation-unit name="invalid-view-name">
         <output-dir compare="Text">none</output-dir>
-        <expected-error>ASX1115: Invalid name for a database object: "" (in line 29, at column 1)</expected-error>
-        <expected-error>ASX1115: Invalid name for a database object: " a" (in line 29, at column 1)</expected-error>
-        <expected-error>ASX1115: Invalid name for a database object: " invalid" (in line 29, at column 1)</expected-error>
-        <expected-error>ASX1115: Invalid name for a database object: "a/b" (in line 29, at column 13)</expected-error>
-        <expected-error>ASX1115: Invalid name for a database object: "c/d" (in line 32, at column 11)</expected-error>
+        <expected-error>ASX1115: Invalid name for a database object: '' (in line 29, at column 1)</expected-error>
+        <expected-error>ASX1115: Invalid name for a database object: ' a' (in line 29, at column 1)</expected-error>
+        <expected-error>ASX1115: Invalid name for a database object: ' invalid' (in line 29, at column 1)</expected-error>
+        <expected-error>ASX1115: Invalid name for a database object: 'a/b' (in line 29, at column 13)</expected-error>
+        <expected-error>ASX1115: Invalid name for a database object: 'c/d' (in line 32, at column 11)</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="ddl">
@@ -4289,6 +4325,28 @@
     <test-case FilePath="ddl">
       <compilation-unit name="index-bad-fields">
         <output-dir compare="Text">index-bad-fields</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="ddl">
+      <compilation-unit name="index-cast-null">
+        <placeholder name="with" value="" />
+        <output-dir compare="Text">index-cast-null</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="ddl">
+      <compilation-unit name="index-cast-null">
+        <placeholder name="with" value="WITH {'merge-policy': {'name': 'correlated-prefix','parameters': { 'max-mergable-component-size': 16384, 'max-tolerance-component-count': 3 }}}" />
+        <output-dir compare="Text">index-cast-null</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="ddl">
+      <compilation-unit name="index-cast-null-negative">
+        <output-dir compare="Text">index-cast-null-negative</output-dir>
+        <expected-error>CAST modifier is only allowed for B-Tree indexes</expected-error>
+        <expected-error>CAST modifier cannot be specified together with ENFORCED</expected-error>
+        <expected-error>CAST modifier is used without specifying the type of the indexed field</expected-error>
+        <expected-error>Typed index on 'typed_f2' field could be created only for open datatype</expected-error>
+        <expected-error>Parameter invalid_date cannot be set</expected-error>
       </compilation-unit>
     </test-case>
   </test-group>
@@ -4551,8 +4609,8 @@
     <test-case FilePath="dml">
       <compilation-unit name="load-with-autogenerated-no-field">
         <output-dir compare="Text">load-with-autogenerated-no-field</output-dir>
-        <expected-error>ASX1014: Field "not_id" is not found</expected-error>
-        <expected-error>ASX1014: Field "not_id" is not found</expected-error>
+        <expected-error>ASX1014: Field 'not_id' is not found</expected-error>
+        <expected-error>ASX1014: Field 'not_id' is not found</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="dml">
@@ -5069,8 +5127,8 @@
     <test-case FilePath="dml">
       <compilation-unit name="load-with-autogenerated-no-field">
         <output-dir compare="Text">load-with-autogenerated-no-field</output-dir>
-        <expected-error>ASX1014: Field "not_id" is not found</expected-error>
-        <expected-error>ASX1014: Field "not_id" is not found</expected-error>
+        <expected-error>ASX1014: Field 'not_id' is not found</expected-error>
+        <expected-error>ASX1014: Field 'not_id' is not found</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="dml">
@@ -6051,6 +6109,11 @@
         <output-dir compare="Text">hash-group-by-decor</output-dir>
       </compilation-unit>
     </test-case>
+    <!--test-case FilePath="group-by">
+      <compilation-unit name="query-ASTERIXDB-3016">
+        <output-dir compare="Text">query-ASTERIXDB-3016</output-dir>
+      </compilation-unit>
+    </test-case-->
   </test-group>
   <test-group name="index-join">
     <test-case FilePath="index-join">
@@ -6496,6 +6559,18 @@
         <output-dir compare="Text">word-jaccard-inline</output-dir>
       </compilation-unit>
     </test-case>
+    <test-case FilePath="index-selection">
+      <compilation-unit name="cast-default-null">
+        <placeholder name="with" value="" />
+        <output-dir compare="Text">cast-default-null</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="index-selection">
+      <compilation-unit name="cast-default-null">
+        <placeholder name="with" value="WITH {'merge-policy': {'name': 'correlated-prefix','parameters': { 'max-mergable-component-size': 16384, 'max-tolerance-component-count': 3 }}}" />
+        <output-dir compare="Text">cast-default-null</output-dir>
+      </compilation-unit>
+    </test-case>
   </test-group>
   <test-group name="inverted-index-join-noeqjoin">
     <test-case FilePath="inverted-index-join-noeqjoin">
@@ -6577,6 +6652,11 @@
       </compilation-unit>
     </test-case>
     <test-case FilePath="join">
+      <compilation-unit name="hash_join_missing">
+        <output-dir compare="Text">hash_join_missing</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="join">
       <compilation-unit name="hash_join_record">
         <output-dir compare="Text">hash_join_record</output-dir>
       </compilation-unit>
@@ -6584,6 +6664,16 @@
     <test-case FilePath="join">
       <compilation-unit name="join-with-empty-dataset">
         <output-dir compare="Text">join-with-empty-dataset</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="join">
+      <compilation-unit name="nlj_partitioning_property">
+        <output-dir compare="Text">nlj_partitioning_property</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="join">
+      <compilation-unit name="inner_right_corr">
+        <output-dir compare="Text">inner_right_corr</output-dir>
       </compilation-unit>
     </test-case>
   </test-group>
@@ -6686,6 +6776,22 @@
     <test-case FilePath="list">
       <compilation-unit name="ordered-list-constructor_03">
         <output-dir compare="Text">ordered-list-constructor_03</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="list">
+      <compilation-unit name="ordered-list-constructor_04">
+        <output-dir compare="Text">ordered-list-constructor_04</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="list">
+      <compilation-unit name="ordered-list-constructor_05">
+        <output-dir compare="Text">ordered-list-constructor_05</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="list">
+      <compilation-unit name="ordered-list-constructor_06_negative">
+        <output-dir compare="Text">none</output-dir>
+        <expected-error><![CDATA[ASX1001: Syntax error: In line 26 >>    from [r, r+1] x select value count(x),<< Encountered "," at column 42]]></expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="list">
@@ -6911,7 +7017,7 @@
     <test-case FilePath="misc">
       <compilation-unit name="partition-by-nonexistent-field">
         <output-dir compare="Text">partition-by-nonexistent-field</output-dir>
-        <expected-error>Field "id" is not found</expected-error>
+        <expected-error>Field 'id' is not found</expected-error>
         <expected-error>Cannot find dataset with name testds in dataverse test</expected-error>
         <expected-error>Cannot find dataset testds in dataverse test nor an alias with name testds</expected-error>
       </compilation-unit>
@@ -7121,6 +7227,11 @@
       </compilation-unit>
     </test-case>
     <test-case FilePath="misc">
+      <compilation-unit name="metadata_only_02">
+        <output-dir compare="Text">metadata_only_02</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="misc">
       <compilation-unit name="cast-ASTERIXDB-2458">
         <output-dir compare="Text">cast-ASTERIXDB-2458</output-dir>
       </compilation-unit>
@@ -7200,7 +7311,7 @@
       <test-case FilePath="index/validations">
         <compilation-unit name="repetitive-keys">
           <output-dir compare="Text">repetitive-keys</output-dir>
-          <expected-error>Cannot create index with the same field "[value]" specified more than once.</expected-error>
+          <expected-error>Cannot create index with the same field '[value]' specified more than once.</expected-error>
         </compilation-unit>
       </test-case>
     </test-group>
@@ -7210,13 +7321,13 @@
       <test-case FilePath="open-index-enforced/error-checking">
         <compilation-unit name="enforced-field-name-collision">
           <output-dir compare="Text">enforced-field-name-collision</output-dir>
-          <expected-error>Cannot create enforced index on "[value]" field. The field is closed type.</expected-error>
+          <expected-error>Cannot create enforced index on '[value]' field. The field is closed type.</expected-error>
         </compilation-unit>
       </test-case>
       <test-case FilePath="open-index-enforced/error-checking">
         <compilation-unit name="enforced-field-type-collision">
           <output-dir compare="Text">enforced-field-type-collision</output-dir>
-          <expected-error>Cannot create enforced index on "[value]" field. The field is closed type.</expected-error>
+          <expected-error>Cannot create enforced index on '[value]' field. The field is closed type.</expected-error>
         </compilation-unit>
       </test-case>
       <test-case FilePath="open-index-enforced/error-checking">
@@ -7228,31 +7339,31 @@
       <test-case FilePath="open-index-enforced/error-checking">
         <compilation-unit name="missing-optionality">
           <output-dir compare="Text">missing-optionality</output-dir>
-          <expected-error>Cannot create enforced index on "[value]" field with non-optional type</expected-error>
+          <expected-error>Cannot create enforced index on '[value]' field with non-optional type</expected-error>
         </compilation-unit>
       </test-case>
       <test-case FilePath="open-index-enforced/error-checking">
         <compilation-unit name="index-on-closed-type">
           <output-dir compare="Text">index-on-closed-type</output-dir>
-          <expected-error>ASX1014: Field "value" is not found (in line 33, at column 34)</expected-error>
+          <expected-error>ASX1014: Field 'value' is not found (in line 33, at column 34)</expected-error>
         </compilation-unit>
       </test-case>
       <test-case FilePath="open-index-enforced/error-checking">
         <compilation-unit name="index-type-collision">
           <output-dir compare="Text">index-type-collision</output-dir>
-          <expected-error>Cannot create index testIdx2 , enforced index testIdx1 on field "[value]" is already defined with type "[integer]"</expected-error>
+          <expected-error>Cannot create index testIdx2 , enforced index testIdx1 on field(s) 'value' is already defined with type(s) 'integer'</expected-error>
         </compilation-unit>
       </test-case>
       <test-case FilePath="open-index-enforced/error-checking">
         <compilation-unit name="index-type-promotion-collision">
           <output-dir compare="Text">index-type-promotion-collision</output-dir>
-          <expected-error>Cannot create index testIdx2 , enforced index testIdx1 on field "[value]" is already defined with type "[bigint]"</expected-error>
+          <expected-error>Cannot create index testIdx2 , enforced index testIdx1 on field(s) 'value' is already defined with type(s) 'bigint'</expected-error>
         </compilation-unit>
       </test-case>
       <test-case FilePath="open-index-enforced/error-checking">
         <compilation-unit name="object-type-collision">
           <output-dir compare="Text">object-type-collision</output-dir>
-          <expected-error>ASX1051: Cannot create enforced index on "[value]" field. The field is closed type.</expected-error>
+          <expected-error>ASX1051: Cannot create enforced index on '[value]' field. The field is closed type.</expected-error>
         </compilation-unit>
       </test-case>
     </test-group>
@@ -8042,6 +8153,14 @@
   <test-group name="array-index">
     <test-group name="array-index/error-handling">
       <test-case FilePath="array-index/error-handling">
+        <compilation-unit name="index-include-unknown-key">
+          <output-dir compare="Text">index-include-unknown-key</output-dir>
+          <expected-error>ASX1079: Compilation error: Array indexes must specify EXCLUDE UNKNOWN KEY</expected-error>
+          <expected-error>ASX1079: Compilation error: Array indexes must specify EXCLUDE UNKNOWN KEY</expected-error>
+          <source-location>false</source-location>
+        </compilation-unit>
+      </test-case>
+      <test-case FilePath="array-index/error-handling">
         <compilation-unit name="index-two-array-fields">
           <output-dir compare="Text">index-two-array-fields</output-dir>
           <expected-error>ASX1079: Compilation error: Cannot create composite index with multiple array fields using different arrays</expected-error>
@@ -8060,7 +8179,7 @@
       <test-case FilePath="array-index/error-handling">
         <compilation-unit name="index-on-closed-array">
           <output-dir compare="Text">index-on-closed-array</output-dir>
-          <expected-error>ASX1014: Field "date" is not found</expected-error>
+          <expected-error>ASX1014: Field 'date' is not found</expected-error>
           <source-location>false</source-location>
         </compilation-unit>
       </test-case>
@@ -8072,10 +8191,15 @@
         </compilation-unit>
       </test-case>
       <test-case FilePath="array-index/error-handling">
-        <compilation-unit name="index-mixed-composite">
-          <output-dir compare="Text">index-mixed-composite</output-dir>
-          <expected-error>ASX1155: Incompatible index type ARRAY</expected-error>
-          <source-location>false</source-location>
+        <compilation-unit name="no-field-type">
+          <output-dir compare="Text">no-field-type</output-dir>
+          <expected-error>ASX1079: Compilation error: cannot find type of elements of field 'open_array_f'</expected-error>
+          <expected-error>ASX1079: Compilation error: cannot find type of elements of field 'nested_array'</expected-error>
+          <expected-error>ASX1079: Compilation error: cannot find type of elements of field 'nested_array'</expected-error>
+          <expected-error>ASX1079: Compilation error: cannot find type of field 'proj1'</expected-error>
+          <expected-error>ASX1079: Compilation error: cannot find type of field 'proj1'</expected-error>
+          <expected-error>ASX1079: Compilation error: cannot find type of field 'proj1'</expected-error>
+          <expected-error>ASX1079: Compilation error: cannot find type of field 'proj1'</expected-error>
         </compilation-unit>
       </test-case>
     </test-group>
@@ -8125,16 +8249,16 @@
           <output-dir compare="Text">complex-structures</output-dir>
         </compilation-unit>
       </test-case>
-      <!--      <test-case FilePath="array-index/metadata/closed">-->
-      <!--        <compilation-unit name="with-composite-sk">-->
-      <!--          <output-dir compare="Text">with-composite-sk</output-dir>-->
-      <!--        </compilation-unit>-->
-      <!--      </test-case>-->
-      <!--      <test-case FilePath="array-index/metadata/open">-->
-      <!--        <compilation-unit name="with-composite-sk">-->
-      <!--          <output-dir compare="Text">with-composite-sk</output-dir>-->
-      <!--        </compilation-unit>-->
-      <!--      </test-case>-->
+      <test-case FilePath="array-index/metadata/closed">
+        <compilation-unit name="with-composite-sk">
+          <output-dir compare="Text">with-composite-sk</output-dir>
+        </compilation-unit>
+      </test-case>
+      <test-case FilePath="array-index/metadata/open">
+        <compilation-unit name="with-composite-sk">
+          <output-dir compare="Text">with-composite-sk</output-dir>
+        </compilation-unit>
+      </test-case>
       <test-case FilePath="array-index/metadata/closed">
         <compilation-unit name="with-composite-array-different-indicators">
           <output-dir compare="Text">with-composite-array-different-indicators</output-dir>
@@ -8210,6 +8334,11 @@
       <test-case FilePath="array-index/bulk-loading/on-index-creation/closed">
         <compilation-unit name="with-3-level-record-path">
           <output-dir compare="Text">with-3-level-record-path</output-dir>
+        </compilation-unit>
+      </test-case>
+      <test-case FilePath="array-index/bulk-loading/on-index-creation/open">
+        <compilation-unit name="composite-atomic">
+          <output-dir compare="Text">composite-atomic</output-dir>
         </compilation-unit>
       </test-case>
     </test-group>
@@ -8370,6 +8499,11 @@
           <output-dir compare="Text">with-open-index</output-dir>
         </compilation-unit>
       </test-case>
+      <test-case FilePath="array-index/join-unnest-queries">
+        <compilation-unit name="loj-subquery">
+          <output-dir compare="Text">loj-subquery</output-dir>
+        </compilation-unit>
+      </test-case>
     </test-group>
     <test-group name="array-index/select-unnest-queries">
       <test-case FilePath="array-index/select-unnest-queries/closed">
@@ -8442,6 +8576,16 @@
           <output-dir compare="Text">with-filter-fields</output-dir>
         </compilation-unit>
       </test-case>
+      <test-case FilePath="array-index/select-unnest-queries/open">
+        <compilation-unit name="using-feed-new-index">
+          <output-dir compare="Text">using-feed</output-dir>
+        </compilation-unit>
+      </test-case>
+      <test-case FilePath="array-index/select-unnest-queries/open">
+        <compilation-unit name="using-feed-old-index">
+          <output-dir compare="Text">using-feed</output-dir>
+        </compilation-unit>
+      </test-case>
     </test-group>
     <test-group name="array-index/select-quantified-queries">
       <test-case FilePath="array-index/select-quantified-queries">
@@ -8475,6 +8619,13 @@
         </compilation-unit>
       </test-case>
     </test-group>
+    <test-group name="array-index/composite-index-queries">
+      <test-case FilePath="array-index">
+        <compilation-unit name="composite-index-queries">
+          <output-dir compare="Text">composite-index-queries</output-dir>
+        </compilation-unit>
+      </test-case>
+    </test-group>
   </test-group>
   <test-group name="nestrecords">
     <test-case FilePath="nestrecords">
@@ -8485,7 +8636,7 @@
     <test-case FilePath="nestrecords">
       <compilation-unit name="nested-optional-pk">
         <output-dir compare="Text">nested-optional-pk</output-dir>
-        <expected-error>ASX1021: The primary key field "nested.id" cannot be nullable</expected-error>
+        <expected-error>ASX1021: The primary key field 'nested.id' cannot be nullable</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="nestrecords">
@@ -8912,6 +9063,11 @@
     <test-case FilePath="numeric">
       <compilation-unit name="round-half-to-even5">
         <output-dir compare="Text">round-half-to-even5</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="numeric">
+      <compilation-unit name="round-half-up">
+        <output-dir compare="Text">round-half-up</output-dir>
       </compilation-unit>
     </test-case>
     <test-case FilePath="numeric">
@@ -9553,13 +9709,13 @@
     <!-- Fail sporadically        <test-case FilePath="range-hints">
             <compilation-unit name="order-by-exception_01">
                 <output-dir compare="Text">order-by</output-dir>
-                <expected-error>org.json.JSONException: JSONObject["summary"] not found</expected-error>
+                <expected-error>org.json.JSONException: JSONObject['summary'] not found</expected-error>
             </compilation-unit>
         </test-case>
         <test-case FilePath="range-hints">
             <compilation-unit name="order-by-exception_02">
                 <output-dir compare="Text">order-by</output-dir>
-                <expected-error>org.json.JSONException: JSONObject["summary"] not found</expected-error>
+                <expected-error>org.json.JSONException: JSONObject['summary'] not found</expected-error>
             </compilation-unit>
         </test-case> -->
   </test-group>
@@ -9683,7 +9839,17 @@
     </test-case>
     <test-case FilePath="scan">
       <compilation-unit name="alltypes_01">
-        <output-dir compare="Text">alltypes_01</output-dir>
+        <output-dir compare="Clean-JSON">alltypes_01-cleanjson</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="scan">
+      <compilation-unit name="alltypes_01">
+        <output-dir compare="Lossless-JSON">alltypes_01-losslessjson</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="scan">
+      <compilation-unit name="alltypes_01">
+        <output-dir compare="Lossless-ADM-JSON">alltypes_01-losslessadmjson</output-dir>
       </compilation-unit>
     </test-case>
     <test-case FilePath="scan">
@@ -9755,6 +9921,25 @@
     <test-case FilePath="select-star">
       <compilation-unit name="var_star_2">
         <output-dir compare="Text">var_star_2</output-dir>
+      </compilation-unit>
+    </test-case>
+  </test-group>
+  <test-group name="select-exclude">
+    <test-case FilePath="select-exclude">
+      <compilation-unit name="tiny-social">
+        <output-dir compare="Text">tiny-social</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="select-exclude">
+      <compilation-unit name="complex-exclude">
+        <output-dir compare="Text">complex-exclude</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="select-exclude">
+      <compilation-unit name="exclude-negative">
+        <output-dir compare="Text">exclude-negative</output-dir>
+        <expected-error>ASX1001: Syntax error</expected-error>
+        <expected-error>ASX1001: Syntax error</expected-error>
       </compilation-unit>
     </test-case>
   </test-group>
@@ -9934,6 +10119,11 @@
       </compilation-unit>
     </test-case>
     <test-case FilePath="spatial">
+      <compilation-unit name="hints_spatial_partitioning">
+        <output-dir compare="Text">hints_spatial_partitioning</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="spatial">
       <compilation-unit name="line_accessor">
         <output-dir compare="Text">line_accessor</output-dir>
       </compilation-unit>
@@ -10031,6 +10221,128 @@
     <test-case FilePath="spatial">
       <compilation-unit name="spatial-large-data">
         <output-dir compare="Text">spatial-large-data</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="spatial">
+      <compilation-unit name="spatial_join_dynamic_partitioning">
+        <output-dir compare="Text">spatial_join_dynamic_partitioning</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="spatial">
+      <compilation-unit name="spatial_join_static_partitioning">
+        <output-dir compare="Text">spatial_join_static_partitioning</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="spatial">
+      <compilation-unit name="spatial_left_outer_join_st_intersects">
+        <output-dir compare="Text">spatial_left_outer_join_st_intersects</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="spatial">
+      <compilation-unit name="spatial_join_projection_check">
+        <output-dir compare="Text">spatial_join_projection_check</output-dir>
+      </compilation-unit>
+    </test-case>
+  </test-group>
+  <test-group name="sql-compat">
+    <test-case FilePath="sql-compat">
+      <compilation-unit name="in_non_list_01">
+        <output-dir compare="Text">in_non_list_01</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="sql-compat">
+      <compilation-unit name="outer_join_01">
+        <output-dir compare="Text">outer_join_01</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="sql-compat">
+      <compilation-unit name="outer_unnest_01">
+        <output-dir compare="Text">outer_unnest_01</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="sql-compat">
+      <compilation-unit name="select_star_01">
+        <output-dir compare="Text">select_star_01</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="sql-compat">
+      <compilation-unit name="select_star_02_negative">
+        <output-dir compare="Text">none</output-dir>
+        <expected-error>ASX1168: Ambiguous projection in SELECT clause (in line 32, at column 8)</expected-error>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="sql-compat">
+      <compilation-unit name="subquery_coercion_01_scalar">
+        <output-dir compare="Text">subquery_coercion_01_scalar</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="sql-compat">
+      <compilation-unit name="subquery_coercion_02_scalar_negative">
+        <output-dir compare="Text">none</output-dir>
+        <expected-error>ASX1169: Unable to do subquery coercion. Subquery returns more than one field (in line 32, at column 29)</expected-error>
+        <expected-error>ASX1169: Unable to do subquery coercion. Unsupported projection kind (in line 32, at column 20)</expected-error>
+        <expected-error>ASX1169: Unable to do subquery coercion. Both SELECT and SELECT VALUE are present (in line 35, at column 4)</expected-error>
+        <expected-error>ASX1169: Unable to do subquery coercion.  (in line 34, at column 3)</expected-error>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="sql-compat">
+      <compilation-unit name="subquery_coercion_03_cmp">
+        <output-dir compare="Text">subquery_coercion_03_cmp</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="sql-compat">
+      <compilation-unit name="subquery_coercion_04_cmp_negative">
+        <output-dir compare="Text">none</output-dir>
+        <expected-error>ASX1169: Unable to do subquery coercion. Subquery returns more than one field (in line 35, at column 26)</expected-error>
+        <expected-error>ASX1169: Unable to do subquery coercion. Subquery returns more than one field (in line 35, at column 21)</expected-error>
+        <expected-error>ASX1169: Unable to do subquery coercion. Both SELECT and SELECT VALUE are present (in line 37, at column 3)</expected-error>
+        <expected-error>ASX1169: Unable to do subquery coercion. Both SELECT and SELECT VALUE are present (in line 38, at column 3)</expected-error>
+        <expected-error>ASX1169: Unable to do subquery coercion.  (in line 36, at column 3)</expected-error>
+        <expected-error>ASX1169: Unable to do subquery coercion. Unsupported projection kind (in line 35, at column 20)</expected-error>
+        <expected-error>ASX1169: Unable to do subquery coercion. Unsupported projection kind (in line 36, at column 11)</expected-error>
+        <expected-error>ASX1169: Unable to do subquery coercion. Unsupported projection kind (in line 37, at column 11)</expected-error>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="sql-compat">
+      <compilation-unit name="subquery_coercion_05_in">
+        <output-dir compare="Text">subquery_coercion_05_in</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="sql-compat">
+      <compilation-unit name="subquery_coercion_06_in_negative">
+        <output-dir compare="Text">none</output-dir>
+        <expected-error>ASX1169: Unable to do subquery coercion. Subquery returns more than one field (in line 36, at column 27)</expected-error>
+        <expected-error>ASX1169: Unable to do subquery coercion. Subquery returns more than one field (in line 37, at column 17)</expected-error>
+        <expected-error>ASX1169: Unable to do subquery coercion. Both SELECT and SELECT VALUE are present (in line 38, at column 3)</expected-error>
+        <expected-error>ASX1169: Unable to do subquery coercion. Both SELECT and SELECT VALUE are present (in line 39, at column 3)</expected-error>
+        <expected-error>ASX1169: Unable to do subquery coercion.  (in line 37, at column 3)</expected-error>
+        <expected-error>ASX1169: Unable to do subquery coercion. Unsupported projection kind (in line 36, at column 21)</expected-error>
+        <expected-error>ASX1169: Unable to do subquery coercion. Unsupported projection kind (in line 37, at column 25)</expected-error>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="sql-compat">
+      <compilation-unit name="subquery_coercion_07_from">
+        <output-dir compare="Text">subquery_coercion_07_from</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="sql-compat">
+      <compilation-unit name="subquery_coercion_08_misc">
+        <output-dir compare="Text">subquery_coercion_08_misc</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="sql-compat">
+      <compilation-unit name="union_all_01">
+        <output-dir compare="Text">union_all_01</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="sql-compat">
+      <compilation-unit name="union_all_02_negative">
+        <output-dir compare="Text">none</output-dir>
+        <expected-error>ASX1171: Unable to process UNION clause. Both SELECT and SELECT VALUE are present (in line 29, at column 1)</expected-error>
+        <expected-error>ASX1171: Unable to process UNION clause. Unequal number of input fields (in line 29, at column 1)</expected-error>
+        <expected-error>ASX1171: Unable to process UNION clause. Unsupported projection kind (in line 29, at column 8)</expected-error>
+        <expected-error>ASX1171: Unable to process UNION clause. Unsupported projection kind (in line 30, at column 8)</expected-error>
+        <expected-error>ASX1171: Unable to process UNION clause. Unsupported projection kind (in line 31, at column 8)</expected-error>
       </compilation-unit>
     </test-case>
   </test-group>
@@ -10291,8 +10603,8 @@
     <test-case FilePath="string">
       <compilation-unit name="like_03_negative">
         <output-dir compare="Text">like_03_negative</output-dir>
-        <expected-error>Invalid pattern "__\c" for LIKE (in line 21, at column 11)</expected-error>
-        <expected-error>Invalid pattern "%\" for LIKE (in line 21, at column 18)</expected-error>
+        <expected-error>Invalid pattern '__\c' for LIKE (in line 21, at column 11)</expected-error>
+        <expected-error>Invalid pattern '%\' for LIKE (in line 21, at column 18)</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="string">
@@ -10581,6 +10893,11 @@
       </compilation-unit>
     </test-case>
     <test-case FilePath="string">
+      <compilation-unit name="substr-ASTERIXDB-2949">
+        <output-dir compare="Text">substr-ASTERIXDB-2949</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="string">
       <compilation-unit name="regexp_position_with_flag/offset0/regex_position0_with_flag">
         <output-dir compare="Text">regexp_position_with_flag/offset0/regex_position0_with_flag</output-dir>
       </compilation-unit>
@@ -10718,6 +11035,11 @@
     <test-case FilePath="string">
       <compilation-unit name="string-equal4">
         <output-dir compare="Text">string-equal4</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="string">
+      <compilation-unit name="string-literal1">
+        <output-dir compare="Text">string-literal1</output-dir>
       </compilation-unit>
     </test-case>
     <test-case FilePath="string">
@@ -11118,6 +11440,11 @@
     <test-case FilePath="subquery">
       <compilation-unit name="query-ASTERIXDB-2845">
         <output-dir compare="Text">query-ASTERIXDB-2845</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="subquery">
+      <compilation-unit name="query-ASTERIXDB-3006">
+        <output-dir compare="Text">query-ASTERIXDB-3006</output-dir>
       </compilation-unit>
     </test-case>
   </test-group>
@@ -13106,6 +13433,8 @@
         <expected-error>ASX1149: Illegal function or view recursion (in line 31, at column 1)</expected-error>
         <expected-error>ASX1149: Illegal function or view recursion (in line 32, at column 1)</expected-error>
         <expected-error>ASX1149: Illegal function or view recursion (in line 33, at column 1)</expected-error>
+        <expected-error><![CDATA[ASX1001: Syntax error: In line 25 >>create view test.v1 primary key (r) not enforced as<< Encountered "primary" at column 21]]></expected-error>
+        <expected-error><![CDATA[ASX1001: Syntax error: In line 28 >>create view test.v2 foreign key (r) references v1 not enforced as<< Encountered <IDENTIFIER> "foreign" at column 21]]></expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="view">
@@ -13128,19 +13457,19 @@
         <expected-warn>ASX0006: Invalid format for duration in k (in line 30, at column 6)</expected-warn>
         <expected-warn>ASX0006: Invalid format for yearmonthduration in m (in line 30, at column 6)</expected-warn>
         <expected-warn>ASX0006: Invalid format for daytimeduration in n (in line 30, at column 6)</expected-warn>
-        <expected-warn>ASX0004: Unsupported type: boolean() cannot process input type duration (in line 30, at column 6)</expected-warn>
-        <expected-warn>ASX0004: Unsupported type: int8() cannot process input type duration (in line 30, at column 6)</expected-warn>
-        <expected-warn>ASX0004: Unsupported type: int16() cannot process input type duration (in line 30, at column 6)</expected-warn>
-        <expected-warn>ASX0004: Unsupported type: int32() cannot process input type duration (in line 30, at column 6)</expected-warn>
-        <expected-warn>ASX0004: Unsupported type: int64() cannot process input type duration (in line 30, at column 6)</expected-warn>
-        <expected-warn>ASX0004: Unsupported type: float() cannot process input type duration (in line 30, at column 6)</expected-warn>
-        <expected-warn>ASX0004: Unsupported type: double() cannot process input type duration (in line 30, at column 6)</expected-warn>
-        <expected-warn>ASX0004: Unsupported type: datetime() cannot process input type duration (in line 30, at column 6)</expected-warn>
-        <expected-warn>ASX0004: Unsupported type: date() cannot process input type duration (in line 30, at column 6)</expected-warn>
-        <expected-warn>ASX0004: Unsupported type: time() cannot process input type duration (in line 30, at column 6)</expected-warn>
-        <expected-warn>ASX0004: Unsupported type: duration() cannot process input type date (in line 30, at column 6)</expected-warn>
-        <expected-warn>ASX0004: Unsupported type: year-month-duration() cannot process input type date (in line 30, at column 6)</expected-warn>
-        <expected-warn>ASX0004: Unsupported type: day-time-duration() cannot process input type date (in line 30, at column 6)</expected-warn>
+        <expected-warn>ASX0004: Unsupported type: boolean-default-null() cannot process input type duration (in line 30, at column 6)</expected-warn>
+        <expected-warn>ASX0004: Unsupported type: int8-default-null() cannot process input type duration (in line 30, at column 6)</expected-warn>
+        <expected-warn>ASX0004: Unsupported type: int16-default-null() cannot process input type duration (in line 30, at column 6)</expected-warn>
+        <expected-warn>ASX0004: Unsupported type: int32-default-null() cannot process input type duration (in line 30, at column 6)</expected-warn>
+        <expected-warn>ASX0004: Unsupported type: int64-default-null() cannot process input type duration (in line 30, at column 6)</expected-warn>
+        <expected-warn>ASX0004: Unsupported type: float-default-null() cannot process input type duration (in line 30, at column 6)</expected-warn>
+        <expected-warn>ASX0004: Unsupported type: double-default-null() cannot process input type duration (in line 30, at column 6)</expected-warn>
+        <expected-warn>ASX0004: Unsupported type: datetime-default-null() cannot process input type duration (in line 30, at column 6)</expected-warn>
+        <expected-warn>ASX0004: Unsupported type: date-default-null() cannot process input type duration (in line 30, at column 6)</expected-warn>
+        <expected-warn>ASX0004: Unsupported type: time-default-null() cannot process input type duration (in line 30, at column 6)</expected-warn>
+        <expected-warn>ASX0004: Unsupported type: duration-default-null() cannot process input type date (in line 30, at column 6)</expected-warn>
+        <expected-warn>ASX0004: Unsupported type: year-month-duration-default-null() cannot process input type date (in line 30, at column 6)</expected-warn>
+        <expected-warn>ASX0004: Unsupported type: day-time-duration-default-null() cannot process input type date (in line 30, at column 6)</expected-warn>
       </compilation-unit>
     </test-case>
     <test-case FilePath="view" check-warnings="true">
@@ -13159,15 +13488,37 @@
         <expected-error>ASX1079: Compilation error: view type cannot have open fields (in line 29, at column 1)</expected-error>
         <expected-error>ASX1004: Unsupported type: view cannot process input type t1_a (in line 30, at column 1)</expected-error>
         <expected-error><![CDATA[ASX1001: Syntax error: In line 25 >>create view test.v1(r bigint, a [bigint]) default null as<< Encountered "[" at column 33]]></expected-error>
-        <expected-error>ASX1079: Compilation error: Invalid type for field r. The type must allow MISSING and NULL (in line 29, at column 1)</expected-error>
-        <expected-error>ASX1001: Syntax error: ASX1059: Field(s) [date-illegal-property-name] unsupported in the with clause (in line 25, at column 1)</expected-error>
+        <expected-error>ASX1092: Parameter date_illegal_property_name cannot be set (in line 25, at column 1)</expected-error>
         <expected-error><![CDATA[ASX1001: Syntax error: In line 25 >>create view test.v1(r bigint) as<< Encountered "as" at column 31]]></expected-error>
+        <expected-error><![CDATA[ASX1014: Field 'unknown_field' is not found (in line 25, at column 1)]]></expected-error>
+        <expected-error><![CDATA[ASX1014: Field 'unknown_field_2' is not found (in line 25, at column 1)]]></expected-error>
+        <expected-error><![CDATA[ASX1001: Syntax error: In line 28 >>  as select r from range(1,2) r;<< Encountered "as" at column 3]]></expected-error>
+        <expected-error><![CDATA[ASX0013: Duplicate field name 'r' (in line 25, at column 20)]]></expected-error>
+        <expected-error><![CDATA[ASX1167: Cannot change primary key of view test1.employee_v1 (in line 38, at column 1)]]></expected-error>
+        <expected-error><![CDATA[ASX1162: Invalid primary key definition (in line 25, at column 1)]]></expected-error>
+        <expected-error><![CDATA[ASX1162: Invalid primary key definition (in line 26, at column 1)]]></expected-error>
+        <expected-error><![CDATA[ASX1001: Syntax error: In line 36 >>  as employee;<< Encountered "as" at column 3]]></expected-error>
+        <expected-error><![CDATA[ASX1165: Invalid foreign key definition: view test1.employee_v1 does not have a primary key (in line 32, at column 1)]]></expected-error>
+        <expected-error><![CDATA[ASX1166: Invalid foreign key definition: foreign key does not match primary key of view test1.employee_v1 (in line 34, at column 1)]]></expected-error>
+        <expected-error><![CDATA[ASX1166: Invalid foreign key definition: foreign key does not match primary key of view test1.employee_v2 (in line 34, at column 1)]]></expected-error>
+        <expected-error><![CDATA[ASX1164: Invalid foreign key definition (in line 34, at column 1)]]></expected-error>
+        <expected-error><![CDATA[ASX1063: Cannot find dataverse with name test3 (in line 42, at column 1)]]></expected-error>
+        <expected-error><![CDATA[ASX1159: Cannot find view with name test1.employee_v3 (in line 42, at column 1)]]></expected-error>
+        <expected-error><![CDATA[ASX1159: Cannot find view with name test1.employee (in line 43, at column 1)]]></expected-error>
+        <expected-error><![CDATA[ASX1164: Invalid foreign key definition (in line 43, at column 1)]]></expected-error>
+        <expected-error><![CDATA[ASX1164: Invalid foreign key definition (in line 39, at column 1)]]></expected-error>
+        <expected-error><![CDATA[ASX1166: Invalid foreign key definition: foreign key does not match primary key of view test1.employee_v1 (in line 39, at column 1)]]></expected-error>
         <source-location>false</source-location>
       </compilation-unit>
     </test-case>
     <test-case FilePath="view">
+      <compilation-unit name="create-view-7-foreign-key">
+        <output-dir compare="Text">create-view-7-foreign-key</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="view">
       <compilation-unit name="drop-dataverse-1">
-        <output-dir compare="Text">none</output-dir>
+        <output-dir compare="Text">drop-dataverse-1</output-dir>
       </compilation-unit>
     </test-case>
     <test-case FilePath="view">
@@ -13179,6 +13530,7 @@
         <expected-error>ASX1147: Cannot drop dataverse: function test2.f2() being used by view test1.v1</expected-error>
         <expected-error>ASX1147: Cannot drop dataverse: synonym test2.s3 being used by view test1.v1</expected-error>
         <expected-error>ASX1147: Cannot drop dataverse: type test2.t1 being used by dataset test1.v1</expected-error>
+        <expected-error>ASX1147: Cannot drop dataverse: dataset (or view) test2.employee_v2 being used by view test1.employee_v1</expected-error>
         <source-location>false</source-location>
       </compilation-unit>
     </test-case>
@@ -14328,6 +14680,13 @@
         <source-location>false</source-location>
       </compilation-unit>
     </test-case>
+    <test-case FilePath="types">
+      <compilation-unit name="query-ASTERIXDB-2950">
+        <output-dir compare="Text">none</output-dir>
+        <expected-error>ASX1002: Type mismatch: function get-item expects its 1st input parameter to be of type multiset or array, but the actual input type is bigint (in line 24, at column 21)</expected-error>
+        <expected-error>ASX1002: Type mismatch: function get-item expects its 1st input parameter to be of type multiset or array, but the actual input type is bigint (in line 25, at column 31)</expected-error>
+      </compilation-unit>
+    </test-case>
   </test-group>
   <test-group name="cleanjson">
     <test-case FilePath="json">
@@ -14879,6 +15238,14 @@
         <source-location>false</source-location>
       </compilation-unit>
     </test-case>
+    <test-case FilePath="json-parser" check-warnings="true">
+      <compilation-unit name="parse-json-function">
+        <output-dir compare="Text">parse-json-function</output-dir>
+        <source-location>false</source-location>
+        <expected-warn>Type mismatch: function parse-json expects its 1st input parameter to be of type string, but the actual input type is bigint</expected-warn>
+        <expected-warn>Malformed input stream</expected-warn>
+      </compilation-unit>
+    </test-case>
   </test-group>
   <test-group name="composite-key">
     <test-case FilePath="composite-key">
@@ -15004,14 +15371,14 @@
     <test-case FilePath="ddl-with-clause">
       <compilation-unit name="missing-non-optional">
         <output-dir compare="Text">missing-non-optional</output-dir>
-        <expected-error>ASX1061: Field "merge-policy.name" in the with clause cannot be null or missing</expected-error>
+        <expected-error>ASX1061: Field 'merge-policy.name' in the with clause cannot be null or missing</expected-error>
         <source-location>false</source-location>
       </compilation-unit>
     </test-case>
     <test-case FilePath="ddl-with-clause">
       <compilation-unit name="type-mismatch">
         <output-dir compare="Text">type-mismatch</output-dir>
-        <expected-error>ASX1060: Field "merge-policy.parameters.max-mergable-component-size" in the with clause must be of type bigint, but found string</expected-error>
+        <expected-error>ASX1060: Field 'merge-policy.parameters.max-mergable-component-size' in the with clause must be of type bigint, but found string</expected-error>
         <source-location>false</source-location>
       </compilation-unit>
     </test-case>
@@ -15025,7 +15392,7 @@
     <test-case FilePath="ddl-with-clause">
       <compilation-unit name="unsupported-subfield">
         <output-dir compare="Text">unsupported-subfield</output-dir>
-        <expected-error>ASX1097: Subfield(s) [unknown-subfield] in "merge-policy" unsupported in the with clause</expected-error>
+        <expected-error>ASX1097: Subfield(s) [unknown-subfield] in 'merge-policy' unsupported in the with clause</expected-error>
         <source-location>false</source-location>
       </compilation-unit>
     </test-case>
@@ -15043,9 +15410,9 @@
         <output-dir compare="Text">inapplicable-hint-warning</output-dir>
         <expected-warn>HYR10006: Could not apply Group By hint: hash</expected-warn>
         <expected-warn>ASX1107: Unexpected hint: indexnl. "hash" expected at this location</expected-warn>
-        <expected-warn>ASX1107: Unexpected hint: hash. "hash-bcast", "indexnl", "skip-index", "use-index" expected at this location</expected-warn>
-        <expected-warn>ASX1107: Unexpected hint: auto. "indexnl", "skip-index", "use-index" expected at this location</expected-warn>
-        <expected-warn>ASX1107: Unexpected hint: hash. "indexnl", "range", "skip-index", "use-index" expected at this location</expected-warn>
+        <expected-warn>ASX1107: Unexpected hint: hash. "hash-bcast", "indexnl", "hashjoin", "skip-index", "use-index", "selectivity", "productivity" expected at this location</expected-warn>
+        <expected-warn>ASX1107: Unexpected hint: auto. "indexnl", "skip-index", "hashjoin", "use-index", "selectivity" expected at this location</expected-warn>
+        <expected-warn>ASX1107: Unexpected hint: hash. "indexnl", "range", "hashjoin", "skip-index", "spatial-partitioning", "use-index" expected at this location</expected-warn>
         <expected-warn>ASX1107: Unexpected hint: hash. None expected at this location</expected-warn>
       </compilation-unit>
     </test-case>
@@ -15066,12 +15433,12 @@
       <compilation-unit name="unknown-hint-warning">
         <output-dir compare="Text">unknown-hint-warning</output-dir>
         <expected-warn>ASX1107: Unexpected hint: unknown_hint_groupby. "hash" expected at this location</expected-warn>
-        <expected-warn>ASX1107: Unexpected hint: unknown_hint_relexpr. "hash-bcast", "indexnl", "skip-index", "use-index" expected at this location</expected-warn>
-        <expected-warn>ASX1107: Unexpected hint: unknown_hint_between. "indexnl", "skip-index", "use-index" expected at this location</expected-warn>
-        <expected-warn>ASX1107: Unexpected hint: unknown_hint_funcall. "indexnl", "range", "skip-index", "use-index" expected at this location</expected-warn>
+        <expected-warn>ASX1107: Unexpected hint: unknown_hint_relexpr. "hash-bcast", "indexnl", "hashjoin", "skip-index", "use-index", "selectivity", "productivity" expected at this location</expected-warn>
+        <expected-warn>ASX1107: Unexpected hint: unknown_hint_between. "indexnl", "skip-index", "hashjoin", "use-index", "selectivity" expected at this location</expected-warn>
+        <expected-warn>ASX1107: Unexpected hint: unknown_hint_funcall. "indexnl", "range", "hashjoin", "skip-index", "spatial-partitioning", "use-index" expected at this location</expected-warn>
         <expected-warn>ASX1107: Unexpected hint: unknown_hint_elsewhere. None expected at this location</expected-warn>
-        <expected-warn>ASX1107: Unexpected hint: unknown_hint_relexpr_6. "hash-bcast", "indexnl", "skip-index", "use-index" expected at this location</expected-warn>
-        <expected-warn>ASX1107: Unexpected hint: unknown_hint_relexpr_6. "hash-bcast", "indexnl", "skip-index", "use-index" expected at this location</expected-warn>
+        <expected-warn>ASX1107: Unexpected hint: unknown_hint_relexpr_6. "hash-bcast", "indexnl", "hashjoin", "skip-index", "use-index", "selectivity", "productivity" expected at this location</expected-warn>
+        <expected-warn>ASX1107: Unexpected hint: unknown_hint_relexpr_6. "hash-bcast", "indexnl", "hashjoin", "skip-index", "use-index", "selectivity", "productivity" expected at this location</expected-warn>
       </compilation-unit>
     </test-case>
     <test-case FilePath="warnings">

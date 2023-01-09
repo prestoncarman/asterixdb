@@ -18,6 +18,7 @@
  */
 package org.apache.asterix.dataflow.data.nontagged.printers;
 
+import java.io.DataOutput;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintStream;
@@ -43,8 +44,8 @@ public class PrintTools {
         long chrononTime = AInt32SerializerDeserializer.getInt(b, s + 1) * CHRONON_OF_DAY;
 
         try {
-            gCalInstance.getExtendStringRepUntilField(chrononTime, 0, ps, GregorianCalendarSystem.Fields.YEAR,
-                    GregorianCalendarSystem.Fields.DAY, false);
+            gCalInstance.getExtendStringRepUntilField(chrononTime, ps, GregorianCalendarSystem.Fields.YEAR,
+                    GregorianCalendarSystem.Fields.DAY);
         } catch (IOException e) {
             throw HyracksDataException.create(e);
         }
@@ -54,8 +55,8 @@ public class PrintTools {
         long chrononTime = AInt64SerializerDeserializer.getLong(b, s + 1);
 
         try {
-            gCalInstance.getExtendStringRepUntilField(chrononTime, 0, ps, GregorianCalendarSystem.Fields.YEAR,
-                    GregorianCalendarSystem.Fields.MILLISECOND, true);
+            gCalInstance.getExtendStringRepUntilField(chrononTime, ps, GregorianCalendarSystem.Fields.YEAR,
+                    GregorianCalendarSystem.Fields.MILLISECOND);
         } catch (IOException e) {
             throw HyracksDataException.create(e);
         }
@@ -212,8 +213,8 @@ public class PrintTools {
         int time = AInt32SerializerDeserializer.getInt(b, s + 1);
 
         try {
-            gCalInstance.getExtendStringRepUntilField(time, 0, ps, GregorianCalendarSystem.Fields.HOUR,
-                    GregorianCalendarSystem.Fields.MILLISECOND, true);
+            gCalInstance.getExtendStringRepUntilField(time, ps, GregorianCalendarSystem.Fields.HOUR,
+                    GregorianCalendarSystem.Fields.MILLISECOND);
         } catch (IOException e) {
             throw HyracksDataException.create(e);
         }
@@ -285,17 +286,50 @@ public class PrintTools {
             if (c == '"') {
                 os.write('"');
             }
-            os.write(c);
-            position += sz;
+            if (Character.isHighSurrogate(c)) {
+                position += writeSupplementaryChar(os, b, maxPosition, position, c, sz);
+                continue;
+            }
+            while (sz > 0) {
+                os.write(b[position]);
+                ++position;
+                --sz;
+            }
+            break;
         }
         os.write('"');
     }
 
-    public static void writeUTF8StringAsJSON(byte[] b, int s, int l, OutputStream os) throws IOException {
+    public static void writeUTF8StringRaw(byte[] b, int s, int l, DataOutput os) throws IOException {
         int utfLength = UTF8StringUtil.getUTFLength(b, s);
         int position = s + UTF8StringUtil.getNumBytesToStoreLength(utfLength); // skip 2 bytes containing string size
         int maxPosition = position + utfLength;
+        while (position < maxPosition) {
+            char c = UTF8StringUtil.charAt(b, position);
+            int sz = UTF8StringUtil.charSize(b, position);
+            if (Character.isHighSurrogate(c)) {
+                position += writeSupplementaryChar(os, b, maxPosition, position, c, sz);
+                continue;
+            }
+            while (sz > 0) {
+                os.write(b[position]);
+                ++position;
+                --sz;
+            }
+        }
+    }
+
+    public static void writeUTF8StringAsJSON(byte[] b, int s, int l, OutputStream os) throws IOException {
+        int utfLength = UTF8StringUtil.getUTFLength(b, s);
         os.write('"');
+        writeUTF8StringAsJSONUnquoted(b, s, l, utfLength, os);
+        os.write('"');
+    }
+
+    public static void writeUTF8StringAsJSONUnquoted(byte[] b, int s, int l, int utfLength, OutputStream os)
+            throws IOException {
+        int position = s + UTF8StringUtil.getNumBytesToStoreLength(utfLength); // skip 2 bytes containing string size
+        int maxPosition = position + utfLength;
         while (position < maxPosition) {
             char c = UTF8StringUtil.charAt(b, position);
             int sz = UTF8StringUtil.charSize(b, position);
@@ -385,7 +419,6 @@ public class PrintTools {
                     break;
             }
         }
-        os.write('\"');
     }
 
     private static void writeUEscape(OutputStream os, char c) throws IOException {
@@ -404,6 +437,19 @@ public class PrintTools {
      * @throws IOException
      */
     private static int writeSupplementaryChar(OutputStream os, byte[] src, int limit, int highSurrogatePos,
+            char highSurrogate, int highSurrogateSize) throws IOException {
+        final int lowSurrogatePos = highSurrogatePos + highSurrogateSize;
+        if (lowSurrogatePos >= limit) {
+            throw new IllegalStateException("malformed utf8 input");
+        }
+        final char lowSurrogate = UTF8StringUtil.charAt(src, lowSurrogatePos);
+        final int lowSurrogateSize = UTF8StringUtil.charSize(src, lowSurrogatePos);
+        os.write(new String(new char[] { highSurrogate, lowSurrogate }).getBytes(StandardCharsets.UTF_8));
+        return highSurrogateSize + lowSurrogateSize;
+    }
+
+    //TODO: some way to dedupe this?
+    private static int writeSupplementaryChar(DataOutput os, byte[] src, int limit, int highSurrogatePos,
             char highSurrogate, int highSurrogateSize) throws IOException {
         final int lowSurrogatePos = highSurrogatePos + highSurrogateSize;
         if (lowSurrogatePos >= limit) {

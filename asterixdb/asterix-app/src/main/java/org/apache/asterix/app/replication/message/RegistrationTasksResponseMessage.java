@@ -18,6 +18,7 @@
  */
 package org.apache.asterix.app.replication.message;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -58,13 +59,9 @@ public class RegistrationTasksResponseMessage extends CcIdentifiedMessage
             Throwable exception = null;
             try {
                 for (INCLifecycleTask task : tasks) {
-                    if (LOGGER.isInfoEnabled()) {
-                        LOGGER.log(Level.INFO, "Starting startup task: " + task);
-                    }
+                    LOGGER.log(Level.INFO, "Starting startup task: {}", task);
                     task.perform(getCcId(), cs);
-                    if (LOGGER.isInfoEnabled()) {
-                        LOGGER.log(Level.INFO, "Completed startup task: " + task);
-                    }
+                    LOGGER.log(Level.INFO, "Completed startup task: {}", task);
                 }
             } catch (Throwable e) { //NOSONAR all startup failures should be reported to CC
                 LOGGER.log(Level.ERROR, "Failed during startup task", e);
@@ -73,7 +70,8 @@ public class RegistrationTasksResponseMessage extends CcIdentifiedMessage
             }
             NcLocalCounters localCounter = success ? NcLocalCounters.collect(getCcId(),
                     (NodeControllerService) appCtx.getServiceContext().getControllerService()) : null;
-            Set<Integer> nodeActivePartitions = appCtx.getReplicaManager().getPartitions();
+            // wrap the returned partitions in a hash set to make it serializable
+            Set<Integer> nodeActivePartitions = new HashSet<>(appCtx.getReplicaManager().getPartitions());
             NCLifecycleTaskReportMessage result =
                     new NCLifecycleTaskReportMessage(nodeId, success, localCounter, nodeActivePartitions);
             result.setException(exception);

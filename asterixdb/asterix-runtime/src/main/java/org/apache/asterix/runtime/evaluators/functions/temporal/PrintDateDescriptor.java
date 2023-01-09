@@ -27,7 +27,6 @@ import org.apache.asterix.om.base.temporal.DateTimeFormatUtils;
 import org.apache.asterix.om.base.temporal.DateTimeFormatUtils.DateTimeParseMode;
 import org.apache.asterix.om.base.temporal.GregorianCalendarSystem;
 import org.apache.asterix.om.functions.BuiltinFunctions;
-import org.apache.asterix.om.functions.IFunctionDescriptor;
 import org.apache.asterix.om.functions.IFunctionDescriptorFactory;
 import org.apache.asterix.om.types.ATypeTag;
 import org.apache.asterix.runtime.evaluators.base.AbstractScalarFunctionDynamicDescriptor;
@@ -49,13 +48,7 @@ import org.apache.hyracks.util.string.UTF8StringWriter;
 public class PrintDateDescriptor extends AbstractScalarFunctionDynamicDescriptor {
     private static final long serialVersionUID = 1L;
 
-    public final static IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
-
-        @Override
-        public IFunctionDescriptor createFunctionDescriptor() {
-            return new PrintDateDescriptor();
-        }
-    };
+    public final static IFunctionDescriptorFactory FACTORY = PrintDateDescriptor::new;
 
     @Override
     public IScalarEvaluatorFactory createEvaluatorFactory(final IScalarEvaluatorFactory[] args) {
@@ -108,7 +101,7 @@ public class PrintDateDescriptor extends AbstractScalarFunctionDynamicDescriptor
                             int formatLength = UTF8StringUtil.getUTFLength(bytes1, offset1 + 1);
                             int offset = UTF8StringUtil.getNumBytesToStoreLength(formatLength);
                             sbder.delete(0, sbder.length());
-                            util.printDateTime(chronon, 0, bytes1, offset1 + 1 + offset, formatLength, sbder,
+                            util.printDateTime(chronon, bytes1, offset1 + 1 + offset, formatLength, sbder,
                                     DateTimeParseMode.DATE_ONLY);
 
                             out.writeByte(ATypeTag.SERIALIZED_STRING_TYPE_TAG);

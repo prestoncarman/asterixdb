@@ -55,6 +55,7 @@ import org.apache.asterix.om.types.TypeSignature;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.common.utils.Pair;
 import org.apache.hyracks.api.exceptions.SourceLocation;
+import org.apache.hyracks.util.LogRedactionUtil;
 
 public class TypeTranslator {
 
@@ -313,6 +314,10 @@ public class TypeTranslator {
         IAType[] fldTypes = new IAType[n];
         int i = 0;
         for (String s : names) {
+            if (names.indexOf(s) < i) {
+                throw new CompilationException(ErrorCode.DUPLICATE_FIELD_NAME, rtd.getSourceLocation(),
+                        LogRedactionUtil.userData(s));
+            }
             fldNames[i++] = s;
         }
         boolean isOpen = rtd.getRecordKind() == RecordKind.OPEN;

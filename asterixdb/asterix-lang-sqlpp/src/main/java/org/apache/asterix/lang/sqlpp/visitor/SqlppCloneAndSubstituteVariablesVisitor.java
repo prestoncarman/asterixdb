@@ -143,8 +143,8 @@ public class SqlppCloneAndSubstituteVariablesVisitor extends CloneAndSubstituteV
         // The condition can refer to the newRightVar and newRightPosVar.
         Expression conditionExpr = (Expression) joinClause.getConditionExpression().accept(this, currentEnv).first;
 
-        JoinClause newJoinClause =
-                new JoinClause(joinClause.getJoinType(), newRightExpr, newRightVar, newRightPosVar, conditionExpr);
+        JoinClause newJoinClause = new JoinClause(joinClause.getJoinType(), newRightExpr, newRightVar, newRightPosVar,
+                conditionExpr, joinClause.getOuterJoinMissingValueType());
         newJoinClause.setSourceLocation(joinClause.getSourceLocation());
         return new Pair<>(newJoinClause, currentEnv);
     }
@@ -193,8 +193,8 @@ public class SqlppCloneAndSubstituteVariablesVisitor extends CloneAndSubstituteV
             currentEnv.removeSubstitution(newRightPosVar);
         }
         // The condition can refer to the newRightVar and newRightPosVar.
-        UnnestClause newUnnestClause =
-                new UnnestClause(unnestClause.getUnnestType(), rightExpr, newRightVar, newRightPosVar);
+        UnnestClause newUnnestClause = new UnnestClause(unnestClause.getUnnestType(), rightExpr, newRightVar,
+                newRightPosVar, unnestClause.getOuterUnnestMissingValueType());
         newUnnestClause.setSourceLocation(unnestClause.getSourceLocation());
         return new Pair<>(newUnnestClause, currentEnv);
     }
@@ -202,11 +202,9 @@ public class SqlppCloneAndSubstituteVariablesVisitor extends CloneAndSubstituteV
     @Override
     public Pair<ILangExpression, VariableSubstitutionEnvironment> visit(Projection projection,
             VariableSubstitutionEnvironment env) throws CompilationException {
-        if (projection.star()) {
-            return new Pair<>(projection, env);
-        }
-        Projection newProjection = new Projection((Expression) projection.getExpression().accept(this, env).first,
-                projection.getName(), projection.star(), projection.varStar());
+        Projection newProjection = new Projection(projection.getKind(),
+                projection.hasExpression() ? (Expression) projection.getExpression().accept(this, env).first : null,
+                projection.getName());
         newProjection.setSourceLocation(projection.getSourceLocation());
         return new Pair<>(newProjection, env);
     }
@@ -271,7 +269,15 @@ public class SqlppCloneAndSubstituteVariablesVisitor extends CloneAndSubstituteV
         } else {
             Pair<ILangExpression, VariableSubstitutionEnvironment> newSelectRegular =
                     selectClause.getSelectRegular().accept(this, env);
-            SelectClause newSelectClause = new SelectClause(null, (SelectRegular) newSelectRegular.first, distinct);
+            List<List<String>> fieldExclusions = new ArrayList<>();
+            if (!selectClause.getFieldExclusions().isEmpty()) {
+                for (List<String> fieldExclusion : selectClause.getFieldExclusions()) {
+                    List<String> fieldExclusionCopy = new ArrayList<>(fieldExclusion);
+                    fieldExclusions.add(fieldExclusionCopy);
+                }
+            }
+            SelectClause newSelectClause =
+                    new SelectClause(null, (SelectRegular) newSelectRegular.first, fieldExclusions, distinct);
             newSelectClause.setSourceLocation(selectClause.getSourceLocation());
             return new Pair<>(newSelectClause, newSelectRegular.second);
         }

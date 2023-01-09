@@ -19,9 +19,9 @@
 package org.apache.asterix.replication.logging;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -57,7 +57,7 @@ class RemoteLogsNotifier implements Runnable {
     @Override
     public void run() {
         final String nodeId = appCtx.getServiceContext().getNodeId();
-        Thread.currentThread().setName(nodeId + RemoteLogsNotifier.class.getSimpleName());
+        Thread.currentThread().setName(RemoteLogsNotifier.class.getSimpleName() + ":" + nodeId);
         while (!Thread.currentThread().isInterrupted()) {
             try {
                 final RemoteLogRecord logRecord = remoteLogsQ.take();
@@ -85,13 +85,12 @@ class RemoteLogsNotifier implements Runnable {
 
     private void checkpointReplicaIndexes(RemoteLogRecord remoteLogMapping, int datasetId, int resourcePartition)
             throws HyracksDataException {
-        final Set<Integer> masterPartitions = appCtx.getReplicaManager().getPartitions();
         final Predicate<LocalResource> replicaIndexesPredicate = lr -> {
             DatasetLocalResource dls = (DatasetLocalResource) lr.getResource();
-            return dls.getDatasetId() == datasetId && dls.getPartition() == resourcePartition
-                    && !masterPartitions.contains(dls.getPartition());
+            return dls.getDatasetId() == datasetId && dls.getPartition() == resourcePartition;
         };
-        final Map<Long, LocalResource> resources = localResourceRep.getResources(replicaIndexesPredicate);
+        final Map<Long, LocalResource> resources =
+                localResourceRep.getResources(replicaIndexesPredicate, Collections.singleton(resourcePartition));
         final List<DatasetResourceReference> replicaIndexesRef =
                 resources.values().stream().map(DatasetResourceReference::of).collect(Collectors.toList());
         for (DatasetResourceReference replicaIndexRef : replicaIndexesRef) {

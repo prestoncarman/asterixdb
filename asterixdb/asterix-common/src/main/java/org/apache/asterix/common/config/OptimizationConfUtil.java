@@ -77,6 +77,16 @@ public class OptimizationConfUtil {
         int externalScanBufferSize = getExternalScanBufferSize(
                 (String) querySpecificConfig.get(CompilerProperties.COMPILER_EXTERNALSCANMEMORY_KEY),
                 compilerProperties.getExternalScanMemorySize(), sourceLoc);
+        boolean batchLookup = getBoolean(querySpecificConfig, CompilerProperties.COMPILER_BATCHED_LOOKUP_KEY,
+                compilerProperties.isBatchLookup());
+        boolean cbo =
+                getBoolean(querySpecificConfig, CompilerProperties.COMPILER_CBO_KEY, compilerProperties.getCBOMode());
+        boolean cboTest = getBoolean(querySpecificConfig, CompilerProperties.COMPILER_CBO_TEST_KEY,
+                compilerProperties.getCBOTestMode());
+        boolean forceJoinOrder = getBoolean(querySpecificConfig, CompilerProperties.COMPILER_FORCE_JOIN_ORDER_KEY,
+                compilerProperties.getForceJoinOrderMode());
+        String queryPlanShape = getString(querySpecificConfig, CompilerProperties.COMPILER_QUERY_PLAN_SHAPE_KEY,
+                compilerProperties.getQueryPlanShapeMode());
 
         PhysicalOptimizationConfig physOptConf = new PhysicalOptimizationConfig();
         physOptConf.setFrameSize(frameSize);
@@ -95,6 +105,11 @@ public class OptimizationConfUtil {
         physOptConf.setMinMemoryAllocation(minMemoryAllocation);
         physOptConf.setArrayIndexEnabled(arrayIndex);
         physOptConf.setExternalScanBufferSize(externalScanBufferSize);
+        physOptConf.setBatchLookup(batchLookup);
+        physOptConf.setCBOMode(cbo);
+        physOptConf.setCBOTestMode(cboTest);
+        physOptConf.setForceJoinOrderMode(forceJoinOrder);
+        physOptConf.setQueryPlanShapeMode(queryPlanShape);
         return physOptConf;
     }
 
@@ -115,6 +130,14 @@ public class OptimizationConfUtil {
                 (String) querySpecificConfig.get(CompilerProperties.COMPILER_SORTMEMORY_KEY),
                 compilerProperties.getSortMemorySize(), compilerProperties.getFrameSize(), MIN_FRAME_LIMIT_FOR_SORT,
                 sourceLoc);
+    }
+
+    public static int getGroupByNumFrames(CompilerProperties compilerProperties,
+            Map<String, Object> querySpecificConfig, SourceLocation sourceLoc) throws AlgebricksException {
+        return getFrameLimit(CompilerProperties.COMPILER_GROUPMEMORY_KEY,
+                (String) querySpecificConfig.get(CompilerProperties.COMPILER_GROUPMEMORY_KEY),
+                compilerProperties.getGroupMemorySize(), compilerProperties.getFrameSize(),
+                MIN_FRAME_LIMIT_FOR_GROUP_BY, sourceLoc);
     }
 
     public static int getTextSearchNumFrames(CompilerProperties compilerProperties,
@@ -161,6 +184,14 @@ public class OptimizationConfUtil {
         String valueInQuery = (String) queryConfig.get(queryConfigKey);
         if (valueInQuery != null) {
             return OptionTypes.BOOLEAN.parse(valueInQuery);
+        }
+        return defaultValue;
+    }
+
+    private static String getString(Map<String, Object> queryConfig, String queryConfigKey, String defaultValue) {
+        String valueInQuery = (String) queryConfig.get(queryConfigKey);
+        if (valueInQuery != null) {
+            return valueInQuery;
         }
         return defaultValue;
     }

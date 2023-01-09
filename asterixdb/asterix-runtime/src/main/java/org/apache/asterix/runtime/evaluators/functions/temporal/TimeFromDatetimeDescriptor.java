@@ -27,7 +27,6 @@ import org.apache.asterix.om.base.AMutableTime;
 import org.apache.asterix.om.base.ATime;
 import org.apache.asterix.om.base.temporal.GregorianCalendarSystem;
 import org.apache.asterix.om.functions.BuiltinFunctions;
-import org.apache.asterix.om.functions.IFunctionDescriptor;
 import org.apache.asterix.om.functions.IFunctionDescriptorFactory;
 import org.apache.asterix.om.types.ATypeTag;
 import org.apache.asterix.om.types.BuiltinType;
@@ -50,14 +49,7 @@ public class TimeFromDatetimeDescriptor extends AbstractScalarFunctionDynamicDes
 
     private static final long serialVersionUID = 1L;
     public final static FunctionIdentifier FID = BuiltinFunctions.TIME_FROM_DATETIME;
-    public final static IFunctionDescriptorFactory FACTORY = new IFunctionDescriptorFactory() {
-
-        @Override
-        public IFunctionDescriptor createFunctionDescriptor() {
-            return new TimeFromDatetimeDescriptor();
-        }
-
-    };
+    public final static IFunctionDescriptorFactory FACTORY = TimeFromDatetimeDescriptor::new;
 
     /* (non-Javadoc)
      * @see org.apache.asterix.runtime.base.IScalarFunctionDynamicDescriptor#createEvaluatorFactory(org.apache.hyracks.algebricks.runtime.base.ICopyEvaluatorFactory[])
@@ -82,6 +74,7 @@ public class TimeFromDatetimeDescriptor extends AbstractScalarFunctionDynamicDes
                     private ISerializerDeserializer<ATime> timeSerde =
                             SerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.ATIME);
                     private AMutableTime aTime = new AMutableTime(0);
+                    private final GregorianCalendarSystem cal = GregorianCalendarSystem.getInstance();
 
                     @Override
                     public void evaluate(IFrameTupleReference tuple, IPointable result) throws HyracksDataException {
@@ -100,10 +93,7 @@ public class TimeFromDatetimeDescriptor extends AbstractScalarFunctionDynamicDes
                                     ATypeTag.SERIALIZED_DATETIME_TYPE_TAG);
                         }
                         long datetimeChronon = ADateTimeSerializerDeserializer.getChronon(bytes, offset + 1);
-                        int timeChronon = (int) (datetimeChronon % GregorianCalendarSystem.CHRONON_OF_DAY);
-                        if (timeChronon < 0) {
-                            timeChronon += GregorianCalendarSystem.CHRONON_OF_DAY;
-                        }
+                        int timeChronon = cal.getTimeChronon(datetimeChronon);
                         aTime.setValue(timeChronon);
                         timeSerde.serialize(aTime, out);
                         result.set(resultStorage);

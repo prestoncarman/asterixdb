@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.IntPredicate;
 import java.util.function.Predicate;
 
 import org.apache.asterix.common.api.IDatasetLifecycleManager;
@@ -170,9 +171,15 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
         closeIndex(iInfo);
         dsInfo.removeIndex(resourceID);
         synchronized (dsInfo) {
-            if (dsInfo.getReferenceCount() == 0 && dsInfo.isOpen() && dsInfo.getIndexes().isEmpty()
-                    && !dsInfo.isExternal()) {
+            int referenceCount = dsInfo.getReferenceCount();
+            boolean open = dsInfo.isOpen();
+            boolean empty = dsInfo.getIndexes().isEmpty();
+            if (referenceCount == 0 && open && empty && !dsInfo.isExternal()) {
+                LOGGER.debug("removing dataset {} from cache", dsInfo.getDatasetID());
                 removeDatasetFromCache(dsInfo.getDatasetID());
+            } else {
+                LOGGER.debug("keeping dataset {} in cache, ref count {}, open {}, indexes count: {}",
+                        dsInfo.getDatasetID(), referenceCount, open, dsInfo.getIndexes().size());
             }
         }
     }
@@ -356,9 +363,14 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
 
     @Override
     public synchronized void flushAllDatasets() throws HyracksDataException {
+        flushAllDatasets(partition -> true);
+    }
+
+    @Override
+    public synchronized void flushAllDatasets(IntPredicate partitions) throws HyracksDataException {
         for (DatasetResource dsr : datasets.values()) {
             if (dsr.getDatasetInfo().isOpen()) {
-                flushDatasetOpenIndexes(dsr, false);
+                flushDatasetOpenIndexes(dsr, partitions, false);
             }
         }
     }
@@ -367,7 +379,7 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
     public synchronized void flushDataset(int datasetId, boolean asyncFlush) throws HyracksDataException {
         DatasetResource dsr = datasets.get(datasetId);
         if (dsr != null) {
-            flushDatasetOpenIndexes(dsr, asyncFlush);
+            flushDatasetOpenIndexes(dsr, p -> true, asyncFlush);
         }
     }
 
@@ -401,7 +413,8 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
      * This method can only be called asynchronously safely if we're sure no modify operation
      * will take place until the flush is scheduled
      */
-    private void flushDatasetOpenIndexes(DatasetResource dsr, boolean asyncFlush) throws HyracksDataException {
+    private void flushDatasetOpenIndexes(DatasetResource dsr, IntPredicate partitions, boolean asyncFlush)
+            throws HyracksDataException {
         DatasetInfo dsInfo = dsr.getDatasetInfo();
         if (!dsInfo.isOpen()) {
             throw new IllegalStateException("flushDatasetOpenIndexes is called on a dataset that is closed");
@@ -413,10 +426,14 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
         // ensure all in-flight flushes gets scheduled
         logManager.log(waitLog);
         for (PrimaryIndexOperationTracker primaryOpTracker : dsr.getOpTrackers()) {
+            if (!partitions.test(primaryOpTracker.getPartition())) {
+                continue;
+            }
             // flush each partition one by one
-            if (primaryOpTracker.getNumActiveOperations() > 0) {
-                throw new IllegalStateException(
-                        "flushDatasetOpenIndexes is called on a dataset with currently active operations");
+            int numActiveOperations = primaryOpTracker.getNumActiveOperations();
+            if (numActiveOperations > 0) {
+                throw new IllegalStateException("flushDatasetOpenIndexes is called on dataset " + dsInfo.getDatasetID()
+                        + " with currently " + "active operations, count=" + numActiveOperations);
             }
             primaryOpTracker.setFlushOnExit(true);
             primaryOpTracker.flushIfNeeded();
@@ -426,6 +443,9 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
         if (!asyncFlush) {
             List<FlushOperation> flushes = new ArrayList<>();
             for (PrimaryIndexOperationTracker primaryOpTracker : dsr.getOpTrackers()) {
+                if (!partitions.test(primaryOpTracker.getPartition())) {
+                    continue;
+                }
                 flushes.addAll(primaryOpTracker.getScheduledFlushes());
             }
             LSMIndexUtil.waitFor(flushes);
@@ -436,7 +456,7 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
         // First wait for any ongoing IO operations
         DatasetInfo dsInfo = dsr.getDatasetInfo();
         try {
-            flushDatasetOpenIndexes(dsr, false);
+            flushDatasetOpenIndexes(dsr, p -> true, false);
         } catch (Exception e) {
             throw HyracksDataException.create(e);
         }
@@ -467,16 +487,6 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
         ArrayList<DatasetResource> openDatasets = new ArrayList<>(datasets.values());
         for (DatasetResource dsr : openDatasets) {
             if (dsr.isOpen()) {
-                closeDataset(dsr);
-            }
-        }
-    }
-
-    @Override
-    public synchronized void closeUserDatasets() throws HyracksDataException {
-        ArrayList<DatasetResource> openDatasets = new ArrayList<>(datasets.values());
-        for (DatasetResource dsr : openDatasets) {
-            if (!dsr.isMetadataDataset()) {
                 closeDataset(dsr);
             }
         }
@@ -532,10 +542,11 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
     }
 
     @Override
-    public void flushDataset(IReplicationStrategy replicationStrategy) throws HyracksDataException {
+    public void flushDataset(IReplicationStrategy replicationStrategy, IntPredicate partitions)
+            throws HyracksDataException {
         for (DatasetResource dsr : datasets.values()) {
             if (dsr.isOpen() && replicationStrategy.isMatch(dsr.getDatasetID())) {
-                flushDatasetOpenIndexes(dsr, false);
+                flushDatasetOpenIndexes(dsr, partitions, false);
             }
         }
     }
@@ -555,6 +566,7 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
         for (DatasetResource dsr : datasets.values()) {
             stats.addPendingFlushes(dsr.getDatasetInfo().getPendingFlushes());
             stats.addPendingMerges(dsr.getDatasetInfo().getPendingMerges());
+            stats.addPendingReplications(dsr.getDatasetInfo().getPendingReplications());
         }
         return stats;
     }

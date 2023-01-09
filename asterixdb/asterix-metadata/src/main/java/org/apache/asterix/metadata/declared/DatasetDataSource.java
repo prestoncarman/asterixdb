@@ -20,6 +20,7 @@ package org.apache.asterix.metadata.declared;
 
 import static org.apache.asterix.external.util.ExternalDataConstants.KEY_EXTERNAL_SCAN_BUFFER_SIZE;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,6 +28,7 @@ import java.util.Map;
 import org.apache.asterix.common.config.DatasetConfig.DatasetType;
 import org.apache.asterix.common.metadata.DataverseName;
 import org.apache.asterix.external.api.ITypedAdapterFactory;
+import org.apache.asterix.external.util.ExternalDataUtils;
 import org.apache.asterix.metadata.IDatasetDetails;
 import org.apache.asterix.metadata.MetadataManager;
 import org.apache.asterix.metadata.entities.Dataset;
@@ -36,6 +38,7 @@ import org.apache.asterix.metadata.entities.InternalDatasetDetails;
 import org.apache.asterix.metadata.utils.KeyFieldTypeUtil;
 import org.apache.asterix.om.types.ARecordType;
 import org.apache.asterix.om.types.IAType;
+import org.apache.asterix.runtime.projection.DataProjectionInfo;
 import org.apache.hyracks.algebricks.common.constraints.AlgebricksPartitionConstraint;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.common.utils.Pair;
@@ -50,6 +53,7 @@ import org.apache.hyracks.algebricks.core.rewriter.base.PhysicalOptimizationConf
 import org.apache.hyracks.api.dataflow.IOperatorDescriptor;
 import org.apache.hyracks.api.job.JobSpecification;
 import org.apache.hyracks.storage.am.common.api.ITupleFilterFactory;
+import org.apache.hyracks.storage.am.common.impls.DefaultTupleProjectorFactory;
 
 public class DatasetDataSource extends DataSource {
 
@@ -75,13 +79,18 @@ public class DatasetDataSource extends DataSource {
 
     private void initInternalDataset(IAType itemType, IAType metaItemType, IDatasetDetails datasetDetails)
             throws AlgebricksException {
-        InternalDatasetDetails internalDatasetDetails = (InternalDatasetDetails) datasetDetails;
+        schemaTypes =
+                createSchemaTypesForInternalDataset(itemType, metaItemType, (InternalDatasetDetails) datasetDetails);
+    }
+
+    static IAType[] createSchemaTypesForInternalDataset(IAType itemType, IAType metaItemType,
+            InternalDatasetDetails internalDatasetDetails) throws AlgebricksException {
         ARecordType recordType = (ARecordType) itemType;
         ARecordType metaRecordType = (ARecordType) metaItemType;
         List<IAType> partitioningKeyTypes =
                 KeyFieldTypeUtil.getPartitioningKeyTypes(internalDatasetDetails, recordType, metaRecordType);
         int n = partitioningKeyTypes.size();
-        schemaTypes = metaItemType == null ? new IAType[n + 1] : new IAType[n + 2];
+        IAType[] schemaTypes = metaItemType == null ? new IAType[n + 1] : new IAType[n + 2];
         for (int keyIndex = 0; keyIndex < n; ++keyIndex) {
             schemaTypes[keyIndex] = partitioningKeyTypes.get(keyIndex);
         }
@@ -89,11 +98,17 @@ public class DatasetDataSource extends DataSource {
         if (metaItemType != null) {
             schemaTypes[n + 1] = metaItemType;
         }
+        return schemaTypes;
     }
 
     private void initExternalDataset(IAType itemType) {
-        schemaTypes = new IAType[1];
+        schemaTypes = createSchemaTypesForExternalDataset(itemType);
+    }
+
+    static IAType[] createSchemaTypesForExternalDataset(IAType itemType) {
+        IAType[] schemaTypes = new IAType[1];
         schemaTypes[0] = itemType;
+        return schemaTypes;
     }
 
     @Override
@@ -114,7 +129,7 @@ public class DatasetDataSource extends DataSource {
                 ExternalDatasetDetails edd = (ExternalDatasetDetails) externalDataset.getDatasetDetails();
                 PhysicalOptimizationConfig physicalOptimizationConfig = context.getPhysicalOptimizationConfig();
                 int externalScanBufferSize = physicalOptimizationConfig.getExternalScanBufferSize();
-                Map<String, String> properties = addProjectionInfo(projectionInfo, edd.getProperties());
+                Map<String, String> properties = addExternalProjectionInfo(projectionInfo, edd.getProperties());
                 properties.put(KEY_EXTERNAL_SCAN_BUFFER_SIZE, String.valueOf(externalScanBufferSize));
                 ITypedAdapterFactory adapterFactory = metadataProvider.getConfiguredAdapterFactory(externalDataset,
                         edd.getAdapter(), properties, (ARecordType) itemType, null, context.getWarningCollector());
@@ -129,22 +144,27 @@ public class DatasetDataSource extends DataSource {
 
                 int[] minFilterFieldIndexes = createFilterIndexes(minFilterVars, opSchema);
                 int[] maxFilterFieldIndexes = createFilterIndexes(maxFilterVars, opSchema);
-                return metadataProvider.buildBtreeRuntime(jobSpec, opSchema, typeEnv, context, true, false,
+                return metadataProvider.buildBtreeRuntime(jobSpec, opSchema, typeEnv, context, true, false, null,
                         ((DatasetDataSource) dataSource).getDataset(), primaryIndex.getIndexName(), null, null, true,
-                        true, false, minFilterFieldIndexes, maxFilterFieldIndexes, tupleFilterFactory, outputLimit,
-                        false, false);
+                        true, false, null, minFilterFieldIndexes, maxFilterFieldIndexes, tupleFilterFactory,
+                        outputLimit, false, false, DefaultTupleProjectorFactory.INSTANCE);
             default:
                 throw new AlgebricksException("Unknown datasource type");
         }
     }
 
-    private Map<String, String> addProjectionInfo(IProjectionInfo<?> projectionInfo, Map<String, String> properties) {
+    private Map<String, String> addExternalProjectionInfo(IProjectionInfo<?> projectionInfo,
+            Map<String, String> properties) {
         Map<String, String> propertiesCopy = properties;
         if (projectionInfo != null) {
             //properties could be cached and reused, so we make a copy per query
             propertiesCopy = new HashMap<>(properties);
-            ExternalDataProjectionInfo fieldNamesInfo = (ExternalDataProjectionInfo) projectionInfo;
-            fieldNamesInfo.addToProperties(propertiesCopy);
+            try {
+                DataProjectionInfo externalProjectionInfo = (DataProjectionInfo) projectionInfo;
+                ExternalDataUtils.setExternalDataProjectionInfo(externalProjectionInfo, propertiesCopy);
+            } catch (IOException e) {
+                throw new IllegalStateException(e);
+            }
         }
         return propertiesCopy;
     }

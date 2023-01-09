@@ -17,15 +17,10 @@
  * under the License.
  */
 
---- Negative: invalid with clause
+--- Negative: default null is required
 
 drop dataverse test if exists;
 create dataverse test;
 
-create view test.v1(cd date) default null
-with {
-  'date':'YYYY-MM-DD',
-  'date-illegal-property-name':'YYYY-MM-DD'
-}
-as
-  select string(current_date()) cd from range(1,2) r;
+create view test.v1(r bigint) as
+  select r from range(1,2) r;

@@ -97,10 +97,13 @@ public class StartTasksWork extends AbstractWork {
 
     private final long jobStartTime;
 
+    private final String jobStartTimeZoneId;
+
     public StartTasksWork(NodeControllerService ncs, DeploymentId deploymentId, JobId jobId, byte[] acgBytes,
             List<TaskAttemptDescriptor> taskDescriptors,
             Map<ConnectorDescriptorId, IConnectorPolicy> connectorPoliciesMap, Set<JobFlag> flags,
-            Map<byte[], byte[]> jobParameters, DeployedJobSpecId deployedJobSpecId, long jobStartTime) {
+            Map<byte[], byte[]> jobParameters, DeployedJobSpecId deployedJobSpecId, long jobStartTime,
+            String jobStartTimeZoneId) {
         this.ncs = ncs;
         this.deploymentId = deploymentId;
         this.jobId = jobId;
@@ -111,6 +114,7 @@ public class StartTasksWork extends AbstractWork {
         this.flags = flags;
         this.jobParameters = jobParameters;
         this.jobStartTime = jobStartTime;
+        this.jobStartTimeZoneId = jobStartTimeZoneId;
     }
 
     @Override
@@ -148,11 +152,12 @@ public class StartTasksWork extends AbstractWork {
                 ActivityCluster ac = acg.getActivityMap().get(aid);
                 IActivity han = ac.getActivityMap().get(aid);
                 LOGGER.trace("Initializing {} -> {} for {}", taId, han, jobId);
+                int partitionCount = td.getPartitionCount();
                 final int partition = tid.getPartition();
                 List<IConnectorDescriptor> inputs = ac.getActivityInputMap().get(aid);
-                task = new Task(joblet, flags, taId, han.getDisplayName(), ncs.getExecutor(), ncs,
+                task = new Task(joblet, flags, taId, partitionCount, han.getDisplayName(), ncs.getExecutor(), ncs,
                         createInputChannels(td, inputs));
-                IOperatorNodePushable operator = han.createPushRuntime(task, rdp, partition, td.getPartitionCount());
+                IOperatorNodePushable operator = han.createPushRuntime(task, rdp, partition, partitionCount);
                 List<IPartitionCollector> collectors = new ArrayList<>();
                 if (inputs != null) {
                     for (int i = 0; i < inputs.size(); ++i) {
@@ -178,7 +183,7 @@ public class StartTasksWork extends AbstractWork {
                                 createPartitionWriterFactory(task, cPolicy, jobId, conn, partition, taId, flags);
                         LOGGER.trace("input: {}: {}", i, conn.getConnectorId());
                         IFrameWriter writer = conn.createPartitioner(task, recordDesc, pwFactory, partition,
-                                td.getPartitionCount(), td.getOutputPartitionCounts()[i]);
+                                partitionCount, td.getOutputPartitionCounts()[i]);
                         writer = (enforce && !profile) ? EnforceFrameWriter.enforce(writer) : writer;
                         operator.setOutputFrameWriter(i, writer, recordDesc);
                     }
@@ -215,7 +220,7 @@ public class StartTasksWork extends AbstractWork {
                 }
                 listenerFactory.updateListenerJobParameters(ncs.createOrGetJobParameterByteStore(jobId));
             }
-            ji = new Joblet(ncs, deploymentId, jobId, appCtx, acg, listenerFactory, jobStartTime);
+            ji = new Joblet(ncs, deploymentId, jobId, appCtx, acg, listenerFactory, jobStartTime, jobStartTimeZoneId);
             jobletMap.put(jobId, ji);
         }
         return ji;

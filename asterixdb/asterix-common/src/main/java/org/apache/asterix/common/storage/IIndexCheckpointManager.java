@@ -28,9 +28,23 @@ public interface IIndexCheckpointManager {
      * @param validComponentSequence
      * @param lsn
      * @param validComponentId
+     * @param masterNodeId
      * @throws HyracksDataException
      */
-    void init(long validComponentSequence, long lsn, long validComponentId) throws HyracksDataException;
+    void init(long validComponentSequence, long lsn, long validComponentId, String masterNodeId)
+            throws HyracksDataException;
+
+    /**
+     * Called when a new LSM disk component is flushed due to a replicated component.
+     * When called, the index checkpoint is updated with the latest valid {@code componentSequence}
+     * and low watermark {@code lsn}
+     *
+     * @param componentSequence
+     * @param lsn
+     * @param masterNodeId
+     * @throws HyracksDataException
+     */
+    void flushed(long componentSequence, long lsn, long componentId, String masterNodeId) throws HyracksDataException;
 
     /**
      * Called when a new LSM disk component is flushed. When called, the index checkpoint is updated
@@ -50,9 +64,11 @@ public interface IIndexCheckpointManager {
      * @param componentSequence
      * @param masterLsn
      * @param componentId
+     * @param masterNodeId
      * @throws HyracksDataException
      */
-    void replicated(long componentSequence, long masterLsn, long componentId) throws HyracksDataException;
+    void replicated(long componentSequence, long masterLsn, long componentId, String masterNodeId)
+            throws HyracksDataException;
 
     /**
      * Called when a flush log is received and replicated from master. The mapping between
@@ -109,12 +125,13 @@ public interface IIndexCheckpointManager {
     IndexCheckpoint getLatest() throws HyracksDataException;
 
     /**
-     * Advance the last valid component sequence. Used for replicated bulkloaded components
+     * Advance the last valid component. Used for replicated bulkloaded components
      *
      * @param componentSequence
+     * @param componentId
      * @throws HyracksDataException
      */
-    void advanceValidComponentSequence(long componentSequence) throws HyracksDataException;
+    void advanceValidComponent(long componentSequence, long componentId) throws HyracksDataException;
 
     /**
      * Set the last component id. Used during recovery or after component delete

@@ -173,6 +173,10 @@ public class ResultExtractor {
         return extract(resultStream, EnumSet.of(ResultField.PLANS), resultCharset, OutputFormat.ADM, plans).getResult();
     }
 
+    public static InputStream extractSignature(InputStream resultStream, Charset resultCharset) throws Exception {
+        return extract(resultStream, EnumSet.of(ResultField.SIGNATURE), resultCharset).getResult();
+    }
+
     public static InputStream extractStatus(InputStream resultStream, Charset resultCharset) throws Exception {
         return extract(resultStream, EnumSet.of(ResultField.STATUS), resultCharset).getResult();
     }
@@ -223,7 +227,7 @@ public class ResultExtractor {
             final String fieldName = fieldNameIter.next();
             final ResultField fieldKind = ResultField.ofFieldName(fieldName.split("-")[0]);
             if (fieldKind == null) {
-                throw new AsterixException("Unanticipated field \"" + fieldName + "\"");
+                throw new AsterixException("Unanticipated field '" + fieldName + "'");
             }
             if (!resultFields.contains(fieldKind)) {
                 continue;

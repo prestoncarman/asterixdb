@@ -19,7 +19,9 @@
 
 package org.apache.asterix.optimizer.rules.am;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
 
 import org.apache.asterix.common.config.DatasetConfig.IndexType;
@@ -28,6 +30,7 @@ import org.apache.asterix.common.exceptions.ErrorCode;
 import org.apache.asterix.metadata.entities.Dataset;
 import org.apache.asterix.metadata.entities.Index;
 import org.apache.asterix.metadata.utils.ArrayIndexUtil;
+import org.apache.asterix.om.functions.BuiltinFunctions;
 import org.apache.asterix.om.types.IAType;
 import org.apache.asterix.om.utils.NonTaggedFormatUtil;
 import org.apache.commons.lang3.mutable.Mutable;
@@ -36,8 +39,12 @@ import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.base.IOptimizationContext;
+import org.apache.hyracks.algebricks.core.algebra.base.LogicalExpressionTag;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalOperatorTag;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalVariable;
+import org.apache.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
+import org.apache.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
+import org.apache.hyracks.algebricks.core.algebra.expressions.IAlgebricksConstantValue;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractBinaryJoinOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.LeftOuterUnnestOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnnestOperator;
@@ -51,8 +58,8 @@ public class ArrayBTreeAccessMethod extends BTreeAccessMethod {
 
     @Override
     public boolean matchAllIndexExprs(Index index) {
-        // Similar to BTree "matchAllIndexExprs", we only require all expressions to be matched if this is a composite
-        // key index with an unknowable field.
+        // We only require all expressions to be matched if this is a composite key index with an unknowable field.
+        // TODO (GLENN): When nulls become stored in array indexes, this should return false.
         return ((Index.ArrayIndexDetails) index.getIndexDetails()).getElementList().stream()
                 .map(e -> e.getProjectList().size()).reduce(0, Integer::sum) > 1 && hasUnknownableField(index);
     }
@@ -80,8 +87,8 @@ public class ArrayBTreeAccessMethod extends BTreeAccessMethod {
     public boolean applyJoinPlanTransformation(List<Mutable<ILogicalOperator>> afterJoinRefs,
             Mutable<ILogicalOperator> joinRef, OptimizableOperatorSubTree leftSubTree,
             OptimizableOperatorSubTree rightSubTree, Index chosenIndex, AccessMethodAnalysisContext analysisCtx,
-            IOptimizationContext context, boolean isLeftOuterJoin, boolean isLeftOuterJoinWithSpecialGroupBy)
-            throws AlgebricksException {
+            IOptimizationContext context, boolean isLeftOuterJoin, boolean isLeftOuterJoinWithSpecialGroupBy,
+            IAlgebricksConstantValue leftOuterMissingValue) throws AlgebricksException {
         AbstractBinaryJoinOperator joinOp = (AbstractBinaryJoinOperator) joinRef.getValue();
         Mutable<ILogicalExpression> conditionRef = joinOp.getCondition();
         Dataset dataset = analysisCtx.getIndexDatasetMap().get(chosenIndex);
@@ -96,6 +103,46 @@ public class ArrayBTreeAccessMethod extends BTreeAccessMethod {
             probeSubTree = leftSubTree;
         } else {
             return false;
+        }
+
+        // TODO (GLENN): There is a bug with nested-loop joins originating from the probe. Disable this case for now.
+        Deque<ILogicalOperator> opStack = new ArrayDeque<>();
+        List<ILogicalOperator> visited = new ArrayList<>();
+        opStack.add(probeSubTree.getRoot());
+        while (!opStack.isEmpty()) {
+            ILogicalOperator workingOp = opStack.pop();
+            if (!visited.contains(workingOp)) {
+                if (workingOp.getOperatorTag() == LogicalOperatorTag.INNERJOIN
+                        || workingOp.getOperatorTag() == LogicalOperatorTag.LEFTOUTERJOIN) {
+                    AbstractBinaryJoinOperator joinOperator = (AbstractBinaryJoinOperator) workingOp;
+                    ILogicalExpression joinCondition = joinOperator.getCondition().getValue();
+                    List<Mutable<ILogicalExpression>> conjuncts = new ArrayList<>();
+                    if (joinCondition.splitIntoConjuncts(conjuncts)) {
+                        for (Mutable<ILogicalExpression> conjunct : conjuncts) {
+                            if (conjunct.getValue().getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
+                                return false;
+                            }
+                            AbstractFunctionCallExpression expr = (AbstractFunctionCallExpression) joinCondition;
+                            if (expr.getFunctionIdentifier() != BuiltinFunctions.EQ) {
+                                return false;
+                            }
+                        }
+                    } else if (joinCondition.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
+                        return false;
+                    } else {
+                        AbstractFunctionCallExpression expr = (AbstractFunctionCallExpression) joinCondition;
+                        if (expr.getFunctionIdentifier() != BuiltinFunctions.EQ) {
+                            return false;
+                        }
+                    }
+                }
+                visited.add(workingOp);
+            }
+            for (Mutable<ILogicalOperator> opRef : workingOp.getInputs()) {
+                if (!visited.contains(opRef.getValue())) {
+                    opStack.push(opRef.getValue());
+                }
+            }
         }
 
         LogicalVariable newNullPlaceHolderVar = null;
@@ -114,7 +161,8 @@ public class ArrayBTreeAccessMethod extends BTreeAccessMethod {
                 if (workingOp.getOperatorTag() == LogicalOperatorTag.UNNEST) {
                     UnnestOperator oldUnnest = (UnnestOperator) workingOp;
                     LeftOuterUnnestOperator newUnnest = new LeftOuterUnnestOperator(oldUnnest.getVariable(),
-                            new MutableObject<>(oldUnnest.getExpressionRef().getValue()));
+                            new MutableObject<>(oldUnnest.getExpressionRef().getValue()),
+                            ConstantExpression.MISSING.getValue());
                     newUnnest.setSourceLocation(oldUnnest.getSourceLocation());
                     newUnnest.getInputs().addAll(oldUnnest.getInputs());
                     newUnnest.setExecutionMode(oldUnnest.getExecutionMode());
@@ -140,14 +188,14 @@ public class ArrayBTreeAccessMethod extends BTreeAccessMethod {
 
         ILogicalOperator indexSearchOp = createIndexSearchPlan(afterJoinRefs, joinRef, conditionRef,
                 indexSubTree.getAssignsAndUnnestsRefs(), indexSubTree, probeSubTree, chosenIndex, analysisCtx, true,
-                isLeftOuterJoin, true, context, newNullPlaceHolderVar);
+                isLeftOuterJoin, true, context, newNullPlaceHolderVar, leftOuterMissingValue);
         if (indexSearchOp == null) {
             return false;
         }
 
         return AccessMethodUtils.finalizeJoinPlanTransformation(afterJoinRefs, joinRef, indexSubTree, probeSubTree,
-                analysisCtx, context, isLeftOuterJoin, isLeftOuterJoinWithSpecialGroupBy, indexSearchOp,
-                newNullPlaceHolderVar, conditionRef, dataset);
+                analysisCtx, context, isLeftOuterJoin, isLeftOuterJoinWithSpecialGroupBy, leftOuterMissingValue,
+                indexSearchOp, newNullPlaceHolderVar, conditionRef, dataset, chosenIndex);
     }
 
     @Override
@@ -156,7 +204,8 @@ public class ArrayBTreeAccessMethod extends BTreeAccessMethod {
             List<Mutable<ILogicalOperator>> assignBeforeTheOpRefs, OptimizableOperatorSubTree indexSubTree,
             OptimizableOperatorSubTree probeSubTree, Index chosenIndex, AccessMethodAnalysisContext analysisCtx,
             boolean retainInput, boolean retainMissing, boolean requiresBroadcast, IOptimizationContext context,
-            LogicalVariable newMissingPlaceHolderForLOJ) throws AlgebricksException {
+            LogicalVariable newMissingNullPlaceHolderForLOJ, IAlgebricksConstantValue leftOuterMissingValue)
+            throws AlgebricksException {
 
         Index.ArrayIndexDetails chosenIndexDetails = (Index.ArrayIndexDetails) chosenIndex.getIndexDetails();
         List<List<String>> chosenIndexKeyFieldNames = new ArrayList<>();
@@ -173,25 +222,8 @@ public class ArrayBTreeAccessMethod extends BTreeAccessMethod {
 
         return createBTreeIndexSearchPlan(afterTopOpRefs, topOpRef, conditionRef, assignBeforeTheOpRefs, indexSubTree,
                 probeSubTree, chosenIndex, analysisCtx, retainInput, retainMissing, requiresBroadcast, context,
-                newMissingPlaceHolderForLOJ, chosenIndexKeyFieldNames, chosenIndexKeyFieldTypes,
-                chosenIndexKeyFieldSourceIndicators);
-    }
-
-    @Override
-    protected IAType getIndexedKeyType(Index.IIndexDetails chosenIndexDetails, int keyPos) throws CompilationException {
-        Index.ArrayIndexDetails arrayIndexDetails = (Index.ArrayIndexDetails) chosenIndexDetails;
-        int elementPos = 0;
-        for (Index.ArrayIndexElement e : arrayIndexDetails.getElementList()) {
-            for (int i = 0; i < e.getProjectList().size(); i++) {
-                if (elementPos == keyPos) {
-                    return e.getTypeList().get(i);
-                }
-                elementPos++;
-            }
-        }
-
-        throw new CompilationException(ErrorCode.COMPILATION_ILLEGAL_STATE,
-                "No array index element found, but using " + "an array access method.");
+                newMissingNullPlaceHolderForLOJ, leftOuterMissingValue, chosenIndexKeyFieldNames,
+                chosenIndexKeyFieldTypes, chosenIndexKeyFieldSourceIndicators);
     }
 
     @Override
@@ -205,8 +237,21 @@ public class ArrayBTreeAccessMethod extends BTreeAccessMethod {
     }
 
     @Override
+    public boolean acceptsFunction(AbstractFunctionCallExpression functionExpr, Index index, IAType indexedFieldType,
+            boolean defaultNull, boolean finalStep) throws CompilationException {
+        if (defaultNull) {
+            throw new CompilationException(ErrorCode.COMPILATION_ILLEGAL_STATE, "CAST modifier not allowed");
+        }
+        return AccessMethodUtils.isFieldAccess(functionExpr.getFunctionIdentifier());
+    }
+
+    @Override
     public int compareTo(IAccessMethod o) {
         return this.getName().compareTo(o.getName());
     }
 
+    @Override
+    protected boolean allowFunctionExpressionArg() {
+        return false;
+    }
 }

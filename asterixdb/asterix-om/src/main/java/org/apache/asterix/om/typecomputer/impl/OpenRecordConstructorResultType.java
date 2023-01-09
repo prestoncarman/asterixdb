@@ -22,9 +22,11 @@ package org.apache.asterix.om.typecomputer.impl;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.apache.asterix.common.annotations.RecordFieldOrderAnnotation;
 import org.apache.asterix.common.exceptions.CompilationException;
 import org.apache.asterix.common.exceptions.ErrorCode;
 import org.apache.asterix.om.typecomputer.base.IResultTypeComputer;
@@ -41,6 +43,7 @@ import org.apache.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.IVariableTypeEnvironment;
 import org.apache.hyracks.algebricks.core.algebra.metadata.IMetadataProvider;
+import org.apache.hyracks.util.LogRedactionUtil;
 
 public class OpenRecordConstructorResultType implements IResultTypeComputer {
 
@@ -51,7 +54,7 @@ public class OpenRecordConstructorResultType implements IResultTypeComputer {
             IMetadataProvider<?, ?> metadataProvider) throws AlgebricksException {
         AbstractFunctionCallExpression f = (AbstractFunctionCallExpression) expression;
 
-        /**
+        /*
          * if type has been top-down propagated, use the enforced type
          */
         ARecordType type = (ARecordType) TypeCastUtils.getRequiredType(f);
@@ -66,6 +69,7 @@ public class OpenRecordConstructorResultType implements IResultTypeComputer {
         // but are additional possible field names. For example, a field "foo" with type
         // ANY cannot be in the closed part, but "foo" is a possible field name.
         Set<String> allPossibleAdditionalFieldNames = new HashSet<>();
+        LinkedHashSet<String> allPossibleFieldNamesOrdered = new LinkedHashSet<>();
         boolean canProvideAdditionFieldInfo = true;
         boolean isOpen = false;
         while (argIter.hasNext()) {
@@ -75,7 +79,8 @@ public class OpenRecordConstructorResultType implements IResultTypeComputer {
             String fieldName = ConstantExpressionUtil.getStringConstant(e1);
             if (fieldName != null && t2 != null && TypeHelper.isClosed(t2)) {
                 if (namesList.contains(fieldName)) {
-                    throw new CompilationException(ErrorCode.DUPLICATE_FIELD_NAME, f.getSourceLocation(), fieldName);
+                    throw new CompilationException(ErrorCode.DUPLICATE_FIELD_NAME, f.getSourceLocation(),
+                            LogRedactionUtil.userData(fieldName));
                 }
                 namesList.add(fieldName);
                 if (t2.getTypeTag() == ATypeTag.UNION) {
@@ -91,11 +96,17 @@ public class OpenRecordConstructorResultType implements IResultTypeComputer {
                 }
                 isOpen = true;
             }
+            allPossibleFieldNamesOrdered.add(fieldName);
         }
         String[] fieldNames = namesList.toArray(new String[0]);
         IAType[] fieldTypes = typesList.toArray(new IAType[0]);
-        return canProvideAdditionFieldInfo
-                ? new ARecordType(null, fieldNames, fieldTypes, isOpen, allPossibleAdditionalFieldNames)
-                : new ARecordType(null, fieldNames, fieldTypes, isOpen);
+        ARecordType resultType;
+        if (isOpen && canProvideAdditionFieldInfo) {
+            resultType = new ARecordType(null, fieldNames, fieldTypes, isOpen, allPossibleAdditionalFieldNames);
+            resultType.getAnnotations().add(new RecordFieldOrderAnnotation(allPossibleFieldNamesOrdered));
+        } else {
+            resultType = new ARecordType(null, fieldNames, fieldTypes, isOpen);
+        }
+        return resultType;
     }
 }

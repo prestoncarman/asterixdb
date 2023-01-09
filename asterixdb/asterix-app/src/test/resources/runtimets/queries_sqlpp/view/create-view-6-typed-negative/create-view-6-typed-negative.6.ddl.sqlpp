@@ -17,14 +17,13 @@
  * under the License.
  */
 
---- Negative: view type has non-optional fields
+--- Negative: invalid view parameter clause
 
 drop dataverse test if exists;
 create dataverse test;
 
-create type test.t1 as closed {
-  r:int64
-};
-
-create view test.v1(t1) default null as
-  select r from range(1,2) r;
+create view test.v1(cd date) default null
+  date 'YYYY-MM-DD'
+  date_illegal_property_name 'YYYY-MM-DD'
+as
+  select string(current_date()) cd from range(1,2) r;

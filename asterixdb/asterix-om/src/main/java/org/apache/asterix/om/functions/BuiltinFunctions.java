@@ -102,6 +102,7 @@ import org.apache.asterix.om.typecomputer.impl.NonTaggedGetItemResultType;
 import org.apache.asterix.om.typecomputer.impl.NotUnknownTypeComputer;
 import org.apache.asterix.om.typecomputer.impl.NullIfTypeComputer;
 import org.apache.asterix.om.typecomputer.impl.NullableDoubleTypeComputer;
+import org.apache.asterix.om.typecomputer.impl.NullableTypeComputer;
 import org.apache.asterix.om.typecomputer.impl.NumericAddSubMulDivTypeComputer;
 import org.apache.asterix.om.typecomputer.impl.NumericBinaryToDoubleTypeComputer;
 import org.apache.asterix.om.typecomputer.impl.NumericDivideTypeComputer;
@@ -134,6 +135,7 @@ import org.apache.asterix.om.typecomputer.impl.ToObjectTypeComputer;
 import org.apache.asterix.om.typecomputer.impl.TreatAsTypeComputer;
 import org.apache.asterix.om.typecomputer.impl.UnaryBinaryInt64TypeComputer;
 import org.apache.asterix.om.typecomputer.impl.UniformInputTypeComputer;
+import org.apache.asterix.om.typecomputer.impl.UnionMbrAggTypeComputer;
 import org.apache.asterix.om.typecomputer.impl.UnorderedListConstructorTypeComputer;
 import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalExpression;
@@ -360,6 +362,8 @@ public class BuiltinFunctions {
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "round-half-to-even", 1);
     public static final FunctionIdentifier NUMERIC_ROUND_HALF_TO_EVEN2 =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "round-half-to-even", 2);
+    public static final FunctionIdentifier NUMERIC_ROUND_HALF_UP2 =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "round-half-up", 2);
     public static final FunctionIdentifier NUMERIC_TRUNC =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "trunc", 2);
 
@@ -496,6 +500,8 @@ public class BuiltinFunctions {
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "repeat", 2);
     public static final FunctionIdentifier STRING_SPLIT =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "split", 2);
+    public static final FunctionIdentifier STRING_PARSE_JSON =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "parse-json", 1);
 
     public static final FunctionIdentifier DATASET =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "dataset", FunctionIdentifier.VARARGS); // 1 or 2
@@ -613,6 +619,15 @@ public class BuiltinFunctions {
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "agg-global-interval-range", 1);
     public static final FunctionIdentifier GLOBAL_INTERVAL_RANGE_MAP =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "agg-global-interval-range-map", 1);
+    public static final FunctionIdentifier UNION_MBR =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "agg-union_mbr", 1);
+    public static final FunctionIdentifier LOCAL_UNION_MBR =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "agg-local-union_mbr", 1);
+    public static final FunctionIdentifier INTERMEDIATE_UNION_MBR =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "agg-intermediate-union_mbr", 1);
+    public static final FunctionIdentifier GLOBAL_UNION_MBR =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "agg-global-union_mbr", 1);
+
     public static final FunctionIdentifier SCALAR_ARRAYAGG =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "arrayagg", 1);
     public static final FunctionIdentifier SCALAR_AVG = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "avg", 1);
@@ -639,6 +654,8 @@ public class BuiltinFunctions {
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "skewness", 1);
     public static final FunctionIdentifier SCALAR_KURTOSIS =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "kurtosis", 1);
+    public static final FunctionIdentifier SCALAR_UNION_MBR =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "union_mbr", 1);
 
     // serializable aggregate functions
     public static final FunctionIdentifier SERIAL_AVG =
@@ -841,6 +858,14 @@ public class BuiltinFunctions {
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "agg-global-sql-kurtosis", 1);
     public static final FunctionIdentifier LOCAL_SQL_KURTOSIS =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "agg-local-sql-kurtosis", 1);
+    public static final FunctionIdentifier SQL_UNION_MBR =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "agg-sql-union_mbr", 1);
+    public static final FunctionIdentifier LOCAL_SQL_UNION_MBR =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "agg-local-sql-union_mbr", 1);
+    public static final FunctionIdentifier INTERMEDIATE_SQL_UNION_MBR =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "agg-intermediate-sql-union_mbr", 1);
+    public static final FunctionIdentifier GLOBAL_SQL_UNION_MBR =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "agg-global-sql-union_mbr", 1);
 
     public static final FunctionIdentifier SCALAR_SQL_AVG =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "sql-avg", 1);
@@ -864,6 +889,8 @@ public class BuiltinFunctions {
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "sql-skewness", 1);
     public static final FunctionIdentifier SCALAR_SQL_KURTOSIS =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "sql-kurtosis", 1);
+    public static final FunctionIdentifier SCALAR_SQL_UNION_MBR =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "sql-union_mbr", 1);
 
     // serializable sql aggregate functions
     public static final FunctionIdentifier SERIAL_SQL_AVG =
@@ -1028,6 +1055,8 @@ public class BuiltinFunctions {
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "percent-rank-impl", FunctionIdentifier.VARARGS);
     public static final FunctionIdentifier WIN_MARK_FIRST_MISSING_IMPL = new FunctionIdentifier(
             FunctionConstants.ASTERIX_NS, "win-mark-first-missing-impl", FunctionIdentifier.VARARGS);
+    public static final FunctionIdentifier WIN_MARK_FIRST_NULL_IMPL = new FunctionIdentifier(
+            FunctionConstants.ASTERIX_NS, "win-mark-first-null-impl", FunctionIdentifier.VARARGS);
     public static final FunctionIdentifier WIN_PARTITION_LENGTH_IMPL =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "win-partition-length-impl", 0);
 
@@ -1038,6 +1067,8 @@ public class BuiltinFunctions {
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "subset-collection", 3);
 
     public static final FunctionIdentifier RANGE = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "range", 2);
+    public static final FunctionIdentifier SPATIAL_TILE =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "spatial-tile", 4);
 
     // fuzzy functions
     public static final FunctionIdentifier FUZZY_EQ =
@@ -1097,24 +1128,42 @@ public class BuiltinFunctions {
     // constructors:
     public static final FunctionIdentifier BOOLEAN_CONSTRUCTOR =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "boolean", 1);
+    public static final FunctionIdentifier BOOLEAN_DEFAULT_NULL_CONSTRUCTOR =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "boolean-default-null", 1);
     public static final FunctionIdentifier STRING_CONSTRUCTOR =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "string", 1);
+    public static final FunctionIdentifier STRING_DEFAULT_NULL_CONSTRUCTOR =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "string-default-null", 1);
     public static final FunctionIdentifier BINARY_HEX_CONSTRUCTOR =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "hex", 1);
     public static final FunctionIdentifier BINARY_BASE64_CONSTRUCTOR =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "base64", 1);
+    public static final FunctionIdentifier BINARY_BASE64_DEFAULT_NULL_CONSTRUCTOR =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "base64-default-null", 1);
     public static final FunctionIdentifier INT8_CONSTRUCTOR =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "int8", 1);
+    public static final FunctionIdentifier INT8_DEFAULT_NULL_CONSTRUCTOR =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "int8-default-null", 1);
     public static final FunctionIdentifier INT16_CONSTRUCTOR =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "int16", 1);
+    public static final FunctionIdentifier INT16_DEFAULT_NULL_CONSTRUCTOR =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "int16-default-null", 1);
     public static final FunctionIdentifier INT32_CONSTRUCTOR =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "int32", 1);
+    public static final FunctionIdentifier INT32_DEFAULT_NULL_CONSTRUCTOR =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "int32-default-null", 1);
     public static final FunctionIdentifier INT64_CONSTRUCTOR =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "int64", 1);
+    public static final FunctionIdentifier INT64_DEFAULT_NULL_CONSTRUCTOR =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "int64-default-null", 1);
     public static final FunctionIdentifier FLOAT_CONSTRUCTOR =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "float", 1);
+    public static final FunctionIdentifier FLOAT_DEFAULT_NULL_CONSTRUCTOR =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "float-default-null", 1);
     public static final FunctionIdentifier DOUBLE_CONSTRUCTOR =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "double", 1);
+    public static final FunctionIdentifier DOUBLE_DEFAULT_NULL_CONSTRUCTOR =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "double-default-null", 1);
     public static final FunctionIdentifier POINT_CONSTRUCTOR =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "point", 1);
     public static final FunctionIdentifier POINT3D_CONSTRUCTOR =
@@ -1129,25 +1178,45 @@ public class BuiltinFunctions {
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "polygon", 1);
     public static final FunctionIdentifier TIME_CONSTRUCTOR =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "time", 1);
+    public static final FunctionIdentifier TIME_DEFAULT_NULL_CONSTRUCTOR =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "time-default-null", 1);
     public static final FunctionIdentifier TIME_CONSTRUCTOR_WITH_FORMAT =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "time", 2);
+    public static final FunctionIdentifier TIME_DEFAULT_NULL_CONSTRUCTOR_WITH_FORMAT =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "time-default-null", 2);
     public static final FunctionIdentifier DATE_CONSTRUCTOR =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "date", 1);
+    public static final FunctionIdentifier DATE_DEFAULT_NULL_CONSTRUCTOR =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "date-default-null", 1);
     public static final FunctionIdentifier DATE_CONSTRUCTOR_WITH_FORMAT =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "date", 2);
+    public static final FunctionIdentifier DATE_DEFAULT_NULL_CONSTRUCTOR_WITH_FORMAT =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "date-default-null", 2);
     public static final FunctionIdentifier DATETIME_CONSTRUCTOR =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "datetime", 1);
+    public static final FunctionIdentifier DATETIME_DEFAULT_NULL_CONSTRUCTOR =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "datetime-default-null", 1);
     public static final FunctionIdentifier DATETIME_CONSTRUCTOR_WITH_FORMAT =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "datetime", 2);
+    public static final FunctionIdentifier DATETIME_DEFAULT_NULL_CONSTRUCTOR_WITH_FORMAT =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "datetime-default-null", 2);
     public static final FunctionIdentifier DURATION_CONSTRUCTOR =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "duration", 1);
+    public static final FunctionIdentifier DURATION_DEFAULT_NULL_CONSTRUCTOR =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "duration-default-null", 1);
     public static final FunctionIdentifier UUID_CONSTRUCTOR =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "uuid", 1);
+    public static final FunctionIdentifier UUID_DEFAULT_NULL_CONSTRUCTOR =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "uuid-default-null", 1);
 
     public static final FunctionIdentifier YEAR_MONTH_DURATION_CONSTRUCTOR =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "year-month-duration", 1);
+    public static final FunctionIdentifier YEAR_MONTH_DURATION_DEFAULT_NULL_CONSTRUCTOR =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "year-month-duration-default-null", 1);
     public static final FunctionIdentifier DAY_TIME_DURATION_CONSTRUCTOR =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "day-time-duration", 1);
+    public static final FunctionIdentifier DAY_TIME_DURATION_DEFAULT_NULL_CONSTRUCTOR =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "day-time-duration-default-null", 1);
 
     public static final FunctionIdentifier INTERVAL_CONSTRUCTOR =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "interval", 2);
@@ -1185,10 +1254,16 @@ public class BuiltinFunctions {
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "interval-ended-by", 2);
     public static final FunctionIdentifier CURRENT_TIME =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "current-time", 0);
+    public static final FunctionIdentifier CURRENT_TIME_IMMEDIATE =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "current-time-immediate", 0);
     public static final FunctionIdentifier CURRENT_DATE =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "current-date", 0);
+    public static final FunctionIdentifier CURRENT_DATE_IMMEDIATE =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "current-date-immediate", 0);
     public static final FunctionIdentifier CURRENT_DATETIME =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "current-datetime", 0);
+    public static final FunctionIdentifier CURRENT_DATETIME_IMMEDIATE =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "current-datetime-immediate", 0);
     public static final FunctionIdentifier DURATION_EQUAL =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "duration-equal", 2);
     public static final FunctionIdentifier YEAR_MONTH_DURATION_GREATER_THAN =
@@ -1246,6 +1321,10 @@ public class BuiltinFunctions {
     public static final FunctionIdentifier CAST_TYPE = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "cast", 1);
     public static final FunctionIdentifier CAST_TYPE_LAX =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "cast-lax", 1);
+    public static final FunctionIdentifier REFERENCE_TILE =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "reference-tile", 6);
+    public static final FunctionIdentifier GET_INTERSECTION =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "get-intersection", 2);
 
     public static final FunctionIdentifier CREATE_UUID =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "create-uuid", 0);
@@ -1389,6 +1468,10 @@ public class BuiltinFunctions {
     public static final FunctionIdentifier ST_POLYGONIZE =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "st-polygonize", 1);
 
+    public static final FunctionIdentifier ST_MBR = new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "st-mbr", 1);
+    public static final FunctionIdentifier ST_MBR_ENLARGE =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "st-mbr-enlarge", 2);
+
     // Spatial and temporal type accessors
     public static final FunctionIdentifier ACCESSOR_TEMPORAL_YEAR =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "get-year", 1);
@@ -1434,8 +1517,12 @@ public class BuiltinFunctions {
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "unix-time-from-time-in-ms", 1);
     public final static FunctionIdentifier UNIX_TIME_FROM_DATETIME_IN_MS =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "unix-time-from-datetime-in-ms", 1);
+    public final static FunctionIdentifier UNIX_TIME_FROM_DATETIME_IN_MS_WITH_TZ =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "unix-time-from-datetime-in-ms", 2);
     public final static FunctionIdentifier UNIX_TIME_FROM_DATETIME_IN_SECS =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "unix-time-from-datetime-in-secs", 1);
+    public final static FunctionIdentifier UNIX_TIME_FROM_DATETIME_IN_SECS_WITH_TZ =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "unix-time-from-datetime-in-secs", 2);
     public static final FunctionIdentifier DATE_FROM_UNIX_TIME_IN_DAYS =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "date-from-unix-time-in-days", 1);
     public static final FunctionIdentifier DATE_FROM_DATETIME =
@@ -1446,8 +1533,12 @@ public class BuiltinFunctions {
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "get-time-from-datetime", 1);
     public static final FunctionIdentifier DATETIME_FROM_UNIX_TIME_IN_MS =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "datetime-from-unix-time-in-ms", 1);
+    public static final FunctionIdentifier DATETIME_FROM_UNIX_TIME_IN_MS_WITH_TZ =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "datetime-from-unix-time-in-ms", 2);
     public static final FunctionIdentifier DATETIME_FROM_UNIX_TIME_IN_SECS =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "datetime-from-unix-time-in-secs", 1);
+    public static final FunctionIdentifier DATETIME_FROM_UNIX_TIME_IN_SECS_WITH_TZ =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "datetime-from-unix-time-in-secs", 2);
     public static final FunctionIdentifier DATETIME_FROM_DATE_TIME =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "datetime-from-date-time", 2);
     public static final FunctionIdentifier CALENDAR_DURATION_FROM_DATETIME =
@@ -1460,6 +1551,16 @@ public class BuiltinFunctions {
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "adjust-datetime-for-timezone", 2);
     public static final FunctionIdentifier DAY_OF_WEEK =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "day-of-week", 1);
+    public static final FunctionIdentifier DAY_OF_WEEK2 =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "day-of-week", 2);
+    public static final FunctionIdentifier DAY_OF_YEAR =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "day-of-year", 1);
+    public static final FunctionIdentifier QUARTER_OF_YEAR =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "quarter-of-year", 1);
+    public static final FunctionIdentifier WEEK_OF_YEAR =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "week-of-year", 1);
+    public static final FunctionIdentifier WEEK_OF_YEAR2 =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "week-of-year", 2);
     public static final FunctionIdentifier PARSE_DATE =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "parse-date", 2);
     public static final FunctionIdentifier PARSE_TIME =
@@ -1705,6 +1806,28 @@ public class BuiltinFunctions {
         addPrivateFunction(MAKE_FIELD_INDEX_HANDLE, AnyTypeComputer.INSTANCE, true);
         addPrivateFunction(MAKE_FIELD_NAME_HANDLE, AnyTypeComputer.INSTANCE, true);
 
+        // cast null type constructors
+        addFunction(BOOLEAN_DEFAULT_NULL_CONSTRUCTOR, NullableTypeComputer.INSTANCE_BOOLEAN, true);
+        addFunction(INT8_DEFAULT_NULL_CONSTRUCTOR, NullableTypeComputer.INSTANCE_INT8, true);
+        addFunction(INT16_DEFAULT_NULL_CONSTRUCTOR, NullableTypeComputer.INSTANCE_INT16, true);
+        addFunction(INT32_DEFAULT_NULL_CONSTRUCTOR, NullableTypeComputer.INSTANCE_INT32, true);
+        addFunction(INT64_DEFAULT_NULL_CONSTRUCTOR, NullableTypeComputer.INSTANCE_INT64, true);
+        addFunction(FLOAT_DEFAULT_NULL_CONSTRUCTOR, NullableTypeComputer.INSTANCE_FLOAT, true);
+        addFunction(DOUBLE_DEFAULT_NULL_CONSTRUCTOR, NullableTypeComputer.INSTANCE_DOUBLE, true);
+        addFunction(STRING_DEFAULT_NULL_CONSTRUCTOR, NullableTypeComputer.INSTANCE_STRING, true);
+        addFunction(DATE_DEFAULT_NULL_CONSTRUCTOR, NullableTypeComputer.INSTANCE_DATE, true);
+        addFunction(DATE_DEFAULT_NULL_CONSTRUCTOR_WITH_FORMAT, NullableTypeComputer.INSTANCE_DATE, true);
+        addFunction(TIME_DEFAULT_NULL_CONSTRUCTOR, NullableTypeComputer.INSTANCE_TIME, true);
+        addFunction(TIME_DEFAULT_NULL_CONSTRUCTOR_WITH_FORMAT, NullableTypeComputer.INSTANCE_TIME, true);
+        addFunction(DATETIME_DEFAULT_NULL_CONSTRUCTOR, NullableTypeComputer.INSTANCE_DATE_TIME, true);
+        addFunction(DATETIME_DEFAULT_NULL_CONSTRUCTOR_WITH_FORMAT, NullableTypeComputer.INSTANCE_DATE_TIME, true);
+        addFunction(DURATION_DEFAULT_NULL_CONSTRUCTOR, NullableTypeComputer.INSTANCE_DURATION, true);
+        addFunction(DAY_TIME_DURATION_DEFAULT_NULL_CONSTRUCTOR, NullableTypeComputer.INSTANCE_DAY_TIME_DURATION, true);
+        addFunction(YEAR_MONTH_DURATION_DEFAULT_NULL_CONSTRUCTOR, NullableTypeComputer.INSTANCE_YEAR_MONTH_DURATION,
+                true);
+        addFunction(UUID_DEFAULT_NULL_CONSTRUCTOR, NullableTypeComputer.INSTANCE_UUID, true);
+        addFunction(BINARY_BASE64_DEFAULT_NULL_CONSTRUCTOR, NullableTypeComputer.INSTANCE_BINARY, true);
+
         addPrivateFunction(NUMERIC_UNARY_MINUS, NumericUnaryTypeComputer.INSTANCE, true);
         addPrivateFunction(NUMERIC_SUBTRACT, NumericAddSubMulDivTypeComputer.INSTANCE_SUB, true);
         addPrivateFunction(NUMERIC_MULTIPLY, NumericAddSubMulDivTypeComputer.INSTANCE_MUL_POW, true);
@@ -1738,6 +1861,7 @@ public class BuiltinFunctions {
         addFunction(NUMERIC_ROUND_WITH_ROUND_DIGIT, NumericRoundTypeComputer.INSTANCE, true);
         addFunction(NUMERIC_ROUND_HALF_TO_EVEN, NumericUnaryTypeComputer.INSTANCE, true);
         addFunction(NUMERIC_ROUND_HALF_TO_EVEN2, NumericRoundTypeComputer.INSTANCE_ROUND_HF_TRUNC, true);
+        addFunction(NUMERIC_ROUND_HALF_UP2, NumericRoundTypeComputer.INSTANCE_ROUND_HF_TRUNC, true);
         addFunction(NUMERIC_TRUNC, NumericRoundTypeComputer.INSTANCE_ROUND_HF_TRUNC, true);
 
         addFunction(BINARY_LENGTH, UnaryBinaryInt64TypeComputer.INSTANCE, true);
@@ -1764,7 +1888,7 @@ public class BuiltinFunctions {
         addFunction(IS_BIT_SET_WITH_ALL_FLAG, BitValuePositionFlagTypeComputer.INSTANCE_TEST_WITH_FLAG, true);
 
         // string functions
-        addFunction(STRING_CONSTRUCTOR, AStringTypeComputer.INSTANCE, true); // TODO(ali)
+        addFunction(STRING_CONSTRUCTOR, AStringTypeComputer.INSTANCE_NULLABLE, true);
         addFunction(STRING_LIKE, BooleanFunctionTypeComputer.INSTANCE, true);
         addFunction(STRING_CONTAINS, UniformInputTypeComputer.STRING_BOOLEAN_INSTANCE, true);
         addFunction(STRING_TO_CODEPOINT, UniformInputTypeComputer.STRING_INT64_LIST_INSTANCE, true);
@@ -1809,6 +1933,7 @@ public class BuiltinFunctions {
         addFunction(STRING_JOIN, StringJoinTypeComputer.INSTANCE, true);
         addFunction(STRING_REPEAT, AStringTypeComputer.INSTANCE_NULLABLE, true);
         addFunction(STRING_SPLIT, UniformInputTypeComputer.STRING_STRING_LIST_INSTANCE, true);
+        addFunction(STRING_PARSE_JSON, AnyTypeComputer.INSTANCE, true);
 
         addPrivateFunction(ORDERED_LIST_CONSTRUCTOR, OrderedListConstructorTypeComputer.INSTANCE, true);
         addFunction(POINT_CONSTRUCTOR, APointTypeComputer.INSTANCE, true);
@@ -1825,7 +1950,7 @@ public class BuiltinFunctions {
         addFunction(TO_DOUBLE, ToDoubleTypeComputer.INSTANCE, true);
         addFunction(TO_NUMBER, ToNumberTypeComputer.INSTANCE, true);
         addFunction(TO_OBJECT, ToObjectTypeComputer.INSTANCE, true);
-        addFunction(TO_STRING, AStringTypeComputer.INSTANCE, true);
+        addFunction(TO_STRING, AStringTypeComputer.INSTANCE_NULLABLE, true);
 
         addPrivateFunction(TREAT_AS_INTEGER, TreatAsTypeComputer.INSTANCE_INTEGER, true);
         addPrivateFunction(IS_NUMERIC_ADD_COMPATIBLE, BooleanOnlyTypeComputer.INSTANCE, true);
@@ -1849,6 +1974,8 @@ public class BuiltinFunctions {
                 new ScalarVersionOfAggregateResultType(NumericSumAggTypeComputer.INSTANCE);
         ScalarVersionOfAggregateResultType scalarMinMaxTypeComputer =
                 new ScalarVersionOfAggregateResultType(MinMaxAggTypeComputer.INSTANCE);
+        ScalarVersionOfAggregateResultType scalarUnionMbrTypeComputer =
+                new ScalarVersionOfAggregateResultType(UnionMbrAggTypeComputer.INSTANCE);
 
         addPrivateFunction(LISTIFY, OrderedListConstructorTypeComputer.INSTANCE, true);
         addFunction(SCALAR_ARRAYAGG, ScalarArrayAggTypeComputer.INSTANCE, true);
@@ -1895,6 +2022,10 @@ public class BuiltinFunctions {
         addPrivateFunction(LOCAL_INTERVAL_RANGE, AIntervalTypeComputer.INSTANCE, true);
         addPrivateFunction(GLOBAL_INTERVAL_RANGE, AIntervalTypeComputer.INSTANCE, true);
         addPrivateFunction(GLOBAL_INTERVAL_RANGE_MAP, AIntervalTypeComputer.INSTANCE, true);
+        addFunction(UNION_MBR, ARectangleTypeComputer.INSTANCE, true);
+        addPrivateFunction(LOCAL_UNION_MBR, ARectangleTypeComputer.INSTANCE, true);
+        addPrivateFunction(INTERMEDIATE_UNION_MBR, ARectangleTypeComputer.INSTANCE, true);
+        addPrivateFunction(GLOBAL_UNION_MBR, ARectangleTypeComputer.INSTANCE, true);
 
         // SUM
         addFunction(SUM, NumericSumAggTypeComputer.INSTANCE, true);
@@ -1953,6 +2084,7 @@ public class BuiltinFunctions {
         addPrivateFunction(SERIAL_GLOBAL_SQL_KURTOSIS, NullableDoubleTypeComputer.INSTANCE, true);
         addPrivateFunction(SERIAL_LOCAL_SQL_KURTOSIS, LocalSingleVarStatisticsTypeComputer.INSTANCE, true);
         addPrivateFunction(SERIAL_INTERMEDIATE_SQL_KURTOSIS, LocalSingleVarStatisticsTypeComputer.INSTANCE, true);
+        addFunction(SCALAR_UNION_MBR, scalarUnionMbrTypeComputer, true);
 
         // SQL SUM
         addFunction(SQL_SUM, NumericSumAggTypeComputer.INSTANCE, true);
@@ -2013,6 +2145,11 @@ public class BuiltinFunctions {
         addPrivateFunction(LOCAL_SQL_KURTOSIS, LocalSingleVarStatisticsTypeComputer.INSTANCE, true);
         addPrivateFunction(INTERMEDIATE_SQL_KURTOSIS, LocalSingleVarStatisticsTypeComputer.INSTANCE, true);
         addFunction(SCALAR_SQL_KURTOSIS, NullableDoubleTypeComputer.INSTANCE, true);
+        addFunction(SQL_UNION_MBR, ARectangleTypeComputer.INSTANCE, true);
+        addPrivateFunction(LOCAL_SQL_UNION_MBR, ARectangleTypeComputer.INSTANCE, true);
+        addPrivateFunction(INTERMEDIATE_SQL_UNION_MBR, ARectangleTypeComputer.INSTANCE, true);
+        addPrivateFunction(GLOBAL_SQL_UNION_MBR, ARectangleTypeComputer.INSTANCE, true);
+        addFunction(SCALAR_SQL_UNION_MBR, ARectangleTypeComputer.INSTANCE, true);
 
         addPrivateFunction(SERIAL_AVG, NullableDoubleTypeComputer.INSTANCE, true);
         addPrivateFunction(SERIAL_COUNT, AInt64TypeComputer.INSTANCE, true);
@@ -2132,6 +2269,7 @@ public class BuiltinFunctions {
         addFunction(PERCENT_RANK, ADoubleTypeComputer.INSTANCE, false);
         addFunction(PERCENT_RANK_IMPL, ADoubleTypeComputer.INSTANCE, false);
         addPrivateFunction(WIN_MARK_FIRST_MISSING_IMPL, ABooleanTypeComputer.INSTANCE, false);
+        addPrivateFunction(WIN_MARK_FIRST_NULL_IMPL, ABooleanTypeComputer.INSTANCE, false);
         addPrivateFunction(WIN_PARTITION_LENGTH_IMPL, AInt64TypeComputer.INSTANCE, false);
 
         // Similarity functions
@@ -2157,6 +2295,9 @@ public class BuiltinFunctions {
         addFunction(GET_CIRCLE_RADIUS_ACCESSOR, ADoubleTypeComputer.INSTANCE, true);
         addFunction(GET_CIRCLE_CENTER_ACCESSOR, APointTypeComputer.INSTANCE, true);
         addFunction(GET_POINTS_LINE_RECTANGLE_POLYGON_ACCESSOR, OrderedListOfAPointTypeComputer.INSTANCE, true);
+        addPrivateFunction(SPATIAL_TILE, AInt32TypeComputer.INSTANCE, true);
+        addPrivateFunction(REFERENCE_TILE, AInt32TypeComputer.INSTANCE, true);
+        addPrivateFunction(GET_INTERSECTION, ARectangleTypeComputer.INSTANCE, true);
 
         //geo functions
         addFunction(ST_AREA, ADoubleTypeComputer.INSTANCE, true);
@@ -2226,6 +2367,9 @@ public class BuiltinFunctions {
         addPrivateFunction(ST_UNION_AGG, AGeometryTypeComputer.INSTANCE, true);
         addPrivateFunction(ST_UNION_SQL_AGG, AGeometryTypeComputer.INSTANCE, true);
         addFunction(ST_POLYGONIZE, AGeometryTypeComputer.INSTANCE, true);
+
+        addPrivateFunction(ST_MBR, ARectangleTypeComputer.INSTANCE, true);
+        addPrivateFunction(ST_MBR_ENLARGE, ARectangleTypeComputer.INSTANCE, true);
 
         // Binary functions
         addFunction(BINARY_HEX_CONSTRUCTOR, ABinaryTypeComputer.INSTANCE_NULLABLE, true);
@@ -2321,14 +2465,18 @@ public class BuiltinFunctions {
         addFunction(UNIX_TIME_FROM_DATE_IN_DAYS, AInt64TypeComputer.INSTANCE, true);
         addFunction(UNIX_TIME_FROM_TIME_IN_MS, AInt64TypeComputer.INSTANCE, true);
         addFunction(UNIX_TIME_FROM_DATETIME_IN_MS, AInt64TypeComputer.INSTANCE, true);
+        addFunction(UNIX_TIME_FROM_DATETIME_IN_MS_WITH_TZ, AInt64TypeComputer.INSTANCE, false);
         addFunction(UNIX_TIME_FROM_DATETIME_IN_SECS, AInt64TypeComputer.INSTANCE, true);
+        addFunction(UNIX_TIME_FROM_DATETIME_IN_SECS_WITH_TZ, AInt64TypeComputer.INSTANCE, false);
         addFunction(DATE_FROM_UNIX_TIME_IN_DAYS, ADateTypeComputer.INSTANCE, true);
         addFunction(DATE_FROM_DATETIME, ADateTypeComputer.INSTANCE, true);
         addFunction(TIME_FROM_UNIX_TIME_IN_MS, ATimeTypeComputer.INSTANCE, true);
         addFunction(TIME_FROM_DATETIME, ATimeTypeComputer.INSTANCE, true);
         addFunction(DATETIME_FROM_DATE_TIME, ADateTimeTypeComputer.INSTANCE, true);
         addFunction(DATETIME_FROM_UNIX_TIME_IN_MS, ADateTimeTypeComputer.INSTANCE, true);
+        addFunction(DATETIME_FROM_UNIX_TIME_IN_MS_WITH_TZ, ADateTimeTypeComputer.INSTANCE, false);
         addFunction(DATETIME_FROM_UNIX_TIME_IN_SECS, ADateTimeTypeComputer.INSTANCE, true);
+        addFunction(DATETIME_FROM_UNIX_TIME_IN_SECS_WITH_TZ, ADateTimeTypeComputer.INSTANCE, false);
         addFunction(CALENDAR_DURATION_FROM_DATETIME, ADurationTypeComputer.INSTANCE, true);
         addFunction(CALENDAR_DURATION_FROM_DATE, ADurationTypeComputer.INSTANCE, true);
         addFunction(ADJUST_DATETIME_FOR_TIMEZONE, AStringTypeComputer.INSTANCE, true);
@@ -2347,8 +2495,11 @@ public class BuiltinFunctions {
         addFunction(INTERVAL_ENDS, ABooleanTypeComputer.INSTANCE, true);
         addFunction(INTERVAL_ENDED_BY, ABooleanTypeComputer.INSTANCE, true);
         addFunction(CURRENT_DATE, ADateTypeComputer.INSTANCE, false);
+        addFunction(CURRENT_DATE_IMMEDIATE, ADateTypeComputer.INSTANCE, false);
         addFunction(CURRENT_TIME, ATimeTypeComputer.INSTANCE, false);
+        addFunction(CURRENT_TIME_IMMEDIATE, ATimeTypeComputer.INSTANCE, false);
         addFunction(CURRENT_DATETIME, ADateTimeTypeComputer.INSTANCE, false);
+        addFunction(CURRENT_DATETIME_IMMEDIATE, ADateTimeTypeComputer.INSTANCE, false);
         addPrivateFunction(DAY_TIME_DURATION_GREATER_THAN, ABooleanTypeComputer.INSTANCE, true);
         addPrivateFunction(DAY_TIME_DURATION_LESS_THAN, ABooleanTypeComputer.INSTANCE, true);
         addPrivateFunction(YEAR_MONTH_DURATION_GREATER_THAN, ABooleanTypeComputer.INSTANCE, true);
@@ -2362,6 +2513,11 @@ public class BuiltinFunctions {
         addFunction(GET_YEAR_MONTH_DURATION, AYearMonthDurationTypeComputer.INSTANCE, true);
         addFunction(INTERVAL_BIN, AIntervalTypeComputer.INSTANCE, true);
         addFunction(DAY_OF_WEEK, AInt64TypeComputer.INSTANCE, true);
+        addFunction(DAY_OF_WEEK2, AInt64TypeComputer.INSTANCE_NULLABLE, true);
+        addFunction(DAY_OF_YEAR, AInt64TypeComputer.INSTANCE, true);
+        addFunction(QUARTER_OF_YEAR, AInt64TypeComputer.INSTANCE, true);
+        addFunction(WEEK_OF_YEAR, AInt64TypeComputer.INSTANCE, true);
+        addFunction(WEEK_OF_YEAR2, AInt64TypeComputer.INSTANCE_NULLABLE, true);
         addFunction(PARSE_DATE, ADateTypeComputer.INSTANCE, true);
         addFunction(PARSE_TIME, ATimeTypeComputer.INSTANCE, true);
         addFunction(PARSE_DATETIME, ADateTimeTypeComputer.INSTANCE, true);
@@ -3037,6 +3193,18 @@ public class BuiltinFunctions {
         addScalarAgg(ST_UNION_SQL_AGG, SCALAR_ST_UNION_SQL_AGG);
         addDistinctAgg(ST_UNION_SQL_AGG_DISTINCT, ST_UNION_SQL_AGG);
         addScalarAgg(ST_UNION_SQL_AGG_DISTINCT, SCALAR_ST_UNION_SQL_AGG_DISTINCT);
+
+        // SQL UNION MBR
+        addAgg(SQL_UNION_MBR);
+        addAgg(LOCAL_SQL_UNION_MBR);
+        addAgg(GLOBAL_SQL_UNION_MBR);
+        addLocalAgg(SQL_UNION_MBR, LOCAL_SQL_UNION_MBR);
+        addIntermediateAgg(LOCAL_SQL_UNION_MBR, INTERMEDIATE_SQL_UNION_MBR);
+        addIntermediateAgg(GLOBAL_SQL_UNION_MBR, GLOBAL_SQL_UNION_MBR);
+        addIntermediateAgg(SQL_UNION_MBR, GLOBAL_SQL_UNION_MBR);
+        addGlobalAgg(SQL_UNION_MBR, GLOBAL_SQL_UNION_MBR);
+
+        addScalarAgg(SQL_UNION_MBR, SCALAR_SQL_UNION_MBR);
     }
 
     interface BuiltinFunctionProperty {
@@ -3074,6 +3242,7 @@ public class BuiltinFunctions {
         addWindowFunction(RATIO_TO_REPORT, RATIO_TO_REPORT_IMPL, HAS_LIST_ARG);
         addWindowFunction(ROW_NUMBER, ROW_NUMBER_IMPL, NO_FRAME_CLAUSE);
         addWindowFunction(null, WIN_MARK_FIRST_MISSING_IMPL, NO_FRAME_CLAUSE, INJECT_ORDER_ARGS);
+        addWindowFunction(null, WIN_MARK_FIRST_NULL_IMPL, NO_FRAME_CLAUSE, INJECT_ORDER_ARGS);
         addWindowFunction(null, WIN_PARTITION_LENGTH_IMPL, NO_FRAME_CLAUSE, MATERIALIZE_PARTITION);
     }
 
@@ -3081,6 +3250,7 @@ public class BuiltinFunctions {
         addUnnestFun(RANGE, true);
         addUnnestFun(SCAN_COLLECTION, false);
         addUnnestFun(SUBSET_COLLECTION, false);
+        addUnnestFun(SPATIAL_TILE, false);
     }
 
     public enum DataSourceFunctionProperty implements BuiltinFunctionProperty {
@@ -3277,11 +3447,18 @@ public class BuiltinFunctions {
     }
 
     public enum SpatialFilterKind {
-        SI
+        SI,
+        STFR
     }
 
     static {
         spatialFilterFunctions.put(BuiltinFunctions.SPATIAL_INTERSECT, SpatialFilterKind.SI);
+        spatialFilterFunctions.put(BuiltinFunctions.ST_INTERSECTS, SpatialFilterKind.STFR);
+        spatialFilterFunctions.put(BuiltinFunctions.ST_OVERLAPS, SpatialFilterKind.STFR);
+        spatialFilterFunctions.put(BuiltinFunctions.ST_TOUCHES, SpatialFilterKind.STFR);
+        spatialFilterFunctions.put(BuiltinFunctions.ST_CONTAINS, SpatialFilterKind.STFR);
+        spatialFilterFunctions.put(BuiltinFunctions.ST_CROSSES, SpatialFilterKind.STFR);
+        spatialFilterFunctions.put(BuiltinFunctions.ST_WITHIN, SpatialFilterKind.STFR);
     }
 
     public static boolean isGlobalAggregateFunction(FunctionIdentifier fi) {
@@ -3289,7 +3466,11 @@ public class BuiltinFunctions {
     }
 
     public static boolean isSpatialFilterFunction(FunctionIdentifier fi) {
-        return spatialFilterFunctions.get(fi) != null;
+        return spatialFilterFunctions.get(fi) == SpatialFilterKind.SI;
+    }
+
+    public static boolean isSTFilterRefineFunction(FunctionIdentifier fi) {
+        return spatialFilterFunctions.get(fi) == SpatialFilterKind.STFR;
     }
 
     static {

@@ -20,6 +20,7 @@ package org.apache.asterix.lang.common.statement;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
@@ -50,10 +51,13 @@ public class CreateIndexStatement extends AbstractStatement {
     // Specific to FullText indexes.
     private final String fullTextConfigName;
     private final OptionalBoolean excludeUnknownKey;
+    private final OptionalBoolean castDefaultNull;
+    private final Map<String, String> castConfig;
 
     public CreateIndexStatement(DataverseName dataverseName, Identifier datasetName, Identifier indexName,
             IndexType indexType, List<IndexedElement> indexedElements, boolean enforced, int gramLength,
-            String fullTextConfigName, boolean ifNotExists, Boolean excludeUnknownKey) {
+            String fullTextConfigName, boolean ifNotExists, Boolean excludeUnknownKey, Boolean castDefaultNull,
+            Map<String, String> castConfig) {
         this.dataverseName = dataverseName;
         this.datasetName = Objects.requireNonNull(datasetName);
         this.indexName = Objects.requireNonNull(indexName);
@@ -64,6 +68,8 @@ public class CreateIndexStatement extends AbstractStatement {
         this.ifNotExists = ifNotExists;
         this.fullTextConfigName = fullTextConfigName;
         this.excludeUnknownKey = OptionalBoolean.ofNullable(excludeUnknownKey);
+        this.castDefaultNull = OptionalBoolean.ofNullable(castDefaultNull);
+        this.castConfig = castConfig == null ? Collections.emptyMap() : castConfig;
     }
 
     public String getFullTextConfigName() {
@@ -98,8 +104,16 @@ public class CreateIndexStatement extends AbstractStatement {
         return excludeUnknownKey.isPresent();
     }
 
-    public OptionalBoolean isExcludeUnknownKey() {
+    public OptionalBoolean getExcludeUnknownKey() {
         return excludeUnknownKey;
+    }
+
+    public boolean hasCastDefaultNull() {
+        return castDefaultNull.isPresent();
+    }
+
+    public OptionalBoolean getCastDefaultNull() {
+        return castDefaultNull;
     }
 
     public int getGramLength() {
@@ -108,6 +122,10 @@ public class CreateIndexStatement extends AbstractStatement {
 
     public boolean getIfNotExists() {
         return this.ifNotExists;
+    }
+
+    public Map<String, String> getCastConfig() {
+        return castConfig;
     }
 
     @Override

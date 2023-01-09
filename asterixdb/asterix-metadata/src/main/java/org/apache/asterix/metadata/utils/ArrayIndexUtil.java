@@ -240,11 +240,12 @@ public class ArrayIndexUtil {
      * Traverse each distinct record path and invoke the appropriate commands for each scenario. Here, we keep track
      * of the record/list type at each step and give this to each command.
      */
-    public static void walkArrayPath(ARecordType baseRecordType, List<String> flattenedFieldName,
+    public static void walkArrayPath(Index index, ARecordType baseRecordType, List<String> flattenedFieldName,
             List<Boolean> unnestFlags, TypeTrackerCommandExecutor commandExecutor) throws AlgebricksException {
         ArrayPath arrayPath = new ArrayPath(flattenedFieldName, unnestFlags).invoke();
         List<List<String>> fieldNamesPerArray = arrayPath.fieldNamesPerArray;
         List<Boolean> unnestFlagsPerArray = arrayPath.unnestFlagsPerArray;
+        boolean requiresOnlyOneUnnest = unnestFlags.stream().filter(f -> f).count() == 1;
 
         // If we are given no base record type, then we do not need to keep track of the record type. We are solely
         // using this walk for its flags.
@@ -265,8 +266,9 @@ public class ArrayIndexUtil {
                     // Determine whether we have an open field or not. Extract the type appropriately.
                     isTrackingType = isTrackingType && intermediateRecordType.doesFieldExist(fieldPart);
                     if (isTrackingType) {
-                        workingType = Index.getNonNullableOpenFieldType(intermediateRecordType.getFieldType(fieldPart),
-                                Collections.singletonList(fieldPart), intermediateRecordType).first;
+                        workingType =
+                                Index.getNonNullableOpenFieldType(index, intermediateRecordType.getFieldType(fieldPart),
+                                        Collections.singletonList(fieldPart), intermediateRecordType).first;
                         if (workingType instanceof ARecordType) {
                             // We have an intermediate step, set our record step for the next loop iteration.
                             intermediateRecordType = (ARecordType) workingType;
@@ -290,7 +292,6 @@ public class ArrayIndexUtil {
             }
 
             if (i == fieldNamesPerArray.size() - 1) {
-                boolean requiresOnlyOneUnnest = fieldNamesPerArray.size() == 1;
                 boolean isNonArrayStep = !unnestFlagsPerArray.get(i);
                 commandExecutor.executeActionOnFinalArrayStep(startingStepRecordType, fieldNamesPerArray.get(i),
                         isNonArrayStep, requiresOnlyOneUnnest);

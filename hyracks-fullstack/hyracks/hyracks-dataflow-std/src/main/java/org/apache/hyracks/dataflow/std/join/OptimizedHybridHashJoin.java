@@ -34,6 +34,7 @@ import org.apache.hyracks.api.dataflow.value.RecordDescriptor;
 import org.apache.hyracks.api.exceptions.ErrorCode;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.io.FileReference;
+import org.apache.hyracks.api.job.profiling.IOperatorStats;
 import org.apache.hyracks.api.util.CleanupUtils;
 import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAccessor;
 import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAppender;
@@ -59,11 +60,6 @@ public class OptimizedHybridHashJoin {
     // Used for special probe BigObject which can not be held into the Join memory
     private FrameTupleAppender bigFrameAppender;
 
-    public enum SIDE {
-        BUILD,
-        PROBE
-    }
-
     private final IHyracksJobletContext jobletCtx;
 
     private final String buildRelName;
@@ -74,7 +70,8 @@ public class OptimizedHybridHashJoin {
     private final RecordDescriptor probeRd;
     private final RunFileWriter[] buildRFWriters; //writing spilled build partitions
     private final RunFileWriter[] probeRFWriters; //writing spilled probe partitions
-    private final IPredicateEvaluator predEvaluator;
+    private final IPredicateEvaluator buildPredEval;
+    private final IPredicateEvaluator probePredEval;
     private final boolean isLeftOuter;
     private final IMissingWriter[] nonMatchWriters;
     private final BitSet spilledStatus; //0=resident, 1=spilled
@@ -95,11 +92,12 @@ public class OptimizedHybridHashJoin {
     // corresponding function signature.
     private final TuplePointer tempPtr = new TuplePointer();
     private int[] probePSizeInTups;
+    private IOperatorStats stats = null;
 
     public OptimizedHybridHashJoin(IHyracksJobletContext jobletCtx, int memSizeInFrames, int numOfPartitions,
             String probeRelName, String buildRelName, RecordDescriptor probeRd, RecordDescriptor buildRd,
-            ITuplePartitionComputer probeHpc, ITuplePartitionComputer buildHpc, IPredicateEvaluator predEval,
-            boolean isLeftOuter, IMissingWriterFactory[] nullWriterFactories1) {
+            ITuplePartitionComputer probeHpc, ITuplePartitionComputer buildHpc, IPredicateEvaluator probePredEval,
+            IPredicateEvaluator buildPredEval, boolean isLeftOuter, IMissingWriterFactory[] nullWriterFactories1) {
         this.jobletCtx = jobletCtx;
         this.memSizeInFrames = memSizeInFrames;
         this.buildRd = buildRd;
@@ -113,8 +111,12 @@ public class OptimizedHybridHashJoin {
         this.probeRFWriters = new RunFileWriter[numOfPartitions];
         this.accessorBuild = new FrameTupleAccessor(buildRd);
         this.accessorProbe = new FrameTupleAccessor(probeRd);
-        this.predEvaluator = predEval;
         this.isLeftOuter = isLeftOuter;
+        if (isLeftOuter && probePredEval != null) {
+            throw new IllegalStateException();
+        }
+        this.buildPredEval = buildPredEval;
+        this.probePredEval = probePredEval;
         this.isReversed = false;
         this.spilledStatus = new BitSet(numOfPartitions);
         this.nonMatchWriters = isLeftOuter ? new IMissingWriter[nullWriterFactories1.length] : null;
@@ -141,11 +143,12 @@ public class OptimizedHybridHashJoin {
         accessorBuild.reset(buffer);
         int tupleCount = accessorBuild.getTupleCount();
         for (int i = 0; i < tupleCount; ++i) {
-            int pid = buildHpc.partition(accessorBuild, i, numOfPartitions);
-            processTupleBuildPhase(i, pid);
-            buildPSizeInTups[pid]++;
+            if (buildPredEval == null || buildPredEval.evaluate(accessorBuild, i)) {
+                int pid = buildHpc.partition(accessorBuild, i, numOfPartitions);
+                processTupleBuildPhase(i, pid);
+                buildPSizeInTups[pid]++;
+            }
         }
-
     }
 
     private void processTupleBuildPhase(int tid, int pid) throws HyracksDataException {
@@ -182,7 +185,10 @@ public class OptimizedHybridHashJoin {
 
     private void spillPartition(int pid) throws HyracksDataException {
         RunFileWriter writer = getSpillWriterOrCreateNewOneIfNotExist(buildRFWriters, buildRelName, pid);
-        bufferManager.flushPartition(pid, writer);
+        int spilt = bufferManager.flushPartition(pid, writer);
+        if (stats != null) {
+            stats.getBytesWritten().update(spilt);
+        }
         bufferManager.clearPartition(pid);
         spilledStatus.set(pid);
     }
@@ -217,8 +223,8 @@ public class OptimizedHybridHashJoin {
 
         ISerializableTable table = new SerializableHashTable(inMemTupCount, jobletCtx, bufferManagerForHashTable);
         this.inMemJoiner = new InMemoryHashJoin(jobletCtx, new FrameTupleAccessor(probeRd), probeHpc,
-                new FrameTupleAccessor(buildRd), buildRd, buildHpc, isLeftOuter, nonMatchWriters, table, predEvaluator,
-                isReversed, bufferManagerForHashTable);
+                new FrameTupleAccessor(buildRd), buildRd, buildHpc, isLeftOuter, nonMatchWriters, table, isReversed,
+                bufferManagerForHashTable);
 
         buildHashTable();
     }
@@ -260,8 +266,12 @@ public class OptimizedHybridHashJoin {
             for (int pid = spilledStatus.nextSetBit(0); pid >= 0 && pid < numOfPartitions; pid =
                     spilledStatus.nextSetBit(pid + 1)) {
                 if (bufferManager.getNumTuples(pid) > 0) {
-                    bufferManager.flushPartition(pid,
+                    int spilt = bufferManager.flushPartition(pid,
                             getSpillWriterOrCreateNewOneIfNotExist(runFileWriters, refName, pid));
+                    if (stats != null) {
+                        stats.getBytesWritten().update(spilt);
+
+                    }
                     bufferManager.clearPartition(pid);
                 }
             }
@@ -416,6 +426,10 @@ public class OptimizedHybridHashJoin {
                 reloadBuffer = new VSizeFrame(jobletCtx);
             }
             while (r.nextFrame(reloadBuffer)) {
+                if (stats != null) {
+                    //TODO: be certain it is the case this is actually eagerly read
+                    stats.getBytesRead().update(reloadBuffer.getBuffer().limit());
+                }
                 accessorBuild.reset(reloadBuffer.getBuffer());
                 for (int tid = 0; tid < accessorBuild.getTupleCount(); tid++) {
                     if (!bufferManager.insertTuple(pid, accessorBuild, tid, tempPtr)) {
@@ -473,22 +487,28 @@ public class OptimizedHybridHashJoin {
     public void probe(ByteBuffer buffer, IFrameWriter writer) throws HyracksDataException {
         accessorProbe.reset(buffer);
         int tupleCount = accessorProbe.getTupleCount();
-
-        if (isBuildRelAllInMemory()) {
-            inMemJoiner.join(buffer, writer);
-            return;
-        }
         inMemJoiner.resetAccessorProbe(accessorProbe);
-        for (int i = 0; i < tupleCount; ++i) {
-            int pid = probeHpc.partition(accessorProbe, i, numOfPartitions);
-
-            if (buildPSizeInTups[pid] > 0 || isLeftOuter) { //Tuple has potential match from previous phase
-                if (spilledStatus.get(pid)) { //pid is Spilled
-                    processTupleProbePhase(i, pid);
-                } else { //pid is Resident
+        if (isBuildRelAllInMemory()) {
+            for (int i = 0; i < tupleCount; ++i) {
+                // NOTE: probePredEval is guaranteed to be 'null' for outer join and in case of role reversal
+                if (probePredEval == null || probePredEval.evaluate(accessorProbe, i)) {
                     inMemJoiner.join(i, writer);
                 }
-                probePSizeInTups[pid]++;
+            }
+        } else {
+            for (int i = 0; i < tupleCount; ++i) {
+                // NOTE: probePredEval is guaranteed to be 'null' for outer join and in case of role reversal
+                if (probePredEval == null || probePredEval.evaluate(accessorProbe, i)) {
+                    int pid = probeHpc.partition(accessorProbe, i, numOfPartitions);
+                    if (buildPSizeInTups[pid] > 0 || isLeftOuter) { //Tuple has potential match from previous phase
+                        if (spilledStatus.get(pid)) { //pid is Spilled
+                            processTupleProbePhase(i, pid);
+                        } else { //pid is Resident
+                            inMemJoiner.join(i, writer);
+                        }
+                        probePSizeInTups[pid]++;
+                    }
+                }
             }
         }
     }
@@ -513,7 +533,10 @@ public class OptimizedHybridHashJoin {
             if (victim >= 0 && bufferManager.getPhysicalSize(victim) >= recordSize) {
                 RunFileWriter runFileWriter =
                         getSpillWriterOrCreateNewOneIfNotExist(probeRFWriters, probeRelName, victim);
-                bufferManager.flushPartition(victim, runFileWriter);
+                int spilt = bufferManager.flushPartition(victim, runFileWriter);
+                if (stats != null) {
+                    stats.getBytesWritten().update(spilt);
+                }
                 bufferManager.clearPartition(victim);
                 if (!bufferManager.insertTuple(pid, accessorProbe, tupleId, tempPtr)) {
                     // This should not happen if the size calculations are correct, just not to let the query fail.
@@ -535,6 +558,9 @@ public class OptimizedHybridHashJoin {
         if (!bigFrameAppender.append(accessor, i)) {
 
             throw new HyracksDataException("The given tuple is too big");
+        }
+        if (stats != null) {
+            stats.getBytesWritten().update(bigFrameAppender.getBuffer().limit());
         }
         bigFrameAppender.write(runFileWriter, true);
     }
@@ -600,7 +626,14 @@ public class OptimizedHybridHashJoin {
         return bufferManager.getPhysicalSize(pid);
     }
 
-    public void setIsReversed(boolean b) {
-        this.isReversed = b;
+    public void setIsReversed(boolean reversed) {
+        if (reversed && (buildPredEval != null || probePredEval != null)) {
+            throw new IllegalStateException();
+        }
+        this.isReversed = reversed;
+    }
+
+    public void setOperatorStats(IOperatorStats stats) {
+        this.stats = stats;
     }
 }

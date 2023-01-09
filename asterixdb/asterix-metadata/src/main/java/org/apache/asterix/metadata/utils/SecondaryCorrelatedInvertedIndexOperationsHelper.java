@@ -116,7 +116,7 @@ public class SecondaryCorrelatedInvertedIndexOperationsHelper extends SecondaryC
             secondaryFieldAccessEvalFactories[0] = metadataProvider.getDataFormat().getFieldAccessEvaluatorFactory(
                     metadataProvider.getFunctionManager(), isOverridingKeyFieldTypes ? enforcedItemType : itemType,
                     indexDetails.getKeyFieldNames().get(0), recordColumn, sourceLoc);
-            Pair<IAType, Boolean> keyTypePair = Index.getNonNullableOpenFieldType(
+            Pair<IAType, Boolean> keyTypePair = Index.getNonNullableOpenFieldType(index,
                     indexDetails.getKeyFieldTypes().get(0), indexDetails.getKeyFieldNames().get(0), itemType);
             secondaryKeyType = keyTypePair.first;
             anySecondaryKeyIsNullable = anySecondaryKeyIsNullable || keyTypePair.second;
@@ -239,8 +239,8 @@ public class SecondaryCorrelatedInvertedIndexOperationsHelper extends SecondaryC
                 createAssignOp(spec, numSecondaryKeys, taggedSecondaryRecDesc);
 
         // Generate compensate tuples for upsert
-        IOperatorDescriptor processorOp =
-                createTupleProcessorOp(spec, taggedSecondaryRecDesc, numSecondaryKeys, numPrimaryKeys, true);
+        IOperatorDescriptor processorOp = createTupleProcessorOp(spec, taggedSecondaryRecDesc, numSecondaryKeys,
+                numPrimaryKeys, true, true, true);
 
         // Create a tokenizer op.
         AbstractOperatorDescriptor tokenizerOp = createTokenizerOp(spec);

@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.hyracks.algebricks.core.algebra.expressions;
 
 import java.util.Collection;
@@ -55,7 +56,17 @@ public final class ConstantExpression extends AbstractLogicalExpression {
 
         @Override
         public String toString() {
-            return "TRUE";
+            return "true";
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            return (obj instanceof IAlgebricksConstantValue) && ((IAlgebricksConstantValue) obj).isTrue();
+        }
+
+        @Override
+        public int hashCode() {
+            return Boolean.TRUE.hashCode();
         }
     });
     public static final ConstantExpression FALSE = new ConstantExpression(new IAlgebricksConstantValue() {
@@ -82,7 +93,17 @@ public final class ConstantExpression extends AbstractLogicalExpression {
 
         @Override
         public String toString() {
-            return "FALSE";
+            return "false";
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            return (obj instanceof IAlgebricksConstantValue) && ((IAlgebricksConstantValue) obj).isFalse();
+        }
+
+        @Override
+        public int hashCode() {
+            return Boolean.FALSE.hashCode();
         }
     });
     public static final ConstantExpression NULL = new ConstantExpression(new IAlgebricksConstantValue() {
@@ -109,7 +130,17 @@ public final class ConstantExpression extends AbstractLogicalExpression {
 
         @Override
         public String toString() {
-            return "NULL";
+            return "null";
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            return (obj instanceof IAlgebricksConstantValue) && ((IAlgebricksConstantValue) obj).isNull();
+        }
+
+        @Override
+        public int hashCode() {
+            return 0;
         }
     });
     public static final ConstantExpression MISSING = new ConstantExpression(new IAlgebricksConstantValue() {
@@ -136,7 +167,17 @@ public final class ConstantExpression extends AbstractLogicalExpression {
 
         @Override
         public String toString() {
-            return "MISSING";
+            return "missing";
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            return (obj instanceof IAlgebricksConstantValue) && ((IAlgebricksConstantValue) obj).isMissing();
+        }
+
+        @Override
+        public int hashCode() {
+            return 0;
         }
     });
 

@@ -31,7 +31,7 @@ import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameters;
 
 /**
- * Runs the cluster state runtime tests with the storage parallelism.
+ * Runs the cluster runtime tests and checks the query metrics.
  */
 @RunWith(Parameterized.class)
 public class MetricsExecutionTest {

@@ -22,37 +22,37 @@
     <test-case FilePath="external-dataset/azure_blob_storage/auth-methods">
       <compilation-unit name="valid-auth-methods">
         <placeholder name="azureblob-credentialsname" value="accountKey" />
-        <placeholder name="azureblob-credentialsvalue" value="%azureblob-accountkey%" />
+        <placeholder name="azureblob-credentialsvalue" value="%azure-accountkey%" />
         <output-dir compare="Text">valid-auth-methods</output-dir>
       </compilation-unit>
     </test-case>
     <test-case FilePath="external-dataset/azure_blob_storage/auth-methods">
       <compilation-unit name="valid-auth-methods">
         <placeholder name="azureblob-credentialsname" value="sharedAccessSignature" />
-        <placeholder name="azureblob-credentialsvalue" value="%azureblob-sas%" />
+        <placeholder name="azureblob-credentialsvalue" value="%azure-sas%" />
         <output-dir compare="Text">valid-auth-methods</output-dir>
       </compilation-unit>
     </test-case>
     <test-case FilePath="external-dataset/azure_blob_storage/auth-methods">
       <compilation-unit name="valid-auth-methods">
         <placeholder name="azureblob-credentialsname" value="connectionString" />
-        <placeholder name="azureblob-credentialsvalue" value="%azureblob-connectionstringaccountkey%" />
+        <placeholder name="azureblob-credentialsvalue" value="%azure-connectionstringaccountkey%" />
         <output-dir compare="Text">valid-auth-methods</output-dir>
       </compilation-unit>
     </test-case>
     <test-case FilePath="external-dataset/azure_blob_storage/auth-methods">
       <compilation-unit name="valid-auth-methods">
         <placeholder name="azureblob-credentialsname" value="connectionString" />
-        <placeholder name="azureblob-credentialsvalue" value="%azureblob-connectionstringsas%" />
+        <placeholder name="azureblob-credentialsvalue" value="%azure-connectionstringsas%" />
         <output-dir compare="Text">valid-auth-methods</output-dir>
       </compilation-unit>
     </test-case>
     <test-case FilePath="external-dataset/azure_blob_storage/auth-methods">
       <compilation-unit name="invalid-auth-methods">
         <placeholder name="azureblob-credentialsname-1" value="accountKey" />
-        <placeholder name="azureblob-credentialsvalue-1" value="%azureblob-accountkey%" />
+        <placeholder name="azureblob-credentialsvalue-1" value="%azure-accountkey%" />
         <placeholder name="azureblob-credentialsname-2" value="connectionString" />
-        <placeholder name="azureblob-credentialsvalue-2" value="%azureblob-connectionstringaccountkey%" />
+        <placeholder name="azureblob-credentialsvalue-2" value="%azure-connectionstringaccountkey%" />
         <output-dir compare="Text">invalid-auth-methods</output-dir>
         <expected-error>ASX1138: Only a single authentication method is allowed: connectionString, accountName &amp; accountKey, or accountName &amp; sharedAccessSignature</expected-error>
       </compilation-unit>
@@ -60,9 +60,9 @@
     <test-case FilePath="external-dataset/azure_blob_storage/auth-methods">
       <compilation-unit name="invalid-auth-methods">
         <placeholder name="azureblob-credentialsname-1" value="sharedAccessSignature" />
-        <placeholder name="azureblob-credentialsvalue-1" value="%azureblob-sas%" />
+        <placeholder name="azureblob-credentialsvalue-1" value="%azure-sas%" />
         <placeholder name="azureblob-credentialsname-2" value="connectionString" />
-        <placeholder name="azureblob-credentialsvalue-2" value="%azureblob-connectionstringaccountkey%" />
+        <placeholder name="azureblob-credentialsvalue-2" value="%azure-connectionstringaccountkey%" />
         <output-dir compare="Text">invalid-auth-methods</output-dir>
         <expected-error>ASX1138: Only a single authentication method is allowed: connectionString, accountName &amp; accountKey, or accountName &amp; sharedAccessSignature</expected-error>
       </compilation-unit>
@@ -81,7 +81,7 @@
     <test-case FilePath="external-dataset/azure_blob_storage/auth-methods">
       <compilation-unit name="anonymous-no-auth-no-endpoint">
         <output-dir compare="Text">anonymous-no-auth-no-endpoint</output-dir>
-        <expected-error>ASX1151: No authentication credentials provided, 'blobEndpoint' field is required for anonymous access</expected-error>
+        <expected-error>ASX1151: No authentication credentials provided, 'endpoint' field is required for anonymous access</expected-error>
       </compilation-unit>
     </test-case>
   </test-group>
@@ -138,6 +138,14 @@
         <output-dir compare="Text">common/tsv/mixed</output-dir>
       </compilation-unit>
     </test-case>
+    <!-- Parquet Tests Start -->
+    <test-case FilePath="external-dataset">
+      <compilation-unit name="common/parquet/object-concat">
+        <placeholder name="adapter" value="AZUREBLOB" />
+        <output-dir compare="Text">common/parquet/object-concat</output-dir>
+      </compilation-unit>
+    </test-case>
+    <!-- Parquet Tests End -->
     <test-case FilePath="external-dataset">
       <compilation-unit name="common/empty-string-definition">
         <placeholder name="adapter" value="AZUREBLOB" />
@@ -170,7 +178,7 @@
     <test-case FilePath="external-dataset">
       <compilation-unit name="common/invalid-endpoint">
         <placeholder name="adapter" value="AZUREBLOB" />
-        <placeholder name="blobEndpoint" value="http://^invalid-endpoint^" />
+        <placeholder name="endpoint" value="http://^invalid-endpoint^" />
         <output-dir compare="Text">common/invalid-endpoint</output-dir>
         <expected-error>External source error. java.net.URISyntaxException: Illegal character in authority at index 7: http://^invalid-endpoint^</expected-error>
       </compilation-unit>
@@ -179,7 +187,7 @@
       <compilation-unit name="common/bucket-does-not-exist">
         <placeholder name="adapter" value="AZUREBLOB" />
         <output-dir compare="Text">common/bucket-does-not-exist</output-dir>
-        <expected-error>External source error. Status code 404</expected-error>
+        <expected-error>External source error. com.azure.storage.blob.models.BlobStorageException: Status code 404</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="external-dataset" check-warnings="true">
@@ -210,28 +218,28 @@
       <compilation-unit name="common/include-exclude/bad-name-1">
         <placeholder name="adapter" value="AZUREBLOB" />
         <output-dir compare="Text">common/include-exclude/bad-name-1</output-dir>
-        <expected-error>Invalid format for property "exclude1"</expected-error>
+        <expected-error>Invalid format for property 'exclude1'</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="external-dataset">
       <compilation-unit name="common/include-exclude/bad-name-2">
         <placeholder name="adapter" value="AZUREBLOB" />
         <output-dir compare="Text">common/include-exclude/bad-name-2</output-dir>
-        <expected-error>Invalid format for property "exclude#"</expected-error>
+        <expected-error>Invalid format for property 'exclude#'</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="external-dataset">
       <compilation-unit name="common/include-exclude/bad-name-3">
         <placeholder name="adapter" value="AZUREBLOB" />
         <output-dir compare="Text">common/include-exclude/bad-name-3</output-dir>
-        <expected-error>Invalid format for property "exclude#hello"</expected-error>
+        <expected-error>Invalid format for property 'exclude#hello'</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="external-dataset">
       <compilation-unit name="common/include-exclude/both">
         <placeholder name="adapter" value="AZUREBLOB" />
         <output-dir compare="Text">common/include-exclude/both</output-dir>
-        <expected-error>The parameters "include" and "exclude" cannot be provided at the same time</expected-error>
+        <expected-error>The parameters 'include' and 'exclude' cannot be provided at the same time</expected-error>
       </compilation-unit>
     </test-case>
     <test-case FilePath="external-dataset">
@@ -353,6 +361,26 @@
       <compilation-unit name="common/include-exclude/include-12">
         <placeholder name="adapter" value="AZUREBLOB" />
         <output-dir compare="Text">common/include-exclude/include-12</output-dir>
+      </compilation-unit>
+    </test-case>
+  </test-group>
+  <test-group name="bom">
+    <test-case FilePath="external-dataset">
+      <compilation-unit name="common/byte_order_mark/json">
+        <placeholder name="adapter" value="AZUREBLOB" />
+        <output-dir compare="Text">common/byte_order_mark/json</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="external-dataset">
+      <compilation-unit name="common/byte_order_mark/csv">
+        <placeholder name="adapter" value="AZUREBLOB" />
+        <output-dir compare="Text">common/byte_order_mark/csv</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="external-dataset">
+      <compilation-unit name="common/byte_order_mark/tsv">
+        <placeholder name="adapter" value="AZUREBLOB" />
+        <output-dir compare="Text">common/byte_order_mark/tsv</output-dir>
       </compilation-unit>
     </test-case>
   </test-group>

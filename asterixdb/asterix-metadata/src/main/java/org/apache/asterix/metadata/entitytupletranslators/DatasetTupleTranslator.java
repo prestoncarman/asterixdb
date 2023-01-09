@@ -35,6 +35,9 @@ import org.apache.asterix.builders.RecordBuilder;
 import org.apache.asterix.builders.UnorderedListBuilder;
 import org.apache.asterix.common.config.DatasetConfig.DatasetType;
 import org.apache.asterix.common.config.DatasetConfig.TransactionState;
+import org.apache.asterix.common.exceptions.AsterixException;
+import org.apache.asterix.common.exceptions.ErrorCode;
+import org.apache.asterix.common.metadata.DatasetFullyQualifiedName;
 import org.apache.asterix.common.metadata.DataverseName;
 import org.apache.asterix.metadata.IDatasetDetails;
 import org.apache.asterix.metadata.bootstrap.MetadataPrimaryIndexes;
@@ -274,26 +277,78 @@ public class DatasetTupleTranslator extends AbstractTupleTranslator<Dataset> {
                     defaultNull = defaultValue.getType().getTypeTag() == ATypeTag.NULL;
                 }
 
-                // Format fields
-                String datetimeFormat = null, dateFormat = null, timeFormat = null;
-                int formatFieldPos =
-                        datasetDetailsRecord.getType().getFieldIndex(MetadataRecordTypes.FIELD_NAME_DATA_FORMAT);
-                if (formatFieldPos >= 0) {
-                    IACursor formatCursor =
-                            ((AOrderedList) datasetDetailsRecord.getValueByPos(formatFieldPos)).getCursor();
-                    if (formatCursor.next()) {
-                        datetimeFormat = getStringValue(formatCursor.get());
-                        if (formatCursor.next()) {
-                            dateFormat = getStringValue(formatCursor.get());
-                            if (formatCursor.next()) {
-                                timeFormat = getStringValue(formatCursor.get());
-                            }
+                // Primary Key
+                List<String> primaryKeyFields = null;
+                int primaryKeyFieldPos =
+                        datasetDetailsRecord.getType().getFieldIndex(MetadataRecordTypes.FIELD_NAME_PRIMARY_KEY);
+                if (primaryKeyFieldPos >= 0) {
+                    AOrderedList primaryKeyFieldList =
+                            ((AOrderedList) datasetDetailsRecord.getValueByPos(primaryKeyFieldPos));
+                    int n = primaryKeyFieldList.size();
+                    primaryKeyFields = new ArrayList<>(n);
+                    for (int i = 0; i < n; i++) {
+                        AOrderedList list = (AOrderedList) primaryKeyFieldList.getItem(i);
+                        if (list.size() != 1) {
+                            throw new AsterixException(ErrorCode.METADATA_ERROR, list.toJSON());
                         }
+                        AString str = (AString) list.getItem(0);
+                        primaryKeyFields.add(str.getStringValue());
                     }
                 }
 
-                datasetDetails =
-                        new ViewDetails(definition, dependencies, defaultNull, datetimeFormat, dateFormat, timeFormat);
+                // Foreign Keys
+                List<ViewDetails.ForeignKey> foreignKeys = null;
+                int foreignKeysFieldPos =
+                        datasetDetailsRecord.getType().getFieldIndex(MetadataRecordTypes.FIELD_NAME_FOREIGN_KEYS);
+                if (foreignKeysFieldPos >= 0) {
+                    AOrderedList foreignKeyRecordsList =
+                            ((AOrderedList) datasetDetailsRecord.getValueByPos(foreignKeysFieldPos));
+                    int nForeignKeys = foreignKeyRecordsList.size();
+                    foreignKeys = new ArrayList<>(nForeignKeys);
+                    for (int i = 0; i < nForeignKeys; i++) {
+                        ARecord foreignKeyRecord = (ARecord) foreignKeyRecordsList.getItem(i);
+                        // 'ForeignKey'
+                        int foreignKeyFieldPos =
+                                foreignKeyRecord.getType().getFieldIndex(MetadataRecordTypes.FIELD_NAME_FOREIGN_KEY);
+                        AOrderedList foreignKeyFieldList =
+                                ((AOrderedList) foreignKeyRecord.getValueByPos(foreignKeyFieldPos));
+                        int nForeignKeyFields = foreignKeyFieldList.size();
+                        List<String> foreignKeyFields = new ArrayList<>(nForeignKeyFields);
+                        for (int j = 0; j < nForeignKeyFields; j++) {
+                            AOrderedList list = (AOrderedList) foreignKeyFieldList.getItem(j);
+                            if (list.size() != 1) {
+                                throw new AsterixException(ErrorCode.METADATA_ERROR, list.toJSON());
+                            }
+                            AString str = (AString) list.getItem(0);
+                            foreignKeyFields.add(str.getStringValue());
+                        }
+
+                        // 'RefDataverseName'
+                        int refDataverseNameFieldPos = foreignKeyRecord.getType()
+                                .getFieldIndex(MetadataRecordTypes.FIELD_NAME_REF_DATAVERSE_NAME);
+                        String refDataverseCanonicalName =
+                                ((AString) foreignKeyRecord.getValueByPos(refDataverseNameFieldPos)).getStringValue();
+                        DataverseName refDataverseName =
+                                DataverseName.createFromCanonicalForm(refDataverseCanonicalName);
+
+                        // 'RefDatasetName'
+                        int refDatasetNameFieldPos = foreignKeyRecord.getType()
+                                .getFieldIndex(MetadataRecordTypes.FIELD_NAME_REF_DATASET_NAME);
+                        String refDatasetName =
+                                ((AString) foreignKeyRecord.getValueByPos(refDatasetNameFieldPos)).getStringValue();
+
+                        foreignKeys.add(new ViewDetails.ForeignKey(foreignKeyFields,
+                                new DatasetFullyQualifiedName(refDataverseName, refDatasetName)));
+                    }
+                }
+
+                // Format fields
+                Triple<String, String, String> dateTimeFormats = getDateTimeFormats(datasetDetailsRecord);
+                String datetimeFormat = dateTimeFormats.first;
+                String dateFormat = dateTimeFormats.second;
+                String timeFormat = dateTimeFormats.third;
+                datasetDetails = new ViewDetails(definition, dependencies, defaultNull, primaryKeyFields, foreignKeys,
+                        datetimeFormat, dateFormat, timeFormat);
                 break;
             }
         }
@@ -364,10 +419,6 @@ public class DatasetTupleTranslator extends AbstractTupleTranslator<Dataset> {
             return ((AString) compressionRecord.getValueByPos(schemeIndex)).getStringValue();
         }
         return CompressionManager.NONE;
-    }
-
-    private static String getStringValue(IAObject obj) {
-        return obj.getType().getTypeTag() == ATypeTag.STRING ? ((AString) obj).getStringValue() : null;
     }
 
     @Override

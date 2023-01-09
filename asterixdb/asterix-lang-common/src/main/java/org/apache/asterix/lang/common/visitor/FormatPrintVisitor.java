@@ -65,6 +65,8 @@ import org.apache.asterix.lang.common.expression.UnaryExpr;
 import org.apache.asterix.lang.common.expression.UnorderedListTypeDefinition;
 import org.apache.asterix.lang.common.expression.VariableExpr;
 import org.apache.asterix.lang.common.statement.AdapterDropStatement;
+import org.apache.asterix.lang.common.statement.AnalyzeDropStatement;
+import org.apache.asterix.lang.common.statement.AnalyzeStatement;
 import org.apache.asterix.lang.common.statement.CompactStatement;
 import org.apache.asterix.lang.common.statement.ConnectFeedStatement;
 import org.apache.asterix.lang.common.statement.CreateAdapterStatement;
@@ -925,6 +927,23 @@ public abstract class FormatPrintVisitor implements ILangVisitor<Void, Integer> 
         out.print(skip(step) + "drop synonym ");
         out.print(generateFullName(del.getDataverseName(), del.getSynonymName()));
         out.println(generateIfExists(del.getIfExists()) + SEMICOLON);
+        return null;
+    }
+
+    @Override
+    public Void visit(AnalyzeStatement as, Integer step) throws CompilationException {
+        out.print(skip(step) + "analyze dataset ");
+        out.print(generateFullName(as.getDataverseName(), as.getDatasetName()));
+        out.println(SEMICOLON);
+        return null;
+    }
+
+    @Override
+    public Void visit(AnalyzeDropStatement as, Integer step) throws CompilationException {
+        out.print(skip(step) + "analyze dataset ");
+        out.print(generateFullName(as.getDataverseName(), as.getDatasetName()));
+        out.print(" drop statistics");
+        out.println(SEMICOLON);
         return null;
     }
 

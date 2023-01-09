@@ -83,7 +83,7 @@ public class SecondaryCorrelatedRTreeOperationsHelper extends SecondaryCorrelate
             throw AsterixException.create(ErrorCode.INDEX_RTREE_MULTIPLE_FIELDS_NOT_ALLOWED, sourceLoc,
                     numSecondaryKeys);
         }
-        Pair<IAType, Boolean> spatialTypePair = Index.getNonNullableOpenFieldType(
+        Pair<IAType, Boolean> spatialTypePair = Index.getNonNullableOpenFieldType(index,
                 indexDetails.getKeyFieldTypes().get(0), secondaryKeyFields.get(0), itemType);
         IAType spatialType = spatialTypePair.first;
         anySecondaryKeyIsNullable = spatialTypePair.second;
@@ -207,7 +207,7 @@ public class SecondaryCorrelatedRTreeOperationsHelper extends SecondaryCorrelate
 
         // Generate compensate tuples for upsert
         IOperatorDescriptor processorOp = createTupleProcessorOp(spec, secondaryRecDescConsideringPointMBR,
-                numNestedSecondaryKeFieldsConsideringPointMBR, numPrimaryKeys, false);
+                numNestedSecondaryKeFieldsConsideringPointMBR, numPrimaryKeys, false, true, true);
 
         ExternalSortOperatorDescriptor sortOp = createSortOp(spec,
                 getTaggedSecondaryComparatorFactories(new IBinaryComparatorFactory[] {

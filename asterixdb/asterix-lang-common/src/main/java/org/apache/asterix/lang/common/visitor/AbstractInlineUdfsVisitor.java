@@ -31,6 +31,7 @@ import org.apache.asterix.common.metadata.DatasetFullyQualifiedName;
 import org.apache.asterix.lang.common.base.Expression;
 import org.apache.asterix.lang.common.base.Expression.Kind;
 import org.apache.asterix.lang.common.base.ILangExpression;
+import org.apache.asterix.lang.common.base.IVisitorExtension;
 import org.apache.asterix.lang.common.clause.GroupbyClause;
 import org.apache.asterix.lang.common.clause.LetClause;
 import org.apache.asterix.lang.common.clause.LimitClause;
@@ -264,6 +265,11 @@ public abstract class AbstractInlineUdfsVisitor extends AbstractQueryExpressionV
     }
 
     @Override
+    public Boolean visit(IVisitorExtension ve, Void arg) throws CompilationException {
+        return ve.inlineUDFsDispatch(this);
+    }
+
+    @Override
     public Boolean visit(InsertStatement insert, Void arg) throws CompilationException {
         boolean changed = false;
         Expression returnExpression = insert.getReturnExpression();
@@ -316,7 +322,8 @@ public abstract class AbstractInlineUdfsVisitor extends AbstractQueryExpressionV
         } else {
             FunctionDecl implem = usedUDFs.get(fs);
             if (implem == null) {
-                throw new CompilationException(ErrorCode.UNKNOWN_FUNCTION, f.getSourceLocation(), fs.toString());
+                //it's an external UDF
+                return new Pair<>(r, expr);
             }
             // it's one of the functions we want to inline
             boolean isVarargs = implem.getSignature().getArity() == FunctionIdentifier.VARARGS;

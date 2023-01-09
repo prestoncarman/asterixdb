@@ -49,7 +49,7 @@ public class LSMBTreeRangeSearchCursor extends LSMIndexSearchCursor {
     private final RangePredicate reusablePred;
     private ISearchOperationCallback searchCallback;
     private BTreeAccessor[] btreeAccessors;
-    private boolean[] isMemoryComponent;
+    protected boolean[] isMemoryComponent;
     private ArrayTupleBuilder tupleBuilder;
     private boolean canCallProceed = true;
     private boolean resultOfSearchCallbackProceed = false;
@@ -149,6 +149,7 @@ public class LSMBTreeRangeSearchCursor extends LSMIndexSearchCursor {
                                 // There are no more elements in the memory component.. can safely skip locking for the
                                 // remaining operations
                                 includeMutableComponent = false;
+                                excludeMemoryComponent();
                             }
                         }
                     } else {
@@ -180,6 +181,7 @@ public class LSMBTreeRangeSearchCursor extends LSMIndexSearchCursor {
                         // the tree of head tuple
                         // the head element of PQ is useless now
                         PriorityQueueElement e = outputPriorityQueue.poll();
+                        markAsDeleted(e);
                         pushIntoQueueFromCursorAndReplaceThisElement(e);
                     } else {
                         // If the previous tuple and the head tuple are different
@@ -198,6 +200,14 @@ public class LSMBTreeRangeSearchCursor extends LSMIndexSearchCursor {
             }
         }
 
+    }
+
+    protected void excludeMemoryComponent() {
+        //NoOp
+    }
+
+    protected void markAsDeleted(PriorityQueueElement e) throws HyracksDataException {
+        //NoOp
     }
 
     private void pushOutputElementIntoQueueIfNeeded() throws HyracksDataException {
@@ -236,16 +246,21 @@ public class LSMBTreeRangeSearchCursor extends LSMIndexSearchCursor {
                     rangeCursors[i].close();
                     btreeAccessors[i].reset(btree, iap);
                     btreeAccessors[i].search(rangeCursors[i], reusablePred);
-                    pushIntoQueueFromCursorAndReplaceThisElement(switchedElements[i]);
+                    // consume the element that we restarted the search at since before the switch it was consumed
+                    if (rangeCursors[i].hasNext()) {
+                        rangeCursors[i].next();
+                        switchedElements[i].reset(rangeCursors[i].getTuple());
+                    }
                 }
             }
             switchRequest[i] = false;
+            switchedElements[i] = null;
             // any failed switch makes further switches pointless
             switchPossible = switchPossible && operationalComponents.get(i).getType() == LSMComponentType.DISK;
         }
     }
 
-    private int replaceFrom() throws HyracksDataException {
+    protected int replaceFrom() throws HyracksDataException {
         int replaceFrom = -1;
         if (!switchPossible) {
             return replaceFrom;
@@ -264,14 +279,18 @@ public class LSMBTreeRangeSearchCursor extends LSMIndexSearchCursor {
                 if (replaceFrom < 0) {
                     replaceFrom = i;
                 }
-                // we return the outputElement to the priority queue if it came from this component
+
+                PriorityQueueElement element;
                 if (outputElement != null && outputElement.getCursorIndex() == i) {
-                    pushIntoQueueFromCursorAndReplaceThisElement(outputElement);
-                    needPushElementIntoQueue = false;
-                    outputElement = null;
-                    canCallProceed = true;
+                    // there should be no element from this cursor in the queue since the element was polled
+                    if (findElement(outputPriorityQueue, i) != null) {
+                        throw new IllegalStateException("found element in the queue from the cursor of output element");
+                    }
+                    element = outputElement;
+                } else {
+                    element = findElement(outputPriorityQueue, i);
                 }
-                PriorityQueueElement element = remove(outputPriorityQueue, i);
+
                 // if this cursor is still active (has an element)
                 // then we copy the search key to restart the operation after
                 // replacing the component
@@ -331,6 +350,18 @@ public class LSMBTreeRangeSearchCursor extends LSMIndexSearchCursor {
         return null;
     }
 
+    private PriorityQueueElement findElement(PriorityQueue<PriorityQueueElement> outputPriorityQueue, int cursorIndex) {
+        // Scans the PQ for the component's element
+        Iterator<PriorityQueueElement> it = outputPriorityQueue.iterator();
+        while (it.hasNext()) {
+            PriorityQueueElement e = it.next();
+            if (e.getCursorIndex() == cursorIndex) {
+                return e;
+            }
+        }
+        return null;
+    }
+
     @Override
     public void doOpen(ICursorInitialState initialState, ISearchPredicate searchPred) throws HyracksDataException {
         LSMBTreeCursorInitialState lsmInitialState = (LSMBTreeCursorInitialState) initialState;
@@ -365,20 +396,21 @@ public class LSMBTreeRangeSearchCursor extends LSMIndexSearchCursor {
         }
         for (int i = 0; i < numBTrees; i++) {
             ILSMComponent component = operationalComponents.get(i);
+            LSMComponentType type = component.getType();
             BTree btree;
             if (component.getType() == LSMComponentType.MEMORY) {
                 includeMutableComponent = true;
             }
             btree = (BTree) component.getIndex();
             if (btreeAccessors[i] == null || destroyIncompatible(component, i)) {
-                btreeAccessors[i] = btree.createAccessor(iap);
-                rangeCursors[i] = btreeAccessors[i].createSearchCursor(false);
+                btreeAccessors[i] = createAccessor(type, btree, i);
+                rangeCursors[i] = createCursor(type, btreeAccessors[i]);
             } else {
                 // re-use
                 btreeAccessors[i].reset(btree, iap);
                 rangeCursors[i].close();
             }
-            isMemoryComponent[i] = component.getType() == LSMComponentType.MEMORY;
+            isMemoryComponent[i] = type == LSMComponentType.MEMORY;
         }
         IndexCursorUtils.open(btreeAccessors, rangeCursors, searchPred);
         try {
@@ -410,6 +442,14 @@ public class LSMBTreeRangeSearchCursor extends LSMIndexSearchCursor {
     @Override
     public boolean getSearchOperationCallbackProceedResult() {
         return resultOfSearchCallbackProceed;
+    }
+
+    protected BTreeAccessor createAccessor(LSMComponentType type, BTree btree, int index) throws HyracksDataException {
+        return btree.createAccessor(iap);
+    }
+
+    protected IIndexCursor createCursor(LSMComponentType type, BTreeAccessor accessor) {
+        return accessor.createSearchCursor(false);
     }
 
 }

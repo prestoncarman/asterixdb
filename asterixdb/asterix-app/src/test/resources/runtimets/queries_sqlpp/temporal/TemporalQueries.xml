@@ -33,6 +33,11 @@
       </compilation-unit>
     </test-case>
     <test-case FilePath="temporal">
+      <compilation-unit name="current_date_time_01">
+        <output-dir compare="Text">current_date_time_01</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="temporal">
       <compilation-unit name="overlap_bins_gby_1">
         <output-dir compare="Text">overlap_bins_gby_1</output-dir>
       </compilation-unit>
@@ -58,18 +63,38 @@
       </compilation-unit>
     </test-case>
     <test-case FilePath="temporal">
-      <compilation-unit name="parse_02">
-        <output-dir compare="Text">parse_02</output-dir>
-      </compilation-unit>
-    </test-case>
-    <test-case FilePath="temporal">
       <compilation-unit name="parse_01">
         <output-dir compare="Text">parse_01</output-dir>
       </compilation-unit>
     </test-case>
     <test-case FilePath="temporal">
+      <compilation-unit name="parse_02">
+        <output-dir compare="Text">parse_02</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="temporal">
+      <compilation-unit name="parse_03">
+        <output-dir compare="Text">parse_03</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="temporal">
+      <compilation-unit name="print_01">
+        <output-dir compare="Text">print_01</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="temporal">
       <compilation-unit name="day_of_week_01">
         <output-dir compare="Text">day_of_week_01</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="temporal">
+      <compilation-unit name="day_of_year_01">
+        <output-dir compare="Text">day_of_year_01</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="temporal">
+      <compilation-unit name="quarter_of_year_01">
+        <output-dir compare="Text">quarter_of_year_01</output-dir>
       </compilation-unit>
     </test-case>
     <test-case FilePath="temporal">
@@ -154,6 +179,11 @@
         <output-dir compare="Text">duration_comps</output-dir>
       </compilation-unit>
     </test-case>
+    <test-case FilePath="temporal">
+      <compilation-unit name="week_of_year_01">
+        <output-dir compare="Text">week_of_year_01</output-dir>
+      </compilation-unit>
+    </test-case>
     <test-case FilePath="temporal/interval_joins">
       <compilation-unit name="interval_after">
         <output-dir compare="Text">interval_after</output-dir>
@@ -217,6 +247,11 @@
     <test-case FilePath="temporal/interval_joins">
       <compilation-unit name="interval_starts">
         <output-dir compare="Text">interval_starts</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="temporal/interval_joins">
+      <compilation-unit name="interval_join_projection_check">
+        <output-dir compare="Text">interval_join_projection_check</output-dir>
       </compilation-unit>
     </test-case>
     <test-case FilePath="temporal/interval_joins_spilling">

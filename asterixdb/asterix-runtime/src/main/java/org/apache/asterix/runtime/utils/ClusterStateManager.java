@@ -420,6 +420,7 @@ public class ClusterStateManager implements IClusterStateManager {
                 clusterPartitions.remove(nodePartition.getPartitionId());
             }
             participantNodes.remove(nodeId);
+            failedNodes.remove(nodeId);
         }
     }
 
@@ -470,12 +471,22 @@ public class ClusterStateManager implements IClusterStateManager {
     @Override
     public synchronized void setRebalanceRequired(boolean rebalanceRequired) throws HyracksDataException {
         this.rebalanceRequired = rebalanceRequired;
-        refreshState();
+        // if the cluster requires a rebalance, we will refresh the cluster state to ensure the state is updated
+        // to REBALANCE_REQUIRED. Otherwise, we will let the rebalance operation update the cluster state to avoid
+        // changing the cluster state during the rebalance
+        if (rebalanceRequired) {
+            refreshState();
+        }
     }
 
     @Override
     public Map<Integer, ClusterPartition> getClusterPartitions() {
         return Collections.unmodifiableMap(clusterPartitions);
+    }
+
+    @Override
+    public synchronized boolean nodesFailed(Set<String> nodeIds) {
+        return nodeIds.stream().anyMatch(failedNodes::contains);
     }
 
     private void updateClusterCounters(String nodeId, NcLocalCounters localCounters) {

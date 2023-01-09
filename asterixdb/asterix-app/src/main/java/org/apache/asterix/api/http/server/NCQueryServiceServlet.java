@@ -32,6 +32,7 @@ import org.apache.asterix.app.message.ExecuteStatementRequestMessage;
 import org.apache.asterix.app.message.ExecuteStatementResponseMessage;
 import org.apache.asterix.app.result.ResponsePrinter;
 import org.apache.asterix.app.result.fields.NcResultPrinter;
+import org.apache.asterix.app.result.fields.SignaturePrinter;
 import org.apache.asterix.common.api.IApplicationContext;
 import org.apache.asterix.common.api.IRequestReference;
 import org.apache.asterix.common.config.GlobalConfig;
@@ -44,6 +45,7 @@ import org.apache.asterix.translator.IStatementExecutor;
 import org.apache.asterix.translator.ResultProperties;
 import org.apache.asterix.translator.SessionOutput;
 import org.apache.hyracks.api.application.INCServiceContext;
+import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.exceptions.Warning;
 import org.apache.hyracks.api.util.ExceptionUtils;
 import org.apache.hyracks.http.api.IChannelClosedHandler;
@@ -75,6 +77,7 @@ public class NCQueryServiceServlet extends QueryServiceServlet {
             QueryServiceRequestParameters param, RequestExecutionState executionState,
             Map<String, String> optionalParameters, Map<String, byte[]> statementParameters,
             ResponsePrinter responsePrinter, List<Warning> warnings) throws Exception {
+        ensureOptionalParameters(optionalParameters);
         // Running on NC -> send 'execute' message to CC
         INCServiceContext ncCtx = (INCServiceContext) serviceCtx;
         INCMessageBroker ncMb = (INCMessageBroker) ncCtx.getMessageBroker();
@@ -122,6 +125,9 @@ public class NCQueryServiceServlet extends QueryServiceServlet {
         // if the was no error, we can set the result status to success
         executionState.setStatus(ResultStatus.SUCCESS, HttpResponseStatus.OK);
         updateStatsFromCC(stats, responseMsg);
+        if (param.isSignature() && delivery != IStatementExecutor.ResultDelivery.ASYNC && !param.isParseOnly()) {
+            responsePrinter.addResultPrinter(SignaturePrinter.newInstance(responseMsg.getExecutionPlans()));
+        }
         if (hasResult(responseMsg)) {
             responsePrinter.addResultPrinter(
                     new NcResultPrinter(appCtx, responseMsg, getResultSet(), delivery, sessionOutput, stats));
@@ -130,17 +136,23 @@ public class NCQueryServiceServlet extends QueryServiceServlet {
         buildResponseResults(responsePrinter, sessionOutput, responseMsg.getExecutionPlans(), warnings);
     }
 
+    protected void ensureOptionalParameters(Map<String, String> optionalParameters) throws HyracksDataException {
+
+    }
+
     protected ExecuteStatementRequestMessage createRequestMessage(IServletRequest request,
             IRequestReference requestReference, String statementsText, SessionOutput sessionOutput,
             ResultProperties resultProperties, QueryServiceRequestParameters param,
             Map<String, String> optionalParameters, Map<String, byte[]> statementParameters, INCServiceContext ncCtx,
             MessageFuture responseFuture, ILangExtension.Language queryLanguage, String handleUrl,
             int stmtCategoryRestrictionMask, boolean forceDropDataset) {
-        return new ExecuteStatementRequestMessage(ncCtx.getNodeId(), responseFuture.getFutureId(), queryLanguage,
-                statementsText, sessionOutput.config(), resultProperties.getNcToCcResultProperties(),
-                param.getClientContextID(), handleUrl, optionalParameters, statementParameters,
-                param.isMultiStatement(), param.getProfileType(), stmtCategoryRestrictionMask, requestReference,
-                forceDropDataset);
+        ExecuteStatementRequestMessage requestMessage = new ExecuteStatementRequestMessage(ncCtx.getNodeId(),
+                responseFuture.getFutureId(), queryLanguage, statementsText, sessionOutput.config(),
+                resultProperties.getNcToCcResultProperties(), param.getClientContextID(), param.getDataverse(),
+                handleUrl, optionalParameters, statementParameters, param.isMultiStatement(), param.getProfileType(),
+                stmtCategoryRestrictionMask, requestReference, forceDropDataset);
+        requestMessage.setSQLCompatMode(param.isSQLCompatMode());
+        return requestMessage;
     }
 
     private void cancelQuery(INCMessageBroker messageBroker, String nodeId, String uuid, String clientContextID,
@@ -192,6 +204,7 @@ public class NCQueryServiceServlet extends QueryServiceServlet {
         stats.setJobProfile(responseStats.getJobProfile());
         stats.setProcessedObjects(responseStats.getProcessedObjects());
         stats.updateTotalWarningsCount(responseStats.getTotalWarningsCount());
+        stats.setCompileTime(responseStats.getCompileTime());
     }
 
     private static void updatePropertiesFromCC(IStatementExecutor.StatementProperties statementProperties,

@@ -161,14 +161,12 @@ public class RecoveryManager implements IRecoveryManager, ILifeCycleComponent {
     public void startLocalRecovery(Set<Integer> partitions) throws IOException, ACIDException {
         state = SystemState.RECOVERING;
         LOGGER.info("starting recovery for partitions {}", partitions);
-
         long readableSmallestLSN = logMgr.getReadableSmallestLSN();
         Checkpoint checkpointObject = checkpointManager.getLatest();
         long lowWaterMarkLSN = checkpointObject.getMinMCTFirstLsn();
         if (lowWaterMarkLSN < readableSmallestLSN) {
             lowWaterMarkLSN = readableSmallestLSN;
         }
-
         //delete any recovery files from previous failed recovery attempts
         deleteRecoveryTemporaryFiles();
 
@@ -293,7 +291,7 @@ public class RecoveryManager implements IRecoveryManager, ILifeCycleComponent {
         final IIndexCheckpointManagerProvider indexCheckpointManagerProvider =
                 ((INcApplicationContext) (serviceCtx.getApplicationContext())).getIndexCheckpointManagerProvider();
 
-        Map<Long, LocalResource> resourcesMap = localResourceRepository.loadAndGetAllResources();
+        Map<Long, LocalResource> resourcesMap = localResourceRepository.getResources(r -> true, partitions);
         final Map<Long, Long> resourceId2MaxLSNMap = new HashMap<>();
         TxnEntityId tempKeyTxnEntityId = new TxnEntityId(-1, -1, -1, null, -1, false);
 
@@ -505,7 +503,8 @@ public class RecoveryManager implements IRecoveryManager, ILifeCycleComponent {
             final List<DatasetResourceReference> partitionResources = localResourceRepository.getResources(resource -> {
                 DatasetLocalResource dsResource = (DatasetLocalResource) resource.getResource();
                 return dsResource.getPartition() == partition;
-            }).values().stream().map(DatasetResourceReference::of).collect(Collectors.toList());
+            }, Collections.singleton(partition)).values().stream().map(DatasetResourceReference::of)
+                    .collect(Collectors.toList());
             for (DatasetResourceReference indexRef : partitionResources) {
                 try {
                     final IIndexCheckpointManager idxCheckpointMgr = idxCheckpointMgrProvider.get(indexRef);
@@ -536,8 +535,9 @@ public class RecoveryManager implements IRecoveryManager, ILifeCycleComponent {
             }
             replayPartitionsLogs(partitions, logMgr.getLogReader(true), minLSN, false);
             if (flush) {
-                appCtx.getDatasetLifecycleManager().flushAllDatasets();
+                appCtx.getDatasetLifecycleManager().flushAllDatasets(partitions::contains);
             }
+            cleanUp(partitions);
         } catch (IOException | ACIDException e) {
             throw HyracksDataException.create(e);
         } finally {
@@ -569,6 +569,10 @@ public class RecoveryManager implements IRecoveryManager, ILifeCycleComponent {
         String recoveryDirPath = getRecoveryDirPath();
         Path recoveryFolderPath = Paths.get(recoveryDirPath);
         FileUtils.deleteQuietly(recoveryFolderPath.toFile());
+    }
+
+    protected void cleanUp(Set<Integer> partitions) throws HyracksDataException {
+        // the cleanup is currently done by PersistentLocalResourceRepository#clean
     }
 
     private String getRecoveryDirPath() {

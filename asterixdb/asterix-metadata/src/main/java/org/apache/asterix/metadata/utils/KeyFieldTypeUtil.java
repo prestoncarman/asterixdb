@@ -40,6 +40,7 @@ import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.common.utils.Pair;
 import org.apache.hyracks.algebricks.common.utils.Triple;
 import org.apache.hyracks.api.exceptions.SourceLocation;
+import org.apache.hyracks.util.LogRedactionUtil;
 
 public class KeyFieldTypeUtil {
 
@@ -133,7 +134,7 @@ public class KeyFieldTypeUtil {
         List<Integer> keySourceIndicators = indexDetails.getKeyFieldSourceIndicators();
         List<IAType> indexKeyTypes = new ArrayList<>();
         for (int i = 0; i < indexDetails.getKeyFieldNames().size(); i++) {
-            Pair<IAType, Boolean> keyPairType = Index.getNonNullableOpenFieldType(
+            Pair<IAType, Boolean> keyPairType = Index.getNonNullableOpenFieldType(index,
                     indexDetails.getKeyFieldTypes().get(i), indexDetails.getKeyFieldNames().get(i),
                     chooseSource(keySourceIndicators, i, recordType, metaRecordType));
             indexKeyTypes.add(keyPairType.first);
@@ -178,8 +179,8 @@ public class KeyFieldTypeUtil {
         List<Integer> keySourceIndicators = indexDetails.getKeyFieldSourceIndicators();
         List<IAType> indexKeyTypes = new ArrayList<>();
         ARecordType targetRecType = chooseSource(keySourceIndicators, 0, recordType, metaRecordType);
-        Pair<IAType, Boolean> keyPairType = Index.getNonNullableOpenFieldType(indexDetails.getKeyFieldTypes().get(0),
-                indexDetails.getKeyFieldNames().get(0), targetRecType);
+        Pair<IAType, Boolean> keyPairType = Index.getNonNullableOpenFieldType(index,
+                indexDetails.getKeyFieldTypes().get(0), indexDetails.getKeyFieldNames().get(0), targetRecType);
         IAType keyType = keyPairType.first;
         IAType nestedKeyType = NonTaggedFormatUtil.getNestedSpatialType(keyType.getTypeTag());
         int numKeys = KeyFieldTypeUtil.getNumSecondaryKeys(index, targetRecType, metaRecordType);
@@ -217,7 +218,7 @@ public class KeyFieldTypeUtil {
             case RTREE:
                 Index.ValueIndexDetails indexDetails = (Index.ValueIndexDetails) index.getIndexDetails();
                 List<Integer> keySourceIndicators = indexDetails.getKeyFieldSourceIndicators();
-                Pair<IAType, Boolean> keyPairType = Index.getNonNullableOpenFieldType(
+                Pair<IAType, Boolean> keyPairType = Index.getNonNullableOpenFieldType(index,
                         indexDetails.getKeyFieldTypes().get(0), indexDetails.getKeyFieldNames().get(0),
                         chooseSource(keySourceIndicators, 0, recordType, metaRecordType));
                 IAType keyType = keyPairType.first;
@@ -323,7 +324,7 @@ public class KeyFieldTypeUtil {
                 } else {
                     // closed record type and we couldn't find the field -> error.
                     throw new CompilationException(ErrorCode.COMPILATION_FIELD_NOT_FOUND, sourceLoc,
-                            RecordUtil.toFullyQualifiedName(path));
+                            LogRedactionUtil.userData(RecordUtil.toFullyQualifiedName(path)));
                 }
             }
             if (fieldType.getTypeTag() == ATypeTag.UNION) {

@@ -24,11 +24,13 @@ import java.nio.ByteBuffer;
 
 import org.apache.hyracks.api.comm.VSizeFrame;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
+import org.apache.hyracks.api.dataflow.IIntrospectingOperator;
 import org.apache.hyracks.api.dataflow.value.IMissingWriter;
 import org.apache.hyracks.api.dataflow.value.IMissingWriterFactory;
 import org.apache.hyracks.api.dataflow.value.RecordDescriptor;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.job.profiling.IOperatorStats;
+import org.apache.hyracks.api.job.profiling.NoOpOperatorStats;
 import org.apache.hyracks.api.util.CleanupUtils;
 import org.apache.hyracks.api.util.ExceptionUtils;
 import org.apache.hyracks.dataflow.common.comm.io.ArrayTupleBuilder;
@@ -44,6 +46,7 @@ import org.apache.hyracks.storage.am.common.api.ILSMIndexCursor;
 import org.apache.hyracks.storage.am.common.api.ISearchOperationCallbackFactory;
 import org.apache.hyracks.storage.am.common.api.ITupleFilter;
 import org.apache.hyracks.storage.am.common.api.ITupleFilterFactory;
+import org.apache.hyracks.storage.am.common.impls.DefaultTupleProjectorFactory;
 import org.apache.hyracks.storage.am.common.impls.IndexAccessParameters;
 import org.apache.hyracks.storage.am.common.impls.NoOpOperationCallback;
 import org.apache.hyracks.storage.am.common.tuples.ReferenceFrameTupleReference;
@@ -54,12 +57,15 @@ import org.apache.hyracks.storage.common.IIndexAccessor;
 import org.apache.hyracks.storage.common.IIndexCursor;
 import org.apache.hyracks.storage.common.ISearchOperationCallback;
 import org.apache.hyracks.storage.common.ISearchPredicate;
+import org.apache.hyracks.storage.common.projection.ITupleProjector;
+import org.apache.hyracks.storage.common.projection.ITupleProjectorFactory;
 import org.apache.hyracks.util.IThreadStatsCollector;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInputUnaryOutputOperatorNodePushable {
+public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInputUnaryOutputOperatorNodePushable
+        implements IIntrospectingOperator {
 
     static final Logger LOGGER = LogManager.getLogger();
     protected final IHyracksTaskContext ctx;
@@ -89,6 +95,7 @@ public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInput
     protected PermutingFrameTupleReference maxFilterKey;
     protected final boolean appendIndexFilter;
     protected ArrayTupleBuilder nonFilterTupleBuild;
+    protected IMissingWriter nonFilterWriter;
     protected final ISearchOperationCallbackFactory searchCallbackFactory;
     protected boolean failed = false;
     protected IOperatorStats stats;
@@ -106,32 +113,37 @@ public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInput
     protected final long outputLimit;
     protected long outputCount = 0;
     protected boolean finished;
+    protected final ITupleProjector tupleProjector;
 
     // no filter and limit pushdown
     public IndexSearchOperatorNodePushable(IHyracksTaskContext ctx, RecordDescriptor inputRecDesc, int partition,
             int[] minFilterFieldIndexes, int[] maxFilterFieldIndexes, IIndexDataflowHelperFactory indexHelperFactory,
-            boolean retainInput, boolean retainMissing, IMissingWriterFactory missingWriterFactory,
-            ISearchOperationCallbackFactory searchCallbackFactory, boolean appendIndexFilter)
-            throws HyracksDataException {
+            boolean retainInput, boolean retainMissing, IMissingWriterFactory nonMatchWriterFactory,
+            ISearchOperationCallbackFactory searchCallbackFactory, boolean appendIndexFilter,
+            IMissingWriterFactory nonFilterWriterFactory) throws HyracksDataException {
         this(ctx, inputRecDesc, partition, minFilterFieldIndexes, maxFilterFieldIndexes, indexHelperFactory,
-                retainInput, retainMissing, missingWriterFactory, searchCallbackFactory, appendIndexFilter, null, -1,
-                false, null, null);
+                retainInput, retainMissing, nonMatchWriterFactory, searchCallbackFactory, appendIndexFilter,
+                nonFilterWriterFactory, null, -1, false, null, null, DefaultTupleProjectorFactory.INSTANCE);
     }
 
     public IndexSearchOperatorNodePushable(IHyracksTaskContext ctx, RecordDescriptor inputRecDesc, int partition,
             int[] minFilterFieldIndexes, int[] maxFilterFieldIndexes, IIndexDataflowHelperFactory indexHelperFactory,
-            boolean retainInput, boolean retainMissing, IMissingWriterFactory missingWriterFactory,
+            boolean retainInput, boolean retainMissing, IMissingWriterFactory nonMatchWriterFactory,
             ISearchOperationCallbackFactory searchCallbackFactory, boolean appendIndexFilter,
-            ITupleFilterFactory tupleFactoryFactory, long outputLimit, boolean appendSearchCallbackProceedResult,
-            byte[] searchCallbackProceedResultFalseValue, byte[] searchCallbackProceedResultTrueValue)
+            IMissingWriterFactory nonFilterWriterFactory, ITupleFilterFactory tupleFactoryFactory, long outputLimit,
+            boolean appendSearchCallbackProceedResult, byte[] searchCallbackProceedResultFalseValue,
+            byte[] searchCallbackProceedResultTrueValue, ITupleProjectorFactory projectorFactory)
             throws HyracksDataException {
         this.ctx = ctx;
         this.indexHelper = indexHelperFactory.create(ctx.getJobletContext().getServiceContext(), partition);
         this.retainInput = retainInput;
         this.retainMissing = retainMissing;
         this.appendIndexFilter = appendIndexFilter;
-        if (this.retainMissing || this.appendIndexFilter) {
-            this.nonMatchWriter = missingWriterFactory.createMissingWriter();
+        if (this.retainMissing) {
+            this.nonMatchWriter = nonMatchWriterFactory.createMissingWriter();
+        }
+        if (this.appendIndexFilter) {
+            this.nonFilterWriter = nonFilterWriterFactory.createMissingWriter();
         }
         this.inputRecDesc = inputRecDesc;
         this.searchCallbackFactory = searchCallbackFactory;
@@ -150,14 +162,13 @@ public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInput
         this.searchCallbackProceedResultTrueValue = searchCallbackProceedResultTrueValue;
         this.tupleFilterFactory = tupleFactoryFactory;
         this.outputLimit = outputLimit;
-
-        if (ctx != null && ctx.getStatsCollector() != null) {
-            stats = ctx.getStatsCollector().getOrAddOperatorStats(getDisplayName());
-        }
+        this.stats = new NoOpOperatorStats();
 
         if (this.tupleFilterFactory != null && this.retainMissing) {
             throw new IllegalStateException("RetainMissing with tuple filter is not supported");
         }
+
+        tupleProjector = projectorFactory.createTupleProjector(ctx);
     }
 
     protected abstract ISearchPredicate createSearchPredicate();
@@ -197,7 +208,7 @@ public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInput
         if (appendIndexFilter) {
             int numIndexFilterFields = index.getNumOfFilterFields();
             nonFilterTupleBuild = new ArrayTupleBuilder(numIndexFilterFields);
-            buildMissingTuple(numIndexFilterFields, nonFilterTupleBuild, nonMatchWriter);
+            buildMissingTuple(numIndexFilterFields, nonFilterTupleBuild, nonFilterWriter);
         }
 
         if (tupleFilterFactory != null) {
@@ -262,7 +273,7 @@ public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInput
                 break;
             }
         }
-        stats.getTupleCounter().update(matchingTupleCount);
+        stats.getInputTupleCounter().update(matchingTupleCount);
 
         if (matchingTupleCount == 0 && retainInput && retainMissing) {
             FrameUtils.appendConcatToWriter(writer, appender, accessor, tupleIndex,
@@ -310,7 +321,8 @@ public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInput
                     if (appender.getTupleCount() > 0) {
                         appender.write(writer, true);
                     }
-                    stats.getDiskIoCounter().update(ctx.getThreadStats().getPinnedPagesCount());
+                    stats.getPageReads().update(ctx.getThreadStats().getPinnedPagesCount());
+                    stats.coldReadCounter().update(ctx.getThreadStats().getColdReadCount());
                 } catch (Throwable th) { // NOSONAR Must ensure writer.fail is called.
                     // subsequently, the failure will be thrown
                     failure = th;
@@ -345,10 +357,7 @@ public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInput
 
     protected void writeTupleToOutput(ITupleReference tuple) throws IOException {
         try {
-            for (int i = 0; i < tuple.getFieldCount(); i++) {
-                dos.write(tuple.getFieldData(i), tuple.getFieldStart(i), tuple.getFieldLength(i));
-                tb.addFieldEndOffset();
-            }
+            tupleProjector.project(tuple, dos, tb);
         } catch (Exception e) {
             throw e;
         }
@@ -393,6 +402,11 @@ public abstract class IndexSearchOperatorNodePushable extends AbstractUnaryInput
     @Override
     public String getDisplayName() {
         return "Index Search";
+    }
+
+    @Override
+    public void setOperatorStats(IOperatorStats stats) {
+        this.stats = stats;
     }
 
 }

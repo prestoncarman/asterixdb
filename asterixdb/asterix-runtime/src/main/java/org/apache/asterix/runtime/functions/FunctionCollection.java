@@ -37,6 +37,7 @@ import org.apache.asterix.runtime.aggregates.scalar.ScalarAvgAggregateDescriptor
 import org.apache.asterix.runtime.aggregates.scalar.ScalarAvgDistinctAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.scalar.ScalarCountAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.scalar.ScalarCountDistinctAggregateDescriptor;
+import org.apache.asterix.runtime.aggregates.scalar.ScalarFirstElementAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.scalar.ScalarKurtosisAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.scalar.ScalarKurtosisDistinctAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.scalar.ScalarMaxAggregateDescriptor;
@@ -63,6 +64,7 @@ import org.apache.asterix.runtime.aggregates.scalar.ScalarSqlStddevPopAggregateD
 import org.apache.asterix.runtime.aggregates.scalar.ScalarSqlStddevPopDistinctAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.scalar.ScalarSqlSumAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.scalar.ScalarSqlSumDistinctAggregateDescriptor;
+import org.apache.asterix.runtime.aggregates.scalar.ScalarSqlUnionMbrAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.scalar.ScalarSqlVarAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.scalar.ScalarSqlVarDistinctAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.scalar.ScalarSqlVarPopAggregateDescriptor;
@@ -73,6 +75,7 @@ import org.apache.asterix.runtime.aggregates.scalar.ScalarStddevPopAggregateDesc
 import org.apache.asterix.runtime.aggregates.scalar.ScalarStddevPopDistinctAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.scalar.ScalarSumAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.scalar.ScalarSumDistinctAggregateDescriptor;
+import org.apache.asterix.runtime.aggregates.scalar.ScalarUnionMbrAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.scalar.ScalarVarAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.scalar.ScalarVarDistinctAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.scalar.ScalarVarPopAggregateDescriptor;
@@ -159,12 +162,14 @@ import org.apache.asterix.runtime.aggregates.std.GlobalSqlSkewnessAggregateDescr
 import org.apache.asterix.runtime.aggregates.std.GlobalSqlStddevAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.GlobalSqlStddevPopAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.GlobalSqlSumAggregateDescriptor;
+import org.apache.asterix.runtime.aggregates.std.GlobalSqlUnionMbrAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.GlobalSqlVarAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.GlobalSqlVarPopAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.GlobalStddevAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.GlobalStddevPopAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.GlobalSumAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.GlobalUnionIntervalRangeMapAggregateDescriptor;
+import org.apache.asterix.runtime.aggregates.std.GlobalUnionMbrAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.GlobalVarAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.GlobalVarPopAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.IntermediateAvgAggregateDescriptor;
@@ -180,11 +185,13 @@ import org.apache.asterix.runtime.aggregates.std.IntermediateSqlSkewnessAggregat
 import org.apache.asterix.runtime.aggregates.std.IntermediateSqlStddevAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.IntermediateSqlStddevPopAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.IntermediateSqlSumAggregateDescriptor;
+import org.apache.asterix.runtime.aggregates.std.IntermediateSqlUnionMbrAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.IntermediateSqlVarAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.IntermediateSqlVarPopAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.IntermediateStddevAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.IntermediateStddevPopAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.IntermediateSumAggregateDescriptor;
+import org.apache.asterix.runtime.aggregates.std.IntermediateUnionMbrAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.IntermediateVarAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.IntermediateVarPopAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.KurtosisAggregateDescriptor;
@@ -202,12 +209,14 @@ import org.apache.asterix.runtime.aggregates.std.LocalSqlSkewnessAggregateDescri
 import org.apache.asterix.runtime.aggregates.std.LocalSqlStddevAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.LocalSqlStddevPopAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.LocalSqlSumAggregateDescriptor;
+import org.apache.asterix.runtime.aggregates.std.LocalSqlUnionMbrAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.LocalSqlVarAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.LocalSqlVarPopAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.LocalStddevAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.LocalStddevPopAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.LocalSumAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.LocalUnionIntervalRangeAggregateDescriptor;
+import org.apache.asterix.runtime.aggregates.std.LocalUnionMbrAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.LocalVarAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.LocalVarPopAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.MaxAggregateDescriptor;
@@ -223,11 +232,13 @@ import org.apache.asterix.runtime.aggregates.std.SqlSkewnessAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.SqlStddevAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.SqlStddevPopAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.SqlSumAggregateDescriptor;
+import org.apache.asterix.runtime.aggregates.std.SqlUnionMbrAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.SqlVarAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.SqlVarPopAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.StddevAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.StddevPopAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.SumAggregateDescriptor;
+import org.apache.asterix.runtime.aggregates.std.UnionMbrAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.VarAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.VarPopAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.stream.EmptyStreamAggregateDescriptor;
@@ -264,21 +275,35 @@ import org.apache.asterix.runtime.evaluators.comparisons.NotEqualsDescriptor;
 import org.apache.asterix.runtime.evaluators.comparisons.NullIfEqualsDescriptor;
 import org.apache.asterix.runtime.evaluators.comparisons.PosInfIfEqualsDescriptor;
 import org.apache.asterix.runtime.evaluators.constructors.ABinaryBase64StringConstructorDescriptor;
+import org.apache.asterix.runtime.evaluators.constructors.ABinaryBase64StringDefaultNullConstructorDescriptor;
 import org.apache.asterix.runtime.evaluators.constructors.ABinaryHexStringConstructorDescriptor;
 import org.apache.asterix.runtime.evaluators.constructors.ABooleanConstructorDescriptor;
+import org.apache.asterix.runtime.evaluators.constructors.ABooleanDefaultNullConstructorDescriptor;
 import org.apache.asterix.runtime.evaluators.constructors.ACircleConstructorDescriptor;
 import org.apache.asterix.runtime.evaluators.constructors.ADateConstructorDescriptor;
 import org.apache.asterix.runtime.evaluators.constructors.ADateConstructorWithFormatDescriptor;
+import org.apache.asterix.runtime.evaluators.constructors.ADateDefaultNullConstructorDescriptor;
+import org.apache.asterix.runtime.evaluators.constructors.ADateDefaultNullConstructorWithFormatDescriptor;
 import org.apache.asterix.runtime.evaluators.constructors.ADateTimeConstructorDescriptor;
 import org.apache.asterix.runtime.evaluators.constructors.ADateTimeConstructorWithFormatDescriptor;
+import org.apache.asterix.runtime.evaluators.constructors.ADateTimeDefaultNullConstructorDescriptor;
+import org.apache.asterix.runtime.evaluators.constructors.ADateTimeDefaultNullConstructorWithFormatDescriptor;
 import org.apache.asterix.runtime.evaluators.constructors.ADayTimeDurationConstructorDescriptor;
+import org.apache.asterix.runtime.evaluators.constructors.ADayTimeDurationDefaultNullConstructorDescriptor;
 import org.apache.asterix.runtime.evaluators.constructors.ADoubleConstructorDescriptor;
+import org.apache.asterix.runtime.evaluators.constructors.ADoubleDefaultNullConstructorDescriptor;
 import org.apache.asterix.runtime.evaluators.constructors.ADurationConstructorDescriptor;
+import org.apache.asterix.runtime.evaluators.constructors.ADurationDefaultNullConstructorDescriptor;
 import org.apache.asterix.runtime.evaluators.constructors.AFloatConstructorDescriptor;
+import org.apache.asterix.runtime.evaluators.constructors.AFloatDefaultNullConstructorDescriptor;
 import org.apache.asterix.runtime.evaluators.constructors.AInt16ConstructorDescriptor;
+import org.apache.asterix.runtime.evaluators.constructors.AInt16DefaultNullConstructorDescriptor;
 import org.apache.asterix.runtime.evaluators.constructors.AInt32ConstructorDescriptor;
+import org.apache.asterix.runtime.evaluators.constructors.AInt32DefaultNullConstructorDescriptor;
 import org.apache.asterix.runtime.evaluators.constructors.AInt64ConstructorDescriptor;
+import org.apache.asterix.runtime.evaluators.constructors.AInt64DefaultNullConstructorDescriptor;
 import org.apache.asterix.runtime.evaluators.constructors.AInt8ConstructorDescriptor;
+import org.apache.asterix.runtime.evaluators.constructors.AInt8DefaultNullConstructorDescriptor;
 import org.apache.asterix.runtime.evaluators.constructors.AIntervalConstructorDescriptor;
 import org.apache.asterix.runtime.evaluators.constructors.AIntervalStartFromDateConstructorDescriptor;
 import org.apache.asterix.runtime.evaluators.constructors.AIntervalStartFromDateTimeConstructorDescriptor;
@@ -289,10 +314,15 @@ import org.apache.asterix.runtime.evaluators.constructors.APointConstructorDescr
 import org.apache.asterix.runtime.evaluators.constructors.APolygonConstructorDescriptor;
 import org.apache.asterix.runtime.evaluators.constructors.ARectangleConstructorDescriptor;
 import org.apache.asterix.runtime.evaluators.constructors.AStringConstructorDescriptor;
+import org.apache.asterix.runtime.evaluators.constructors.AStringDefaultNullConstructorDescriptor;
 import org.apache.asterix.runtime.evaluators.constructors.ATimeConstructorDescriptor;
 import org.apache.asterix.runtime.evaluators.constructors.ATimeConstructorWithFormatDescriptor;
+import org.apache.asterix.runtime.evaluators.constructors.ATimeDefaultNullConstructorDescriptor;
+import org.apache.asterix.runtime.evaluators.constructors.ATimeDefaultNullConstructorWithFormatDescriptor;
 import org.apache.asterix.runtime.evaluators.constructors.AUUIDFromStringConstructorDescriptor;
+import org.apache.asterix.runtime.evaluators.constructors.AUUIDFromStringDefaultNullConstructorDescriptor;
 import org.apache.asterix.runtime.evaluators.constructors.AYearMonthDurationConstructorDescriptor;
+import org.apache.asterix.runtime.evaluators.constructors.AYearMonthDurationDefaultNullConstructorDescriptor;
 import org.apache.asterix.runtime.evaluators.constructors.ClosedRecordConstructorDescriptor;
 import org.apache.asterix.runtime.evaluators.constructors.OpenRecordConstructorDescriptor;
 import org.apache.asterix.runtime.evaluators.constructors.OrderedListConstructorDescriptor;
@@ -341,6 +371,7 @@ import org.apache.asterix.runtime.evaluators.functions.DecodeDataverseNameDescri
 import org.apache.asterix.runtime.evaluators.functions.DeepEqualityDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.FullTextContainsFunctionDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.FullTextContainsWithoutOptionFunctionDescriptor;
+import org.apache.asterix.runtime.evaluators.functions.GetIntersectionDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.GetItemDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.GetJobParameterByNameDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.GetTypeDescriptor;
@@ -403,6 +434,7 @@ import org.apache.asterix.runtime.evaluators.functions.NumericRadiansDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.NumericRoundDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.NumericRoundHalfToEven2Descriptor;
 import org.apache.asterix.runtime.evaluators.functions.NumericRoundHalfToEvenDescriptor;
+import org.apache.asterix.runtime.evaluators.functions.NumericRoundHalfUp2Descriptor;
 import org.apache.asterix.runtime.evaluators.functions.NumericRoundWithRoundDigitDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.NumericSignDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.NumericSinDescriptor;
@@ -416,6 +448,7 @@ import org.apache.asterix.runtime.evaluators.functions.NumericUnaryMinusDescript
 import org.apache.asterix.runtime.evaluators.functions.OrDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.RandomDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.RandomWithSeedDescriptor;
+import org.apache.asterix.runtime.evaluators.functions.ReferenceTileDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.SleepDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.SpatialAreaDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.SpatialCellDescriptor;
@@ -522,14 +555,21 @@ import org.apache.asterix.runtime.evaluators.functions.temporal.AdjustTimeForTim
 import org.apache.asterix.runtime.evaluators.functions.temporal.CalendarDurationFromDateDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.temporal.CalendarDurationFromDateTimeDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.temporal.CurrentDateDescriptor;
+import org.apache.asterix.runtime.evaluators.functions.temporal.CurrentDateImmediateDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.temporal.CurrentDateTimeDescriptor;
+import org.apache.asterix.runtime.evaluators.functions.temporal.CurrentDateTimeImmediateDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.temporal.CurrentTimeDescriptor;
+import org.apache.asterix.runtime.evaluators.functions.temporal.CurrentTimeImmediateDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.temporal.DateFromDatetimeDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.temporal.DateFromUnixTimeInDaysDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.temporal.DatetimeFromDateAndTimeDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.temporal.DatetimeFromUnixTimeInMsDescriptor;
+import org.apache.asterix.runtime.evaluators.functions.temporal.DatetimeFromUnixTimeInMsWithTzDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.temporal.DatetimeFromUnixTimeInSecsDescriptor;
+import org.apache.asterix.runtime.evaluators.functions.temporal.DatetimeFromUnixTimeInSecsWithTzDescriptor;
+import org.apache.asterix.runtime.evaluators.functions.temporal.DayOfWeek2Descriptor;
 import org.apache.asterix.runtime.evaluators.functions.temporal.DayOfWeekDescriptor;
+import org.apache.asterix.runtime.evaluators.functions.temporal.DayOfYearDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.temporal.DayTimeDurationGreaterThanComparatorDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.temporal.DayTimeDurationLessThanComparatorDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.temporal.DurationEqualDescriptor;
@@ -562,12 +602,17 @@ import org.apache.asterix.runtime.evaluators.functions.temporal.ParseTimeDescrip
 import org.apache.asterix.runtime.evaluators.functions.temporal.PrintDateDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.temporal.PrintDateTimeDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.temporal.PrintTimeDescriptor;
+import org.apache.asterix.runtime.evaluators.functions.temporal.QuarterOfYearDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.temporal.TimeFromDatetimeDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.temporal.TimeFromUnixTimeInMsDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.temporal.UnixTimeFromDateInDaysDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.temporal.UnixTimeFromDatetimeInMsDescriptor;
+import org.apache.asterix.runtime.evaluators.functions.temporal.UnixTimeFromDatetimeInMsWithTzDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.temporal.UnixTimeFromDatetimeInSecsDescriptor;
+import org.apache.asterix.runtime.evaluators.functions.temporal.UnixTimeFromDatetimeInSecsWithTzDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.temporal.UnixTimeFromTimeInMsDescriptor;
+import org.apache.asterix.runtime.evaluators.functions.temporal.WeekOfYear2Descriptor;
+import org.apache.asterix.runtime.evaluators.functions.temporal.WeekOfYearDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.temporal.YearMonthDurationGreaterThanComparatorDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.temporal.YearMonthDurationLessThanComparatorDescriptor;
 import org.apache.asterix.runtime.runningaggregates.std.DenseRankRunningAggregateDescriptor;
@@ -577,9 +622,11 @@ import org.apache.asterix.runtime.runningaggregates.std.RankRunningAggregateDesc
 import org.apache.asterix.runtime.runningaggregates.std.RowNumberRunningAggregateDescriptor;
 import org.apache.asterix.runtime.runningaggregates.std.TidRunningAggregateDescriptor;
 import org.apache.asterix.runtime.runningaggregates.std.WinMarkFirstMissingRunningAggregateDescriptor;
+import org.apache.asterix.runtime.runningaggregates.std.WinMarkFirstNullRunningAggregateDescriptor;
 import org.apache.asterix.runtime.runningaggregates.std.WinPartitionLenRunningAggregateDescriptor;
 import org.apache.asterix.runtime.unnestingfunctions.std.RangeDescriptor;
 import org.apache.asterix.runtime.unnestingfunctions.std.ScanCollectionDescriptor;
+import org.apache.asterix.runtime.unnestingfunctions.std.SpatialTileDescriptor;
 import org.apache.asterix.runtime.unnestingfunctions.std.SubsetCollectionDescriptor;
 
 /**
@@ -631,6 +678,7 @@ public final class FunctionCollection implements IFunctionCollection {
         fc.add(ScanCollectionDescriptor.FACTORY);
         fc.add(RangeDescriptor.FACTORY);
         fc.add(SubsetCollectionDescriptor.FACTORY);
+        fc.add(SpatialTileDescriptor.FACTORY);
 
         // aggregate functions
         fc.add(ListifyAggregateDescriptor.FACTORY);
@@ -686,6 +734,10 @@ public final class FunctionCollection implements IFunctionCollection {
         fc.add(LocalUnionIntervalRangeAggregateDescriptor.FACTORY);
         fc.add(GlobalIntervalRangeAggregateDescriptor.FACTORY);
         fc.add(GlobalUnionIntervalRangeMapAggregateDescriptor.FACTORY);
+        fc.add(UnionMbrAggregateDescriptor.FACTORY);
+        fc.add(LocalUnionMbrAggregateDescriptor.FACTORY);
+        fc.add(IntermediateUnionMbrAggregateDescriptor.FACTORY);
+        fc.add(GlobalUnionMbrAggregateDescriptor.FACTORY);
 
         // serializable aggregates
         fc.add(SerializableCountAggregateDescriptor.FACTORY);
@@ -747,6 +799,8 @@ public final class FunctionCollection implements IFunctionCollection {
         fc.add(ScalarKurtosisDistinctAggregateDescriptor.FACTORY);
         fc.add(ScalarSkewnessAggregateDescriptor.FACTORY);
         fc.add(ScalarSkewnessDistinctAggregateDescriptor.FACTORY);
+        fc.add(ScalarUnionMbrAggregateDescriptor.FACTORY);
+        fc.add(ScalarFirstElementAggregateDescriptor.FACTORY);
 
         // SQL aggregates
         fc.add(SqlCountAggregateDescriptor.FACTORY);
@@ -790,6 +844,10 @@ public final class FunctionCollection implements IFunctionCollection {
         fc.add(LocalSqlSkewnessAggregateDescriptor.FACTORY);
         fc.add(IntermediateSqlSkewnessAggregateDescriptor.FACTORY);
         fc.add(GlobalSqlSkewnessAggregateDescriptor.FACTORY);
+        fc.add(SqlUnionMbrAggregateDescriptor.FACTORY);
+        fc.add(LocalSqlUnionMbrAggregateDescriptor.FACTORY);
+        fc.add(IntermediateSqlUnionMbrAggregateDescriptor.FACTORY);
+        fc.add(GlobalSqlUnionMbrAggregateDescriptor.FACTORY);
 
         // SQL serializable aggregates
         fc.add(SerializableSqlCountAggregateDescriptor.FACTORY);
@@ -849,6 +907,7 @@ public final class FunctionCollection implements IFunctionCollection {
         fc.add(ScalarSqlKurtosisDistinctAggregateDescriptor.FACTORY);
         fc.add(ScalarSqlSkewnessAggregateDescriptor.FACTORY);
         fc.add(ScalarSqlSkewnessDistinctAggregateDescriptor.FACTORY);
+        fc.add(ScalarSqlUnionMbrAggregateDescriptor.FACTORY);
 
         // window functions
         fc.add(DenseRankRunningAggregateDescriptor.FACTORY);
@@ -857,6 +916,7 @@ public final class FunctionCollection implements IFunctionCollection {
         fc.add(RowNumberRunningAggregateDescriptor.FACTORY);
         fc.add(PercentRankRunningAggregateDescriptor.FACTORY);
         fc.add(WinMarkFirstMissingRunningAggregateDescriptor.FACTORY);
+        fc.add(WinMarkFirstNullRunningAggregateDescriptor.FACTORY);
         fc.add(WinPartitionLenRunningAggregateDescriptor.FACTORY);
 
         // boolean functions
@@ -902,8 +962,11 @@ public final class FunctionCollection implements IFunctionCollection {
         fc.add(CreateQueryUIDDescriptor.FACTORY);
         fc.add(RandomDescriptor.FACTORY);
         fc.add(CurrentDateDescriptor.FACTORY);
+        fc.add(CurrentDateImmediateDescriptor.FACTORY);
         fc.add(CurrentTimeDescriptor.FACTORY);
+        fc.add(CurrentTimeImmediateDescriptor.FACTORY);
         fc.add(CurrentDateTimeDescriptor.FACTORY);
+        fc.add(CurrentDateTimeImmediateDescriptor.FACTORY);
 
         fc.add(IsNumericAddCompatibleDescriptor.FACTORY);
 
@@ -938,6 +1001,7 @@ public final class FunctionCollection implements IFunctionCollection {
         fc.add(NumericRoundWithRoundDigitDescriptor.FACTORY);
         fc.add(NumericRoundHalfToEvenDescriptor.FACTORY);
         fc.add(NumericRoundHalfToEven2Descriptor.FACTORY);
+        fc.add(NumericRoundHalfUp2Descriptor.FACTORY);
         fc.add(NumericACosDescriptor.FACTORY);
         fc.add(NumericASinDescriptor.FACTORY);
         fc.add(NumericATanDescriptor.FACTORY);
@@ -1045,15 +1109,24 @@ public final class FunctionCollection implements IFunctionCollection {
 
         // Constructors
         fc.add(ABooleanConstructorDescriptor.FACTORY);
+        fc.add(ABooleanDefaultNullConstructorDescriptor.FACTORY);
         fc.add(ABinaryHexStringConstructorDescriptor.FACTORY);
         fc.add(ABinaryBase64StringConstructorDescriptor.FACTORY);
+        fc.add(ABinaryBase64StringDefaultNullConstructorDescriptor.FACTORY);
         fc.add(AStringConstructorDescriptor.FACTORY);
+        fc.add(AStringDefaultNullConstructorDescriptor.FACTORY);
         fc.add(AInt8ConstructorDescriptor.FACTORY);
+        fc.add(AInt8DefaultNullConstructorDescriptor.FACTORY);
         fc.add(AInt16ConstructorDescriptor.FACTORY);
+        fc.add(AInt16DefaultNullConstructorDescriptor.FACTORY);
         fc.add(AInt32ConstructorDescriptor.FACTORY);
+        fc.add(AInt32DefaultNullConstructorDescriptor.FACTORY);
         fc.add(AInt64ConstructorDescriptor.FACTORY);
+        fc.add(AInt64DefaultNullConstructorDescriptor.FACTORY);
         fc.add(AFloatConstructorDescriptor.FACTORY);
+        fc.add(AFloatDefaultNullConstructorDescriptor.FACTORY);
         fc.add(ADoubleConstructorDescriptor.FACTORY);
+        fc.add(ADoubleDefaultNullConstructorDescriptor.FACTORY);
         fc.add(APointConstructorDescriptor.FACTORY);
         fc.add(APoint3DConstructorDescriptor.FACTORY);
         fc.add(ALineConstructorDescriptor.FACTORY);
@@ -1061,15 +1134,25 @@ public final class FunctionCollection implements IFunctionCollection {
         fc.add(ACircleConstructorDescriptor.FACTORY);
         fc.add(ARectangleConstructorDescriptor.FACTORY);
         fc.add(ATimeConstructorDescriptor.FACTORY);
+        fc.add(ATimeDefaultNullConstructorDescriptor.FACTORY);
         fc.add(ATimeConstructorWithFormatDescriptor.FACTORY);
+        fc.add(ATimeDefaultNullConstructorWithFormatDescriptor.FACTORY);
         fc.add(ADateConstructorDescriptor.FACTORY);
+        fc.add(ADateDefaultNullConstructorDescriptor.FACTORY);
         fc.add(ADateConstructorWithFormatDescriptor.FACTORY);
+        fc.add(ADateDefaultNullConstructorWithFormatDescriptor.FACTORY);
         fc.add(ADateTimeConstructorDescriptor.FACTORY);
+        fc.add(ADateTimeDefaultNullConstructorDescriptor.FACTORY);
         fc.add(ADateTimeConstructorWithFormatDescriptor.FACTORY);
+        fc.add(ADateTimeDefaultNullConstructorWithFormatDescriptor.FACTORY);
         fc.add(ADurationConstructorDescriptor.FACTORY);
+        fc.add(ADurationDefaultNullConstructorDescriptor.FACTORY);
         fc.add(AYearMonthDurationConstructorDescriptor.FACTORY);
+        fc.add(AYearMonthDurationDefaultNullConstructorDescriptor.FACTORY);
         fc.add(ADayTimeDurationConstructorDescriptor.FACTORY);
+        fc.add(ADayTimeDurationDefaultNullConstructorDescriptor.FACTORY);
         fc.add(AUUIDFromStringConstructorDescriptor.FACTORY);
+        fc.add(AUUIDFromStringDefaultNullConstructorDescriptor.FACTORY);
         fc.add(AIntervalConstructorDescriptor.FACTORY);
         fc.add(AIntervalStartFromDateConstructorDescriptor.FACTORY);
         fc.add(AIntervalStartFromDateTimeConstructorDescriptor.FACTORY);
@@ -1090,6 +1173,8 @@ public final class FunctionCollection implements IFunctionCollection {
         fc.add(CircleRadiusAccessor.FACTORY);
         fc.add(CircleCenterAccessor.FACTORY);
         fc.add(LineRectanglePolygonAccessor.FACTORY);
+        fc.add(ReferenceTileDescriptor.FACTORY);
+        fc.add(GetIntersectionDescriptor.FACTORY);
 
         // full-text function
         fc.add(FullTextContainsFunctionDescriptor.FACTORY);
@@ -1135,13 +1220,17 @@ public final class FunctionCollection implements IFunctionCollection {
         fc.add(UnixTimeFromDateInDaysDescriptor.FACTORY);
         fc.add(UnixTimeFromTimeInMsDescriptor.FACTORY);
         fc.add(UnixTimeFromDatetimeInMsDescriptor.FACTORY);
+        fc.add(UnixTimeFromDatetimeInMsWithTzDescriptor.FACTORY);
         fc.add(UnixTimeFromDatetimeInSecsDescriptor.FACTORY);
+        fc.add(UnixTimeFromDatetimeInSecsWithTzDescriptor.FACTORY);
         fc.add(DateFromUnixTimeInDaysDescriptor.FACTORY);
         fc.add(DateFromDatetimeDescriptor.FACTORY);
         fc.add(TimeFromUnixTimeInMsDescriptor.FACTORY);
         fc.add(TimeFromDatetimeDescriptor.FACTORY);
         fc.add(DatetimeFromUnixTimeInMsDescriptor.FACTORY);
+        fc.add(DatetimeFromUnixTimeInMsWithTzDescriptor.FACTORY);
         fc.add(DatetimeFromUnixTimeInSecsDescriptor.FACTORY);
+        fc.add(DatetimeFromUnixTimeInSecsWithTzDescriptor.FACTORY);
         fc.add(DatetimeFromDateAndTimeDescriptor.FACTORY);
         fc.add(CalendarDurationFromDateTimeDescriptor.FACTORY);
         fc.add(CalendarDurationFromDateDescriptor.FACTORY);
@@ -1174,6 +1263,11 @@ public final class FunctionCollection implements IFunctionCollection {
         fc.add(IntervalBinDescriptor.FACTORY);
         fc.add(OverlapBinsDescriptor.FACTORY);
         fc.add(DayOfWeekDescriptor.FACTORY);
+        fc.add(DayOfWeek2Descriptor.FACTORY);
+        fc.add(DayOfYearDescriptor.FACTORY);
+        fc.add(QuarterOfYearDescriptor.FACTORY);
+        fc.add(WeekOfYearDescriptor.FACTORY);
+        fc.add(WeekOfYear2Descriptor.FACTORY);
         fc.add(ParseDateDescriptor.FACTORY);
         fc.add(ParseTimeDescriptor.FACTORY);
         fc.add(ParseDateTimeDescriptor.FACTORY);

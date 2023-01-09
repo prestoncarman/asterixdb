@@ -33,6 +33,7 @@ public enum SqlppHint {
     DATETIME_ADD_RAND_HOURS_HINT("datetime-add-rand-hours"),
     DATETIME_BETWEEN_YEARS_HINT("datetime-between-years"),
     HASH_GROUP_BY_HINT("hash"),
+    HASH_JOIN_HINT("hashjoin"),
     INDEXED_NESTED_LOOP_JOIN_HINT("indexnl"),
     INMEMORY_HINT("inmem"),
     INSERT_RAND_INT_HINT("insert-rand-int"),
@@ -41,10 +42,13 @@ public enum SqlppHint {
     LIST_VAL_FILE_HINT("list-val-file"),
     RANGE_HINT("range"),
     SKIP_SECONDARY_INDEX_SEARCH_HINT("skip-index"),
+    SPATIAL_JOIN_HINT("spatial-partitioning"),
     USE_SECONDARY_INDEX_SEARCH_HINT("use-index"),
     VAL_FILE_HINT("val-files"),
     VAL_FILE_SAME_INDEX_HINT("val-file-same-idx"),
     GEN_FIELDS_HINT("gen-fields"),
+    SINGLE_DATASET_PREDICATE_SELECTIVITY_HINT("selectivity"),
+    JOIN_PREDICATE_PRODUCTIVITY_HINT("productivity"),
 
     // data generator hints
     DGEN_HINT("dgen");

@@ -295,7 +295,7 @@ public class NCUdfApiServlet extends AbstractNCUdfServlet {
         responseWriter.flush();
     }
 
-    protected boolean isRequestPermittedForWrite(IServletRequest request, IServletResponse response) {
+    protected boolean isRequestPermitted(IServletRequest request, IServletResponse response) throws IOException {
         if (!isRequestOnLoopback(request)) {
             rejectForbidden(response);
             return false;
@@ -313,21 +313,22 @@ public class NCUdfApiServlet extends AbstractNCUdfServlet {
         }
     }
 
-    protected static void rejectForbidden(IServletResponse response) {
-        response.setStatus(HttpResponseStatus.FORBIDDEN);
-        response.writer().write("{ \"error\": \"Forbidden\" }");
+    protected void rejectForbidden(IServletResponse response) throws IOException {
+        // TODO: why this JSON format, do we use this anywhere else?
+        sendError(response, HttpUtil.ContentType.APPLICATION_JSON, HttpResponseStatus.FORBIDDEN,
+                "{ \"error\": \"Forbidden\" }");
     }
 
     @Override
-    protected void post(IServletRequest request, IServletResponse response) {
-        if (isRequestPermittedForWrite(request, response)) {
+    protected void post(IServletRequest request, IServletResponse response) throws IOException {
+        if (isRequestPermitted(request, response)) {
             handleModification(request, response, LibraryOperation.UPSERT);
         }
     }
 
     @Override
-    protected void delete(IServletRequest request, IServletResponse response) {
-        if (isRequestPermittedForWrite(request, response)) {
+    protected void delete(IServletRequest request, IServletResponse response) throws IOException {
+        if (isRequestPermitted(request, response)) {
             handleModification(request, response, LibraryOperation.DELETE);
         }
     }

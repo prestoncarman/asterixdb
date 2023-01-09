@@ -48,6 +48,7 @@ import org.apache.asterix.runtime.exceptions.UnsupportedTypeException;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.util.ExceptionUtils;
 import org.apache.hyracks.data.std.api.IMutableValueStorage;
+import org.apache.hyracks.util.LogRedactionUtil;
 import org.apache.hyracks.util.ParseUtil;
 
 import com.fasterxml.jackson.core.JsonFactory;
@@ -73,10 +74,8 @@ public abstract class AbstractJsonDataParser extends AbstractNestedDataParser<AD
     /**
      * Initialize JSONDataParser with GeometryCoParser
      *
-     * @param recordType
-     *            defined type.
-     * @param jsonFactory
-     *            Jackson JSON parser factory.
+     * @param recordType  defined type.
+     * @param jsonFactory Jackson JSON parser factory.
      */
     public AbstractJsonDataParser(ARecordType recordType, JsonFactory jsonFactory) {
         // recordType currently cannot be null, however this is to guarantee for any future changes.
@@ -101,7 +100,7 @@ public abstract class AbstractJsonDataParser extends AbstractNestedDataParser<AD
             parseValue(BuiltinType.ANY, out);
             return true;
         } catch (IOException e) {
-            throw new RuntimeDataException(ErrorCode.RECORD_READER_MALFORMED_INPUT_STREAM, e);
+            throw createException(e);
         }
     }
 
@@ -200,7 +199,7 @@ public abstract class AbstractJsonDataParser extends AbstractNestedDataParser<AD
 
             if (!recordType.isOpen() && fieldIndex < 0) {
                 throw new RuntimeDataException(ErrorCode.PARSER_ADM_DATA_PARSER_EXTRA_FIELD_IN_CLOSED_RECORD,
-                        fieldName);
+                        LogRedactionUtil.userData(fieldName));
             }
             valueBuffer.reset();
             nextToken();
@@ -215,7 +214,8 @@ public abstract class AbstractJsonDataParser extends AbstractNestedDataParser<AD
 
                 //fail fast if the current field is not nullable
                 if (currentToken() == ADMToken.NULL && !isNullableType(fieldType)) {
-                    throw new RuntimeDataException(ErrorCode.PARSER_EXT_DATA_PARSER_CLOSED_FIELD_NULL, fieldName);
+                    throw new RuntimeDataException(ErrorCode.PARSER_EXT_DATA_PARSER_CLOSED_FIELD_NULL,
+                            LogRedactionUtil.userData(fieldName));
                 }
 
                 nullBitMap.set(fieldIndex);
@@ -238,8 +238,7 @@ public abstract class AbstractJsonDataParser extends AbstractNestedDataParser<AD
     /**
      * Geometry in GeoJSON is an object
      *
-     * @param typeTag
-     *            geometry typeTag
+     * @param typeTag geometry typeTag
      * @param out
      * @throws IOException
      */
@@ -329,7 +328,7 @@ public abstract class AbstractJsonDataParser extends AbstractNestedDataParser<AD
                 break;
             case INT:
             case DOUBLE:
-                serailizeNumeric(actualType.getTypeTag(), out);
+                serializeNumeric(actualType.getTypeTag(), out);
                 break;
             case STRING:
                 serializeString(actualType.getTypeTag(), out);
@@ -352,7 +351,7 @@ public abstract class AbstractJsonDataParser extends AbstractNestedDataParser<AD
      * @param out
      * @throws IOException
      */
-    private void serailizeNumeric(ATypeTag numericType, DataOutput out) throws IOException {
+    protected void serializeNumeric(ATypeTag numericType, DataOutput out) throws IOException {
         final ATypeTag typeToUse = numericType == ATypeTag.ANY ? currentToken().getTypeTag() : numericType;
 
         switch (typeToUse) {
@@ -393,7 +392,7 @@ public abstract class AbstractJsonDataParser extends AbstractNestedDataParser<AD
      * @param out
      * @throws IOException
      */
-    private void serializeString(ATypeTag stringVariantType, DataOutput out) throws IOException {
+    protected void serializeString(ATypeTag stringVariantType, DataOutput out) throws IOException {
         char[] buffer = jsonParser.getTextCharacters();
         int begin = jsonParser.getTextOffset();
         int len = jsonParser.getTextLength();
@@ -411,6 +410,18 @@ public abstract class AbstractJsonDataParser extends AbstractNestedDataParser<AD
                 break;
             case TIME:
                 parseTime(buffer, begin, len, out);
+                break;
+            case YEARMONTHDURATION:
+                parseYearMonthDuration(buffer, begin, len, out);
+                break;
+            case DAYTIMEDURATION:
+                parseDateTimeDuration(buffer, begin, len, out);
+                break;
+            case DURATION:
+                parseDuration(buffer, begin, len, out);
+                break;
+            case UUID:
+                parseUUID(buffer, begin, len, out);
                 break;
             default:
                 throw new RuntimeDataException(ErrorCode.TYPE_UNSUPPORTED, jsonParser.currentToken().toString());

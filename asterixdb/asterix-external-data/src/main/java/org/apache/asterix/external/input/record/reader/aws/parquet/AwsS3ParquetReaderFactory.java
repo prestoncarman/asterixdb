@@ -18,22 +18,32 @@
  */
 package org.apache.asterix.external.input.record.reader.aws.parquet;
 
+import static org.apache.hyracks.api.util.ExceptionUtils.getMessageOrToString;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 import org.apache.asterix.common.exceptions.CompilationException;
+import org.apache.asterix.common.exceptions.ErrorCode;
+import org.apache.asterix.common.exceptions.RuntimeDataException;
 import org.apache.asterix.external.input.HDFSDataSourceFactory;
 import org.apache.asterix.external.input.record.reader.abstracts.AbstractExternalInputStreamFactory.IncludeExcludeMatcher;
 import org.apache.asterix.external.util.ExternalDataConstants;
 import org.apache.asterix.external.util.ExternalDataUtils;
+import org.apache.asterix.external.util.aws.s3.S3Constants;
+import org.apache.asterix.external.util.aws.s3.S3Utils;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.api.application.IServiceContext;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.exceptions.IWarningCollector;
+import org.apache.hyracks.api.util.ExceptionUtils;
 
+import com.amazonaws.SdkBaseException;
+
+import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.s3.model.S3Object;
 
 public class AwsS3ParquetReaderFactory extends HDFSDataSourceFactory {
@@ -50,10 +60,20 @@ public class AwsS3ParquetReaderFactory extends HDFSDataSourceFactory {
         putS3ConfToHadoopConf(configuration, path);
 
         //Configure Hadoop S3 input splits
-        JobConf conf = createHdfsConf(serviceCtx, configuration);
-        int numberOfPartitions = getPartitionConstraint().getLocations().length;
-        ExternalDataUtils.AwsS3.configureAwsS3HdfsJobConf(conf, configuration, numberOfPartitions);
-        configureHdfsConf(conf, configuration);
+        try {
+            JobConf conf = createHdfsConf(serviceCtx, configuration);
+            int numberOfPartitions = getPartitionConstraint().getLocations().length;
+            S3Utils.configureAwsS3HdfsJobConf(conf, configuration, numberOfPartitions);
+            configureHdfsConf(conf, configuration);
+        } catch (SdkException | SdkBaseException ex) {
+            throw new RuntimeDataException(ErrorCode.EXTERNAL_SOURCE_ERROR, getMessageOrToString(ex));
+        } catch (AlgebricksException ex) {
+            Throwable root = ExceptionUtils.getRootCause(ex);
+            if (root instanceof SdkException || root instanceof SdkBaseException) {
+                throw new RuntimeDataException(ErrorCode.EXTERNAL_SOURCE_ERROR, getMessageOrToString(root));
+            }
+            throw ex;
+        }
     }
 
     @Override
@@ -89,8 +109,7 @@ public class AwsS3ParquetReaderFactory extends HDFSDataSourceFactory {
             throws CompilationException {
         String container = configuration.get(ExternalDataConstants.CONTAINER_NAME_FIELD_NAME);
         IncludeExcludeMatcher includeExcludeMatcher = ExternalDataUtils.getIncludeExcludeMatchers(configuration);
-        List<S3Object> filesOnly =
-                ExternalDataUtils.AwsS3.listS3Objects(configuration, includeExcludeMatcher, warningCollector);
+        List<S3Object> filesOnly = S3Utils.listS3Objects(configuration, includeExcludeMatcher, warningCollector);
         StringBuilder builder = new StringBuilder();
 
         if (!filesOnly.isEmpty()) {
@@ -105,7 +124,7 @@ public class AwsS3ParquetReaderFactory extends HDFSDataSourceFactory {
     }
 
     private static void appendFileURI(StringBuilder builder, String container, S3Object file) {
-        builder.append(ExternalDataConstants.AwsS3.HADOOP_S3_PROTOCOL);
+        builder.append(S3Constants.HADOOP_S3_PROTOCOL);
         builder.append("://");
         builder.append(container);
         builder.append('/');

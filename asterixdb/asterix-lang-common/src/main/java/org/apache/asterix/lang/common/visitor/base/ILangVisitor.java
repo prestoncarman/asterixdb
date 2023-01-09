@@ -19,6 +19,7 @@
 package org.apache.asterix.lang.common.visitor.base;
 
 import org.apache.asterix.common.exceptions.CompilationException;
+import org.apache.asterix.lang.common.base.IVisitorExtension;
 import org.apache.asterix.lang.common.clause.GroupbyClause;
 import org.apache.asterix.lang.common.clause.LetClause;
 import org.apache.asterix.lang.common.clause.LimitClause;
@@ -42,6 +43,8 @@ import org.apache.asterix.lang.common.expression.UnaryExpr;
 import org.apache.asterix.lang.common.expression.UnorderedListTypeDefinition;
 import org.apache.asterix.lang.common.expression.VariableExpr;
 import org.apache.asterix.lang.common.statement.AdapterDropStatement;
+import org.apache.asterix.lang.common.statement.AnalyzeDropStatement;
+import org.apache.asterix.lang.common.statement.AnalyzeStatement;
 import org.apache.asterix.lang.common.statement.CompactStatement;
 import org.apache.asterix.lang.common.statement.ConnectFeedStatement;
 import org.apache.asterix.lang.common.statement.CreateAdapterStatement;
@@ -207,6 +210,10 @@ public interface ILangVisitor<R, T> {
 
     R visit(SynonymDropStatement del, T arg) throws CompilationException;
 
+    R visit(AnalyzeStatement as, T arg) throws CompilationException;
+
+    R visit(AnalyzeDropStatement as, T step) throws CompilationException;
+
     R visit(CompactStatement del, T arg) throws CompilationException;
 
     R visit(ListSliceExpression expression, T arg) throws CompilationException;
@@ -216,4 +223,6 @@ public interface ILangVisitor<R, T> {
     R visit(ViewDropStatement vds, T arg) throws CompilationException;
 
     R visit(ViewDecl vd, T arg) throws CompilationException;
+
+    R visit(IVisitorExtension ve, T arg) throws CompilationException;
 }

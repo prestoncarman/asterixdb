@@ -24,6 +24,8 @@ import static org.apache.asterix.common.replication.IPartitionReplica.PartitionR
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 
 import org.apache.asterix.common.api.INcApplicationContext;
 import org.apache.asterix.common.exceptions.ReplicationException;
@@ -52,9 +54,12 @@ public class PartitionReplica implements IPartitionReplica {
     private static final int INITIAL_BUFFER_SIZE = StorageUtil.getIntSizeInBytes(4, StorageUtil.StorageUnit.KILOBYTE);
     private final INcApplicationContext appCtx;
     private final ReplicaIdentifier id;
+    private double syncProgress = -1;
+    private long lastProgressTime = -1;
     private ByteBuffer reusbaleBuf;
     private PartitionReplicaStatus status = DISCONNECTED;
     private ISocketChannel sc;
+    private Future<?> syncFuture;
 
     public PartitionReplica(ReplicaIdentifier id, INcApplicationContext appCtx) {
         this.id = id;
@@ -77,17 +82,19 @@ public class PartitionReplica implements IPartitionReplica {
     }
 
     public synchronized void sync() {
-        sync(true);
+        sync(true, true);
     }
 
-    public synchronized void sync(boolean register) {
+    public synchronized void sync(boolean register, boolean deltaRecovery) {
         if (status == IN_SYNC || status == CATCHING_UP) {
             return;
         }
         setStatus(CATCHING_UP);
-        appCtx.getThreadExecutor().execute(() -> {
+        ExecutorService threadExecutor = (ExecutorService) appCtx.getThreadExecutor();
+        syncFuture = threadExecutor.submit(() -> {
             try {
-                new ReplicaSynchronizer(appCtx, this).sync(register);
+                Thread.currentThread().setName("Replica " + id.toString() + " Synchronizer");
+                new ReplicaSynchronizer(appCtx, this).sync(register, deltaRecovery);
                 setStatus(IN_SYNC);
             } catch (Exception e) {
                 LOGGER.error(() -> "Failed to sync replica " + this, e);
@@ -96,6 +103,13 @@ public class PartitionReplica implements IPartitionReplica {
                 close();
             }
         });
+    }
+
+    public synchronized void abort() {
+        if (syncFuture != null) {
+            syncFuture.cancel(true);
+        }
+        syncFuture = null;
     }
 
     public synchronized ISocketChannel getChannel() {
@@ -133,10 +147,21 @@ public class PartitionReplica implements IPartitionReplica {
         return reusbaleBuf;
     }
 
+    public synchronized void setSyncProgress(double syncProgress) {
+        this.syncProgress = syncProgress;
+        lastProgressTime = System.nanoTime();
+    }
+
+    @Override
+    public synchronized double getSyncProgress() {
+        return syncProgress;
+    }
+
     private JsonNode asJson() {
         ObjectNode json = OBJECT_MAPPER.createObjectNode();
         json.put("id", id.toString());
         json.put("status", status.name());
+        json.put("syncProgress", syncProgress);
         return json;
     }
 
@@ -150,6 +175,19 @@ public class PartitionReplica implements IPartitionReplica {
         }
         PartitionReplica that = (PartitionReplica) o;
         return id.equals(that.id);
+    }
+
+    @Override
+    public synchronized long getLastProgressTime() {
+        switch (status) {
+            case IN_SYNC:
+                return System.nanoTime();
+            case CATCHING_UP:
+                return lastProgressTime;
+            case DISCONNECTED:
+                return -1;
+        }
+        return -1;
     }
 
     @Override
@@ -172,6 +210,17 @@ public class PartitionReplica implements IPartitionReplica {
         }
         LOGGER.info(() -> "Replica " + this + " status changing: " + this.status + " -> " + status);
         this.status = status;
+        switch (status) {
+            case IN_SYNC:
+                syncProgress = 1;
+                break;
+            case CATCHING_UP:
+                lastProgressTime = System.nanoTime();
+                break;
+            case DISCONNECTED:
+                syncProgress = -1;
+                break;
+        }
     }
 
     private void sendGoodBye() {

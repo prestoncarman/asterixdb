@@ -43,7 +43,9 @@ public interface Clause extends ILangExpression {
         SELECT_ELEMENT,
         SELECT_REGULAR,
         SELECT_SET_OPERATION,
-        UNNEST_CLAUSE
+        UNNEST_CLAUSE,
+
+        EXTENSION
     }
 
 }

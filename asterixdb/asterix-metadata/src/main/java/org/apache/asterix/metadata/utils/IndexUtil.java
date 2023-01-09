@@ -33,12 +33,19 @@ import org.apache.asterix.metadata.declared.MetadataProvider;
 import org.apache.asterix.metadata.entities.Dataset;
 import org.apache.asterix.metadata.entities.Index;
 import org.apache.asterix.metadata.entities.InternalDatasetDetails;
+import org.apache.asterix.om.base.AString;
+import org.apache.asterix.om.base.IAObject;
+import org.apache.asterix.om.types.IAType;
 import org.apache.asterix.runtime.job.listener.JobEventListenerFactory;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
+import org.apache.hyracks.algebricks.common.utils.Pair;
+import org.apache.hyracks.algebricks.common.utils.Triple;
+import org.apache.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import org.apache.hyracks.api.dataflow.value.ITypeTraits;
 import org.apache.hyracks.api.exceptions.SourceLocation;
 import org.apache.hyracks.api.job.IJobletEventListenerFactory;
 import org.apache.hyracks.api.job.JobSpecification;
+import org.apache.hyracks.util.OptionalBoolean;
 
 public class IndexUtil {
 
@@ -72,6 +79,8 @@ public class IndexUtil {
         } else if (index.getIndexType() == DatasetConfig.IndexType.ARRAY) {
             numSecondaryKeys = ((Index.ArrayIndexDetails) index.getIndexDetails()).getElementList().stream()
                     .map(e -> e.getProjectList().size()).reduce(0, Integer::sum);
+        } else if (index.getIndexType() == DatasetConfig.IndexType.SAMPLE) {
+            return null;
         } else {
             throw new CompilationException(ErrorCode.COMPILATION_UNKNOWN_INDEX_TYPE, index.getIndexType().toString());
         }
@@ -104,6 +113,8 @@ public class IndexUtil {
             case SINGLE_PARTITION_NGRAM_INVIX:
             case SINGLE_PARTITION_WORD_INVIX:
                 break;
+            case SAMPLE:
+                break;
             default:
                 throw new CompilationException(ErrorCode.COMPILATION_UNKNOWN_INDEX_TYPE,
                         index.getIndexType().toString());
@@ -113,21 +124,21 @@ public class IndexUtil {
 
     public static JobSpecification buildDropIndexJobSpec(Index index, MetadataProvider metadataProvider,
             Dataset dataset, SourceLocation sourceLoc) throws AlgebricksException {
-        SecondaryIndexOperationsHelper secondaryIndexHelper =
+        ISecondaryIndexOperationsHelper secondaryIndexHelper =
                 SecondaryIndexOperationsHelper.createIndexOperationsHelper(dataset, index, metadataProvider, sourceLoc);
         return secondaryIndexHelper.buildDropJobSpec(EnumSet.noneOf(DropOption.class));
     }
 
     public static JobSpecification buildDropIndexJobSpec(Index index, MetadataProvider metadataProvider,
             Dataset dataset, Set<DropOption> options, SourceLocation sourceLoc) throws AlgebricksException {
-        SecondaryIndexOperationsHelper secondaryIndexHelper =
+        ISecondaryIndexOperationsHelper secondaryIndexHelper =
                 SecondaryIndexOperationsHelper.createIndexOperationsHelper(dataset, index, metadataProvider, sourceLoc);
         return secondaryIndexHelper.buildDropJobSpec(options);
     }
 
     public static JobSpecification buildSecondaryIndexCreationJobSpec(Dataset dataset, Index index,
             MetadataProvider metadataProvider, SourceLocation sourceLoc) throws AlgebricksException {
-        SecondaryIndexOperationsHelper secondaryIndexHelper =
+        ISecondaryIndexOperationsHelper secondaryIndexHelper =
                 SecondaryIndexOperationsHelper.createIndexOperationsHelper(dataset, index, metadataProvider, sourceLoc);
         return secondaryIndexHelper.buildCreationJobSpec();
     }
@@ -140,8 +151,8 @@ public class IndexUtil {
     public static JobSpecification buildSecondaryIndexLoadingJobSpec(Dataset dataset, Index index,
             MetadataProvider metadataProvider, List<ExternalFile> files, SourceLocation sourceLoc)
             throws AlgebricksException {
-        SecondaryIndexOperationsHelper secondaryIndexHelper;
-        if (dataset.isCorrelated()) {
+        ISecondaryIndexOperationsHelper secondaryIndexHelper;
+        if (dataset.isCorrelated() && supportsCorrelated(index.getIndexType())) { //TODO:REVISIT
             secondaryIndexHelper = SecondaryCorrelatedTreeIndexOperationsHelper.createIndexOperationsHelper(dataset,
                     index, metadataProvider, sourceLoc);
         } else {
@@ -149,14 +160,18 @@ public class IndexUtil {
                     metadataProvider, sourceLoc);
         }
         if (files != null) {
-            secondaryIndexHelper.setExternalFiles(files);
+            ((SecondaryIndexOperationsHelper) secondaryIndexHelper).setExternalFiles(files);
         }
         return secondaryIndexHelper.buildLoadingJobSpec();
     }
 
+    private static boolean supportsCorrelated(DatasetConfig.IndexType indexType) {
+        return indexType != DatasetConfig.IndexType.SAMPLE;
+    }
+
     public static JobSpecification buildSecondaryIndexCompactJobSpec(Dataset dataset, Index index,
             MetadataProvider metadataProvider, SourceLocation sourceLoc) throws AlgebricksException {
-        SecondaryIndexOperationsHelper secondaryIndexHelper =
+        ISecondaryIndexOperationsHelper secondaryIndexHelper =
                 SecondaryIndexOperationsHelper.createIndexOperationsHelper(dataset, index, metadataProvider, sourceLoc);
         return secondaryIndexHelper.buildCompactJobSpec();
     }
@@ -179,4 +194,63 @@ public class IndexUtil {
         spec.setJobletEventListenerFactory(jobEventListenerFactory);
     }
 
+    public static boolean castDefaultNull(Index index) {
+        return Index.IndexCategory.of(index.getIndexType()) == Index.IndexCategory.VALUE
+                && ((Index.ValueIndexDetails) index.getIndexDetails()).getCastDefaultNull().getOrElse(false);
+    }
+
+    public static Pair<FunctionIdentifier, IAObject> getTypeConstructorDefaultNull(Index index, IAType type,
+            SourceLocation srcLoc) throws CompilationException {
+        Triple<String, String, String> temporalFormats = getTemporalFormats(index);
+        String format = temporalFormats != null ? TypeUtil.getTemporalFormat(type, temporalFormats) : null;
+        boolean withFormat = format != null;
+        FunctionIdentifier typeConstructorFun = TypeUtil.getTypeConstructorDefaultNull(type, withFormat);
+        if (typeConstructorFun == null) {
+            throw new CompilationException(ErrorCode.COMPILATION_TYPE_UNSUPPORTED, srcLoc, "index", type.getTypeName());
+        }
+        return new Pair<>(typeConstructorFun, withFormat ? new AString(format) : null);
+    }
+
+    private static Triple<String, String, String> getTemporalFormats(Index index) {
+        if (Index.IndexCategory.of(index.getIndexType()) != Index.IndexCategory.VALUE) {
+            return null;
+        }
+        Index.ValueIndexDetails indexDetails = (Index.ValueIndexDetails) index.getIndexDetails();
+        String datetimeFormat = indexDetails.getCastDatetimeFormat();
+        String dateFormat = indexDetails.getCastDateFormat();
+        String timeFormat = indexDetails.getCastTimeFormat();
+        if (datetimeFormat != null || dateFormat != null || timeFormat != null) {
+            return new Triple<>(datetimeFormat, dateFormat, timeFormat);
+        } else {
+            return null;
+        }
+    }
+
+    public static boolean includesUnknowns(Index index) {
+        return !index.isPrimaryKeyIndex() && secondaryIndexIncludesUnknowns(index);
+    }
+
+    private static boolean secondaryIndexIncludesUnknowns(Index index) {
+        if (Index.IndexCategory.of(index.getIndexType()) != Index.IndexCategory.VALUE) {
+            // other types of indexes do not include unknowns
+            return false;
+        }
+        OptionalBoolean excludeUnknownKey = ((Index.ValueIndexDetails) index.getIndexDetails()).getExcludeUnknownKey();
+        if (index.getIndexType() == DatasetConfig.IndexType.BTREE) {
+            // by default, Btree includes unknowns
+            return excludeUnknownKey.isEmpty() || !excludeUnknownKey.get();
+        } else {
+            // by default, others exclude unknowns
+            return !excludeUnknownKey.isEmpty() && !excludeUnknownKey.get();
+        }
+    }
+
+    public static boolean excludesUnknowns(Index index) {
+        return !includesUnknowns(index);
+    }
+
+    public static Pair<String, String> getSampleIndexNames(String datasetName) {
+        return new Pair<>(MetadataConstants.SAMPLE_INDEX_1_PREFIX + datasetName,
+                MetadataConstants.SAMPLE_INDEX_2_PREFIX + datasetName);
+    }
 }

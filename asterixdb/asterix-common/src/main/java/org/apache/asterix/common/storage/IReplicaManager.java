@@ -80,12 +80,14 @@ public interface IReplicaManager {
     void release(int partition) throws HyracksDataException;
 
     /**
-     * A lock that can be used to ensure a single replica is being synchronized at a time
+     * A lock that can be used to ensure a single partition replica is being synchronized at a time
      * by this {@link IReplicaManager}
+     *
+     * @param partition partition
      *
      * @return the synchronization lock
      */
-    Object getReplicaSyncLock();
+    Object getPartitionSyncLock(int partition);
 
     /**
      * Gets the partition replicas matching {@code id}
@@ -100,4 +102,12 @@ public interface IReplicaManager {
      * @return the list of replicas
      */
     List<IPartitionReplica> getReplicas();
+
+    /**
+     * Returns true if {@code partition} is originated by this node, otherwise false.
+     *
+     * @param partition
+     * @return true if the partition is originated by this node, otherwise false.
+     */
+    boolean isPartitionOrigin(int partition);
 }

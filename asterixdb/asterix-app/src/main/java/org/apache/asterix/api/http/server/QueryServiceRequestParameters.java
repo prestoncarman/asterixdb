@@ -33,6 +33,7 @@ import org.apache.asterix.common.exceptions.ErrorCode;
 import org.apache.asterix.common.exceptions.RuntimeDataException;
 import org.apache.asterix.translator.IStatementExecutor.ResultDelivery;
 import org.apache.asterix.translator.IStatementExecutor.Stats.ProfileType;
+import org.apache.asterix.translator.SessionConfig.ClientType;
 import org.apache.asterix.translator.SessionConfig.OutputFormat;
 import org.apache.asterix.translator.SessionConfig.PlanFormat;
 import org.apache.commons.lang3.StringUtils;
@@ -60,6 +61,8 @@ public class QueryServiceRequestParameters {
         STATEMENT("statement"),
         FORMAT("format"),
         CLIENT_ID("client_context_id"),
+        CLIENT_TYPE("client-type"),
+        DATAVERSE("dataverse"),
         PRETTY("pretty"),
         MODE("mode"),
         TIMEOUT("timeout"),
@@ -70,12 +73,14 @@ public class QueryServiceRequestParameters {
         LOGICAL_PLAN("logical-plan"),
         OPTIMIZED_LOGICAL_PLAN("optimized-logical-plan"),
         PARSE_ONLY("parse-only"),
+        COMPILE_ONLY("compile-only"),
         READ_ONLY("readonly"),
         JOB("job"),
         PROFILE("profile"),
         SIGNATURE("signature"),
         MULTI_STATEMENT("multi-statement"),
-        MAX_WARNINGS("max-warnings");
+        MAX_WARNINGS("max-warnings"),
+        SQL_COMPAT("sql-compat");
 
         private final String str;
 
@@ -90,7 +95,8 @@ public class QueryServiceRequestParameters {
 
     private enum Attribute {
         HEADER("header"),
-        LOSSLESS("lossless");
+        LOSSLESS("lossless"),
+        LOSSLESS_ADM("lossless-adm");
 
         private final String str;
 
@@ -105,6 +111,8 @@ public class QueryServiceRequestParameters {
 
     private static final Map<String, PlanFormat> planFormats = ImmutableMap.of(HttpUtil.ContentType.JSON,
             PlanFormat.JSON, "clean_json", PlanFormat.JSON, "string", PlanFormat.STRING);
+    private static final Map<String, ClientType> clientTypes =
+            ImmutableMap.of("asterix", ClientType.ASTERIX, "jdbc", ClientType.JDBC);
     private static final Map<String, Boolean> booleanValues =
             ImmutableMap.of(Boolean.TRUE.toString(), Boolean.TRUE, Boolean.FALSE.toString(), Boolean.FALSE);
     private static final Map<String, Boolean> csvHeaderValues =
@@ -115,6 +123,8 @@ public class QueryServiceRequestParameters {
     private String path;
     private String statement;
     private String clientContextID;
+    private String dataverse;
+    private ClientType clientType = ClientType.ASTERIX;
     private OutputFormat format = OutputFormat.CLEAN_JSON;
     private ResultDelivery mode = ResultDelivery.IMMEDIATE;
     private PlanFormat planFormat = PlanFormat.JSON;
@@ -124,6 +134,7 @@ public class QueryServiceRequestParameters {
     private boolean pretty = false;
     private boolean expressionTree = false;
     private boolean parseOnly = false; // don't execute; simply check for syntax correctness and named parameters.
+    private boolean compileOnly = false; // don't execute; compile only.
     private boolean readOnly = false; // only allow statements belonging to QUERY category, fail for other categories.
     private boolean rewrittenExpressionTree = false;
     private boolean logicalPlan = false;
@@ -132,6 +143,7 @@ public class QueryServiceRequestParameters {
     private boolean isCSVWithHeader = false;
     private boolean signature = true;
     private boolean multiStatement = true;
+    private boolean sqlCompatMode = false;
     private long timeout = TimeUnit.MILLISECONDS.toMillis(Long.MAX_VALUE);
     private long maxResultReads = 1L;
     private long maxWarnings = 0L;
@@ -195,6 +207,22 @@ public class QueryServiceRequestParameters {
 
     public void setClientContextID(String clientContextID) {
         this.clientContextID = clientContextID;
+    }
+
+    public ClientType getClientType() {
+        return clientType;
+    }
+
+    public void setClientType(ClientType clientType) {
+        this.clientType = Objects.requireNonNull(clientType);
+    }
+
+    public String getDataverse() {
+        return dataverse;
+    }
+
+    public void setDataverse(String dataverse) {
+        this.dataverse = dataverse;
     }
 
     public ResultDelivery getMode() {
@@ -279,6 +307,14 @@ public class QueryServiceRequestParameters {
         return parseOnly;
     }
 
+    public void setCompileOnly(boolean compileOnly) {
+        this.compileOnly = compileOnly;
+    }
+
+    public boolean isCompileOnly() {
+        return compileOnly;
+    }
+
     public void setReadOnly(boolean readOnly) {
         this.readOnly = readOnly;
     }
@@ -324,6 +360,14 @@ public class QueryServiceRequestParameters {
         this.multiStatement = multiStatement;
     }
 
+    public boolean isSQLCompatMode() {
+        return sqlCompatMode;
+    }
+
+    public void setSQLCompatMode(boolean sqlCompatMode) {
+        this.sqlCompatMode = sqlCompatMode;
+    }
+
     public void setMaxWarnings(long maxWarnings) {
         this.maxWarnings = maxWarnings;
     }
@@ -340,6 +384,8 @@ public class QueryServiceRequestParameters {
         object.put("pretty", pretty);
         object.put("mode", mode.getName());
         object.put("clientContextID", clientContextID);
+        object.put("clientType", clientType.toString());
+        object.put("dataverse", dataverse);
         object.put("format", format.toString());
         object.put("timeout", timeout);
         object.put("maxResultReads", maxResultReads);
@@ -355,6 +401,7 @@ public class QueryServiceRequestParameters {
         object.put("parseOnly", parseOnly);
         object.put("readOnly", readOnly);
         object.put("maxWarnings", maxWarnings);
+        object.put("sqlCompat", sqlCompatMode);
         if (statementParams != null) {
             for (Map.Entry<String, JsonNode> statementParam : statementParams.entrySet()) {
                 object.set('$' + statementParam.getKey(), statementParam.getValue());
@@ -413,6 +460,7 @@ public class QueryServiceRequestParameters {
             throws HyracksDataException {
         setStatement(valGetter.apply(req, Parameter.STATEMENT.str()));
         setClientContextID(valGetter.apply(req, Parameter.CLIENT_ID.str()));
+        setDataverse(valGetter.apply(req, Parameter.DATAVERSE.str()));
 
         setFormatIfExists(req, acceptHeader, Parameter.FORMAT.str(), valGetter);
         setMode(parseIfExists(req, Parameter.MODE.str(), valGetter, getMode(), ResultDelivery::fromName));
@@ -429,12 +477,15 @@ public class QueryServiceRequestParameters {
                 parseBoolean(req, Parameter.REWRITTEN_EXPRESSION_TREE.str(), valGetter, isRewrittenExpressionTree()));
         setLogicalPlan(parseBoolean(req, Parameter.LOGICAL_PLAN.str(), valGetter, isLogicalPlan()));
         setParseOnly(parseBoolean(req, Parameter.PARSE_ONLY.str(), valGetter, isParseOnly()));
+        setCompileOnly(parseBoolean(req, Parameter.COMPILE_ONLY.str, valGetter, isCompileOnly()));
         setReadOnly(parseBoolean(req, Parameter.READ_ONLY.str(), valGetter, isReadOnly()));
         setOptimizedLogicalPlan(
                 parseBoolean(req, Parameter.OPTIMIZED_LOGICAL_PLAN.str(), valGetter, isOptimizedLogicalPlan()));
         setMultiStatement(parseBoolean(req, Parameter.MULTI_STATEMENT.str(), valGetter, isMultiStatement()));
         setJob(parseBoolean(req, Parameter.JOB.str(), valGetter, isJob()));
         setSignature(parseBoolean(req, Parameter.SIGNATURE.str(), valGetter, isSignature()));
+        setClientType(parseIfExists(req, Parameter.CLIENT_TYPE.str(), valGetter, getClientType(), clientTypes::get));
+        setSQLCompatMode(parseBoolean(req, Parameter.SQL_COMPAT.str(), valGetter, isSQLCompatMode()));
     }
 
     protected void setExtraParams(JsonNode jsonRequest) throws HyracksDataException {
@@ -586,8 +637,11 @@ public class QueryServiceRequestParameters {
         if (mimeSplits.length > 0) {
             String format = mimeSplits[0].toLowerCase().trim();
             if (format.equals(HttpUtil.ContentType.APPLICATION_JSON)) {
-                return Pair.of(hasValue(mimeSplits, Attribute.LOSSLESS.str(), booleanValues)
-                        ? OutputFormat.LOSSLESS_JSON : OutputFormat.CLEAN_JSON, Boolean.FALSE);
+                return Pair
+                        .of(hasValue(mimeSplits, Attribute.LOSSLESS.str(), booleanValues) ? OutputFormat.LOSSLESS_JSON
+                                : hasValue(mimeSplits, Attribute.LOSSLESS_ADM.str(), booleanValues)
+                                        ? OutputFormat.LOSSLESS_ADM_JSON : OutputFormat.CLEAN_JSON,
+                                Boolean.FALSE);
             } else if (format.equals(HttpUtil.ContentType.TEXT_CSV)) {
                 return Pair.of(OutputFormat.CSV,
                         hasValue(mimeSplits, Attribute.HEADER.str(), csvHeaderValues) ? Boolean.TRUE : Boolean.FALSE);

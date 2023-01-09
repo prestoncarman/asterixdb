@@ -38,9 +38,9 @@ public interface IStatsCollector extends IWritable, Serializable {
     /**
      * @param operatorName
      * @return {@link IOperatorStats} for the operator with name <code>operatorName</code>
-     * if it already exists, and adds it if it does not.
+     * if one exists or else null.
      */
-    IOperatorStats getOrAddOperatorStats(String operatorName);
+    IOperatorStats getOperatorStats(String operatorName);
 
     /**
      * Get every registered operator stats object
@@ -67,5 +67,4 @@ public interface IStatsCollector extends IWritable, Serializable {
      * @param currHolder the timer that needs to be paused
      */
     void giveClock(IPassableTimer currHolder);
-
 }

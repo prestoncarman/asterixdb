@@ -26,6 +26,7 @@ import java.util.TreeMap;
 
 import org.apache.asterix.metadata.entities.Dataset;
 import org.apache.asterix.metadata.entities.Index;
+import org.apache.asterix.optimizer.rules.am.array.ArrayIndexStructureMatcher;
 import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.hyracks.algebricks.common.utils.Pair;
 import org.apache.hyracks.algebricks.common.utils.Quadruple;
@@ -56,7 +57,7 @@ public class AccessMethodAnalysisContext {
     // See AccessMethodUtils#removeUnjoinedDuplicatesInLOJ() for a definition of a special GroupBy
     // and extra output processing steps needed when it's not available.
     private Mutable<ILogicalOperator> lojSpecialGroupByOpRef = null;
-    private ScalarFunctionCallExpression lojIsMissingFuncInSpecialGroupBy = null;
+    private ScalarFunctionCallExpression lojIsMissingNullFuncInSpecialGroupBy = null;
 
     // For a secondary index, if we use only PK and secondary key field in a plan, it is an index-only plan.
     // Contains information about index-only plan
@@ -145,12 +146,12 @@ public class AccessMethodAnalysisContext {
         return lojSpecialGroupByOpRef;
     }
 
-    public void setLOJIsMissingFuncInSpecialGroupBy(ScalarFunctionCallExpression isMissingFunc) {
-        lojIsMissingFuncInSpecialGroupBy = isMissingFunc;
+    public void setLOJIsMissingNullFuncInSpecialGroupBy(ScalarFunctionCallExpression isMissingNullFunc) {
+        lojIsMissingNullFuncInSpecialGroupBy = isMissingNullFunc;
     }
 
-    public ScalarFunctionCallExpression getLOJIsMissingFuncInSpecialGroupBy() {
-        return lojIsMissingFuncInSpecialGroupBy;
+    public ScalarFunctionCallExpression getLOJIsMissingNullFuncInSpecialGroupBy() {
+        return lojIsMissingNullFuncInSpecialGroupBy;
     }
 
     public Dataset getDatasetFromIndexDatasetMap(Index idx) {

@@ -18,9 +18,14 @@
  */
 package org.apache.asterix.external.util;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 
@@ -35,7 +40,11 @@ import org.apache.asterix.external.indexing.RecordId.RecordIdType;
 import org.apache.asterix.external.input.record.reader.hdfs.parquet.MapredParquetInputFormat;
 import org.apache.asterix.external.input.record.reader.hdfs.parquet.ParquetReadSupport;
 import org.apache.asterix.external.input.stream.HDFSInputStream;
-import org.apache.asterix.hivecompat.io.RCFileInputFormat;
+import org.apache.asterix.external.util.ExternalDataConstants.ParquetOptions;
+import org.apache.asterix.om.types.ARecordType;
+import org.apache.asterix.runtime.projection.DataProjectionInfo;
+import org.apache.asterix.runtime.projection.FunctionCallInformation;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.BlockLocation;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -51,6 +60,9 @@ import org.apache.hyracks.api.client.IHyracksClientConnection;
 import org.apache.hyracks.api.context.ICCContext;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.exceptions.HyracksException;
+import org.apache.hyracks.api.exceptions.IWarningCollector;
+import org.apache.hyracks.api.exceptions.Warning;
+import org.apache.hyracks.api.network.INetworkSecurityManager;
 import org.apache.hyracks.hdfs.scheduler.Scheduler;
 import org.apache.parquet.hadoop.ParquetInputFormat;
 
@@ -61,10 +73,12 @@ public class HDFSUtils {
 
     public static Scheduler initializeHDFSScheduler(ICCServiceContext serviceCtx) throws HyracksDataException {
         ICCContext ccContext = serviceCtx.getCCContext();
+        INetworkSecurityManager networkSecurityManager = serviceCtx.getControllerService().getNetworkSecurityManager();
         Scheduler scheduler = null;
         try {
             scheduler = new Scheduler(ccContext.getClusterControllerInfo().getClientNetAddress(),
-                    ccContext.getClusterControllerInfo().getClientNetPort());
+                    ccContext.getClusterControllerInfo().getClientNetPort(),
+                    networkSecurityManager.getSocketChannelFactory());
         } catch (HyracksException e) {
             throw new RuntimeDataException(ErrorCode.UTIL_HDFS_UTILS_CANNOT_OBTAIN_HDFS_SCHEDULER);
         }
@@ -170,8 +184,6 @@ public class HDFSUtils {
                 return ExternalDataConstants.CLASS_NAME_TEXT_INPUT_FORMAT;
             case ExternalDataConstants.INPUT_FORMAT_SEQUENCE:
                 return ExternalDataConstants.CLASS_NAME_SEQUENCE_INPUT_FORMAT;
-            case ExternalDataConstants.INPUT_FORMAT_RC:
-                return ExternalDataConstants.CLASS_NAME_RC_INPUT_FORMAT;
             case ExternalDataConstants.INPUT_FORMAT_PARQUET:
                 return ExternalDataConstants.CLASS_NAME_PARQUET_INPUT_FORMAT;
             default:
@@ -186,8 +198,6 @@ public class HDFSUtils {
                 return TextInputFormat.class;
             case ExternalDataConstants.INPUT_FORMAT_SEQUENCE:
                 return SequenceFileInputFormat.class;
-            case ExternalDataConstants.INPUT_FORMAT_RC:
-                return RCFileInputFormat.class;
             case ExternalDataConstants.INPUT_FORMAT_PARQUET:
                 return MapredParquetInputFormat.class;
             default:
@@ -199,7 +209,7 @@ public class HDFSUtils {
         JobConf conf = new JobConf();
         String localShortCircuitSocketPath = configuration.get(ExternalDataConstants.KEY_LOCAL_SOCKET_PATH);
         String formatClassName = HDFSUtils.getInputFormatClassName(configuration);
-        final String url = configuration.get(ExternalDataConstants.KEY_HDFS_URL);
+        String url = configuration.get(ExternalDataConstants.KEY_HDFS_URL);
 
         //Allow hdfs adapter to read from local-files. However, this only works in a single-node configuration.
         if (url != null && url.trim().startsWith("hdfs")) {
@@ -218,14 +228,38 @@ public class HDFSUtils {
         }
 
         if (ExternalDataConstants.CLASS_NAME_PARQUET_INPUT_FORMAT.equals(formatClassName)) {
-            //Parquet configurations
-            conf.set(ParquetInputFormat.READ_SUPPORT_CLASS, ParquetReadSupport.class.getName());
-            //Set the requested fields. Default * which means all fields
-            final String requestedFields = configuration.get(ExternalDataConstants.KEY_REQUESTED_FIELDS);
-            conf.set(ExternalDataConstants.KEY_REQUESTED_FIELDS, requestedFields != null ? requestedFields : "*");
+            configureParquet(configuration, conf);
         }
 
         return conf;
+    }
+
+    private static void configureParquet(Map<String, String> configuration, JobConf conf) {
+        //Parquet configurations
+        conf.set(ParquetInputFormat.READ_SUPPORT_CLASS, ParquetReadSupport.class.getName());
+
+        //Get requested values
+        String requestedValues = configuration.get(ExternalDataConstants.KEY_REQUESTED_FIELDS);
+        if (requestedValues == null) {
+            //No value is requested, return the entire record
+            requestedValues = DataProjectionInfo.ALL_FIELDS_TYPE.getTypeName();
+        } else {
+            //Subset of the values were requested, set the functionCallInformation
+            conf.set(ExternalDataConstants.KEY_HADOOP_ASTERIX_FUNCTION_CALL_INFORMATION,
+                    configuration.get(ExternalDataConstants.KEY_HADOOP_ASTERIX_FUNCTION_CALL_INFORMATION));
+        }
+        conf.set(ExternalDataConstants.KEY_REQUESTED_FIELDS, requestedValues);
+
+        //Parse JSON string as ADM?
+        conf.set(ParquetOptions.HADOOP_PARSE_JSON_STRING,
+                configuration.getOrDefault(ParquetOptions.PARSE_JSON_STRING, ExternalDataConstants.TRUE));
+
+        //Rebase and parse decimal as double?
+        conf.set(ParquetOptions.HADOOP_DECIMAL_TO_DOUBLE,
+                configuration.getOrDefault(ParquetOptions.DECIMAL_TO_DOUBLE, ExternalDataConstants.FALSE));
+        //Re-adjust the time zone for UTC-adjusted values
+        conf.set(ParquetOptions.HADOOP_TIMEZONE, configuration.getOrDefault(ParquetOptions.TIMEZONE, ""));
+
     }
 
     public static AlgebricksAbsolutePartitionConstraint getPartitionConstraints(IApplicationContext appCtx,
@@ -243,10 +277,102 @@ public class HDFSUtils {
             case ExternalDataConstants.INPUT_FORMAT_TEXT:
             case ExternalDataConstants.INPUT_FORMAT_SEQUENCE:
                 return RecordIdType.OFFSET;
-            case ExternalDataConstants.INPUT_FORMAT_RC:
-                return RecordIdType.RC;
             default:
                 return null;
         }
+    }
+
+    public static ARecordType getExpectedType(Configuration configuration) throws IOException {
+        String encoded = configuration.get(ExternalDataConstants.KEY_REQUESTED_FIELDS, "");
+        if (encoded.isEmpty() || encoded.equals(DataProjectionInfo.ALL_FIELDS_TYPE.getTypeName())) {
+            //By default, return the entire records
+            return DataProjectionInfo.ALL_FIELDS_TYPE;
+        } else if (encoded.equals(DataProjectionInfo.EMPTY_TYPE.getTypeName())) {
+            //No fields were requested
+            return DataProjectionInfo.EMPTY_TYPE;
+        }
+        //A subset of the fields was requested
+        Base64.Decoder decoder = Base64.getDecoder();
+        byte[] typeBytes = decoder.decode(encoded);
+        DataInputStream dataInputStream = new DataInputStream(new ByteArrayInputStream(typeBytes));
+        return DataProjectionInfo.createTypeField(dataInputStream);
+    }
+
+    public static void setFunctionCallInformationMap(Map<String, FunctionCallInformation> funcCallInfoMap,
+            Configuration conf) throws IOException {
+        String stringFunctionCallInfoMap = ExternalDataUtils.serializeFunctionCallInfoToString(funcCallInfoMap);
+        conf.set(ExternalDataConstants.KEY_HADOOP_ASTERIX_FUNCTION_CALL_INFORMATION, stringFunctionCallInfoMap);
+    }
+
+    public static Map<String, FunctionCallInformation> getFunctionCallInformationMap(Configuration conf)
+            throws IOException {
+        String encoded = conf.get(ExternalDataConstants.KEY_HADOOP_ASTERIX_FUNCTION_CALL_INFORMATION, "");
+        if (!encoded.isEmpty()) {
+            Base64.Decoder decoder = Base64.getDecoder();
+            byte[] functionCallInfoMapBytes = decoder.decode(encoded);
+            DataInputStream dataInputStream = new DataInputStream(new ByteArrayInputStream(functionCallInfoMapBytes));
+            return DataProjectionInfo.createFunctionCallInformationMap(dataInputStream);
+        }
+        return null;
+    }
+
+    public static void setWarnings(List<Warning> warnings, Configuration conf) throws IOException {
+        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+        DataOutputStream dataOutputStream = new DataOutputStream(byteArrayOutputStream);
+
+        StringBuilder stringBuilder = new StringBuilder();
+        Base64.Encoder encoder = Base64.getEncoder();
+        for (int i = 0; i < warnings.size(); i++) {
+            Warning warning = warnings.get(i);
+            warning.writeFields(dataOutputStream);
+            stringBuilder.append(encoder.encodeToString(byteArrayOutputStream.toByteArray()));
+            //Warnings are separated by ','
+            stringBuilder.append(',');
+            byteArrayOutputStream.reset();
+        }
+        conf.set(ExternalDataConstants.KEY_HADOOP_ASTERIX_WARNINGS_LIST, stringBuilder.toString());
+    }
+
+    public static void issueWarnings(IWarningCollector warningCollector, Configuration conf) throws IOException {
+        String warnings = conf.get(ExternalDataConstants.KEY_HADOOP_ASTERIX_WARNINGS_LIST, "");
+        if (!warnings.isEmpty()) {
+            String[] encodedWarnings = warnings.split(",");
+            Base64.Decoder decoder = Base64.getDecoder();
+            for (int i = 0; i < encodedWarnings.length; i++) {
+                /*
+                 * This should create a small number of objects as warnings are reported only once by AsterixDB's
+                 * hadoop readers
+                 */
+                byte[] warningBytes = decoder.decode(encodedWarnings[i]);
+                DataInputStream dataInputStream = new DataInputStream(new ByteArrayInputStream(warningBytes));
+                if (warningCollector.shouldWarn()) {
+                    warningCollector.warn(Warning.create(dataInputStream));
+                }
+            }
+            //Remove reported warnings
+            conf.unset(ExternalDataConstants.KEY_HADOOP_ASTERIX_WARNINGS_LIST);
+        }
+    }
+
+    /**
+     * Hadoop can cache FileSystem instance if reading the same file. This method allows for disabling the cache
+     *
+     * @param conf     Hadoop configuration
+     * @param protocol fs scheme (or protocol). e.g., s3a
+     */
+    public static void disableHadoopFileSystemCache(Configuration conf, String protocol) {
+        //Disable fs cache
+        conf.set(String.format(ExternalDataConstants.KEY_HADOOP_DISABLE_FS_CACHE_TEMPLATE, protocol),
+                ExternalDataConstants.TRUE);
+    }
+
+    /**
+     * Check whether the provided path is empty
+     *
+     * @param job Hadoop Configuration
+     * @return <code>true</code> if the path is empty, <code>false</code> otherwise
+     */
+    public static boolean isEmpty(JobConf job) {
+        return job.get(ExternalDataConstants.KEY_HADOOP_INPUT_DIR, "").isEmpty();
     }
 }

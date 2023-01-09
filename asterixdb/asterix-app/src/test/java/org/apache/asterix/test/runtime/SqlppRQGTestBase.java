@@ -25,6 +25,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -54,6 +55,7 @@ import org.apache.asterix.test.common.ResultExtractor;
 import org.apache.asterix.test.common.TestExecutor;
 import org.apache.asterix.test.common.TestHelper;
 import org.apache.asterix.testframework.context.TestCaseContext;
+import org.apache.asterix.testframework.xml.TestCase;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
@@ -68,18 +70,13 @@ import com.fasterxml.jackson.databind.ObjectReader;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
-// Prerequisite:
-// setenv TESTCONTAINERS_RYUK_DISABLED true
-
 public abstract class SqlppRQGTestBase {
 
     private static final Logger LOGGER = LogManager.getLogger(SqlppRQGTestBase.class);
 
-    protected static final String TESTCONTAINERS_RYUK_DISABLED = "TESTCONTAINERS_RYUK_DISABLED";
-
     protected static final String TEST_CONFIG_FILE_NAME = "src/main/resources/cc.conf";
 
-    protected static final String POSTGRES_IMAGE = "postgres:12.2";
+    protected static final String POSTGRES_IMAGE = "postgres:13.4";
 
     protected static final String TABLE_NAME = "tenk";
 
@@ -143,8 +140,8 @@ public abstract class SqlppRQGTestBase {
         return result;
     }
 
-    protected void runTestCase(int testcaseId, String testcaseDescription, String sqlQuery, String sqlppQuery)
-            throws Exception {
+    protected void runTestCase(int testcaseId, String testcaseDescription, String sqlQuery, String sqlppQuery,
+            List<TestCase.CompilationUnit.Parameter> params) throws Exception {
         LOGGER.info(String.format("Starting testcase #%d: %s", testcaseId, testcaseDescription));
 
         LOGGER.info("Running SQL");
@@ -158,16 +155,17 @@ public abstract class SqlppRQGTestBase {
         LOGGER.info("Running SQL++");
         LOGGER.info(sqlppQuery);
         ArrayNode sqlppResult;
-        try (InputStream resultStream = testExecutor.executeQueryService(sqlppQuery,
-                testExecutor.getEndpoint(Servlets.QUERY_SERVICE), TestCaseContext.OutputFormat.ADM)) {
+        URI endpoint = testExecutor.getEndpoint(Servlets.QUERY_SERVICE);
+        try (InputStream resultStream = testExecutor.executeQueryService(sqlppQuery, TestCaseContext.OutputFormat.ADM,
+                endpoint, params == null ? Collections.emptyList() : params, false, StandardCharsets.UTF_8)) {
             sqlppResult = asJson(
                     ResultExtractor.extract(resultStream, StandardCharsets.UTF_8, TestCaseContext.OutputFormat.ADM));
         }
 
         boolean eq = TestHelper.equalJson(sqlResult, sqlppResult, false, false, false, null);
 
-        File sqlResultFile = writeResult(sqlResult, testcaseId, "sql", testcaseDescription);
-        File sqlppResultFile = writeResult(sqlppResult, testcaseId, "sqlpp", testcaseDescription);
+        File sqlResultFile = writeResult(outputDir, sqlResult, testcaseId, "sql", testcaseDescription);
+        File sqlppResultFile = writeResult(outputDir, sqlppResult, testcaseId, "sqlpp", testcaseDescription);
 
         if (!eq) {
             /*
@@ -328,7 +326,13 @@ public abstract class SqlppRQGTestBase {
         }
     }
 
-    protected File writeResult(ArrayNode result, int testcaseId, String resultKind, String comment) throws IOException {
+    static File writeResult(Path outputDir, ArrayNode result, int testcaseId, String resultKind, String comment)
+            throws IOException {
+        return writeResult(outputDir, result, testcaseId, resultKind, comment, SqlppRQGTestBase::prettyPrint);
+    }
+
+    static File writeResult(Path outputDir, ArrayNode result, int testcaseId, String resultKind, String comment,
+            JsonNodePrinter printer) throws IOException {
         File outDir = outputDir.toFile();
         String outFileName = String.format("%d.%s.txt", testcaseId, resultKind);
         FileUtils.forceMkdir(outDir);
@@ -337,10 +341,18 @@ public abstract class SqlppRQGTestBase {
             pw.print("---");
             pw.println(comment);
             for (int i = 0, ln = result.size(); i < ln; i++) {
-                pw.println(ResultExtractor.prettyPrint(result.get(i)));
+                printer.print(pw, result.get(i));
             }
         }
         return outFile;
+    }
+
+    public interface JsonNodePrinter {
+        void print(PrintWriter out, JsonNode node) throws IOException;
+    }
+
+    private static void prettyPrint(PrintWriter out, JsonNode node) throws JsonProcessingException {
+        out.println(ResultExtractor.prettyPrint(node));
     }
 
     protected static <T> List<T> randomize(Collection<T> input, Random random) {
@@ -369,7 +381,7 @@ public abstract class SqlppRQGTestBase {
 
     protected static void startAsterix() throws Exception {
         testExecutor = new TestExecutor();
-        LangExecutionUtil.setUp(TEST_CONFIG_FILE_NAME, testExecutor);
+        LangExecutionUtil.setUp(TEST_CONFIG_FILE_NAME, testExecutor, false);
         loadAsterixData();
     }
 
@@ -378,10 +390,6 @@ public abstract class SqlppRQGTestBase {
     }
 
     protected static void startPostgres() throws SQLException, IOException {
-        if (!Boolean.parseBoolean(System.getenv(TESTCONTAINERS_RYUK_DISABLED))) {
-            throw new IllegalStateException(
-                    String.format("Set environment variable %s=%s", TESTCONTAINERS_RYUK_DISABLED, true));
-        }
         LOGGER.info("Starting Postgres");
         postgres = new PostgreSQLContainer<>(POSTGRES_IMAGE);
         postgres.start();

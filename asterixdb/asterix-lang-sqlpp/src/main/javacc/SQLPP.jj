@@ -63,6 +63,7 @@ import org.apache.asterix.common.annotations.ListValFileDataGen;
 import org.apache.asterix.common.annotations.RangeAnnotation;
 import org.apache.asterix.common.annotations.SecondaryIndexSearchPreferenceAnnotation;
 import org.apache.asterix.common.annotations.SkipSecondaryIndexSearchExpressionAnnotation;
+import org.apache.asterix.common.annotations.SpatialJoinAnnotation;
 import org.apache.asterix.common.annotations.TypeDataGen;
 import org.apache.asterix.common.annotations.UndeclaredFieldsDataGen;
 import org.apache.asterix.common.config.DatasetConfig.DatasetType;
@@ -75,6 +76,7 @@ import org.apache.asterix.common.functions.FunctionConstants;
 import org.apache.asterix.common.functions.FunctionSignature;
 import org.apache.asterix.common.metadata.DataverseName;
 import org.apache.asterix.common.metadata.DatasetFullyQualifiedName;
+import org.apache.asterix.external.dataset.adapter.AdapterIdentifier;
 import org.apache.asterix.lang.common.base.AbstractClause;
 import org.apache.asterix.lang.common.base.AbstractLangExpression;
 import org.apache.asterix.lang.common.base.AbstractStatement;
@@ -123,6 +125,8 @@ import org.apache.asterix.lang.common.literal.StringLiteral;
 import org.apache.asterix.lang.common.literal.TrueLiteral;
 import org.apache.asterix.lang.common.parser.ScopeChecker;
 import org.apache.asterix.lang.common.statement.AdapterDropStatement;
+import org.apache.asterix.lang.common.statement.AnalyzeStatement;
+import org.apache.asterix.lang.common.statement.AnalyzeDropStatement;
 import org.apache.asterix.lang.common.statement.CompactStatement;
 import org.apache.asterix.lang.common.statement.ConnectFeedStatement;
 import org.apache.asterix.lang.common.statement.StartFeedStatement;
@@ -171,6 +175,8 @@ import org.apache.asterix.lang.common.struct.Identifier;
 import org.apache.asterix.lang.common.struct.OperatorType;
 import org.apache.asterix.lang.common.struct.QuantifiedPair;
 import org.apache.asterix.lang.common.struct.VarIdentifier;
+import org.apache.asterix.lang.common.util.DatasetDeclParametersUtil;
+import org.apache.asterix.lang.common.util.ExpressionUtils;
 import org.apache.asterix.lang.common.util.RangeMapBuilder;
 import org.apache.asterix.lang.sqlpp.clause.AbstractBinaryCorrelateClause;
 import org.apache.asterix.lang.sqlpp.clause.FromClause;
@@ -202,7 +208,8 @@ import org.apache.asterix.lang.sqlpp.struct.SetOperationRight;
 import org.apache.asterix.lang.sqlpp.util.ExpressionToVariableUtil;
 import org.apache.asterix.lang.sqlpp.util.FunctionMapUtil;
 import org.apache.asterix.lang.sqlpp.util.SqlppVariableUtil;
-import org.apache.asterix.external.dataset.adapter.AdapterIdentifier;
+import org.apache.asterix.metadata.utils.MetadataConstants;
+import org.apache.asterix.om.exceptions.TypeMismatchException;
 import org.apache.asterix.om.functions.BuiltinFunctions;
 import org.apache.asterix.om.types.BuiltinType;
 import org.apache.commons.lang3.ArrayUtils;
@@ -211,7 +218,10 @@ import org.apache.hyracks.algebricks.common.utils.Pair;
 import org.apache.hyracks.algebricks.common.utils.Triple;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.core.algebra.expressions.BroadcastExpressionAnnotation;
+import org.apache.hyracks.algebricks.core.algebra.expressions.HashJoinExpressionAnnotation;
 import org.apache.hyracks.algebricks.core.algebra.expressions.IExpressionAnnotation;
+import org.apache.hyracks.algebricks.core.algebra.expressions.JoinProductivityAnnotation;
+import org.apache.hyracks.algebricks.core.algebra.expressions.PredicateCardinalityAnnotation;
 import org.apache.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import org.apache.hyracks.api.exceptions.IWarningCollector;
 import org.apache.hyracks.api.exceptions.SourceLocation;
@@ -219,6 +229,8 @@ import org.apache.hyracks.api.exceptions.Warning;
 import org.apache.hyracks.dataflow.common.data.partition.range.RangeMap;
 import org.apache.hyracks.util.LogRedactionUtil;
 import org.apache.hyracks.util.StringUtil;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 class SQLPPParser extends ScopeChecker implements IParser {
 
@@ -230,6 +242,7 @@ class SQLPPParser extends ScopeChecker implements IParser {
     private static final String INCLUDE = "INCLUDE";
     private static final String FIRST = "FIRST";
     private static final String FOLLOWING = "FOLLOWING";
+    private static final String FOREIGN = "FOREIGN";
     private static final String GROUPING = "GROUPING";
     private static final String GROUPS = "GROUPS";
     private static final String IGNORE = "IGNORE";
@@ -241,6 +254,7 @@ class SQLPPParser extends ScopeChecker implements IParser {
     private static final String PARTITION = "PARTITION";
     private static final String PRECEDING = "PRECEDING";
     private static final String RANGE = "RANGE";
+    private static final String REFERENCES = "REFERENCES";
     private static final String RESPECT = "RESPECT";
     private static final String ROLLUP = "ROLLUP";
     private static final String ROW = "ROW";
@@ -251,6 +265,7 @@ class SQLPPParser extends ScopeChecker implements IParser {
     private static final String REPLACE = "REPLACE";
     private static final String RETURNS = "RETURNS";
     private static final String CONFIG = "CONFIG";
+    private static final String STATISTICS = "STATISTICS";
 
 
     private static final String INT_TYPE_NAME = "int";
@@ -279,7 +294,7 @@ class SQLPPParser extends ScopeChecker implements IParser {
         this.gramLength = gramLength;
         this.fullTextConfig = fullTextConfig;
       }
-    };
+    }
 
     private static class FunctionName {
        public DataverseName dataverse;
@@ -344,7 +359,7 @@ class SQLPPParser extends ScopeChecker implements IParser {
         super.setInput(s);
     }
 
-    public static void main(String args[]) throws ParseException, TokenMgrError, IOException, FileNotFoundException, CompilationException {
+    public static void main(String[] args) throws ParseException, TokenMgrError, IOException, FileNotFoundException, CompilationException {
         File file = new File(args[0]);
         Reader fis = new BufferedReader(new InputStreamReader(new FileInputStream(file), "UTF-8"));
         SQLPPParser parser = new SQLPPParser(fis);
@@ -397,6 +412,19 @@ class SQLPPParser extends ScopeChecker implements IParser {
 
     private static List<String> parseParenthesizedIdentifierList(String text) throws CompilationException {
         return new SQLPPParser(text).parseParenthesizedIdentifierList();
+    }
+
+    private List<Literal> parseParenthesizedLiteralList() throws CompilationException {
+        return parseImpl(new ParseFunction<List<Literal>>() {
+            @Override
+            public  List<Literal> parse() throws ParseException {
+                return SQLPPParser.this.ParenthesizedLiteralList();
+            }
+        });
+    }
+
+    private static List<Literal> parseParenthesizedLiteralList(String text) throws CompilationException {
+        return new SQLPPParser(text).parseParenthesizedLiteralList();
     }
 
     @Override
@@ -628,10 +656,45 @@ class SQLPPParser extends ScopeChecker implements IParser {
     private IExpressionAnnotation parseExpressionAnnotation(Token hintToken) {
       // placeholder for the annotation that should be returned if this hint's parameters cannot be parsed
       IExpressionAnnotation onParseErrorReturn = null;
+      double selectivity, cardinality, productivity;
+      Pattern number = Pattern.compile("\\d+\\.\\d+");
+      Pattern stringNumber = Pattern.compile("\\w+\\s+\\d+\\.\\d+");
+      Pattern lessThanOnePat = Pattern.compile("0\\.\\d+");
       try {
         switch (hintToken.hint) {
+          case SINGLE_DATASET_PREDICATE_SELECTIVITY_HINT:
+            selectivity = 1.0; // uninitialized
+            if (hintToken.hintParams != null) {
+            Matcher mat = lessThanOnePat.matcher(hintToken.hintParams);
+            if (mat.find()) {
+                selectivity = Double.parseDouble (mat.group());
+                }
+            }
+
+            return new PredicateCardinalityAnnotation(selectivity);
+          case JOIN_PREDICATE_PRODUCTIVITY_HINT:
+            productivity = 1.0; // uninitialized
+            String leftSideDataSet = null;
+            if (hintToken.hintParams != null) {
+                Matcher StringNum = stringNumber.matcher(hintToken.hintParams);
+
+                if (StringNum.find()) {
+                    String matchedGroup = StringNum.group();
+                    Pattern var = Pattern.compile("[a-zA-Z]\\w*"); // any word character [a-zA-Z_0-9]
+                    Matcher matVar = var.matcher(matchedGroup);
+                    if (matVar.find())
+                        leftSideDataSet = matVar.group();
+                    Matcher numMat = number.matcher(matchedGroup);
+                    if (numMat.find())
+                        productivity = Double.parseDouble (numMat.group());
+                }
+            }
+            // attach hint to global scope
+            return new JoinProductivityAnnotation (productivity, leftSideDataSet);
           case HASH_BROADCAST_JOIN_HINT:
             return new BroadcastExpressionAnnotation(BroadcastExpressionAnnotation.BroadcastSide.RIGHT);
+          case HASH_JOIN_HINT:
+            return new HashJoinExpressionAnnotation(HashJoinExpressionAnnotation.BuildSide.RIGHT);
           case INDEXED_NESTED_LOOP_JOIN_HINT:
             if (hintToken.hintParams == null) {
               return IndexedNLJoinExpressionAnnotation.INSTANCE_ANY_INDEX;
@@ -652,6 +715,47 @@ class SQLPPParser extends ScopeChecker implements IParser {
               // if parameter parsing fails then ignore this hint
               List<String> indexNames = parseParenthesizedIdentifierList(hintToken.hintParams);
               return SkipSecondaryIndexSearchExpressionAnnotation.newInstance(indexNames);
+            }
+          case SPATIAL_JOIN_HINT:
+            List<Literal> hintValues = parseParenthesizedLiteralList(hintToken.hintParams);
+
+            // Handle exceptions
+            if (hintValues.size() != 6) {
+              throw new SqlppParseException(getSourceLocation(hintToken), String.format("Unexpected hint: %s. 6 arguments are required.",
+                                hintToken.hint.toString()));
+            }
+
+            for (int i = 0; i < 4; i++) {
+              Literal lit = hintValues.get(i);
+              if ((lit.getLiteralType() != Literal.Type.DOUBLE)
+                    && (lit.getLiteralType() != Literal.Type.FLOAT)
+                    && (lit.getLiteralType() != Literal.Type.LONG)
+                    && (lit.getLiteralType() != Literal.Type.INTEGER)){
+                throw new SqlppParseException(getSourceLocation(hintToken), String.format("Unexpected hint: %s. Numeric value is required for first 4 arguments.",
+                                hintToken.hint.toString()));
+              }
+            }
+
+            for (int i = 4; i < 6; i++) {
+              Literal lit = hintValues.get(i);
+              if ((lit.getLiteralType() != Literal.Type.LONG)
+                    && (lit.getLiteralType() != Literal.Type.INTEGER)) {
+                throw new SqlppParseException(getSourceLocation(hintToken), String.format("Unexpected hint: %s. Long/int is required for last 2 arguments.",
+                              hintToken.hint.toString()));
+              }
+            }
+
+            try {
+              double minX = ExpressionUtils.getDoubleValue(hintValues.get(0));
+              double minY = ExpressionUtils.getDoubleValue(hintValues.get(1));
+              double maxX = ExpressionUtils.getDoubleValue(hintValues.get(2));
+              double maxY = ExpressionUtils.getDoubleValue(hintValues.get(3));
+              int numRows = (int) ExpressionUtils.getLongValue(hintValues.get(4));
+              int numColumns = (int) ExpressionUtils.getLongValue(hintValues.get(5));
+              SpatialJoinAnnotation spatialJoinAnn = new SpatialJoinAnnotation(minX, minY, maxX, maxY, numRows, numColumns);
+              return spatialJoinAnn;
+            } catch (TypeMismatchException e) {
+              throw new SqlppParseException(getSourceLocation(hintToken), e.getMessage());
             }
           case USE_SECONDARY_INDEX_SEARCH_HINT:
             if (hintToken.hintParams == null) {
@@ -776,6 +880,7 @@ Statement SingleStatement() throws ParseException:
     | stmt = UpsertStatement()
     | stmt = ConnectionStatement()
     | stmt = CompactStatement()
+    | stmt = AnalyzeStatement()
     | stmt = Query()
     | stmt = RefreshExternalDatasetStatement()
   )
@@ -979,6 +1084,11 @@ DatasetDecl DatasetSpecification(Token startStmtToken) throws ParseException:
     try {
       InternalDetailsDecl idd = new InternalDetailsDecl(primaryKeyFields.second, primaryKeyFields.first, autogenerated,
         filterField == null? null : filterField.first, filterField == null? null : filterField.second);
+      DatasetDeclParametersUtil.adjustInlineTypeDecl(typeExpr, primaryKeyFields.second, primaryKeyFields.first, false);
+      if (metaTypeExpr != null) {
+        DatasetDeclParametersUtil.adjustInlineTypeDecl(metaTypeExpr, primaryKeyFields.second, primaryKeyFields.first,
+          true);
+      }
       stmt = new DatasetDecl(nameComponents.first, nameComponents.second, typeExpr, metaTypeExpr, hints,
         DatasetType.INTERNAL, idd, withRecord, ifNotExists);
       return addSourceLocation(stmt, startStmtToken);
@@ -1133,6 +1243,9 @@ CreateIndexStatement IndexSpecification(Token startStmtToken) throws ParseExcept
   String fullTextConfigName = null;
   Token startElementToken = null;
   Boolean excludeUnknown = null;
+  Pair<Map<String, String>, Boolean> castConfigDefaultNull;
+  Boolean castDefaultNull = null;
+  Map<String, String> castConfig = null;
 }
 {
   (
@@ -1151,16 +1264,23 @@ CreateIndexStatement IndexSpecification(Token startStmtToken) throws ParseExcept
       )*
     <RIGHTPAREN>
     ( <TYPE> indexParams = IndexType() )? ( <ENFORCED> { enforced = true; } )?
-    ( <IDENTIFIER>
+    ( LOOKAHEAD({laIdentifier(EXCLUDE) || laIdentifier(INCLUDE)}) <IDENTIFIER>
+    {
+      if (isToken(EXCLUDE)) {
+        excludeUnknown = true;
+      } else if (isToken(INCLUDE)) {
+        excludeUnknown = false;
+      } else {
+        throw createUnexpectedTokenError();
+      }
+    } <UNKNOWN> <KEY>
+    )?
+
+    ( <CAST><LEFTPAREN> castConfigDefaultNull = CastDefaultNull() <RIGHTPAREN>
       {
-        if (isToken(EXCLUDE)) {
-          excludeUnknown = true;
-        } else if (isToken(INCLUDE)) {
-          excludeUnknown = false;
-        } else {
-          throw createUnexpectedTokenError();
-        }
-      } <UNKNOWN> <KEY>
+        castConfig = castConfigDefaultNull.first;
+        castDefaultNull = castConfigDefaultNull.second;
+      }
     )?
   )
   {
@@ -1177,7 +1297,7 @@ CreateIndexStatement IndexSpecification(Token startStmtToken) throws ParseExcept
     }
     CreateIndexStatement stmt = new CreateIndexStatement(nameComponents.first, nameComponents.second,
       new Identifier(indexName), indexType, indexedElementList, enforced, gramLength, fullTextConfigName, ifNotExists,
-      excludeUnknown);
+      excludeUnknown, castDefaultNull, castConfig);
     return addSourceLocation(stmt, startStmtToken);
   }
 }
@@ -1303,10 +1423,11 @@ CreateIndexStatement PrimaryIndexSpecification(Token startStmtToken) throws Pars
   <ON> nameComponents = QualifiedName() (<TYPE> <BTREE>)?
   {
     if (indexName == null) {
-      indexName = "primary_idx_" + nameComponents.second;
+      indexName = MetadataConstants.PRIMARY_INDEX_PREFIX + nameComponents.second;
     }
     CreateIndexStatement stmt = new CreateIndexStatement(nameComponents.first, nameComponents.second,
-      new Identifier(indexName), IndexType.BTREE, Collections.emptyList(), false, -1, null, ifNotExists, null);
+      new Identifier(indexName), IndexType.BTREE, Collections.emptyList(), false, -1, null, ifNotExists, null, null,
+      Collections.emptyMap());
     return addSourceLocation(stmt, startStmtToken);
   }
 }
@@ -1436,21 +1557,45 @@ CreateViewStatement ViewSpecification(Token startStmtToken, boolean orReplace) t
   boolean ifNotExists = false;
   Token beginPos = null, endPos = null;
   Expression viewBodyExpr = null;
+  Pair<Map<String, String>, Boolean> viewConfigDefaultNull;
   Boolean defaultNull = null;
-  RecordConstructor withRecord = null;
+  Map<String, String> viewConfig = null;
+  Pair<List<Integer>, List<List<String>>> primaryKeyFields = null;
+  Pair<List<Integer>, List<List<String>>> foreignKeyFields = null;
+  Pair<DataverseName, Identifier> refNameComponents = null;
+  List<CreateViewStatement.ForeignKeyDecl> foreignKeyDecls = null;
   DataverseName currentDataverse = defaultDataverse;
 }
 {
   nameComponents = QualifiedName()
   (
-    (
-      typeExpr = DatasetTypeSpecification()
-      ifNotExists = IfNotExists()
-      <IDENTIFIER> { expectToken(DEFAULT); } <NULL> { defaultNull = true; }
-      ( <WITH> withRecord = RecordConstructor() )?
-    )
-    |
-    ( ifNotExists = IfNotExists() )
+      (
+        typeExpr = DatasetTypeSpecification()
+        ifNotExists = IfNotExists()
+        viewConfigDefaultNull = CastDefaultNull()
+        {
+          viewConfig = viewConfigDefaultNull.first;
+          defaultNull = viewConfigDefaultNull.second;
+        }
+        (
+          <PRIMARY> <KEY> <LEFTPAREN> primaryKeyFields = PrimaryKeyFields() <RIGHTPAREN>
+          <NOT> <ENFORCED>
+        )?
+        (
+          <IDENTIFIER> { expectToken(FOREIGN); } <KEY> <LEFTPAREN> foreignKeyFields = PrimaryKeyFields() <RIGHTPAREN>
+          <IDENTIFIER> { expectToken(REFERENCES); } refNameComponents = QualifiedName()
+          <NOT> <ENFORCED>
+          {
+            if (foreignKeyDecls == null) {
+              foreignKeyDecls = new ArrayList<CreateViewStatement.ForeignKeyDecl>();
+            }
+            foreignKeyDecls.add(new CreateViewStatement.ForeignKeyDecl(foreignKeyFields.second,
+              foreignKeyFields.first, refNameComponents.first, refNameComponents.second));
+          }
+        )*
+      )
+      |
+      ( ifNotExists = IfNotExists() )
   )
   {
     if (orReplace && ifNotExists) {
@@ -1472,13 +1617,15 @@ CreateViewStatement ViewSpecification(Token startStmtToken, boolean orReplace) t
       endPos.endColumn + 1);
     removeCurrentScope();
     defaultDataverse = currentDataverse;
-    try {
-      CreateViewStatement stmt = new CreateViewStatement(nameComponents.first, nameComponents.second.getValue(),
-        typeExpr, viewBody, viewBodyExpr, defaultNull, withRecord, orReplace, ifNotExists);
-    return addSourceLocation(stmt, startStmtToken);
-    } catch (CompilationException e) {
-       throw new SqlppParseException(getSourceLocation(startStmtToken), e.getMessage());
+    if (typeExpr != null && primaryKeyFields != null) {
+      DatasetDeclParametersUtil.adjustInlineTypeDecl(typeExpr, primaryKeyFields.second, primaryKeyFields.first, false);
     }
+    CreateViewStatement.KeyDecl primaryKeyDecl = primaryKeyFields != null ?
+      new CreateViewStatement.KeyDecl(primaryKeyFields.second, primaryKeyFields.first) : null;
+    CreateViewStatement stmt = new CreateViewStatement(nameComponents.first, nameComponents.second.getValue(),
+      typeExpr, viewBody, viewBodyExpr, defaultNull, viewConfig, primaryKeyDecl, foreignKeyDecls, orReplace,
+      ifNotExists);
+    return addSourceLocation(stmt, startStmtToken);
   }
 }
 
@@ -1493,6 +1640,28 @@ Expression ViewBody() throws ParseException:
   )
   {
     return viewBodyExpr;
+  }
+}
+
+Pair<Map<String, String>, Boolean> CastDefaultNull() throws ParseException:
+{
+  Map<String, String> castConfig = null;
+  Boolean defaultNull = null;
+  String propertyName = null, propertyValue = null;
+}
+{
+  <IDENTIFIER> { expectToken(DEFAULT); } <NULL> { defaultNull = true; }
+    (
+      LOOKAHEAD(2) <IDENTIFIER> { propertyName = token.image.toLowerCase(); } propertyValue = StringLiteral()
+      {
+        if (castConfig == null) {
+          castConfig = new HashMap<String, String>();
+        }
+        castConfig.put(propertyName, propertyValue);
+      }
+    )*
+  {
+    return new Pair<Map<String, String>, Boolean>(castConfig, defaultNull);
   }
 }
 
@@ -1929,12 +2098,23 @@ int FunctionArity() throws ParseException:
 
 Pair<List<Integer>, List<List<String>>> PrimaryKey() throws ParseException:
 {
+  Pair<List<Integer>, List<List<String>>> primaryKeyFields = null;
+}
+{
+  <PRIMARY> <KEY> primaryKeyFields = PrimaryKeyFields()
+  {
+    return primaryKeyFields;
+  }
+}
+
+Pair<List<Integer>, List<List<String>>> PrimaryKeyFields() throws ParseException:
+{
   Pair<Integer, List<String>> tmp = null;
   List<Integer> keyFieldSourceIndicators = new ArrayList<Integer>();
   List<List<String>> primaryKeyFields = new ArrayList<List<String>>();
 }
 {
-  <PRIMARY> <KEY> tmp = NestedField()
+  tmp = NestedField()
     {
       keyFieldSourceIndicators.add(tmp.first);
       primaryKeyFields.add(tmp.second);
@@ -2493,6 +2673,50 @@ String AdapterName() throws ParseException :
     }
 }
 
+Statement AnalyzeStatement() throws ParseException:
+{
+  Token startToken = null;
+  Statement stmt = null;
+  Pair<DataverseName,Identifier> nameComponents = null;
+}
+{
+  <ANALYZE> { startToken = token; } Dataset() nameComponents = QualifiedName()
+  (
+    stmt = AnalyzeDatasetDropStatement(startToken, nameComponents.first, nameComponents.second)
+    | stmt = AnalyzeDatasetStatement(startToken, nameComponents.first, nameComponents.second)
+  )
+  {
+    return stmt;
+  }
+}
+
+Statement AnalyzeDatasetStatement(Token startToken, DataverseName dvName, Identifier identifier) throws ParseException:
+{
+  RecordConstructor withRecord = null;
+}
+{
+  ( <WITH> withRecord = RecordConstructor() )?
+  {
+    try {
+    AnalyzeStatement stmt = new AnalyzeStatement(dvName, identifier.getValue(), withRecord);
+    return addSourceLocation(stmt, startToken);
+    } catch (CompilationException e) {
+       throw new SqlppParseException(getSourceLocation(startToken), e.getMessage());
+    }
+  }
+}
+
+Statement AnalyzeDatasetDropStatement(Token startToken, DataverseName dvName, Identifier identifier) throws ParseException:
+{
+}
+{
+  <DROP> <IDENTIFIER> { expectToken(STATISTICS); }
+  {
+    AnalyzeDropStatement stmt = new AnalyzeDropStatement(dvName, identifier.getValue());
+    return addSourceLocation(stmt, startToken);
+  }
+}
+
 Statement CompactStatement() throws ParseException:
 {
   Token startToken = null;
@@ -2859,8 +3083,8 @@ FunctionName FunctionName() throws ParseException:
   // Note: there's a copy of this production in PrimaryExpr() (LOOKAHEAD for FunctionCallExpr())
   //       that copy must be kept in sync with this code
   prefix = MultipartIdentifierWithHints(
-    SqlppHint.INDEXED_NESTED_LOOP_JOIN_HINT, SqlppHint.RANGE_HINT,
-    SqlppHint.SKIP_SECONDARY_INDEX_SEARCH_HINT, SqlppHint.USE_SECONDARY_INDEX_SEARCH_HINT
+    SqlppHint.INDEXED_NESTED_LOOP_JOIN_HINT, SqlppHint.RANGE_HINT, SqlppHint.HASH_JOIN_HINT, SqlppHint.SKIP_SECONDARY_INDEX_SEARCH_HINT,
+    SqlppHint.SPATIAL_JOIN_HINT, SqlppHint.USE_SECONDARY_INDEX_SEARCH_HINT
   )
   (<SHARP> suffix = Identifier())?
   {
@@ -2933,6 +3157,49 @@ List<String> ParenthesizedIdentifierList() throws ParseException:
   <LEFTPAREN>
   ident = Identifier() { list.add(ident); }
   ( <COMMA> ident = Identifier() { list.add(ident); } )*
+  <RIGHTPAREN>
+  {
+    return list;
+  }
+}
+
+List<Literal> ParenthesizedLiteralList() throws ParseException:
+{
+  List<Literal> list = new ArrayList<Literal>();
+  boolean minus = false;
+  Expression litExpr = null;
+  Literal lit = null;
+}
+{
+  <LEFTPAREN>
+  (<MINUS> { minus = true; })? litExpr = Literal()
+  {
+    lit = ((LiteralExpr) litExpr).getValue();
+    if (minus)
+    {
+      try {
+        lit = ExpressionUtils.reverseSign(lit);
+      } catch (TypeMismatchException e) {
+        throw new SqlppParseException(getSourceLocation(token), e.getMessage());
+      }
+      minus = false;
+    }
+    list.add(lit);
+  }
+  ( <COMMA> (<MINUS> { minus = true; })? litExpr = Literal()
+  {
+    lit = ((LiteralExpr) litExpr).getValue();
+    if (minus)
+    {
+      try {
+        lit = ExpressionUtils.reverseSign(lit);
+      } catch (TypeMismatchException e) {
+        throw new SqlppParseException(getSourceLocation(token), e.getMessage());
+      }
+      minus = false;
+    }
+    list.add(lit);
+  } )*
   <RIGHTPAREN>
   {
     return list;
@@ -3016,12 +3283,48 @@ String QuotedString() throws ParseException:
 
 String StringLiteral() throws ParseException:
 {
+  StringBuilder str = null;
+  char quote = 0;
+  boolean ext = false;
+  Token litToken = null;
+  String lit = null;
 }
 {
-  <STRING_LITERAL>
+  ( <STRING_LITERAL>
     {
-      return removeQuotesAndEscapes(token.image);
+      String quoted = token.image;
+      char q = quoted.charAt(0);
+      boolean e = q == 'E';
+      if (e) {
+        q = quoted.charAt(1);
+        quoted = quoted.substring(1);
+      }
+      if (lit == null) {
+        quote = q;
+        ext = e;
+      } else {
+        boolean isAdjacent = litToken.endLine == token.beginLine && litToken.endColumn + 1 == token.beginColumn;
+        if (!isAdjacent || ext || e || (q != quote)) {
+          throw new SqlppParseException(getSourceLocation(token), "Invalid string literal");
+        }
+        if (str == null) {
+          str = new StringBuilder();
+        }
+        str.append(lit);
+        str.append(quote);
+      }
+      lit = removeQuotesAndEscapes(quoted);
+      litToken = token;
     }
+  )+
+  {
+    if (str == null) {
+      return lit;
+    } else {
+      str.append(lit);
+      return str.toString();
+    }
+  }
 }
 
 Triple<List<String>, Token, Token> MultipartIdentifier() throws ParseException:
@@ -3267,6 +3570,7 @@ Expression RelExpr() throws ParseException:
   Token opToken = null;
   Expression operand = null;
   IExpressionAnnotation annotation = null;
+  List<IExpressionAnnotation> annotationList = new ArrayList<IExpressionAnnotation>();
 }
 {
     operand = BetweenExpr()
@@ -3280,10 +3584,13 @@ Expression RelExpr() throws ParseException:
           }
           Token hintToken = fetchHint(token,
             SqlppHint.HASH_BROADCAST_JOIN_HINT, SqlppHint.INDEXED_NESTED_LOOP_JOIN_HINT,
-            SqlppHint.SKIP_SECONDARY_INDEX_SEARCH_HINT, SqlppHint.USE_SECONDARY_INDEX_SEARCH_HINT
+            SqlppHint.HASH_JOIN_HINT, SqlppHint.SKIP_SECONDARY_INDEX_SEARCH_HINT, SqlppHint.USE_SECONDARY_INDEX_SEARCH_HINT,
+            SqlppHint.SINGLE_DATASET_PREDICATE_SELECTIVITY_HINT, SqlppHint.JOIN_PREDICATE_PRODUCTIVITY_HINT
           );
-          if (hintToken != null) {
+          while (hintToken != null) {
             annotation = parseExpressionAnnotation(hintToken);
+            annotationList.add(annotation);
+            hintToken = hintToken.specialToken;
           }
           String operator = opToken.image.toLowerCase();
           if (operator.equals("<>")){
@@ -3313,7 +3620,7 @@ Expression RelExpr() throws ParseException:
 
      {
        if (annotation != null) {
-         op.addHint(annotation);
+         op.addHints(annotationList);
        }
        return op==null? operand: op;
      }
@@ -3333,8 +3640,8 @@ Expression BetweenExpr() throws ParseException:
       (<NOT> { not = true; })? <BETWEEN>
         {
           Token hintToken = fetchHint(token,
-            SqlppHint.INDEXED_NESTED_LOOP_JOIN_HINT, SqlppHint.SKIP_SECONDARY_INDEX_SEARCH_HINT,
-            SqlppHint.USE_SECONDARY_INDEX_SEARCH_HINT
+            SqlppHint.INDEXED_NESTED_LOOP_JOIN_HINT, SqlppHint.SKIP_SECONDARY_INDEX_SEARCH_HINT, SqlppHint.HASH_JOIN_HINT,
+            SqlppHint.USE_SECONDARY_INDEX_SEARCH_HINT, SqlppHint.SINGLE_DATASET_PREDICATE_SELECTIVITY_HINT
           );
           if (hintToken != null) {
             annotation = parseExpressionAnnotation(hintToken);
@@ -3418,6 +3725,7 @@ Expression LikeExpr() throws ParseException:
   boolean not = false;
   OperatorExpr op = null;
   Expression operand = null;
+  IExpressionAnnotation annotation = null;
 }
 {
     operand = ConcatExpr()
@@ -3425,6 +3733,10 @@ Expression LikeExpr() throws ParseException:
         LOOKAHEAD(2)
         (<NOT> { not = true; })? <LIKE>
         {
+          Token hintToken = fetchHint(token, SqlppHint.SINGLE_DATASET_PREDICATE_SELECTIVITY_HINT);
+          if (hintToken != null) {
+               annotation = parseExpressionAnnotation(hintToken);
+          }
           op = new OperatorExpr();
           op.addOperand(operand);
           op.setCurrentop(true);
@@ -3438,6 +3750,9 @@ Expression LikeExpr() throws ParseException:
             op.addOperator(operator);
           } catch (CompilationException e){
             throw new SqlppParseException(getSourceLocation(token), e.getMessage());
+          }
+          if (annotation != null) {
+             op.addHint(annotation);
           }
         }
 
@@ -4231,17 +4546,35 @@ WindowExpression.FrameExclusionKind WindowFrameExclusion() throws ParseException
 
 Expression ParenthesizedExpression() throws ParseException:
 {
-  Expression expr;
+  Token startToken = null;
+  Expression expr = null, expr2 = null;
+  List<Expression> exprList = null;
 }
 {
     (
     LOOKAHEAD(2)
-    <LEFTPAREN> expr = Expression() <RIGHTPAREN>
+    <LEFTPAREN> { startToken = token; } expr = Expression()
+    (
+      <COMMA> expr2 = Expression()
+      {
+        if (exprList == null) {
+          exprList = new ArrayList<Expression>();
+          exprList.add(expr);
+        }
+        exprList.add(expr2);
+      }
+    )*
+    <RIGHTPAREN>
     |
     expr = Subquery()
     )
     {
-      return expr;
+      if (exprList != null) {
+        ListConstructor listExpr = new ListConstructor(ListConstructor.Type.ORDERED_LIST_CONSTRUCTOR, exprList);
+        return addSourceLocation(listExpr, startToken);
+      } else {
+        return expr;
+      }
     }
 }
 
@@ -4443,26 +4776,47 @@ SelectClause SelectClause() throws ParseException:
   Token startToken = null;
   SelectRegular selectRegular = null;
   SelectElement selectElement = null;
+  List<List<String>> fieldExclusions = new ArrayList<List<String>>();
+  List<String> nestedField = new ArrayList<String>();
+  String identifier;
   boolean distinct = false;
 }
 {
   <SELECT> { startToken = token; } (<ALL>|<DISTINCT> { distinct = true; } )?
   (
-    selectRegular = SelectRegular()
+    (
+      selectRegular = SelectRegular()
+      ( LOOKAHEAD({laIdentifier(EXCLUDE)}) <IDENTIFIER>
+        identifier = Identifier() { nestedField.add(identifier); }
+        ( <DOT> identifier = Identifier() { nestedField.add(identifier); } )*
+        {
+          fieldExclusions.add(nestedField);
+          nestedField = new ArrayList<String>();
+        }
+        ( LOOKAHEAD(1) // Force <COMMA> to be recognized for a nested field in our EXCLUDE list.
+          <COMMA> identifier = Identifier() { nestedField.add(identifier); }
+          ( <DOT> identifier = Identifier() { nestedField.add(identifier); } )*
+          {
+            fieldExclusions.add(nestedField);
+            nestedField = new ArrayList<String>();
+          }
+        )*
+      )?
+    )
     |
     selectElement = SelectElement()
   )?
   {
     SourceLocation sourceLoc = getSourceLocation(startToken);
     if (selectRegular == null && selectElement == null){
-        Projection projection = new Projection(null, null, true, false);
+        Projection projection = new Projection(Projection.Kind.STAR, null, null);
         projection.setSourceLocation(sourceLoc);
         List<Projection> projections = new ArrayList<Projection>();
         projections.add(projection);
         selectRegular = new SelectRegular(projections);
         selectRegular.setSourceLocation(sourceLoc);
     }
-    SelectClause selectClause = new SelectClause(selectElement, selectRegular, distinct);
+    SelectClause selectClause = new SelectClause(selectElement, selectRegular, fieldExclusions, distinct);
     selectClause.setSourceLocation(sourceLoc);
     return selectClause;
   }
@@ -4512,15 +4866,22 @@ Projection Projection() throws ParseException :
   Expression expr = null;
   Identifier identifier = null;
   String name = null;
+  Projection.Kind kind = null;
   boolean star = false;
   boolean varStar = false;
 }
 {
   (
-    <MUL> { star = true; startSrcLoc = getSourceLocation(token); }
-    | LOOKAHEAD(3) expr = VariableRef() <DOT> <MUL> { varStar = true; }
-    | expr = Expression() ((<AS>)? name = Identifier())?
+    <MUL> { kind = Projection.Kind.STAR; startSrcLoc = getSourceLocation(token); }
+    | LOOKAHEAD(3) expr = VariableRef() <DOT> <MUL> { kind = Projection.Kind.VAR_STAR; }
+    | expr = Expression()
+      ( // EXCLUDE is a soft-keyword-- we want to avoid mistaking EXCLUDE as an identifier here.
+        LOOKAHEAD({ getToken(1).kind == AS || getToken(1).kind == QUOTED_STRING
+                    || (getToken(1).kind == IDENTIFIER && !laIdentifier(1, EXCLUDE)) })
+        (<AS>)? name = Identifier()
+      )?
       {
+        kind = Projection.Kind.NAMED_EXPR;
         if (name == null) {
           String generatedColumnIdentifier = ExpressionToVariableUtil.getGeneratedIdentifier(expr, false);
           if (generatedColumnIdentifier != null) {
@@ -4530,7 +4891,7 @@ Projection Projection() throws ParseException :
       }
   )
   {
-    Projection projection = new Projection(expr, name, star, varStar);
+    Projection projection = new Projection(kind, expr, name);
     projection.setSourceLocation(expr != null ? expr.getSourceLocation() : startSrcLoc);
     return projection;
   }
@@ -4607,7 +4968,7 @@ JoinClause JoinClause(JoinType joinType) throws ParseException :
   <JOIN> { startToken = token; } rightInput = JoinClauseRightInput() <ON> conditionExpr = Expression()
   {
     JoinClause joinClause = new JoinClause(joinType, rightInput.first, rightInput.second, rightInput.third,
-      conditionExpr);
+      conditionExpr, joinType == JoinType.INNER ? null : Literal.Type.MISSING);
     return addSourceLocation(joinClause, startToken);
   }
 }
@@ -4622,7 +4983,7 @@ JoinClause CrossJoinClause() throws ParseException :
   <JOIN> { startToken = token; } rightInput = JoinClauseRightInput()
   {
     JoinClause joinClause = new JoinClause(JoinType.INNER, rightInput.first, rightInput.second, rightInput.third,
-      new LiteralExpr(TrueLiteral.INSTANCE));
+      new LiteralExpr(TrueLiteral.INSTANCE), null);
     return addSourceLocation(joinClause, startToken);
   }
 }
@@ -4656,7 +5017,8 @@ UnnestClause UnnestClause(UnnestType unnestType) throws ParseException :
     if (rightVar == null) {
       rightVar = ExpressionToVariableUtil.getGeneratedVariable(rightExpr, true);
     }
-    UnnestClause unnestClause = new UnnestClause(unnestType, rightExpr, rightVar, posVar);
+    UnnestClause unnestClause = new UnnestClause(unnestType, rightExpr, rightVar, posVar,
+      unnestType == UnnestType.INNER ? null : Literal.Type.MISSING);
     return addSourceLocation(unnestClause, startToken);
   }
 }
@@ -5069,11 +5431,12 @@ TOKEN_MGR_DECLS:
 
     void CommonTokenAction(Token token) {
       Token hintToken = token.specialToken;
-      if (hintToken != null) {
+      while (hintToken != null) { // make this a while loop
         hintToken.sourceLocation = new SourceLocation(hintToken.beginLine, hintToken.beginColumn);
         String text = hintToken.image.substring(1).trim();
         boolean hintFound = hintToken.parseHint(text);
         hintCollector.put(hintToken.sourceLocation, hintFound ? hintToken.hint.getIdentifier() : hintToken.hintParams);
+        hintToken = hintToken.specialToken;
       }
     }
 }
@@ -5083,6 +5446,7 @@ TOKEN [IGNORE_CASE]:
 {
   <ADAPTER: "adapter">
   | <ALL : "all">
+  | <ANALYZE: "analyze">
   | <AND : "and">
   | <ANY : "any">
   | <APPLY : "apply">
@@ -5094,6 +5458,7 @@ TOKEN [IGNORE_CASE]:
   | <BTREE : "btree">
   | <BY : "by">
   | <CASE : "case">
+  | <CAST : "cast">
   | <CLOSED : "closed">
   | <CREATE : "create">
   | <CROSS : "cross">
@@ -5311,7 +5676,7 @@ TOKEN :
         | <EscapeCr>
         | <EscapeTab>
         | ~["`","\\"])* "`">
-  | <STRING_LITERAL : ("\"" (
+  | <STRING_LITERAL : ( ("E")? "\"" (
           <EscapeQuot>
         | <EscapeBslash>
         | <EscapeSlash>
@@ -5321,7 +5686,7 @@ TOKEN :
         | <EscapeCr>
         | <EscapeTab>
         | ~["\"","\\"])* "\"")
-      | ("\'"(
+      | ( ("E")? "\'" (
           <EscapeApos>
         | <EscapeBslash>
         | <EscapeSlash>

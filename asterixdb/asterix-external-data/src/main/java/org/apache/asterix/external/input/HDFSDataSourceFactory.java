@@ -25,7 +25,8 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.asterix.common.api.IApplicationContext;
-import org.apache.asterix.common.exceptions.AsterixException;
+import org.apache.asterix.common.exceptions.CompilationException;
+import org.apache.asterix.common.exceptions.ErrorCode;
 import org.apache.asterix.external.api.AsterixInputStream;
 import org.apache.asterix.external.api.IExternalIndexer;
 import org.apache.asterix.external.api.IIndexibleExternalDataSource;
@@ -54,6 +55,7 @@ import org.apache.hyracks.api.application.IServiceContext;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.exceptions.IWarningCollector;
+import org.apache.hyracks.data.std.api.IValueReference;
 import org.apache.hyracks.hdfs.dataflow.ConfFactory;
 import org.apache.hyracks.hdfs.dataflow.InputSplitsFactory;
 import org.apache.hyracks.hdfs.scheduler.Scheduler;
@@ -106,7 +108,7 @@ public class HDFSDataSourceFactory implements IRecordReaderFactory<Object>, IInd
             // if files list was set, we restrict the splits to the list
             InputSplit[] inputSplits;
             if (files == null) {
-                inputSplits = conf.getInputFormat().getSplits(conf, numPartitions);
+                inputSplits = getInputSplits(conf, numPartitions);
             } else {
                 inputSplits = HDFSUtils.getSplits(conf, files);
             }
@@ -119,19 +121,26 @@ public class HDFSDataSourceFactory implements IRecordReaderFactory<Object>, IInd
             read = new boolean[readSchedule.length];
             Arrays.fill(read, false);
             String formatString = configuration.get(ExternalDataConstants.KEY_FORMAT);
-            if (formatString == null || formatString.equals(ExternalDataConstants.FORMAT_HDFS_WRITABLE)
-                    || formatString.equals(ExternalDataConstants.FORMAT_NOOP)
-                    || formatString.equals(ExternalDataConstants.FORMAT_PARQUET)) {
+            if (formatString == null || formatString.equals(ExternalDataConstants.FORMAT_HDFS_WRITABLE)) {
                 RecordReader<?, ?> reader = conf.getInputFormat().getRecordReader(inputSplits[0], conf, Reporter.NULL);
                 this.recordClass = reader.createValue().getClass();
                 reader.close();
+            } else if (formatString.equals(ExternalDataConstants.FORMAT_PARQUET)) {
+                recordClass = IValueReference.class;
             } else {
                 recordReaderClazz = StreamRecordReaderProvider.getRecordReaderClazz(configuration);
                 this.recordClass = char[].class;
             }
         } catch (IOException e) {
-            throw new AsterixException(e);
+            throw new CompilationException(ErrorCode.EXTERNAL_SOURCE_ERROR, e);
         }
+    }
+
+    private InputSplit[] getInputSplits(JobConf conf, int numPartitions) throws IOException {
+        if (HDFSUtils.isEmpty(conf)) {
+            return Scheduler.EMPTY_INPUT_SPLITS;
+        }
+        return conf.getInputFormat().getSplits(conf, numPartitions);
     }
 
     // Used to tell the factory to restrict the splits to the intersection between this list a
@@ -229,7 +238,19 @@ public class HDFSDataSourceFactory implements IRecordReaderFactory<Object>, IInd
                 }
             }
             restoreConfig(ctx);
-            return createRecordReader(configuration, read, inputSplits, readSchedule, nodeName, conf, files, indexer);
+            JobConf readerConf = conf;
+            if (ctx.getWarningCollector().shouldWarn()
+                    && configuration.get(ExternalDataConstants.KEY_INPUT_FORMAT.trim())
+                            .equals(ExternalDataConstants.INPUT_FORMAT_PARQUET)) {
+                /*
+                 * JobConf is used to pass warnings from the ParquetReadSupport to ParquetReader. As multiple
+                 * partitions can issue different warnings, we might have a race condition on JobConf. Thus, we
+                 * should create a copy when warnings are enabled.
+                 */
+                readerConf = confFactory.getConf();
+            }
+            return createRecordReader(configuration, read, inputSplits, readSchedule, nodeName, readerConf, files,
+                    indexer, ctx.getWarningCollector());
         } catch (Exception e) {
             throw HyracksDataException.create(e);
         }
@@ -257,10 +278,10 @@ public class HDFSDataSourceFactory implements IRecordReaderFactory<Object>, IInd
 
     private static IRecordReader<? extends Object> createRecordReader(Map<String, String> configuration, boolean[] read,
             InputSplit[] inputSplits, String[] readSchedule, String nodeName, JobConf conf, List<ExternalFile> files,
-            IExternalIndexer indexer) throws IOException {
+            IExternalIndexer indexer, IWarningCollector warningCollector) throws IOException {
         if (configuration.get(ExternalDataConstants.KEY_INPUT_FORMAT.trim())
                 .equals(ExternalDataConstants.INPUT_FORMAT_PARQUET)) {
-            return new ParquetFileRecordReader<>(read, inputSplits, readSchedule, nodeName, conf);
+            return new ParquetFileRecordReader<>(read, inputSplits, readSchedule, nodeName, conf, warningCollector);
         } else {
             return new HDFSRecordReader<>(read, inputSplits, readSchedule, nodeName, conf, files, indexer);
         }

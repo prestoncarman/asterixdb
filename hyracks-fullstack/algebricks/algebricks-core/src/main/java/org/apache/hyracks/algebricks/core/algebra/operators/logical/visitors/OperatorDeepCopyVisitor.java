@@ -133,7 +133,7 @@ public class OperatorDeepCopyVisitor implements ILogicalOperatorVisitor<ILogical
     @Override
     public ILogicalOperator visitLeftOuterJoinOperator(LeftOuterJoinOperator op, Void arg) throws AlgebricksException {
         return new LeftOuterJoinOperator(deepCopyExpressionRef(op.getCondition()), op.getInputs().get(0),
-                op.getInputs().get(1));
+                op.getInputs().get(1), op.getMissingValue());
     }
 
     @Override
@@ -158,7 +158,7 @@ public class OperatorDeepCopyVisitor implements ILogicalOperatorVisitor<ILogical
 
     @Override
     public ILogicalOperator visitSelectOperator(SelectOperator op, Void arg) throws AlgebricksException {
-        return new SelectOperator(deepCopyExpressionRef(op.getCondition()), op.getRetainMissing(),
+        return new SelectOperator(deepCopyExpressionRef(op.getCondition()), op.getRetainMissingAsValue(),
                 op.getMissingPlaceholderVariable());
     }
 
@@ -247,7 +247,7 @@ public class OperatorDeepCopyVisitor implements ILogicalOperatorVisitor<ILogical
         ArrayList<LogicalVariable> newInputList = new ArrayList<>();
         newInputList.addAll(op.getVariables());
         return new LeftOuterUnnestMapOperator(newInputList, deepCopyExpressionRef(op.getExpressionRef()),
-                new ArrayList<>(op.getVariableTypes()), op.propagatesInput());
+                new ArrayList<>(op.getVariableTypes()), op.getMissingValue());
     }
 
     @Override
@@ -420,7 +420,7 @@ public class OperatorDeepCopyVisitor implements ILogicalOperatorVisitor<ILogical
     public ILogicalOperator visitLeftOuterUnnestOperator(LeftOuterUnnestOperator op, Void arg)
             throws AlgebricksException {
         return new LeftOuterUnnestOperator(op.getVariable(), deepCopyExpressionRef(op.getExpressionRef()),
-                op.getPositionalVariable(), op.getPositionalVariableType());
+                op.getPositionalVariable(), op.getPositionalVariableType(), op.getMissingValue());
     }
 
     @Override
@@ -448,11 +448,11 @@ public class OperatorDeepCopyVisitor implements ILogicalOperatorVisitor<ILogical
         deepCopyVars(newVariables, op.getVariables());
         List<Mutable<ILogicalExpression>> newExpressions = new ArrayList<>();
         deepCopyExpressionRefs(newExpressions, op.getExpressions());
-        List<ILogicalPlan> newNestedPlans = new ArrayList<>();
         WindowOperator newWinOp = new WindowOperator(newPartitionExprs, newOrderExprs, newFrameValueExprs,
                 newFrameStartExprs, newFrameStartValidationExprs, newFrameEndExprs, newFrameEndValidationExprs,
                 newFrameExclusionExprs, op.getFrameExcludeNegationStartIdx(), newFrameExcludeUnaryExpr,
-                newFrameOffsetExpr, op.getFrameMaxObjects(), newVariables, newExpressions, newNestedPlans);
+                newFrameOffsetExpr, op.getFrameMaxObjects(), newVariables, newExpressions, null);
+        List<ILogicalPlan> newNestedPlans = newWinOp.getNestedPlans();
         for (ILogicalPlan nestedPlan : op.getNestedPlans()) {
             newNestedPlans.add(OperatorManipulationUtil.deepCopy(nestedPlan, newWinOp));
         }

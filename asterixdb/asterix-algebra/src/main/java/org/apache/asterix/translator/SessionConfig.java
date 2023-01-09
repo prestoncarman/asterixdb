@@ -21,6 +21,7 @@ package org.apache.asterix.translator;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.Logger;
@@ -39,7 +40,7 @@ import org.apache.logging.log4j.Logger;
  * <li>It allows you to specify output format-specific parameters.
  */
 public class SessionConfig implements Serializable {
-    private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 2L;
 
     /**
      * Used to specify the output format for the primary execution.
@@ -48,7 +49,8 @@ public class SessionConfig implements Serializable {
         ADM,
         CSV,
         CLEAN_JSON,
-        LOSSLESS_JSON
+        LOSSLESS_JSON,
+        LOSSLESS_ADM_JSON
     }
 
     /**
@@ -70,6 +72,11 @@ public class SessionConfig implements Serializable {
             }
             return defaultFmt;
         }
+    }
+
+    public enum ClientType {
+        ASTERIX,
+        JDBC
     }
 
     /**
@@ -127,12 +134,15 @@ public class SessionConfig implements Serializable {
      */
     public static final String FORMAT_QUOTE_RECORD = "quote-record";
 
+    // Client type
+    private ClientType clientType;
+
     // Output format.
     private OutputFormat fmt;
     private PlanFormat planFormat;
 
     // Standard execution flags.
-    private final boolean executeQuery;
+    private boolean executeQuery;
     private final boolean generateJobSpec;
     private final boolean optimize;
     private long maxWarnings;
@@ -174,6 +184,18 @@ public class SessionConfig implements Serializable {
         this.generateJobSpec = generateJobSpec;
         this.flags = new HashMap<>();
         this.planFormat = planFormat;
+        this.clientType = ClientType.ASTERIX;
+    }
+
+    /**
+     * Retrieve the client type for this execution.
+     */
+    public ClientType getClientType() {
+        return this.clientType;
+    }
+
+    public void setClientType(ClientType clientType) {
+        this.clientType = Objects.requireNonNull(clientType);
     }
 
     /**
@@ -214,6 +236,10 @@ public class SessionConfig implements Serializable {
      */
     public boolean isExecuteQuery() {
         return executeQuery;
+    }
+
+    public void setExecuteQuery(boolean executeQuery) {
+        this.executeQuery = executeQuery;
     }
 
     /**

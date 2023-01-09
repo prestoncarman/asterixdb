@@ -21,9 +21,6 @@ package org.apache.hyracks.api.dataflow.value;
 
 import org.apache.hyracks.api.comm.IFrameTupleAccessor;
 
-/*
- * Compares two tuples to make sure that records, whose comparison keys are NULL do not pass comparator filter
- */
 public interface IPredicateEvaluator {
-    public boolean evaluate(IFrameTupleAccessor fta0, int tupId0, IFrameTupleAccessor fta1, int tupId1);
+    boolean evaluate(IFrameTupleAccessor fta, int tupId);
 }

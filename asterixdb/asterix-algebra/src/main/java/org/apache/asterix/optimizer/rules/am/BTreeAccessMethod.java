@@ -19,6 +19,8 @@
 
 package org.apache.asterix.optimizer.rules.am;
 
+import static org.apache.asterix.optimizer.rules.am.AccessMethodUtils.CAST_NULL_TYPE_CONSTRUCTORS;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
@@ -27,6 +29,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 import org.apache.asterix.common.annotations.AbstractExpressionAnnotationWithIndexNames;
@@ -36,14 +39,21 @@ import org.apache.asterix.common.config.DatasetConfig.DatasetType;
 import org.apache.asterix.common.config.DatasetConfig.IndexType;
 import org.apache.asterix.common.exceptions.CompilationException;
 import org.apache.asterix.common.exceptions.ErrorCode;
+import org.apache.asterix.dataflow.data.common.ILogicalBinaryComparator;
+import org.apache.asterix.dataflow.data.nontagged.comparators.ComparatorUtil;
 import org.apache.asterix.lang.common.util.FunctionUtil;
 import org.apache.asterix.metadata.entities.Dataset;
 import org.apache.asterix.metadata.entities.Index;
+import org.apache.asterix.metadata.utils.IndexUtil;
+import org.apache.asterix.metadata.utils.TypeUtil;
+import org.apache.asterix.om.base.ADouble;
+import org.apache.asterix.om.base.IAObject;
 import org.apache.asterix.om.functions.BuiltinFunctions;
+import org.apache.asterix.om.typecomputer.impl.TypeComputeUtils;
 import org.apache.asterix.om.types.ARecordType;
-import org.apache.asterix.om.types.AUnionType;
+import org.apache.asterix.om.types.BuiltinType;
 import org.apache.asterix.om.types.IAType;
-import org.apache.asterix.om.utils.NonTaggedFormatUtil;
+import org.apache.asterix.om.types.hierachy.ATypeHierarchy;
 import org.apache.asterix.optimizer.rules.util.EquivalenceClassUtils;
 import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.commons.lang3.mutable.MutableObject;
@@ -58,6 +68,7 @@ import org.apache.hyracks.algebricks.core.algebra.base.LogicalExpressionTag;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalOperatorTag;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import org.apache.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
+import org.apache.hyracks.algebricks.core.algebra.expressions.IAlgebricksConstantValue;
 import org.apache.hyracks.algebricks.core.algebra.expressions.IVariableTypeEnvironment;
 import org.apache.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.UnnestingFunctionCallExpression;
@@ -117,11 +128,15 @@ public class BTreeAccessMethod implements IAccessMethod {
             List<AbstractLogicalOperator> assignsAndUnnests, AccessMethodAnalysisContext analysisCtx,
             IOptimizationContext context, IVariableTypeEnvironment typeEnvironment) throws AlgebricksException {
         boolean matches = AccessMethodUtils.analyzeFuncExprArgsForOneConstAndVarAndUpdateAnalysisCtx(funcExpr,
-                analysisCtx, context, typeEnvironment);
+                analysisCtx, context, typeEnvironment, allowFunctionExpressionArg());
         if (!matches) {
             matches = AccessMethodUtils.analyzeFuncExprArgsForTwoVarsAndUpdateAnalysisCtx(funcExpr, analysisCtx);
         }
         return matches;
+    }
+
+    protected boolean allowFunctionExpressionArg() {
+        return true;
     }
 
     @Override
@@ -189,7 +204,7 @@ public class BTreeAccessMethod implements IAccessMethod {
                         afterSelectRefs),
                 false, subTree.getDataSourceRef().getValue().getInputs().get(0).getValue()
                         .getExecutionMode() == ExecutionMode.UNPARTITIONED,
-                context, null);
+                context, null, null);
 
         if (primaryIndexUnnestOp == null) {
             return false;
@@ -242,8 +257,8 @@ public class BTreeAccessMethod implements IAccessMethod {
     public boolean applyJoinPlanTransformation(List<Mutable<ILogicalOperator>> afterJoinRefs,
             Mutable<ILogicalOperator> joinRef, OptimizableOperatorSubTree leftSubTree,
             OptimizableOperatorSubTree rightSubTree, Index chosenIndex, AccessMethodAnalysisContext analysisCtx,
-            IOptimizationContext context, boolean isLeftOuterJoin, boolean isLeftOuterJoinWithSpecialGroupBy)
-            throws AlgebricksException {
+            IOptimizationContext context, boolean isLeftOuterJoin, boolean isLeftOuterJoinWithSpecialGroupBy,
+            IAlgebricksConstantValue leftOuterMissingValue) throws AlgebricksException {
         AbstractBinaryJoinOperator joinOp = (AbstractBinaryJoinOperator) joinRef.getValue();
         Mutable<ILogicalExpression> conditionRef = joinOp.getCondition();
 
@@ -268,12 +283,12 @@ public class BTreeAccessMethod implements IAccessMethod {
             return false;
         }
 
-        LogicalVariable newNullPlaceHolderVar = null;
+        LogicalVariable newMissingNullPlaceHolderVar = null;
         if (isLeftOuterJoin) {
-            // Gets a new null place holder variable that is the first field variable of the primary key
+            // Gets a new missing/null place holder variable that is the first field variable of the primary key
             // from the indexSubTree's datasourceScanOp.
             // We need this for all left outer joins, even those that do not have a special GroupBy
-            newNullPlaceHolderVar = indexSubTree.getDataSourceVariables().get(0);
+            newMissingNullPlaceHolderVar = indexSubTree.getDataSourceVariables().get(0);
         }
 
         boolean canContinue = AccessMethodUtils.setIndexOnlyPlanInfo(afterJoinRefs, joinRef, probeSubTree, indexSubTree,
@@ -284,15 +299,15 @@ public class BTreeAccessMethod implements IAccessMethod {
 
         ILogicalOperator indexSearchOp = createIndexSearchPlan(afterJoinRefs, joinRef, conditionRef,
                 indexSubTree.getAssignsAndUnnestsRefs(), indexSubTree, probeSubTree, chosenIndex, analysisCtx, true,
-                isLeftOuterJoin, true, context, newNullPlaceHolderVar);
+                isLeftOuterJoin, true, context, newMissingNullPlaceHolderVar, leftOuterMissingValue);
 
         if (indexSearchOp == null) {
             return false;
         }
 
         return AccessMethodUtils.finalizeJoinPlanTransformation(afterJoinRefs, joinRef, indexSubTree, probeSubTree,
-                analysisCtx, context, isLeftOuterJoin, isLeftOuterJoinWithSpecialGroupBy, indexSearchOp,
-                newNullPlaceHolderVar, conditionRef, dataset);
+                analysisCtx, context, isLeftOuterJoin, isLeftOuterJoinWithSpecialGroupBy, leftOuterMissingValue,
+                indexSearchOp, newMissingNullPlaceHolderVar, conditionRef, dataset, chosenIndex);
     }
 
     /**
@@ -306,7 +321,8 @@ public class BTreeAccessMethod implements IAccessMethod {
             List<Mutable<ILogicalOperator>> assignBeforeTheOpRefs, OptimizableOperatorSubTree indexSubTree,
             OptimizableOperatorSubTree probeSubTree, Index chosenIndex, AccessMethodAnalysisContext analysisCtx,
             boolean retainInput, boolean retainMissing, boolean requiresBroadcast, IOptimizationContext context,
-            LogicalVariable newMissingPlaceHolderForLOJ) throws AlgebricksException {
+            LogicalVariable newMissingNullPlaceHolderForLOJ, IAlgebricksConstantValue leftOuterMissingValue)
+            throws AlgebricksException {
 
         Index.ValueIndexDetails chosenIndexDetails = (Index.ValueIndexDetails) chosenIndex.getIndexDetails();
         List<List<String>> chosenIndexKeyFieldNames = chosenIndexDetails.getKeyFieldNames();
@@ -315,8 +331,8 @@ public class BTreeAccessMethod implements IAccessMethod {
 
         return createBTreeIndexSearchPlan(afterTopOpRefs, topOpRef, conditionRef, assignBeforeTheOpRefs, indexSubTree,
                 probeSubTree, chosenIndex, analysisCtx, retainInput, retainMissing, requiresBroadcast, context,
-                newMissingPlaceHolderForLOJ, chosenIndexKeyFieldNames, chosenIndexKeyFieldTypes,
-                chosenIndexKeyFieldSourceIndicators);
+                newMissingNullPlaceHolderForLOJ, leftOuterMissingValue, chosenIndexKeyFieldNames,
+                chosenIndexKeyFieldTypes, chosenIndexKeyFieldSourceIndicators);
     }
 
     protected ILogicalOperator createBTreeIndexSearchPlan(List<Mutable<ILogicalOperator>> afterTopOpRefs,
@@ -324,9 +340,9 @@ public class BTreeAccessMethod implements IAccessMethod {
             List<Mutable<ILogicalOperator>> assignBeforeTheOpRefs, OptimizableOperatorSubTree indexSubTree,
             OptimizableOperatorSubTree probeSubTree, Index chosenIndex, AccessMethodAnalysisContext analysisCtx,
             boolean retainInput, boolean retainMissing, boolean requiresBroadcast, IOptimizationContext context,
-            LogicalVariable newMissingPlaceHolderForLOJ, List<List<String>> chosenIndexKeyFieldNames,
-            List<IAType> chosenIndexKeyFieldTypes, List<Integer> chosenIndexKeyFieldSourceIndicators)
-            throws AlgebricksException {
+            LogicalVariable newMissingNullPlaceHolderForLOJ, IAlgebricksConstantValue leftOuterMissingValue,
+            List<List<String>> chosenIndexKeyFieldNames, List<IAType> chosenIndexKeyFieldTypes,
+            List<Integer> chosenIndexKeyFieldSourceIndicators) throws AlgebricksException {
         Dataset dataset = indexSubTree.getDataset();
         ARecordType recordType = indexSubTree.getRecordType();
         ARecordType metaRecordType = indexSubTree.getMetaRecordType();
@@ -367,6 +383,7 @@ public class BTreeAccessMethod implements IAccessMethod {
         boolean couldntFigureOut = false;
         boolean doneWithExprs = false;
         boolean isEqCondition = false;
+        boolean anyRealTypeConvertedToIntegerType = false;
         BitSet setLowKeys = new BitSet(numSecondaryKeys);
         BitSet setHighKeys = new BitSet(numSecondaryKeys);
         // Go through the func exprs listed as optimizable by the chosen index,
@@ -394,10 +411,12 @@ public class BTreeAccessMethod implements IAccessMethod {
             // This is required because of type-casting. Refer to AccessMethodUtils.createSearchKeyExpr for details.
             IAType indexedFieldType = chosenIndexKeyFieldTypes.get(keyPos);
             Triple<ILogicalExpression, ILogicalExpression, Boolean> returnedSearchKeyExpr =
-                    AccessMethodUtils.createSearchKeyExpr(chosenIndex, optFuncExpr, indexedFieldType, probeSubTree);
+                    AccessMethodUtils.createSearchKeyExpr(chosenIndex, optFuncExpr, indexedFieldType, probeSubTree,
+                            SEARCH_KEY_ROUNDING_FUNCTION_COMPUTER);
             ILogicalExpression searchKeyExpr = returnedSearchKeyExpr.first;
             ILogicalExpression searchKeyEQExpr = null;
             boolean realTypeConvertedToIntegerType = returnedSearchKeyExpr.third;
+            anyRealTypeConvertedToIntegerType |= realTypeConvertedToIntegerType;
 
             LimitType limit = getLimitType(optFuncExpr, probeSubTree);
             if (limit == null) {
@@ -411,7 +430,7 @@ public class BTreeAccessMethod implements IAccessMethod {
             }
 
             // Deals with the non-enforced index case here.
-            if (relaxLimitTypeToInclusive(chosenIndex, keyPos, realTypeConvertedToIntegerType)) {
+            if (relaxLimitTypeToInclusive(chosenIndex, indexedFieldType, realTypeConvertedToIntegerType)) {
                 if (limit == LimitType.HIGH_EXCLUSIVE) {
                     limit = LimitType.HIGH_INCLUSIVE;
                 } else if (limit == LimitType.LOW_EXCLUSIVE) {
@@ -659,7 +678,7 @@ public class BTreeAccessMethod implements IAccessMethod {
         // The result: SK, PK, [Optional - the result of an instantTrylock on PK]
         ILogicalOperator secondaryIndexUnnestOp = AccessMethodUtils.createSecondaryIndexUnnestMap(dataset, recordType,
                 metaRecordType, chosenIndex, inputOp, jobGenParams, context, retainInput, retainMissing,
-                generateInstantTrylockResultFromIndexSearch);
+                generateInstantTrylockResultFromIndexSearch, leftOuterMissingValue);
 
         // Generate the rest of the upstream plan which feeds the search results into the primary index.
         ILogicalOperator indexSearchOp = null;
@@ -676,7 +695,8 @@ public class BTreeAccessMethod implements IAccessMethod {
             indexSearchOp = AccessMethodUtils.createRestOfIndexSearchPlan(afterTopOpRefs, topOpRef, conditionRef,
                     assignBeforeTheOpRefs, dataSourceOp, dataset, recordType, metaRecordType, secondaryIndexUnnestOp,
                     context, true, retainInput, retainMissing, false, chosenIndex, analysisCtx, indexSubTree,
-                    probeSubTree, newMissingPlaceHolderForLOJ);
+                    probeSubTree, newMissingNullPlaceHolderForLOJ, leftOuterMissingValue,
+                    anyRealTypeConvertedToIntegerType);
 
             // Replaces the datasource scan with the new plan rooted at
             // Get dataSourceRef operator -
@@ -733,7 +753,7 @@ public class BTreeAccessMethod implements IAccessMethod {
             } else {
                 leftOuterUnnestMapRequired = false;
             }
-
+            AbstractUnnestMapOperator unnestMapOp;
             if (conditionRef.getValue() != null) {
                 // The job gen parameters are transferred to the actual job gen
                 // via the UnnestMapOperator's function arguments.
@@ -745,7 +765,6 @@ public class BTreeAccessMethod implements IAccessMethod {
                         new UnnestingFunctionCallExpression(primaryIndexSearch, primaryIndexFuncArgs);
                 primaryIndexSearchFunc.setSourceLocation(dataSourceOp.getSourceLocation());
                 primaryIndexSearchFunc.setReturnsUniqueValues(true);
-                AbstractUnnestMapOperator unnestMapOp;
                 if (!leftOuterUnnestMapRequired) {
                     unnestMapOp = new UnnestMapOperator(scanVariables,
                             new MutableObject<ILogicalExpression>(primaryIndexSearchFunc), primaryIndexOutputTypes,
@@ -753,12 +772,9 @@ public class BTreeAccessMethod implements IAccessMethod {
                 } else {
                     unnestMapOp = new LeftOuterUnnestMapOperator(scanVariables,
                             new MutableObject<ILogicalExpression>(primaryIndexSearchFunc), primaryIndexOutputTypes,
-                            true);
+                            leftOuterMissingValue);
                 }
-                unnestMapOp.setSourceLocation(dataSourceOp.getSourceLocation());
-                indexSearchOp = unnestMapOp;
             } else {
-                AbstractUnnestMapOperator unnestMapOp;
                 if (!leftOuterUnnestMapRequired) {
                     unnestMapOp = new UnnestMapOperator(scanVariables,
                             ((UnnestMapOperator) secondaryIndexUnnestOp).getExpressionRef(), primaryIndexOutputTypes,
@@ -766,13 +782,13 @@ public class BTreeAccessMethod implements IAccessMethod {
                 } else {
                     unnestMapOp = new LeftOuterUnnestMapOperator(scanVariables,
                             ((LeftOuterUnnestMapOperator) secondaryIndexUnnestOp).getExpressionRef(),
-                            primaryIndexOutputTypes, true);
+                            primaryIndexOutputTypes, leftOuterMissingValue);
                 }
-                unnestMapOp.setSourceLocation(dataSourceOp.getSourceLocation());
-                indexSearchOp = unnestMapOp;
             }
-            // TODO: shouldn't indexSearchOp execution mode be set to that of the input? the default is UNPARTITIONED
-            indexSearchOp.getInputs().add(new MutableObject<>(inputOp));
+            unnestMapOp.setExecutionMode(ExecutionMode.PARTITIONED);
+            unnestMapOp.setSourceLocation(dataSourceOp.getSourceLocation());
+            unnestMapOp.getInputs().add(new MutableObject<>(inputOp));
+            indexSearchOp = unnestMapOp;
 
             // Adds equivalence classes --- one equivalent class between a primary key
             // variable and a record field-access expression.
@@ -902,8 +918,41 @@ public class BTreeAccessMethod implements IAccessMethod {
         return limit;
     }
 
-    private boolean relaxLimitTypeToInclusive(Index chosenIndex, int keyPos, boolean realTypeConvertedToIntegerType)
-            throws CompilationException {
+    private static final BTreeSearchKeyRoundingFunctionProvider SEARCH_KEY_ROUNDING_FUNCTION_COMPUTER =
+            new BTreeSearchKeyRoundingFunctionProvider();
+
+    private static class BTreeSearchKeyRoundingFunctionProvider
+            extends AccessMethodUtils.SearchKeyRoundingFunctionProvider {
+
+        private final ILogicalBinaryComparator DOUBLE_CMPR =
+                ComparatorUtil.createLogicalComparator(BuiltinType.ADOUBLE, BuiltinType.ADOUBLE, false);
+
+        private static final ADouble ZERO = new ADouble(0);
+
+        @Override
+        public ATypeHierarchy.TypeCastingMathFunctionType getRoundingFunction(ComparisonKind cKind, Index chosenIndex,
+                IAType indexedFieldType, IAObject constantValue, boolean realTypeConvertedToIntegerType)
+                throws CompilationException {
+            switch (cKind) {
+                case GE:
+                    return relaxLimitTypeToInclusive(chosenIndex, indexedFieldType, realTypeConvertedToIntegerType)
+                            && DOUBLE_CMPR.compare(ZERO, constantValue) == ILogicalBinaryComparator.Result.LT
+                                    ? ATypeHierarchy.TypeCastingMathFunctionType.FLOOR
+                                    : ATypeHierarchy.TypeCastingMathFunctionType.CEIL;
+                case LE:
+                    return relaxLimitTypeToInclusive(chosenIndex, indexedFieldType, realTypeConvertedToIntegerType)
+                            && DOUBLE_CMPR.compare(ZERO, constantValue) == ILogicalBinaryComparator.Result.GT
+                                    ? ATypeHierarchy.TypeCastingMathFunctionType.CEIL
+                                    : ATypeHierarchy.TypeCastingMathFunctionType.FLOOR;
+                default:
+                    return super.getRoundingFunction(cKind, chosenIndex, indexedFieldType, constantValue,
+                            realTypeConvertedToIntegerType);
+            }
+        }
+    }
+
+    private static boolean relaxLimitTypeToInclusive(Index chosenIndex, IAType indexedFieldType,
+            boolean realTypeConvertedToIntegerType) {
         // For a non-enforced index or an enforced index that stores a casted value on the given index,
         // we need to apply the following transformation.
         // For an index on a closed field, this transformation is not necessary since the value between
@@ -931,11 +980,7 @@ public class BTreeAccessMethod implements IAccessMethod {
         }
 
         if (chosenIndex.getIndexDetails().isOverridingKeyFieldTypes() && !chosenIndex.isEnforced()) {
-            IAType indexedKeyType = getIndexedKeyType(chosenIndex.getIndexDetails(), keyPos);
-            if (NonTaggedFormatUtil.isOptional(indexedKeyType)) {
-                indexedKeyType = ((AUnionType) indexedKeyType).getActualType();
-            }
-            switch (indexedKeyType.getTypeTag()) {
+            switch (TypeComputeUtils.getActualType(indexedFieldType).getTypeTag()) {
                 case TINYINT:
                 case SMALLINT:
                 case INTEGER:
@@ -951,17 +996,13 @@ public class BTreeAccessMethod implements IAccessMethod {
         return false;
     }
 
-    protected IAType getIndexedKeyType(Index.IIndexDetails chosenIndexDetails, int keyPos) throws CompilationException {
-        return ((Index.ValueIndexDetails) chosenIndexDetails).getKeyFieldTypes().get(keyPos);
-    }
-
     private boolean probeIsOnLhs(IOptimizableFuncExpr optFuncExpr, OptimizableOperatorSubTree probeSubTree) {
         if (probeSubTree == null) {
             if (optFuncExpr.getConstantExpressions().length == 0) {
                 return optFuncExpr.getLogicalExpr(0) == null;
             }
             // We are optimizing a selection query. Search key is a constant. Return true if constant is on lhs.
-            return optFuncExpr.getFuncExpr().getArguments().get(0) == optFuncExpr.getConstantExpr(0);
+            return optFuncExpr.getArgument(0) == optFuncExpr.getConstantExpr(0);
         } else {
             // We are optimizing a join query. Determine whether the feeding variable is on the lhs.
             return (optFuncExpr.getOperatorSubTree(0) == null || optFuncExpr.getOperatorSubTree(0) == probeSubTree);
@@ -979,7 +1020,8 @@ public class BTreeAccessMethod implements IAccessMethod {
     }
 
     @Override
-    public boolean exprIsOptimizable(Index index, IOptimizableFuncExpr optFuncExpr) throws AlgebricksException {
+    public boolean exprIsOptimizable(Index index, IOptimizableFuncExpr optFuncExpr, boolean checkApplicableOnly)
+            throws AlgebricksException {
         // If we are optimizing a join, check for the indexed nested-loop join hint.
         if (optFuncExpr.getNumLogicalVars() == 2) {
             if (optFuncExpr.getOperatorSubTree(0) == optFuncExpr.getOperatorSubTree(1)) {
@@ -992,7 +1034,8 @@ public class BTreeAccessMethod implements IAccessMethod {
                     //And we were unable to determine its type
                     return false;
                 }
-            } else if (!optFuncExpr.getFuncExpr().hasAnnotation(IndexedNLJoinExpressionAnnotation.class)) {
+            } else if (!checkApplicableOnly
+                    && !optFuncExpr.getFuncExpr().hasAnnotation(IndexedNLJoinExpressionAnnotation.class)) {
                 return false;
             }
         }
@@ -1030,6 +1073,30 @@ public class BTreeAccessMethod implements IAccessMethod {
     @Override
     public String getName() {
         return "BTREE_ACCESS_METHOD";
+    }
+
+    @Override
+    public boolean acceptsFunction(AbstractFunctionCallExpression functionExpr, Index index, IAType indexedFieldType,
+            boolean defaultNull, boolean finalStep) throws CompilationException {
+        FunctionIdentifier funId = functionExpr.getFunctionIdentifier();
+        if (!finalStep) {
+            return AccessMethodUtils.isFieldAccess(funId);
+        }
+        if (defaultNull) {
+            if (!CAST_NULL_TYPE_CONSTRUCTORS.contains(funId)) {
+                return false;
+            }
+            IAType nonNullableType = Index.getNonNullableType(indexedFieldType).first;
+            Pair<FunctionIdentifier, IAObject> constructorWithFmt =
+                    IndexUtil.getTypeConstructorDefaultNull(index, nonNullableType, functionExpr.getSourceLocation());
+            FunctionIdentifier indexedFieldConstructorFun = constructorWithFmt.first;
+            IAObject formatInIndex = constructorWithFmt.second;
+            IAObject formatInFunction = TypeUtil.getTemporalFormatArg(functionExpr);
+            // index has CAST (DEFAULT NULL); the applied function should be the same as the indexed field function
+            return funId.equals(indexedFieldConstructorFun) && Objects.equals(formatInIndex, formatInFunction);
+        } else {
+            return AccessMethodUtils.isFieldAccess(funId);
+        }
     }
 
     @Override
