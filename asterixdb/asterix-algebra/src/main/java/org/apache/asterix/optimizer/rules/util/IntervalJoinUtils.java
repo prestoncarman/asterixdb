@@ -22,6 +22,7 @@ package org.apache.asterix.optimizer.rules.util;
 import static org.apache.hyracks.algebricks.core.algebra.properties.IPartitioningProperty.PartitioningType.*;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -138,8 +139,9 @@ public class IntervalJoinUtils {
             }
             return false;
         }
-        IntervalPartitions intervalPartitions =
-                IntervalJoinUtils.createIntervalPartitions(op, fi, sideLeft, sideRight, rangeMap, context, left, right);
+
+        IntervalPartitions intervalPartitions = IntervalJoinUtils.createIntervalPartitions(op, fi, sideLeft, sideRight,
+                context, left, right, rangeMap, null);
         IntervalJoinUtils.setSortMergeIntervalJoinOp(op, fi, sideLeft, sideRight, context, intervalPartitions);
         return true;
     }
@@ -148,13 +150,47 @@ public class IntervalJoinUtils {
         return fexp.getAnnotation(RangeAnnotation.class);
     }
 
-    protected static void tryIntervalJoinAssignment(AbstractBinaryJoinOperator op, IOptimizationContext context,
-            ILogicalExpression joinCondition, int left, int right) throws AlgebricksException {
-
-        AbstractFunctionCallExpression fexp = (AbstractFunctionCallExpression) joinCondition;
-
-        RangeAnnotation rangeAnnotation = IntervalJoinUtils.findRangeAnnotation(fexp);
-        IntervalJoinUtils.updateJoinPlan(op, context, fexp, left, right, rangeAnnotation);
+    protected static FunctionIdentifier isIntervalJoinCondition(ILogicalExpression e,
+            Collection<LogicalVariable> inLeftAll, Collection<LogicalVariable> inRightAll,
+            Collection<LogicalVariable> outLeftFields, Collection<LogicalVariable> outRightFields, int left,
+            int right) {
+        FunctionIdentifier fiReturn;
+        boolean switchArguments = false;
+        if (e.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
+            return null;
+        }
+        AbstractFunctionCallExpression fexp = (AbstractFunctionCallExpression) e;
+        FunctionIdentifier fi = fexp.getFunctionIdentifier();
+        if (isIntervalFunction(fi)) {
+            fiReturn = fi;
+        } else {
+            return null;
+        }
+        ILogicalExpression opLeft = fexp.getArguments().get(left).getValue();
+        ILogicalExpression opRight = fexp.getArguments().get(right).getValue();
+        if (opLeft.getExpressionTag() != LogicalExpressionTag.VARIABLE
+                || opRight.getExpressionTag() != LogicalExpressionTag.VARIABLE) {
+            return null;
+        }
+        LogicalVariable var1 = ((VariableReferenceExpression) opLeft).getVariableReference();
+        if (inLeftAll.contains(var1) && !outLeftFields.contains(var1)) {
+            outLeftFields.add(var1);
+        } else if (inRightAll.contains(var1) && !outRightFields.contains(var1)) {
+            outRightFields.add(var1);
+            fiReturn = getInverseIntervalFunction(fi);
+            switchArguments = true;
+        } else {
+            return null;
+        }
+        LogicalVariable var2 = ((VariableReferenceExpression) opRight).getVariableReference();
+        if (inLeftAll.contains(var2) && !outLeftFields.contains(var2) && switchArguments) {
+            outLeftFields.add(var2);
+        } else if (inRightAll.contains(var2) && !outRightFields.contains(var2) && !switchArguments) {
+            outRightFields.add(var2);
+        } else {
+            return null;
+        }
+        return fiReturn;
     }
 
     protected static void updateJoinPlan(AbstractBinaryJoinOperator op, IOptimizationContext context,
