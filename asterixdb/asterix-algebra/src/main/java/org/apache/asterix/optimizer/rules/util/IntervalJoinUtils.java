@@ -160,32 +160,6 @@ public class IntervalJoinUtils {
 
     /**
      * Certain Relations not yet supported as seen below. Will default to regular join.
-     */
-    private static IIntervalJoinUtilFactory createIntervalJoinCheckerFactory(FunctionIdentifier fi, RangeMap rangeMap,
-                                                                             String rangeMapKey) throws CompilationException {
-        IIntervalJoinUtilFactory mjcf;
-        if (fi.equals(BuiltinFunctions.INTERVAL_OVERLAPPED_BY)) {
-            mjcf = new OverlappedByIntervalJoinUtilFactory();
-        } else if (fi.equals(BuiltinFunctions.INTERVAL_OVERLAPS)) {
-            mjcf = new OverlapsIntervalJoinUtilFactory();
-        } else if (fi.equals(BuiltinFunctions.INTERVAL_COVERS)) {
-            mjcf = new CoversIntervalJoinUtilFactory();
-        } else if (fi.equals(BuiltinFunctions.INTERVAL_COVERED_BY)) {
-            mjcf = new CoveredByIntervalJoinUtilFactory();
-        } else if (fi.equals(BuiltinFunctions.INTERVAL_BEFORE)) {
-            mjcf = new BeforeIntervalJoinUtilFactory();
-        } else if (fi.equals(BuiltinFunctions.INTERVAL_AFTER)) {
-            mjcf = new AfterIntervalJoinUtilFactory();
-        } else if (fi.equals(BuiltinFunctions.INTERVAL_OVERLAPPING)) {
-            mjcf = new OverlappingIntervalJoinUtilFactory(rangeMap, rangeMapKey);
-        } else {
-            throw new CompilationException(ErrorCode.COMPILATION_ILLEGAL_STATE, fi.getName());
-        }
-        return mjcf;
-    }
-
-    /**
-     * Certain Relations not yet supported as seen below. Will default to regular join.
      * Inserts partition sort key.
      */
     protected static IntervalPartitions createIntervalPartitions(AbstractBinaryJoinOperator op, FunctionIdentifier fi,
@@ -273,6 +247,32 @@ public class IntervalJoinUtils {
             return null;
         }
         return fiReturn;
+    }
+
+    /**
+     * Certain Relations not yet supported as seen below. Will default to regular join.
+     */
+    private static IIntervalJoinUtilFactory createIntervalJoinCheckerFactory(FunctionIdentifier fi, RangeMap rangeMap,
+                                                                             String rangeMapKey) throws CompilationException {
+        IIntervalJoinUtilFactory mjcf;
+        if (fi.equals(BuiltinFunctions.INTERVAL_OVERLAPPED_BY)) {
+            mjcf = new OverlappedByIntervalJoinUtilFactory();
+        } else if (fi.equals(BuiltinFunctions.INTERVAL_OVERLAPS)) {
+            mjcf = new OverlapsIntervalJoinUtilFactory();
+        } else if (fi.equals(BuiltinFunctions.INTERVAL_COVERS)) {
+            mjcf = new CoversIntervalJoinUtilFactory();
+        } else if (fi.equals(BuiltinFunctions.INTERVAL_COVERED_BY)) {
+            mjcf = new CoveredByIntervalJoinUtilFactory();
+        } else if (fi.equals(BuiltinFunctions.INTERVAL_BEFORE)) {
+            mjcf = new BeforeIntervalJoinUtilFactory();
+        } else if (fi.equals(BuiltinFunctions.INTERVAL_AFTER)) {
+            mjcf = new AfterIntervalJoinUtilFactory();
+        } else if (fi.equals(BuiltinFunctions.INTERVAL_OVERLAPPING)) {
+            mjcf = new OverlappingIntervalJoinUtilFactory(rangeMap, rangeMapKey);
+        } else {
+            throw new CompilationException(ErrorCode.COMPILATION_ILLEGAL_STATE, fi.getName());
+        }
+        return mjcf;
     }
 
     protected static void updateJoinPlan(AbstractBinaryJoinOperator op, IOptimizationContext context,
