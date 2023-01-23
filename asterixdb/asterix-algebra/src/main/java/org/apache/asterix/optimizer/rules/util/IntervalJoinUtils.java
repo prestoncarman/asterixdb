@@ -139,7 +139,6 @@ public class IntervalJoinUtils {
             }
             return false;
         }
-
         IntervalPartitions intervalPartitions = IntervalJoinUtils.createIntervalPartitions(op, fi, sideLeft, sideRight,
                 context, left, right, rangeMap, null);
         IntervalJoinUtils.setSortMergeIntervalJoinOp(op, fi, sideLeft, sideRight, context, intervalPartitions);
@@ -148,6 +147,89 @@ public class IntervalJoinUtils {
 
     protected static RangeAnnotation findRangeAnnotation(AbstractFunctionCallExpression fexp) {
         return fexp.getAnnotation(RangeAnnotation.class);
+    }
+
+    protected static void setSortMergeIntervalJoinOp(AbstractBinaryJoinOperator op, FunctionIdentifier fi,
+                                                     List<LogicalVariable> sideLeft, List<LogicalVariable> sideRight, IOptimizationContext context,
+                                                     IntervalPartitions intervalPartitions) throws CompilationException {
+        IIntervalJoinUtilFactory mjcf = createIntervalJoinCheckerFactory(fi, intervalPartitions.getRangeMap(), null);
+        op.setPhysicalOperator(new IntervalMergeJoinPOperator(op.getJoinKind(),
+                AbstractJoinPOperator.JoinPartitioningType.BROADCAST, sideLeft, sideRight,
+                context.getPhysicalOptimizationConfig().getMaxFramesForJoin(), mjcf, intervalPartitions));
+    }
+
+    /**
+     * Certain Relations not yet supported as seen below. Will default to regular join.
+     */
+    private static IIntervalJoinUtilFactory createIntervalJoinCheckerFactory(FunctionIdentifier fi, RangeMap rangeMap,
+                                                                             String rangeMapKey) throws CompilationException {
+        IIntervalJoinUtilFactory mjcf;
+        if (fi.equals(BuiltinFunctions.INTERVAL_OVERLAPPED_BY)) {
+            mjcf = new OverlappedByIntervalJoinUtilFactory();
+        } else if (fi.equals(BuiltinFunctions.INTERVAL_OVERLAPS)) {
+            mjcf = new OverlapsIntervalJoinUtilFactory();
+        } else if (fi.equals(BuiltinFunctions.INTERVAL_COVERS)) {
+            mjcf = new CoversIntervalJoinUtilFactory();
+        } else if (fi.equals(BuiltinFunctions.INTERVAL_COVERED_BY)) {
+            mjcf = new CoveredByIntervalJoinUtilFactory();
+        } else if (fi.equals(BuiltinFunctions.INTERVAL_BEFORE)) {
+            mjcf = new BeforeIntervalJoinUtilFactory();
+        } else if (fi.equals(BuiltinFunctions.INTERVAL_AFTER)) {
+            mjcf = new AfterIntervalJoinUtilFactory();
+        } else if (fi.equals(BuiltinFunctions.INTERVAL_OVERLAPPING)) {
+            mjcf = new OverlappingIntervalJoinUtilFactory(rangeMap, rangeMapKey);
+        } else {
+            throw new CompilationException(ErrorCode.COMPILATION_ILLEGAL_STATE, fi.getName());
+        }
+        return mjcf;
+    }
+
+    /**
+     * Certain Relations not yet supported as seen below. Will default to regular join.
+     * Inserts partition sort key.
+     */
+    protected static IntervalPartitions createIntervalPartitions(AbstractBinaryJoinOperator op, FunctionIdentifier fi,
+                                                                 List<LogicalVariable> sideLeft, List<LogicalVariable> sideRight, IOptimizationContext context, int left,
+                                                                 int right, RangeMap rangeMap, String rangeMapKey) throws AlgebricksException {
+
+        List<LogicalVariable> leftPartitionVar = new ArrayList<>(2);
+        leftPartitionVar.add(context.newVar());
+        leftPartitionVar.add(context.newVar());
+        List<LogicalVariable> rightPartitionVar = new ArrayList<>(2);
+        rightPartitionVar.add(context.newVar());
+        rightPartitionVar.add(context.newVar());
+
+        insertPartitionSortKey(op, left, leftPartitionVar, sideLeft.get(0), context);
+        insertPartitionSortKey(op, right, rightPartitionVar, sideRight.get(0), context);
+
+        List<IntervalColumn> leftIC = Collections.singletonList(new IntervalColumn(leftPartitionVar.get(0),
+                leftPartitionVar.get(1), OrderOperator.IOrder.OrderKind.ASC));
+        List<IntervalColumn> rightIC = Collections.singletonList(new IntervalColumn(rightPartitionVar.get(0),
+                rightPartitionVar.get(1), OrderOperator.IOrder.OrderKind.ASC));
+
+        //Set Partitioning Types
+        PartitioningType leftPartitioningType = ORDERED_PARTITIONED;
+        PartitioningType rightPartitioningType = ORDERED_PARTITIONED;
+        if (fi.equals(BuiltinFunctions.INTERVAL_OVERLAPPED_BY)) {
+            rightPartitioningType = PARTIAL_BROADCAST_ORDERED_INTERSECT;
+        } else if (fi.equals(BuiltinFunctions.INTERVAL_OVERLAPS)) {
+            leftPartitioningType = PARTIAL_BROADCAST_ORDERED_INTERSECT;
+        } else if (fi.equals(BuiltinFunctions.INTERVAL_OVERLAPPING)) {
+            leftPartitioningType = PARTIAL_BROADCAST_ORDERED_INTERSECT;
+            rightPartitioningType = PARTIAL_BROADCAST_ORDERED_INTERSECT;
+        } else if (fi.equals(BuiltinFunctions.INTERVAL_COVERS)) {
+            leftPartitioningType = PARTIAL_BROADCAST_ORDERED_INTERSECT;
+        } else if (fi.equals(BuiltinFunctions.INTERVAL_COVERED_BY)) {
+            rightPartitioningType = PARTIAL_BROADCAST_ORDERED_INTERSECT;
+        } else if (fi.equals(BuiltinFunctions.INTERVAL_BEFORE)) {
+            leftPartitioningType = PARTIAL_BROADCAST_ORDERED_FOLLOWING;
+        } else if (fi.equals(BuiltinFunctions.INTERVAL_AFTER)) {
+            rightPartitioningType = PARTIAL_BROADCAST_ORDERED_FOLLOWING;
+        } else {
+            throw new CompilationException(ErrorCode.COMPILATION_ILLEGAL_STATE, fi.getName());
+        }
+        return new IntervalPartitions(leftIC, rightIC, leftPartitioningType, rightPartitioningType, rangeMap,
+                rangeMapKey);
     }
 
     protected static FunctionIdentifier isIntervalJoinCondition(ILogicalExpression e,
@@ -257,54 +339,6 @@ public class IntervalJoinUtils {
         return INTERVAL_JOIN_CONDITIONS.containsKey(fi);
     }
 
-    /**
-     * Certain Relations not yet supported as seen below. Will default to regular join.
-     * Inserts partition sort key.
-     */
-    protected static IntervalPartitions createIntervalPartitions(AbstractBinaryJoinOperator op, FunctionIdentifier fi,
-            List<LogicalVariable> sideLeft, List<LogicalVariable> sideRight, IOptimizationContext context, int left,
-            int right, RangeMap rangeMap, String rangeMapKey) throws AlgebricksException {
-
-        List<LogicalVariable> leftPartitionVar = new ArrayList<>(2);
-        leftPartitionVar.add(context.newVar());
-        leftPartitionVar.add(context.newVar());
-        List<LogicalVariable> rightPartitionVar = new ArrayList<>(2);
-        rightPartitionVar.add(context.newVar());
-        rightPartitionVar.add(context.newVar());
-
-        insertPartitionSortKey(op, left, leftPartitionVar, sideLeft.get(0), context);
-        insertPartitionSortKey(op, right, rightPartitionVar, sideRight.get(0), context);
-
-        List<IntervalColumn> leftIC = Collections.singletonList(new IntervalColumn(leftPartitionVar.get(0),
-                leftPartitionVar.get(1), OrderOperator.IOrder.OrderKind.ASC));
-        List<IntervalColumn> rightIC = Collections.singletonList(new IntervalColumn(rightPartitionVar.get(0),
-                rightPartitionVar.get(1), OrderOperator.IOrder.OrderKind.ASC));
-
-        //Set Partitioning Types
-        PartitioningType leftPartitioningType = ORDERED_PARTITIONED;
-        PartitioningType rightPartitioningType = ORDERED_PARTITIONED;
-        if (fi.equals(BuiltinFunctions.INTERVAL_OVERLAPPED_BY)) {
-            rightPartitioningType = PARTIAL_BROADCAST_ORDERED_INTERSECT;
-        } else if (fi.equals(BuiltinFunctions.INTERVAL_OVERLAPS)) {
-            leftPartitioningType = PARTIAL_BROADCAST_ORDERED_INTERSECT;
-        } else if (fi.equals(BuiltinFunctions.INTERVAL_OVERLAPPING)) {
-            leftPartitioningType = PARTIAL_BROADCAST_ORDERED_INTERSECT;
-            rightPartitioningType = PARTIAL_BROADCAST_ORDERED_INTERSECT;
-        } else if (fi.equals(BuiltinFunctions.INTERVAL_COVERS)) {
-            leftPartitioningType = PARTIAL_BROADCAST_ORDERED_INTERSECT;
-        } else if (fi.equals(BuiltinFunctions.INTERVAL_COVERED_BY)) {
-            rightPartitioningType = PARTIAL_BROADCAST_ORDERED_INTERSECT;
-        } else if (fi.equals(BuiltinFunctions.INTERVAL_BEFORE)) {
-            leftPartitioningType = PARTIAL_BROADCAST_ORDERED_FOLLOWING;
-        } else if (fi.equals(BuiltinFunctions.INTERVAL_AFTER)) {
-            rightPartitioningType = PARTIAL_BROADCAST_ORDERED_FOLLOWING;
-        } else {
-            throw new CompilationException(ErrorCode.COMPILATION_ILLEGAL_STATE, fi.getName());
-        }
-        return new IntervalPartitions(leftIC, rightIC, leftPartitioningType, rightPartitioningType, rangeMap,
-                rangeMapKey);
-    }
-
     protected static Triple<List<LogicalVariable>, List<LogicalVariable>, IntervalPartitions> createIntervalPartitionsDynamic(
             FunctionIdentifier fi, IOptimizationContext context, RangeMap rangeMap, String rangeMapKey)
             throws AlgebricksException {
@@ -378,41 +412,6 @@ public class IntervalJoinUtils {
 
         context.computeAndSetTypeEnvironmentForOperator(ao);
         ao.recomputeSchema();
-    }
-
-    /**
-     * Certain Relations not yet supported as seen below. Will default to regular join.
-     */
-    private static IIntervalJoinUtilFactory createIntervalJoinCheckerFactory(FunctionIdentifier fi, RangeMap rangeMap,
-            String rangeMapKey) throws CompilationException {
-        IIntervalJoinUtilFactory mjcf;
-        if (fi.equals(BuiltinFunctions.INTERVAL_OVERLAPPED_BY)) {
-            mjcf = new OverlappedByIntervalJoinUtilFactory();
-        } else if (fi.equals(BuiltinFunctions.INTERVAL_OVERLAPS)) {
-            mjcf = new OverlapsIntervalJoinUtilFactory();
-        } else if (fi.equals(BuiltinFunctions.INTERVAL_COVERS)) {
-            mjcf = new CoversIntervalJoinUtilFactory();
-        } else if (fi.equals(BuiltinFunctions.INTERVAL_COVERED_BY)) {
-            mjcf = new CoveredByIntervalJoinUtilFactory();
-        } else if (fi.equals(BuiltinFunctions.INTERVAL_BEFORE)) {
-            mjcf = new BeforeIntervalJoinUtilFactory();
-        } else if (fi.equals(BuiltinFunctions.INTERVAL_AFTER)) {
-            mjcf = new AfterIntervalJoinUtilFactory();
-        } else if (fi.equals(BuiltinFunctions.INTERVAL_OVERLAPPING)) {
-            mjcf = new OverlappingIntervalJoinUtilFactory(rangeMap, rangeMapKey);
-        } else {
-            throw new CompilationException(ErrorCode.COMPILATION_ILLEGAL_STATE, fi.getName());
-        }
-        return mjcf;
-    }
-
-    protected static void setSortMergeIntervalJoinOp(AbstractBinaryJoinOperator op, FunctionIdentifier fi,
-            List<LogicalVariable> sideLeft, List<LogicalVariable> sideRight, IOptimizationContext context,
-            IntervalPartitions intervalPartitions) throws CompilationException {
-        IIntervalJoinUtilFactory mjcf = createIntervalJoinCheckerFactory(fi, intervalPartitions.getRangeMap(), null);
-        op.setPhysicalOperator(new IntervalMergeJoinPOperator(op.getJoinKind(),
-                AbstractJoinPOperator.JoinPartitioningType.BROADCAST, sideLeft, sideRight,
-                context.getPhysicalOptimizationConfig().getMaxFramesForJoin(), mjcf, intervalPartitions));
     }
 
     private static FunctionIdentifier getInverseIntervalFunction(FunctionIdentifier fi) {

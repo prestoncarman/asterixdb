@@ -95,8 +95,7 @@ public class IntervalMergeJoinPOperator extends AbstractJoinPOperator {
     @Override
     public void computeDeliveredProperties(ILogicalOperator iop, IOptimizationContext context) {
         List<OrderColumn> order = intervalPartitions.getLeftStartColumn();
-        IPartitioningProperty pp;
-        pp = new OrderedPartitionedProperty(order, null, intervalPartitions.getRangeMap());
+        IPartitioningProperty pp = new OrderedPartitionedProperty(order, null, intervalPartitions.getRangeMap());
         List<ILocalStructuralProperty> propsLocal = new ArrayList<>();
         propsLocal.add(new LocalOrderProperty(intervalPartitions.getLeftStartColumn()));
         deliveredProperties = new StructuralPropertiesVector(pp, propsLocal);
@@ -129,6 +128,7 @@ public class IntervalMergeJoinPOperator extends AbstractJoinPOperator {
 
         if (op.getExecutionMode() == AbstractLogicalOperator.ExecutionMode.PARTITIONED) {
             INodeDomain targetNodeDomain = context.getComputationNodeDomain();
+
             RangeMap rangeMapHint = intervalPartitions.getRangeMap();
 
             //Assign Property
