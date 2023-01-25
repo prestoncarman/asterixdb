@@ -339,6 +339,10 @@ public class IntervalJoinUtils {
         return INTERVAL_JOIN_CONDITIONS.containsKey(fi);
     }
 
+    private static FunctionIdentifier getInverseIntervalFunction(FunctionIdentifier fi) {
+        return INTERVAL_JOIN_CONDITIONS.get(fi);
+    }
+
     protected static Triple<List<LogicalVariable>, List<LogicalVariable>, IntervalPartitions> createIntervalPartitionsDynamic(
             FunctionIdentifier fi, IOptimizationContext context, RangeMap rangeMap, String rangeMapKey)
             throws AlgebricksException {
@@ -412,10 +416,6 @@ public class IntervalJoinUtils {
 
         context.computeAndSetTypeEnvironmentForOperator(ao);
         ao.recomputeSchema();
-    }
-
-    private static FunctionIdentifier getInverseIntervalFunction(FunctionIdentifier fi) {
-        return INTERVAL_JOIN_CONDITIONS.get(fi);
     }
 
     protected static void buildSortMergeIntervalPlanWithStaticHint(AbstractBinaryJoinOperator op,
