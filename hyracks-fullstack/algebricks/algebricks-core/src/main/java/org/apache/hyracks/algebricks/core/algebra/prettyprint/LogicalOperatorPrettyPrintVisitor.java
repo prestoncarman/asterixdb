@@ -24,12 +24,14 @@ import java.util.Map;
 
 import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
+import org.apache.hyracks.algebricks.common.exceptions.NotImplementedException;
 import org.apache.hyracks.algebricks.common.utils.Pair;
 import org.apache.hyracks.algebricks.common.utils.Triple;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalPlan;
 import org.apache.hyracks.algebricks.core.algebra.base.IPhysicalOperator;
+import org.apache.hyracks.algebricks.core.algebra.base.LogicalOperatorTag;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import org.apache.hyracks.algebricks.core.algebra.expressions.IAlgebricksConstantValue;
 import org.apache.hyracks.algebricks.core.algebra.metadata.IProjectionInfo;
@@ -66,6 +68,7 @@ import org.apache.hyracks.algebricks.core.algebra.operators.logical.SelectOperat
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.SinkOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.SplitOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.SubplanOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.SwitchOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.TokenizeOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnionAllOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOperator;
@@ -91,35 +94,67 @@ public class LogicalOperatorPrettyPrintVisitor extends AbstractLogicalOperatorPr
     }
 
     @Override
-    public final IPlanPrettyPrinter printPlan(ILogicalPlan plan) throws AlgebricksException {
-        printPlanImpl(plan, 0);
+    public final IPlanPrettyPrinter printPlan(ILogicalPlan plan, boolean printOptimizerEstimates)
+            throws AlgebricksException {
+        printPlanImpl(plan, 0, printOptimizerEstimates);
         return this;
     }
 
     @Override
-    public final IPlanPrettyPrinter printPlan(ILogicalPlan plan, Map<Object, String> log2phys)
-            throws AlgebricksException {
+    public final IPlanPrettyPrinter printPlan(ILogicalPlan plan, Map<Object, String> log2phys,
+            boolean printOptimizerEstimates) throws AlgebricksException {
         //TODO(ian): would be nice if the text plan returned real operator ids too
-        printPlanImpl(plan, 0);
+        printPlanImpl(plan, 0, printOptimizerEstimates);
         return this;
     }
 
     @Override
-    public final IPlanPrettyPrinter printOperator(AbstractLogicalOperator op, boolean printInputs)
-            throws AlgebricksException {
-        printOperatorImpl(op, 0, printInputs);
+    public final IPlanPrettyPrinter printOperator(AbstractLogicalOperator op, boolean printInputs,
+            boolean printOptimizerEstimates) throws AlgebricksException {
+        printOperatorImpl(op, 0, printInputs, printOptimizerEstimates);
         return this;
     }
 
-    private void printPlanImpl(ILogicalPlan plan, int indent) throws AlgebricksException {
+    private void printPlanImpl(ILogicalPlan plan, int indent, boolean printOptimizerEstimates)
+            throws AlgebricksException {
         for (Mutable<ILogicalOperator> root : plan.getRoots()) {
-            printOperatorImpl((AbstractLogicalOperator) root.getValue(), indent, true);
+            printOperatorImpl((AbstractLogicalOperator) root.getValue(), indent, true, printOptimizerEstimates);
         }
     }
 
-    private void printOperatorImpl(AbstractLogicalOperator op, int indent, boolean printInputs)
-            throws AlgebricksException {
+    private void printOperatorImpl(AbstractLogicalOperator op, int indent, boolean printInputs,
+            boolean printOptimizerEstimates) throws AlgebricksException {
+        double planCard, planCost, opCard, opLocalCost, opTotalCost;
+        if (op.getOperatorTag() == LogicalOperatorTag.DISTRIBUTE_RESULT && printOptimizerEstimates) {
+            planCard = getPlanCardinality(op);
+            planCost = getPlanCost(op);
+            buffer.append(CARDINALITY);
+            buffer.append(": ");
+            appendln(buffer, Double.toString(planCard));
+            buffer.append(PLAN_COST);
+            buffer.append(": ");
+            appendln(buffer, Double.toString(planCost));
+        }
+
         op.accept(this, indent);
+        if (printOptimizerEstimates) {
+            opCard = getOpCardinality(op);
+            opLocalCost = getOpLocalCost(op);
+            opTotalCost = getOpTotalCost(op);
+            buffer.append(" [");
+            buffer.append(CARDINALITY);
+            buffer.append(": ");
+            buffer.append(Double.toString(opCard));
+            buffer.append(", ");
+            buffer.append(OP_COST_LOCAL);
+            buffer.append(": ");
+            buffer.append(Double.toString(opLocalCost));
+            buffer.append(", ");
+            buffer.append(OP_COST_TOTAL);
+            buffer.append(": ");
+            buffer.append(Double.toString(opTotalCost));
+            buffer.append("]");
+        }
         IPhysicalOperator pOp = op.getPhysicalOperator();
 
         if (pOp != null) {
@@ -132,7 +167,8 @@ public class LogicalOperatorPrettyPrintVisitor extends AbstractLogicalOperatorPr
 
         if (printInputs) {
             for (Mutable<ILogicalOperator> i : op.getInputs()) {
-                printOperatorImpl((AbstractLogicalOperator) i.getValue(), indent + INIT_INDENT, printInputs);
+                printOperatorImpl((AbstractLogicalOperator) i.getValue(), indent + INIT_INDENT, printInputs,
+                        printOptimizerEstimates);
             }
         }
     }
@@ -439,6 +475,12 @@ public class LogicalOperatorPrettyPrintVisitor extends AbstractLogicalOperatorPr
     }
 
     @Override
+    public Void visitSwitchOperator(SwitchOperator op, Integer indent) throws AlgebricksException {
+        // TODO (GLENN): Implement this logic
+        throw new NotImplementedException();
+    }
+
+    @Override
     public Void visitMaterializeOperator(MaterializeOperator op, Integer indent) throws AlgebricksException {
         addIndent(indent).append("materialize");
         return null;
@@ -617,7 +659,7 @@ public class LogicalOperatorPrettyPrintVisitor extends AbstractLogicalOperatorPr
                 } else {
                     addIndent(indent).append("       {\n");
                 }
-                printPlanImpl(p, indent + SUBPLAN_INDENT);
+                printPlanImpl(p, indent + SUBPLAN_INDENT, true);
                 addIndent(indent).append("       }");
             }
         }

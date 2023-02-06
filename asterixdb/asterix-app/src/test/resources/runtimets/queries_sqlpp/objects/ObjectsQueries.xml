@@ -124,6 +124,10 @@
     <compilation-unit name="object_concat">
       <output-dir compare="Text">object_concat</output-dir>
       <expected-warn>ASX0013: Duplicate field name 'v'</expected-warn>
+      <expected-warn>ASX0013: Duplicate field name 'f'</expected-warn>
+      <expected-warn>ASX0013: Duplicate field name 'id'</expected-warn>
+      <expected-warn>ASX0013: Duplicate field name 'id'</expected-warn>
+      <expected-warn>ASX0013: Duplicate field name 'dup'</expected-warn>
     </compilation-unit>
   </test-case>
   <test-case FilePath="objects">
@@ -242,6 +246,11 @@
       <expected-warn>Duplicate field name 'id' (in line 22, at column 56)</expected-warn>
       <expected-warn>Duplicate field name 'f1' (in line 22, at column 83)</expected-warn>
       <expected-warn>Duplicate field name 'fname1' (in line 25, at column 45)</expected-warn>
+    </compilation-unit>
+  </test-case>
+  <test-case FilePath="objects">
+    <compilation-unit name="load-record-fields">
+      <output-dir compare="Text">load-record-fields</output-dir>
     </compilation-unit>
   </test-case>
 </test-group>

@@ -54,6 +54,7 @@ import org.apache.hyracks.algebricks.core.algebra.operators.logical.SelectOperat
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.SinkOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.SplitOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.SubplanOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.SwitchOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.TokenizeOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnionAllOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOperator;
@@ -86,7 +87,7 @@ public class EstimatedCostComputationVisitor implements ILogicalOperatorVisitor<
     public Pair<Double, Double> visitEmptyTupleSourceOperator(EmptyTupleSourceOperator op, Double arg)
             throws AlgebricksException {
         // Empty tuple source operator sends an empty tuple to downstream operators.
-        return new Pair<>(1.0, 1.0);
+        return new Pair<>(0.0, 0.0);
     }
 
     @Override
@@ -169,6 +170,11 @@ public class EstimatedCostComputationVisitor implements ILogicalOperatorVisitor<
     }
 
     @Override
+    public Pair<Double, Double> visitSwitchOperator(SwitchOperator op, Double arg) throws AlgebricksException {
+        return annotate(this, op, arg);
+    }
+
+    @Override
     public Pair<Double, Double> visitMaterializeOperator(MaterializeOperator op, Double arg)
             throws AlgebricksException {
         return annotate(this, op, arg);
@@ -220,7 +226,7 @@ public class EstimatedCostComputationVisitor implements ILogicalOperatorVisitor<
     @Override
     public Pair<Double, Double> visitDataScanOperator(DataSourceScanOperator op, Double arg)
             throws AlgebricksException {
-        Pair<Double, Double> cardCost = new Pair<>(1.0, 1.0);
+        Pair<Double, Double> cardCost = new Pair<>(0.0, 0.0);
 
         for (Map.Entry<String, Object> anno : op.getAnnotations().entrySet()) {
             if (anno.getValue() != null && anno.getKey().equals(OperatorAnnotations.OP_INPUT_CARDINALITY)) {
@@ -250,7 +256,7 @@ public class EstimatedCostComputationVisitor implements ILogicalOperatorVisitor<
             op.getAnnotations().put(OperatorAnnotations.OP_COST_LOCAL, exchCost);
             op.getAnnotations().put(OperatorAnnotations.OP_COST_TOTAL, exchCost + cardCost.getSecond());
         } else {
-            op.getAnnotations().put(OperatorAnnotations.OP_COST_LOCAL, cardCost.getSecond());
+            op.getAnnotations().put(OperatorAnnotations.OP_COST_LOCAL, 0.0);
             op.getAnnotations().put(OperatorAnnotations.OP_COST_TOTAL, cardCost.getSecond());
         }
         op.getAnnotations().put(OperatorAnnotations.OP_OUTPUT_CARDINALITY, cardCost.getFirst());
@@ -305,12 +311,12 @@ public class EstimatedCostComputationVisitor implements ILogicalOperatorVisitor<
     private static Pair<Double, Double> annotate(EstimatedCostComputationVisitor visitor, ILogicalOperator op,
             Double arg) throws AlgebricksException {
         if (op.getInputs().isEmpty()) {
-            return new Pair<>(1.0, 1.0);
+            return new Pair<>(0.0, 0.0);
         }
         Pair<Double, Double> cardCost = op.getInputs().get(0).getValue().accept(visitor, arg);
         op.getAnnotations().put(OperatorAnnotations.OP_OUTPUT_CARDINALITY, cardCost.getFirst());
         op.getAnnotations().put(OperatorAnnotations.OP_COST_TOTAL, cardCost.getSecond());
-        op.getAnnotations().put(OperatorAnnotations.OP_COST_LOCAL, cardCost.getSecond());
+        op.getAnnotations().put(OperatorAnnotations.OP_COST_LOCAL, 0.0);
         return cardCost;
     }
 
@@ -322,9 +328,9 @@ public class EstimatedCostComputationVisitor implements ILogicalOperatorVisitor<
         return operator.getInputs().get(0).getValue().accept(this, arg);
     }
 
-    // Visits an inner join operator, particularly, deals with the case the join is a cartesian product.
+    // Visits an inner join operator.
     private Pair<Double, Double> visitInnerJoin(InnerJoinOperator joinOperator, Double arg) throws AlgebricksException {
-        Pair<Double, Double> cardCost = new Pair<>(1.0, 1.0);
+        Pair<Double, Double> cardCost = new Pair<>(0.0, 0.0);
 
         ILogicalOperator left = joinOperator.getInputs().get(0).getValue();
         ILogicalOperator right = joinOperator.getInputs().get(1).getValue();

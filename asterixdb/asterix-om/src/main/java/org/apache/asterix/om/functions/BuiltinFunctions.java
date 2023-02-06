@@ -119,8 +119,12 @@ import org.apache.asterix.om.typecomputer.impl.OrderedListOfAStringTypeComputer;
 import org.apache.asterix.om.typecomputer.impl.OrderedListOfAnyTypeComputer;
 import org.apache.asterix.om.typecomputer.impl.PropagateTypeComputer;
 import org.apache.asterix.om.typecomputer.impl.RecordAddFieldsTypeComputer;
+import org.apache.asterix.om.typecomputer.impl.RecordAddTypeComputer;
 import org.apache.asterix.om.typecomputer.impl.RecordMergeTypeComputer;
+import org.apache.asterix.om.typecomputer.impl.RecordPutTypeComputer;
 import org.apache.asterix.om.typecomputer.impl.RecordRemoveFieldsTypeComputer;
+import org.apache.asterix.om.typecomputer.impl.RecordRemoveTypeComputer;
+import org.apache.asterix.om.typecomputer.impl.RecordRenameTypeComputer;
 import org.apache.asterix.om.typecomputer.impl.ScalarArrayAggTypeComputer;
 import org.apache.asterix.om.typecomputer.impl.ScalarVersionOfAggregateResultType;
 import org.apache.asterix.om.typecomputer.impl.SleepTypeComputer;
@@ -250,6 +254,12 @@ public class BuiltinFunctions {
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "array-slice", 3);
     public static final FunctionIdentifier ARRAY_EXCEPT =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "array-except", 2);
+    public static final FunctionIdentifier ARRAY_SWAP =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "array-swap", 3);
+    public static final FunctionIdentifier ARRAY_MOVE =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "array-move", 3);
+    public static final FunctionIdentifier ARRAY_BINARY_SEARCH =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "array-binary-search", 2);
 
     // objects
     public static final FunctionIdentifier RECORD_MERGE =
@@ -2416,6 +2426,9 @@ public class BuiltinFunctions {
         addFunction(ARRAY_SLICE_WITH_END_POSITION, AListTypeComputer.INSTANCE_SLICE, true);
         addFunction(ARRAY_SLICE_WITHOUT_END_POSITION, AListTypeComputer.INSTANCE_SLICE, true);
         addFunction(ARRAY_EXCEPT, ArrayExceptTypeComputer.INSTANCE, true);
+        addFunction(ARRAY_MOVE, AListTypeComputer.INSTANCE_MOVE, true);
+        addFunction(ARRAY_SWAP, AListTypeComputer.INSTANCE_SWAP, true);
+        addFunction(ARRAY_BINARY_SEARCH, AInt32TypeComputer.INSTANCE_NULLABLE, true);
 
         // objects
         addFunction(RECORD_MERGE, RecordMergeTypeComputer.INSTANCE, true);
@@ -2436,12 +2449,12 @@ public class BuiltinFunctions {
         addFunction(RECORD_PAIRS, OrderedListOfAnyTypeComputer.INSTANCE_NULLABLE, true);
         addFunction(PAIRS, OrderedListOfAnyTypeComputer.INSTANCE_NULLABLE, true);
         addFunction(GEOMETRY_CONSTRUCTOR, AGeometryTypeComputer.INSTANCE, true);
-        addFunction(RECORD_REMOVE, OpenARecordTypeComputer.INSTANCE, true);
-        addFunction(RECORD_RENAME, OpenARecordTypeComputer.INSTANCE, true);
+        addFunction(RECORD_REMOVE, RecordRemoveTypeComputer.INSTANCE, true);
+        addFunction(RECORD_RENAME, RecordRenameTypeComputer.INSTANCE, true);
         addFunction(RECORD_UNWRAP, AnyTypeComputer.INSTANCE, true);
         addFunction(RECORD_REPLACE, OpenARecordTypeComputer.INSTANCE, true);
-        addFunction(RECORD_ADD, OpenARecordTypeComputer.INSTANCE, true);
-        addFunction(RECORD_PUT, OpenARecordTypeComputer.INSTANCE, true);
+        addFunction(RECORD_ADD, RecordAddTypeComputer.INSTANCE, true);
+        addFunction(RECORD_PUT, RecordPutTypeComputer.INSTANCE, true);
         addFunction(RECORD_VALUES, OrderedListOfAnyTypeComputer.INSTANCE, true);
 
         // temporal type accessors

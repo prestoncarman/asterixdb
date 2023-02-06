@@ -70,6 +70,7 @@ import org.apache.maven.project.inheritance.ModelInheritanceAssembler;
 
 public abstract class LicenseMojo extends AbstractMojo {
 
+    private static final String SHADOWED_KEY = LicenseMojo.class.getName() + "_shadowed";
     @Parameter
     protected List<Override> overrides = new ArrayList<>();
 
@@ -249,7 +250,7 @@ public abstract class LicenseMojo extends AbstractMojo {
         });
     }
 
-    protected void addDependenciesToLicenseMap() throws ProjectBuildingException {
+    protected void addDependenciesToLicenseMap() throws ProjectBuildingException, MojoExecutionException, IOException {
         Map<MavenProject, List<Pair<String, String>>> dependencyLicenseMap = gatherDependencies();
         dependencyLicenseMap.forEach((depProject, value) -> {
             Set<String> locations = dependencySets.isEmpty() ? Collections.singleton(location)
@@ -310,7 +311,9 @@ public abstract class LicenseMojo extends AbstractMojo {
                 licenseUrl = fakeLicenseUrl;
             }
         }
-        addProject(new Project(depProject, depLocation, depProject.getArtifact().getFile()),
+        addProject(
+                new Project(depProject, depLocation, depProject.getArtifact().getFile(),
+                        Boolean.parseBoolean(String.valueOf(depProject.getContextValue(SHADOWED_KEY)))),
                 new LicenseSpec(licenseUrl, displayName), true);
     }
 
@@ -363,11 +366,13 @@ public abstract class LicenseMojo extends AbstractMojo {
         }
     }
 
-    protected Map<MavenProject, List<Pair<String, String>>> gatherDependencies() throws ProjectBuildingException {
+    protected Map<MavenProject, List<Pair<String, String>>> gatherDependencies()
+            throws ProjectBuildingException, MojoExecutionException, IOException {
         Map<MavenProject, List<Pair<String, String>>> dependencyLicenseMap = new HashMap<>();
         Map<String, MavenProject> dependencyGavMap = new HashMap<>();
 
         gatherProjectDependencies(project, dependencyLicenseMap, dependencyGavMap);
+        processExtraDependencies(dependencyLicenseMap, dependencyGavMap);
         for (Override override : overrides) {
 
             // Collect both <gav></gav> and <gavs><gav></gav><gav></gav>...</gavs>
@@ -399,29 +404,44 @@ public abstract class LicenseMojo extends AbstractMojo {
         return dependencyLicenseMap;
     }
 
-    private void gatherProjectDependencies(MavenProject project,
+    protected void gatherProjectDependencies(MavenProject project,
             Map<MavenProject, List<Pair<String, String>>> dependencyLicenseMap,
-            Map<String, MavenProject> dependencyGavMap) throws ProjectBuildingException {
+            Map<String, MavenProject> dependencyGavMap) throws ProjectBuildingException, MojoExecutionException {
+        getLog().debug("+gatherProjectDependencies " + toGav(project));
         final Set<Artifact> dependencyArtifacts = project.getArtifacts();
         if (dependencyArtifacts != null) {
             for (Artifact depArtifact : dependencyArtifacts) {
-                processArtifact(depArtifact, dependencyLicenseMap, dependencyGavMap);
+                processArtifact(depArtifact, dependencyLicenseMap, dependencyGavMap, false);
             }
-        }
-        for (String gav : extraDependencies) {
-            ArtifactHandler handler = new DefaultArtifactHandler("jar");
-            String[] gavParts = StringUtils.split(gav, ':');
-            Artifact manualDep = new DefaultArtifact(gavParts[0], gavParts[1], gavParts[2], Artifact.SCOPE_COMPILE,
-                    "jar", null, handler);
-            processArtifact(manualDep, dependencyLicenseMap, dependencyGavMap);
         }
     }
 
-    private void processArtifact(Artifact depArtifact,
+    protected void processExtraDependencies(Map<MavenProject, List<Pair<String, String>>> dependencyLicenseMap,
+            Map<String, MavenProject> dependencyGavMap) throws ProjectBuildingException, MojoExecutionException {
+        for (String extraDependency : extraDependencies) {
+            String[] gavParts = StringUtils.split(extraDependency, ':');
+            String gav = gavParts[0] + ":" + gavParts[1] + ":" + gavParts[2];
+            if (!dependencyGavMap.containsKey(gav)) {
+                ArtifactHandler handler = new DefaultArtifactHandler("jar");
+                Artifact manualDep = new DefaultArtifact(gavParts[0], gavParts[1], gavParts[2], Artifact.SCOPE_COMPILE,
+                        "jar", null, handler);
+                boolean shadowed = false;
+                if (gavParts.length > 3) {
+                    shadowed = "shadowed".equals(gavParts[3]);
+                }
+                processArtifact(manualDep, dependencyLicenseMap, dependencyGavMap, shadowed);
+            } else {
+                getLog().warn("not adding extra dependency " + gav + " as it is already added");
+            }
+        }
+    }
+
+    protected void processArtifact(Artifact depArtifact,
             Map<MavenProject, List<Pair<String, String>>> dependencyLicenseMap,
-            Map<String, MavenProject> dependencyGavMap) throws ProjectBuildingException {
+            Map<String, MavenProject> dependencyGavMap, boolean shadowed) throws ProjectBuildingException {
         if (!excludedScopes.contains(depArtifact.getScope())) {
             MavenProject dep = resolveDependency(depArtifact);
+            getLog().debug("+processArtifact " + toGav(dep));
             if (!depArtifact.isResolved()) {
                 ArtifactResolutionRequest arr = new ArtifactResolutionRequest();
                 arr.setLocalRepository(localRepository);
@@ -442,6 +462,7 @@ public abstract class LicenseMojo extends AbstractMojo {
                         : (license1.getName() != null ? license1.getName() : "LICENSE_EMPTY_NAME_URL");
                 licenseUrls.add(new ImmutablePair<>(url, license1.getName()));
             }
+            dep.setContextValue(SHADOWED_KEY, shadowed);
             dependencyLicenseMap.put(dep, licenseUrls);
         }
     }
@@ -457,6 +478,10 @@ public abstract class LicenseMojo extends AbstractMojo {
             } catch (ProjectBuildingException e) {
                 throw new ProjectBuildingException(key, "Error creating dependent artifacts", e);
             }
+            // override the gav in the built dependency with the gavs in depObj
+            depProj.setGroupId(depObj.getGroupId());
+            depProj.setArtifactId(depObj.getArtifactId());
+            depProj.setVersion(depObj.getVersion());
 
             Model supplement = supplementModels
                     .get(SupplementalModelHelper.generateSupplementMapKey(depObj.getGroupId(), depObj.getArtifactId()));

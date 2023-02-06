@@ -28,6 +28,7 @@ import java.util.Map;
 
 import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
+import org.apache.hyracks.algebricks.common.exceptions.NotImplementedException;
 import org.apache.hyracks.algebricks.common.utils.Pair;
 import org.apache.hyracks.algebricks.common.utils.Triple;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalExpression;
@@ -36,9 +37,10 @@ import org.apache.hyracks.algebricks.core.algebra.base.ILogicalPlan;
 import org.apache.hyracks.algebricks.core.algebra.base.IPhysicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalOperatorTag;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalVariable;
-import org.apache.hyracks.algebricks.core.algebra.base.OperatorAnnotations;
+import org.apache.hyracks.algebricks.core.algebra.base.PhysicalOperatorTag;
 import org.apache.hyracks.algebricks.core.algebra.expressions.IAlgebricksConstantValue;
 import org.apache.hyracks.algebricks.core.algebra.metadata.IProjectionInfo;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractBinaryJoinOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractOperatorWithNestedPlans;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractUnnestMapOperator;
@@ -73,6 +75,7 @@ import org.apache.hyracks.algebricks.core.algebra.operators.logical.SelectOperat
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.SinkOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.SplitOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.SubplanOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.SwitchOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.TokenizeOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnionAllOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOperator;
@@ -99,8 +102,8 @@ public class LogicalOperatorPrettyPrintVisitorJson extends AbstractLogicalOperat
     private static final String EXPRESSION_FIELD = "expression";
     private static final String CONDITION_FIELD = "condition";
     private static final String MISSING_VALUE_FIELD = "missing-value";
-    private static final String OP_CARDINALITY = "cardinality";
-
+    private static final String OPTIMIZER_ESTIMATES = "optimizer-estimates";
+    private static final String QUERY_PLAN = "plan";
     private final Map<AbstractLogicalOperator, String> operatorIdentity = new HashMap<>();
     private Map<Object, String> log2odid = Collections.emptyMap();
     private final IdCounter idCounter = new IdCounter();
@@ -159,37 +162,38 @@ public class LogicalOperatorPrettyPrintVisitorJson extends AbstractLogicalOperat
     }
 
     @Override
-    public final IPlanPrettyPrinter printPlan(ILogicalPlan plan) throws AlgebricksException {
-        printPlanImpl(plan);
+    public final IPlanPrettyPrinter printPlan(ILogicalPlan plan, boolean printOptimizerEstimates)
+            throws AlgebricksException {
+        printPlanImpl(plan, printOptimizerEstimates);
         flushContentToWriter();
         return this;
     }
 
     @Override
-    public final IPlanPrettyPrinter printPlan(ILogicalPlan plan, Map<Object, String> log2phys)
-            throws AlgebricksException {
+    public final IPlanPrettyPrinter printPlan(ILogicalPlan plan, Map<Object, String> log2phys,
+            boolean printOptimizerEstimates) throws AlgebricksException {
         this.log2odid = log2phys;
-        printPlanImpl(plan);
+        printPlanImpl(plan, printOptimizerEstimates);
         flushContentToWriter();
         return this;
     }
 
     @Override
-    public final IPlanPrettyPrinter printOperator(AbstractLogicalOperator op, boolean printInputs)
-            throws AlgebricksException {
-        printOperatorImpl(op, printInputs);
+    public final IPlanPrettyPrinter printOperator(AbstractLogicalOperator op, boolean printInputs,
+            boolean printOptimizerEstimates) throws AlgebricksException {
+        printOperatorImpl(op, printInputs, printOptimizerEstimates);
         flushContentToWriter();
         return this;
     }
 
-    private void printPlanImpl(ILogicalPlan plan) throws AlgebricksException {
+    private void printPlanImpl(ILogicalPlan plan, boolean printOptimizerEstimates) throws AlgebricksException {
         try {
             boolean writeArrayOfRoots = plan.getRoots().size() > 1;
             if (writeArrayOfRoots) {
                 jsonGenerator.writeStartArray();
             }
             for (Mutable<ILogicalOperator> root : plan.getRoots()) {
-                printOperatorImpl((AbstractLogicalOperator) root.getValue(), true);
+                printOperatorImpl((AbstractLogicalOperator) root.getValue(), true, printOptimizerEstimates);
             }
             if (writeArrayOfRoots) {
                 jsonGenerator.writeEndArray();
@@ -199,8 +203,10 @@ public class LogicalOperatorPrettyPrintVisitorJson extends AbstractLogicalOperat
         }
     }
 
-    private void printOperatorImpl(AbstractLogicalOperator op, boolean printInputs) throws AlgebricksException {
+    private void printOperatorImpl(AbstractLogicalOperator op, boolean printInputs, boolean printOptimizerEstimates)
+            throws AlgebricksException {
         try {
+            boolean nestPlanInPlanField = nestPlanInPlanField(op, printOptimizerEstimates);
             jsonGenerator.writeStartObject();
             op.accept(this, null);
             jsonGenerator.writeStringField("operatorId", idCounter.printOperatorId(op));
@@ -214,42 +220,68 @@ public class LogicalOperatorPrettyPrintVisitorJson extends AbstractLogicalOperat
             }
             jsonGenerator.writeStringField("execution-mode", op.getExecutionMode().toString());
 
-            for (Map.Entry<String, Object> anno : op.getAnnotations().entrySet()) {
-                Object annotationVal = anno.getValue();
-                if (annotationVal != null) {
-                    String annotation = anno.getKey();
-                    switch (annotation) {
-                        case OperatorAnnotations.OP_COST_LOCAL:
-                        case OperatorAnnotations.OP_COST_TOTAL:
-                            jsonGenerator.writeStringField(annotation.toLowerCase().replace('_', '-'),
-                                    annotationVal.toString());
-                            break;
-                        case OperatorAnnotations.OP_INPUT_CARDINALITY:
-                            if (op.getOperatorTag() == LogicalOperatorTag.DATASOURCESCAN) {
-                                jsonGenerator.writeStringField(OP_CARDINALITY, annotationVal.toString());
-                            }
-                            break;
-                        case OperatorAnnotations.OP_OUTPUT_CARDINALITY:
-                            if (op.getOperatorTag() != LogicalOperatorTag.DATASOURCESCAN) {
-                                jsonGenerator.writeStringField(OP_CARDINALITY, annotationVal.toString());
-                            }
-                            break;
-                        default:
-                            break;
-                    }
-                }
-            }
+            generateCardCostFields(op, printOptimizerEstimates);
 
-            if (printInputs && !op.getInputs().isEmpty()) {
-                jsonGenerator.writeArrayFieldStart("inputs");
-                for (Mutable<ILogicalOperator> k : op.getInputs()) {
-                    printOperatorImpl((AbstractLogicalOperator) k.getValue(), printInputs);
-                }
-                jsonGenerator.writeEndArray();
+            List<Mutable<ILogicalOperator>> inputs = op.getInputs();
+            if (printInputs && !inputs.isEmpty()) {
+                printInputs(op, inputs, printOptimizerEstimates);
             }
             jsonGenerator.writeEndObject();
+            if (nestPlanInPlanField) {
+                jsonGenerator.writeEndObject();
+            }
         } catch (IOException e) {
             throw AlgebricksException.create(ErrorCode.ERROR_PRINTING_PLAN, e, String.valueOf(e));
+        }
+    }
+
+    private void printInputs(AbstractLogicalOperator op, List<Mutable<ILogicalOperator>> inputs,
+            boolean printOptimizerEstimates) throws IOException, AlgebricksException {
+        jsonGenerator.writeArrayFieldStart("inputs");
+        if (printInputsInReverse(op)) {
+            for (int i = inputs.size() - 1; i >= 0; i--) {
+                Mutable<ILogicalOperator> inOp = inputs.get(i);
+                printOperatorImpl((AbstractLogicalOperator) inOp.getValue(), true, printOptimizerEstimates);
+            }
+        } else {
+            for (Mutable<ILogicalOperator> inOp : inputs) {
+                printOperatorImpl((AbstractLogicalOperator) inOp.getValue(), true, printOptimizerEstimates);
+            }
+        }
+        jsonGenerator.writeEndArray();
+    }
+
+    private boolean nestPlanInPlanField(AbstractLogicalOperator op, boolean printOptimizerEstimates)
+            throws IOException {
+        double planCard, planCost;
+        if (op.getOperatorTag() == LogicalOperatorTag.DISTRIBUTE_RESULT && printOptimizerEstimates) {
+            planCard = getPlanCardinality(op);
+            planCost = getPlanCost(op);
+            jsonGenerator.writeStartObject();
+            jsonGenerator.writeNumberField(CARDINALITY, planCard);
+            jsonGenerator.writeNumberField(PLAN_COST, planCost);
+            jsonGenerator.writeFieldName(QUERY_PLAN);
+            return true;
+        }
+        return false;
+    }
+
+    private void generateCardCostFields(AbstractLogicalOperator op, boolean printOptimizerEstimates)
+            throws AlgebricksException {
+        double opCard, opLocalCost, opTotalCost;
+        if (printOptimizerEstimates) {
+            opCard = getOpCardinality(op);
+            opLocalCost = getOpLocalCost(op);
+            opTotalCost = getOpTotalCost(op);
+            try {
+                jsonGenerator.writeObjectFieldStart(OPTIMIZER_ESTIMATES);
+                jsonGenerator.writeNumberField(CARDINALITY, opCard);
+                jsonGenerator.writeNumberField(OP_COST_LOCAL, opLocalCost);
+                jsonGenerator.writeNumberField(OP_COST_TOTAL, opTotalCost);
+                jsonGenerator.writeEndObject();
+            } catch (IOException e) {
+                throw AlgebricksException.create(ErrorCode.ERROR_PRINTING_PLAN, e, String.valueOf(e));
+            }
         }
     }
 
@@ -336,6 +368,7 @@ public class LogicalOperatorPrettyPrintVisitorJson extends AbstractLogicalOperat
         try {
             jsonGenerator.writeStringField(OPERATOR_FIELD, "join");
             writeStringFieldExpression(CONDITION_FIELD, op.getCondition(), indent);
+            writeBuildSide(op);
             return null;
         } catch (IOException e) {
             throw AlgebricksException.create(ErrorCode.ERROR_PRINTING_PLAN, e, String.valueOf(e));
@@ -350,6 +383,7 @@ public class LogicalOperatorPrettyPrintVisitorJson extends AbstractLogicalOperat
             if (op.getMissingValue().isNull()) {
                 writeNullField(MISSING_VALUE_FIELD);
             }
+            writeBuildSide(op);
             return null;
         } catch (IOException e) {
             throw AlgebricksException.create(ErrorCode.ERROR_PRINTING_PLAN, e, String.valueOf(e));
@@ -634,6 +668,12 @@ public class LogicalOperatorPrettyPrintVisitorJson extends AbstractLogicalOperat
     }
 
     @Override
+    public Void visitSwitchOperator(SwitchOperator op, Void indent) throws AlgebricksException {
+        // TODO (GLENN): Implement this logic
+        throw new NotImplementedException();
+    }
+
+    @Override
     public Void visitMaterializeOperator(MaterializeOperator op, Void indent) throws AlgebricksException {
         try {
             jsonGenerator.writeStringField(OPERATOR_FIELD, "materialize");
@@ -811,7 +851,7 @@ public class LogicalOperatorPrettyPrintVisitorJson extends AbstractLogicalOperat
             jsonGenerator.writeArrayFieldStart("subplan");
             List<ILogicalPlan> nestedPlans = op.getNestedPlans();
             for (int i = 0, size = nestedPlans.size(); i < size; i++) {
-                printPlanImpl(nestedPlans.get(i));
+                printPlanImpl(nestedPlans.get(i), false);
             }
             jsonGenerator.writeEndArray();
             idCounter.previousPrefix();
@@ -899,6 +939,21 @@ public class LogicalOperatorPrettyPrintVisitorJson extends AbstractLogicalOperat
         if (!expressions.isEmpty()) {
             writeArrayFieldOfExpressions(EXPRESSIONS_FIELD, expressions, indent);
         }
+    }
+
+    private void writeBuildSide(AbstractBinaryJoinOperator op) throws IOException {
+        int buildInputIndex = printInputsInReverse(op) ? 0 : 1;
+        jsonGenerator.writeNumberField("build-side", buildInputIndex);
+    }
+
+    private static boolean printInputsInReverse(AbstractLogicalOperator op) {
+        return isHashJoin(op);
+    }
+
+    private static boolean isHashJoin(AbstractLogicalOperator op) {
+        IPhysicalOperator pOp = op.getPhysicalOperator();
+        return pOp != null && (pOp.getOperatorTag() == PhysicalOperatorTag.IN_MEMORY_HASH_JOIN
+                || pOp.getOperatorTag() == PhysicalOperatorTag.HYBRID_HASH_JOIN);
     }
 
     private String getIndexOpString(Kind opKind) {

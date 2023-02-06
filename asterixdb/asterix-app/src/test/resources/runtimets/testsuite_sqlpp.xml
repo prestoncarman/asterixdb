@@ -3106,6 +3106,21 @@
         <expected-error>Input contains different list types (in line 25, at column 8)</expected-error>
       </compilation-unit>
     </test-case>
+    <test-case FilePath="array_fun">
+      <compilation-unit name="array_binary_search">
+        <output-dir compare="Text">array_binary_search</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="array_fun">
+      <compilation-unit name="array_move">
+        <output-dir compare="Text">array_move</output-dir>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="array_fun">
+      <compilation-unit name="array_swap">
+        <output-dir compare="Text">array_swap</output-dir>
+      </compilation-unit>
+    </test-case>
   </test-group>
   <test-group name="bitwise">
     <test-case FilePath="bitwise">
@@ -8586,6 +8601,11 @@
           <output-dir compare="Text">using-feed</output-dir>
         </compilation-unit>
       </test-case>
+      <test-case FilePath="array-index/select-unnest-queries/open">
+        <compilation-unit name="multiple-indexes">
+          <output-dir compare="Text">multiple-indexes</output-dir>
+        </compilation-unit>
+      </test-case>
     </test-group>
     <test-group name="array-index/select-quantified-queries">
       <test-case FilePath="array-index/select-quantified-queries">
@@ -8616,6 +8636,11 @@
       <test-case FilePath="array-index/select-quantified-queries">
         <compilation-unit name="with-open-index">
           <output-dir compare="Text">with-open-index</output-dir>
+        </compilation-unit>
+      </test-case>
+      <test-case FilePath="array-index/select-quantified-queries">
+        <compilation-unit name="multiple-indexes">
+          <output-dir compare="Text">multiple-indexes</output-dir>
         </compilation-unit>
       </test-case>
     </test-group>
@@ -15007,6 +15032,11 @@
         <output-dir compare="Text">query-ASTERIXDB-1354</output-dir>
       </compilation-unit>
     </test-case>
+    <test-case FilePath="union">
+      <compilation-unit name="union_type_cast">
+        <output-dir compare="Text">union_type_cast</output-dir>
+      </compilation-unit>
+    </test-case>
   </test-group>
   <test-group name="upsert">
     <test-case FilePath="upsert">
@@ -15405,6 +15435,29 @@
     </test-case>
   </test-group>
   <test-group name="warnings">
+    <test-case FilePath="warnings" check-warnings="true">
+      <compilation-unit name="broadcast-join-hint-warning">
+        <output-dir compare="Text">broadcast-join-hint-warning</output-dir>
+        <expected-warn><![CDATA[ASX1107: Unexpected hint: hash-bcas. "hash-bcast", "indexnl", "hashjoin", "skip-index", "use-index", "selectivity", "productivity" expected at this location (in line 36, at column 22)]]></expected-warn>
+        <expected-warn><![CDATA[ASX1132: Invalid specification for hint hash-bcast. ASX1001: Syntax error: In line 1 >>()<< Encountered ")" at column 2.  (in line 36, at column 22)]]></expected-warn>
+        <expected-warn>HYR10006: Could not apply broadcast hash join hint: broadcast cn (in line 36, at column 43)</expected-warn>
+      </compilation-unit>
+    </test-case>
+    <test-case FilePath="warnings" check-warnings="true">
+      <compilation-unit name="hashjoin-hint-warning">
+        <output-dir compare="Text">hashjoin-hint-warning</output-dir>
+        <expected-warn><![CDATA[ASX1132: Invalid specification for hint hashjoin. ASX1001: Syntax error: In line 1 >>build<< Encountered <EOF> at column 5.  (in line 36, at column 22)]]></expected-warn>
+        <expected-warn><![CDATA[ASX1107: Unexpected hint: hashjon build. "hash-bcast", "indexnl", "hashjoin", "skip-index", "use-index", "selectivity", "productivity" expected at this location (in line 36, at column 22)]]></expected-warn>
+        <expected-warn><![CDATA[ASX1132: Invalid specification for hint hashjoin. ASX1001: Syntax error: In line 1 >>buil<< Encountered <EOF> at column 4.  (in line 36, at column 22)]]></expected-warn>
+        <expected-warn><![CDATA[ASX1132: Invalid specification for hint hashjoin. ASX1001: Syntax error: In line 1 >>build ()<< Encountered ")" at column 8.  (in line 36, at column 22)]]></expected-warn>
+        <expected-warn>HYR10006: Could not apply hash join hint: build with cn (in line 36, at column 47)</expected-warn>
+        <expected-warn><![CDATA[ASX1132: Invalid specification for hint hashjoin. ASX1001: Syntax error: In line 1 >>probe<< Encountered <EOF> at column 5.  (in line 36, at column 22)]]></expected-warn>
+        <expected-warn><![CDATA[ASX1107: Unexpected hint: hashjon probe. "hash-bcast", "indexnl", "hashjoin", "skip-index", "use-index", "selectivity", "productivity" expected at this location (in line 36, at column 22)]]></expected-warn>
+        <expected-warn><![CDATA[ASX1132: Invalid specification for hint hashjoin. ASX1001: Syntax error: In line 1 >>prob<< Encountered <EOF> at column 4.  (in line 36, at column 22)]]></expected-warn>
+        <expected-warn><![CDATA[ASX1132: Invalid specification for hint hashjoin. ASX1001: Syntax error: In line 1 >>probe ()<< Encountered ")" at column 8.  (in line 36, at column 22)]]></expected-warn>
+        <expected-warn>HYR10006: Could not apply hash join hint: probe with cn (in line 36, at column 47)</expected-warn>
+      </compilation-unit>
+    </test-case>
     <test-case FilePath="warnings" check-warnings="true">
       <compilation-unit name="inapplicable-hint-warning">
         <output-dir compare="Text">inapplicable-hint-warning</output-dir>
