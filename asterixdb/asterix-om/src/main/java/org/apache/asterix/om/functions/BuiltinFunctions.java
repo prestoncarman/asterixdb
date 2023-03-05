@@ -621,12 +621,14 @@ public class BuiltinFunctions {
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "agg-local-kurtosis", 1);
     public static final FunctionIdentifier NULL_WRITER =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "agg-null-writer", 1);
-    public static final FunctionIdentifier INTERVAL_RANGE =
-            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "agg-interval-range", 1);
-    public static final FunctionIdentifier LOCAL_INTERVAL_RANGE =
-            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "agg-local-interval_range", 1);
-    public static final FunctionIdentifier GLOBAL_INTERVAL_RANGE =
-            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "agg-global-interval-range", 1);
+    public static final FunctionIdentifier UNION_INTERVAL_RANGE =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "agg-union_interval_range", 1);
+    public static final FunctionIdentifier LOCAL_UNION_INTERVAL_RANGE =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "agg-local-union_interval_range", 1);
+    public static final FunctionIdentifier INTERMEDIATE_UNION_INTERVAL_RANGE =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "agg-intermediate-union_interval_range", 1);
+    public static final FunctionIdentifier GLOBAL_UNION_INTERVAL_RANGE =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "agg-global-union_interval_range", 1);
     public static final FunctionIdentifier GLOBAL_INTERVAL_RANGE_MAP =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "agg-global-interval-range-map", 1);
     public static final FunctionIdentifier UNION_MBR =
@@ -666,7 +668,8 @@ public class BuiltinFunctions {
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "kurtosis", 1);
     public static final FunctionIdentifier SCALAR_UNION_MBR =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "union_mbr", 1);
-
+    public static final FunctionIdentifier SCALAR_UNION_INTERVAL_RANGE =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "union_interval_range", 1);
     // serializable aggregate functions
     public static final FunctionIdentifier SERIAL_AVG =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "avg-serial", 1);
@@ -808,6 +811,15 @@ public class BuiltinFunctions {
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "agg-intermediate-sql-max", 1);
     public static final FunctionIdentifier GLOBAL_SQL_MAX =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "agg-global-sql-max", 1);
+    public static final FunctionIdentifier SQL_UNION_INTERVAL_RANGE =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "agg-sql-union_interval_range", 1);
+    public static final FunctionIdentifier LOCAL_SQL_UNION_INTERVAL_RANGE =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "agg-local-sql-union_interval_range", 1);
+    public static final FunctionIdentifier INTERMEDIATE_SQL_UNION_INTERVAL_RANGE =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "agg-intermediate-sql-union_interval_range", 1);
+    public static final FunctionIdentifier GLOBAL_SQL_UNION_INTERVAL_RANGE =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "agg-global-sql-union_interval_range", 1);
+
     public static final FunctionIdentifier SQL_MIN =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "agg-sql-min", 1);
     public static final FunctionIdentifier LOCAL_SQL_MIN =
@@ -885,6 +897,8 @@ public class BuiltinFunctions {
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "sql-sum", 1);
     public static final FunctionIdentifier SCALAR_SQL_MAX =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "sql-max", 1);
+    public static final FunctionIdentifier SCALAR_SQL_UNION_INTERVAL_RANGE =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "sql-union_interval_range", 1);
     public static final FunctionIdentifier SCALAR_SQL_MIN =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "sql-min", 1);
     public static final FunctionIdentifier SCALAR_SQL_STDDEV_SAMP =
@@ -1986,6 +2000,9 @@ public class BuiltinFunctions {
                 new ScalarVersionOfAggregateResultType(MinMaxAggTypeComputer.INSTANCE);
         ScalarVersionOfAggregateResultType scalarUnionMbrTypeComputer =
                 new ScalarVersionOfAggregateResultType(UnionMbrAggTypeComputer.INSTANCE);
+        ScalarVersionOfAggregateResultType scalarUnionIntervalRangeTypeComputer =
+                new ScalarVersionOfAggregateResultType(
+                        org.apache.asterix.om.typecomputer.impl.UnionIntervalRangeAggTypeComputer.INSTANCE);
 
         addPrivateFunction(LISTIFY, OrderedListConstructorTypeComputer.INSTANCE, true);
         addFunction(SCALAR_ARRAYAGG, ScalarArrayAggTypeComputer.INSTANCE, true);
@@ -2029,8 +2046,10 @@ public class BuiltinFunctions {
         addFunction(KURTOSIS, NullableDoubleTypeComputer.INSTANCE, true);
         addPrivateFunction(GLOBAL_KURTOSIS, NullableDoubleTypeComputer.INSTANCE, true);
         addPrivateFunction(NULL_WRITER, PropagateTypeComputer.INSTANCE_NULLABLE, true);
-        addPrivateFunction(LOCAL_INTERVAL_RANGE, AIntervalTypeComputer.INSTANCE, true);
-        addPrivateFunction(GLOBAL_INTERVAL_RANGE, AIntervalTypeComputer.INSTANCE, true);
+        addPrivateFunction(UNION_INTERVAL_RANGE, AIntervalTypeComputer.INSTANCE, true);
+        addPrivateFunction(LOCAL_UNION_INTERVAL_RANGE, AIntervalTypeComputer.INSTANCE, true);
+        addPrivateFunction(INTERMEDIATE_UNION_INTERVAL_RANGE, AIntervalTypeComputer.INSTANCE, true);
+        addPrivateFunction(GLOBAL_UNION_INTERVAL_RANGE, AIntervalTypeComputer.INSTANCE, true);
         addPrivateFunction(GLOBAL_INTERVAL_RANGE_MAP, AIntervalTypeComputer.INSTANCE, true);
         addFunction(UNION_MBR, ARectangleTypeComputer.INSTANCE, true);
         addPrivateFunction(LOCAL_UNION_MBR, ARectangleTypeComputer.INSTANCE, true);
@@ -2095,6 +2114,7 @@ public class BuiltinFunctions {
         addPrivateFunction(SERIAL_LOCAL_SQL_KURTOSIS, LocalSingleVarStatisticsTypeComputer.INSTANCE, true);
         addPrivateFunction(SERIAL_INTERMEDIATE_SQL_KURTOSIS, LocalSingleVarStatisticsTypeComputer.INSTANCE, true);
         addFunction(SCALAR_UNION_MBR, scalarUnionMbrTypeComputer, true);
+        addFunction(SCALAR_UNION_INTERVAL_RANGE, scalarUnionIntervalRangeTypeComputer, true);
 
         // SQL SUM
         addFunction(SQL_SUM, NumericSumAggTypeComputer.INSTANCE, true);
@@ -2106,7 +2126,8 @@ public class BuiltinFunctions {
         addPrivateFunction(SERIAL_LOCAL_SQL_SUM, NumericSumAggTypeComputer.INSTANCE, true);
         addPrivateFunction(SERIAL_INTERMEDIATE_SQL_SUM, NumericSumAggTypeComputer.INSTANCE, true);
         addPrivateFunction(SERIAL_GLOBAL_SQL_SUM, NumericSumAggTypeComputer.INSTANCE, true);
-
+        addScalarAgg(UNION_INTERVAL_RANGE, SCALAR_UNION_INTERVAL_RANGE);
+        addScalarAgg(UNION_MBR, SCALAR_UNION_MBR);
         addFunction(SQL_AVG, NullableDoubleTypeComputer.INSTANCE, true);
         addPrivateFunction(GLOBAL_SQL_AVG, NullableDoubleTypeComputer.INSTANCE, true);
         addPrivateFunction(LOCAL_SQL_AVG, LocalAvgTypeComputer.INSTANCE, true);
@@ -2160,6 +2181,12 @@ public class BuiltinFunctions {
         addPrivateFunction(INTERMEDIATE_SQL_UNION_MBR, ARectangleTypeComputer.INSTANCE, true);
         addPrivateFunction(GLOBAL_SQL_UNION_MBR, ARectangleTypeComputer.INSTANCE, true);
         addFunction(SCALAR_SQL_UNION_MBR, ARectangleTypeComputer.INSTANCE, true);
+
+        addFunction(SQL_UNION_INTERVAL_RANGE, AIntervalTypeComputer.INSTANCE, true);
+        addPrivateFunction(LOCAL_SQL_UNION_INTERVAL_RANGE, AIntervalTypeComputer.INSTANCE, true);
+        addPrivateFunction(INTERMEDIATE_SQL_UNION_INTERVAL_RANGE, AIntervalTypeComputer.INSTANCE, true);
+        addPrivateFunction(GLOBAL_SQL_UNION_INTERVAL_RANGE, AIntervalTypeComputer.INSTANCE, true);
+        addFunction(SCALAR_SQL_UNION_INTERVAL_RANGE, AIntervalTypeComputer.INSTANCE, true);
 
         addPrivateFunction(SERIAL_AVG, NullableDoubleTypeComputer.INSTANCE, true);
         addPrivateFunction(SERIAL_COUNT, AInt64TypeComputer.INSTANCE, true);
@@ -2618,6 +2645,18 @@ public class BuiltinFunctions {
 
         addDistinctAgg(COUNT_DISTINCT, COUNT);
         addScalarAgg(COUNT_DISTINCT, SCALAR_COUNT_DISTINCT);
+
+        // INTERVAL RANGE
+        addAgg(SQL_UNION_INTERVAL_RANGE);
+        addAgg(LOCAL_SQL_UNION_INTERVAL_RANGE);
+        addAgg(GLOBAL_SQL_UNION_INTERVAL_RANGE);
+        addLocalAgg(SQL_UNION_INTERVAL_RANGE, LOCAL_SQL_UNION_INTERVAL_RANGE);
+        addIntermediateAgg(LOCAL_SQL_UNION_INTERVAL_RANGE, INTERMEDIATE_SQL_UNION_INTERVAL_RANGE);
+        addIntermediateAgg(GLOBAL_SQL_UNION_INTERVAL_RANGE, GLOBAL_SQL_UNION_INTERVAL_RANGE);
+        addIntermediateAgg(SQL_UNION_INTERVAL_RANGE, GLOBAL_SQL_UNION_INTERVAL_RANGE);
+        addGlobalAgg(SQL_UNION_INTERVAL_RANGE, GLOBAL_SQL_UNION_INTERVAL_RANGE);
+
+        addScalarAgg(SQL_UNION_INTERVAL_RANGE, SCALAR_SQL_UNION_INTERVAL_RANGE);
 
         // MAX
         addAgg(MAX);
@@ -3224,19 +3263,33 @@ public class BuiltinFunctions {
     }
 
     public enum WindowFunctionProperty implements BuiltinFunctionProperty {
-        /** Whether the order clause is prohibited */
+        /**
+         * Whether the order clause is prohibited
+         */
         NO_ORDER_CLAUSE,
-        /** Whether the frame clause is prohibited */
+        /**
+         * Whether the frame clause is prohibited
+         */
         NO_FRAME_CLAUSE,
-        /** Whether the first argument is a list */
+        /**
+         * Whether the first argument is a list
+         */
         HAS_LIST_ARG,
-        /** Whether order by expressions must be injected as arguments */
+        /**
+         * Whether order by expressions must be injected as arguments
+         */
         INJECT_ORDER_ARGS,
-        /** Whether a running aggregate requires partition materialization runtime */
+        /**
+         * Whether a running aggregate requires partition materialization runtime
+         */
         MATERIALIZE_PARTITION,
-        /** Whether FROM (FIRST | LAST) modifier is allowed */
+        /**
+         * Whether FROM (FIRST | LAST) modifier is allowed
+         */
         ALLOW_FROM_FIRST_LAST,
-        /** Whether (RESPECT | IGNORE) NULLS modifier is allowed */
+        /**
+         * Whether (RESPECT | IGNORE) NULLS modifier is allowed
+         */
         ALLOW_RESPECT_IGNORE_NULLS
     }
 
@@ -3267,7 +3320,9 @@ public class BuiltinFunctions {
     }
 
     public enum DataSourceFunctionProperty implements BuiltinFunctionProperty {
-        /** Force minimum memory budget if a query only uses this function */
+        /**
+         * Force minimum memory budget if a query only uses this function
+         */
         MIN_MEMORY_BUDGET
     }
 

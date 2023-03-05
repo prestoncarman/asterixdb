@@ -119,5 +119,10 @@
         <output-dir compare="Text">interval_overlaps</output-dir>
       </compilation-unit>
     </test-case>
+    <test-case FilePath="temporal/union_interval_range">
+      <compilation-unit name="union_interval_range">
+        <output-dir compare="Text">union_interval_range</output-dir>
+      </compilation-unit>
+    </test-case>
   </test-group>
 </test-suite>

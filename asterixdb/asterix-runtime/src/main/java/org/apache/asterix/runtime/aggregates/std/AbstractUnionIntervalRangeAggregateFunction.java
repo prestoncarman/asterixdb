@@ -42,7 +42,7 @@ import org.apache.hyracks.data.std.primitive.VoidPointable;
 import org.apache.hyracks.data.std.util.ArrayBackedValueStorage;
 import org.apache.hyracks.dataflow.common.data.accessors.IFrameTupleReference;
 
-public abstract class AbstractIntervalRangeAggregateFunction extends AbstractAggregateFunction {
+public abstract class AbstractUnionIntervalRangeAggregateFunction extends AbstractAggregateFunction {
 
     private ArrayBackedValueStorage resultStorage = new ArrayBackedValueStorage();
     private IPointable inputVal = new VoidPointable();
@@ -55,7 +55,7 @@ public abstract class AbstractIntervalRangeAggregateFunction extends AbstractAgg
     private ISerializerDeserializer<AInterval> intervalSerde =
             SerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.AINTERVAL);
 
-    public AbstractIntervalRangeAggregateFunction(IScalarEvaluatorFactory[] args, IEvaluatorContext context,
+    public AbstractUnionIntervalRangeAggregateFunction(IScalarEvaluatorFactory[] args, IEvaluatorContext context,
             SourceLocation sourceLoc) throws HyracksDataException {
         super(sourceLoc);
         this.eval = args[0].createScalarEvaluator(context);
@@ -109,7 +109,7 @@ public abstract class AbstractIntervalRangeAggregateFunction extends AbstractAgg
     }
 
     protected void processNull() throws UnsupportedItemTypeException {
-        throw new UnsupportedItemTypeException(sourceLoc, BuiltinFunctions.INTERVAL_RANGE,
+        throw new UnsupportedItemTypeException(sourceLoc, BuiltinFunctions.UNION_INTERVAL_RANGE,
                 ATypeTag.SERIALIZED_SYSTEM_NULL_TYPE_TAG);
     }
 

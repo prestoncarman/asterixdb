@@ -35,7 +35,7 @@ public class LocalUnionIntervalRangeAggregateDescriptor extends AbstractUnionInt
 
     @Override
     public FunctionIdentifier getIdentifier() {
-        return BuiltinFunctions.LOCAL_INTERVAL_RANGE;
+        return BuiltinFunctions.LOCAL_UNION_INTERVAL_RANGE;
     }
 
     @Override
@@ -46,7 +46,7 @@ public class LocalUnionIntervalRangeAggregateDescriptor extends AbstractUnionInt
             @Override
             public IAggregateEvaluator createAggregateEvaluator(final IEvaluatorContext ctx)
                     throws HyracksDataException {
-                return new IntervalRangeAggregateFunction(args, ctx, sourceLoc);
+                return new UnionIntervalRangeAggregateFunction(args, ctx, sourceLoc);
             }
         };
     }

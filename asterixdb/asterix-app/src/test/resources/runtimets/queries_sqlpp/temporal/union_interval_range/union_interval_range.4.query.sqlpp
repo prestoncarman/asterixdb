@@ -16,17 +16,12 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.asterix.runtime.aggregates.std;
+/*
+ * Description      :   Check union_interval_range functionality for interval on Staff
+ * Expected Result  :   Success
+ * Date             :   5th Mar, 2023
+ */
 
-import org.apache.hyracks.algebricks.runtime.base.IEvaluatorContext;
-import org.apache.hyracks.algebricks.runtime.base.IScalarEvaluatorFactory;
-import org.apache.hyracks.api.exceptions.HyracksDataException;
-import org.apache.hyracks.api.exceptions.SourceLocation;
+use TinyCollege;
 
-public class IntervalRangeAggregateFunction extends AbstractIntervalRangeAggregateFunction {
-
-    public IntervalRangeAggregateFunction(IScalarEvaluatorFactory[] args, IEvaluatorContext context,
-            SourceLocation sourceLoc) throws HyracksDataException {
-        super(args, context, sourceLoc);
-    }
-}
+select `union_interval_range`(vacation) from Staff;

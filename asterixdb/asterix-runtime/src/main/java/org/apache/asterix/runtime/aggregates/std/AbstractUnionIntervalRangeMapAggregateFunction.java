@@ -144,7 +144,7 @@ public abstract class AbstractUnionIntervalRangeMapAggregateFunction extends Abs
     }
 
     protected void processNull() throws UnsupportedItemTypeException {
-        throw new UnsupportedItemTypeException(sourceLoc, BuiltinFunctions.INTERVAL_RANGE,
+        throw new UnsupportedItemTypeException(sourceLoc, BuiltinFunctions.UNION_INTERVAL_RANGE,
                 ATypeTag.SERIALIZED_SYSTEM_NULL_TYPE_TAG);
     }
 

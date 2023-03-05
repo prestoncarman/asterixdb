@@ -109,40 +109,11 @@ public class IntervalJoinUtils {
 
     protected static boolean tryIntervalJoinAssignment(AbstractBinaryJoinOperator op, IOptimizationContext context,
             ILogicalExpression joinCondition, int left, int right) throws AlgebricksException {
-        List<LogicalVariable> sideLeft = new ArrayList<>(1);
-        List<LogicalVariable> sideRight = new ArrayList<>(1);
-        List<LogicalVariable> varsLeft = op.getInputs().get(left).getValue().getSchema();
-        List<LogicalVariable> varsRight = op.getInputs().get(right).getValue().getSchema();
 
-        AbstractFunctionCallExpression funcExpr = (AbstractFunctionCallExpression) joinCondition;
-        FunctionIdentifier fi = IntervalJoinUtils.isIntervalJoinCondition(funcExpr, varsLeft, varsRight, sideLeft,
-                sideRight, left, right);
-        if (fi == null) {
-            return false;
-        }
+        AbstractFunctionCallExpression fexp = (AbstractFunctionCallExpression) joinCondition;
 
-        // Existing workflow for interval merge join
-        RangeAnnotation rangeAnnotation = IntervalJoinUtils.findRangeAnnotation(funcExpr);
-        if (rangeAnnotation == null) {
-            return false;
-        }
-
-        //Check RangeMap type
-        RangeMap rangeMap = rangeAnnotation.getRangeMap();
-        if (rangeMap.getTag(0, 0) != ATypeTag.DATETIME.serialize() && rangeMap.getTag(0, 0) != ATypeTag.DATE.serialize()
-                && rangeMap.getTag(0, 0) != ATypeTag.TIME.serialize()) {
-            IWarningCollector warningCollector = context.getWarningCollector();
-            if (warningCollector.shouldWarn()) {
-                warningCollector.warn(Warning.of(op.getSourceLocation(),
-                        org.apache.hyracks.api.exceptions.ErrorCode.INAPPLICABLE_HINT,
-                        "Date, DateTime, and Time are only range hints types supported for interval joins"));
-            }
-            return false;
-        }
-        IntervalPartitions intervalPartitions = IntervalJoinUtils.createIntervalPartitions(op, fi, sideLeft, sideRight,
-                context, left, right, rangeMap, null);
-        IntervalJoinUtils.setSortMergeIntervalJoinOp(op, fi, sideLeft, sideRight, context, intervalPartitions);
-        return true;
+        RangeAnnotation rangeAnnotation = IntervalJoinUtils.findRangeAnnotation(fexp);
+        return IntervalJoinUtils.updateJoinPlan(op, context, fexp, left, right, rangeAnnotation);
     }
 
     protected static RangeAnnotation findRangeAnnotation(AbstractFunctionCallExpression fexp) {
@@ -150,8 +121,8 @@ public class IntervalJoinUtils {
     }
 
     protected static void setSortMergeIntervalJoinOp(AbstractBinaryJoinOperator op, FunctionIdentifier fi,
-                                                     List<LogicalVariable> sideLeft, List<LogicalVariable> sideRight, IOptimizationContext context,
-                                                     IntervalPartitions intervalPartitions) throws CompilationException {
+            List<LogicalVariable> sideLeft, List<LogicalVariable> sideRight, IOptimizationContext context,
+            IntervalPartitions intervalPartitions) throws CompilationException {
         IIntervalJoinUtilFactory mjcf = createIntervalJoinCheckerFactory(fi, intervalPartitions.getRangeMap(), null);
         op.setPhysicalOperator(new IntervalMergeJoinPOperator(op.getJoinKind(),
                 AbstractJoinPOperator.JoinPartitioningType.BROADCAST, sideLeft, sideRight,
@@ -163,8 +134,8 @@ public class IntervalJoinUtils {
      * Inserts partition sort key.
      */
     protected static IntervalPartitions createIntervalPartitions(AbstractBinaryJoinOperator op, FunctionIdentifier fi,
-                                                                 List<LogicalVariable> sideLeft, List<LogicalVariable> sideRight, IOptimizationContext context, int left,
-                                                                 int right, RangeMap rangeMap, String rangeMapKey) throws AlgebricksException {
+            List<LogicalVariable> sideLeft, List<LogicalVariable> sideRight, IOptimizationContext context, int left,
+            int right, RangeMap rangeMap, String rangeMapKey) throws AlgebricksException {
 
         List<LogicalVariable> leftPartitionVar = new ArrayList<>(2);
         leftPartitionVar.add(context.newVar());
@@ -253,7 +224,7 @@ public class IntervalJoinUtils {
      * Certain Relations not yet supported as seen below. Will default to regular join.
      */
     private static IIntervalJoinUtilFactory createIntervalJoinCheckerFactory(FunctionIdentifier fi, RangeMap rangeMap,
-                                                                             String rangeMapKey) throws CompilationException {
+            String rangeMapKey) throws CompilationException {
         IIntervalJoinUtilFactory mjcf;
         if (fi.equals(BuiltinFunctions.INTERVAL_OVERLAPPED_BY)) {
             mjcf = new OverlappedByIntervalJoinUtilFactory();
@@ -275,7 +246,7 @@ public class IntervalJoinUtils {
         return mjcf;
     }
 
-    protected static void updateJoinPlan(AbstractBinaryJoinOperator op, IOptimizationContext context,
+    protected static boolean updateJoinPlan(AbstractBinaryJoinOperator op, IOptimizationContext context,
             AbstractFunctionCallExpression fexp, int left, int right, RangeAnnotation rangeAnnotation)
             throws AlgebricksException {
 
@@ -286,12 +257,12 @@ public class IntervalJoinUtils {
 
         boolean switchArguments = false;
         if (fexp.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
-            return;
+            return false;
         }
 
         FunctionIdentifier fi = fexp.getFunctionIdentifier();
         if (!isIntervalFunction(fi)) {
-            return;
+            return false;
         }
 
         ILogicalExpression opLeft = fexp.getArguments().get(left).getValue();
@@ -299,7 +270,7 @@ public class IntervalJoinUtils {
 
         if (opLeft.getExpressionTag() != LogicalExpressionTag.VARIABLE
                 || opRight.getExpressionTag() != LogicalExpressionTag.VARIABLE) {
-            return;
+            return false;
         }
 
         LogicalVariable var1 = ((VariableReferenceExpression) opLeft).getVariableReference();
@@ -310,7 +281,7 @@ public class IntervalJoinUtils {
             fi = getInverseIntervalFunction(fi);
             switchArguments = true;
         } else {
-            return;
+            return false;
         }
 
         LogicalVariable var2 = ((VariableReferenceExpression) opRight).getVariableReference();
@@ -319,20 +290,20 @@ public class IntervalJoinUtils {
         } else if (varsRight.contains(var2) && !sideRight.contains(var2) && !switchArguments) {
             sideRight.add(var2);
         } else {
-            return;
+            return false;
         }
 
         if (fi == null) {
-            return;
+            return false;
         }
 
         if (rangeAnnotation == null) {
-
             buildSortMergeIntervalPlanWithDynamicHint(op, context, fi, sideLeft, sideRight, left, right);
         } else {
             buildSortMergeIntervalPlanWithStaticHint(op, context, fi, sideLeft, sideRight, left, right,
                     rangeAnnotation);
         }
+        return true;
     }
 
     private static boolean isIntervalFunction(FunctionIdentifier fi) {
@@ -448,7 +419,6 @@ public class IntervalJoinUtils {
         Mutable<ILogicalOperator> rightInputOp = op.getInputs().get(right);
 
         // Add a dynamic workflow to compute Range of the left branch
-        // Add a dynamic workflow to compute Range of the right branch
         Triple<MutableObject<ILogicalOperator>, List<LogicalVariable>, MutableObject<ILogicalOperator>> leftRangeCalculator =
                 createDynamicRangeCalculator(op, context, leftInputOp, sideLeft);
         MutableObject<ILogicalOperator> leftGlobalRangeAggregateOperator = leftRangeCalculator.first;
@@ -654,7 +624,7 @@ public class IntervalJoinUtils {
 
         // Create local aggregate operator
         IFunctionInfo localAggFunc =
-                context.getMetadataProvider().lookupFunction(BuiltinFunctions.LOCAL_INTERVAL_RANGE);
+                context.getMetadataProvider().lookupFunction(BuiltinFunctions.LOCAL_UNION_INTERVAL_RANGE);
         AggregateFunctionCallExpression localAggExpr = new AggregateFunctionCallExpression(localAggFunc, false, fields);
         localAggExpr.setSourceLocation(op.getSourceLocation());
         localAggExpr.setOpaqueParameters(new Object[] {});
@@ -678,7 +648,7 @@ public class IntervalJoinUtils {
         AbstractLogicalExpression inputVarRef = new VariableReferenceExpression(inputVar, op.getSourceLocation());
         globalAggFuncArgs.add(new MutableObject<>(inputVarRef));
         IFunctionInfo globalAggFunc =
-                context.getMetadataProvider().lookupFunction(BuiltinFunctions.GLOBAL_INTERVAL_RANGE);
+                context.getMetadataProvider().lookupFunction(BuiltinFunctions.GLOBAL_UNION_INTERVAL_RANGE);
         AggregateFunctionCallExpression globalAggExpr =
                 new AggregateFunctionCallExpression(globalAggFunc, true, globalAggFuncArgs);
         globalAggExpr.setStepOneAggregate(globalAggFunc);

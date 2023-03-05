@@ -149,7 +149,6 @@ import org.apache.asterix.runtime.aggregates.serializable.std.SerializableVarPop
 import org.apache.asterix.runtime.aggregates.std.AvgAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.CountAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.GlobalAvgAggregateDescriptor;
-import org.apache.asterix.runtime.aggregates.std.GlobalIntervalRangeAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.GlobalKurtosisAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.GlobalMaxAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.GlobalMinAggregateDescriptor;
@@ -737,8 +736,9 @@ public final class FunctionCollection implements IFunctionCollection {
         fc.add(EmptyStreamAggregateDescriptor.FACTORY);
         fc.add(NonEmptyStreamAggregateDescriptor.FACTORY);
         fc.add(NullWriterAggregateDescriptor.FACTORY);
+        fc.add(org.apache.asterix.runtime.aggregates.std.UnionIntervalRangeAggregateDescriptor.FACTORY);
         fc.add(LocalUnionIntervalRangeAggregateDescriptor.FACTORY);
-        fc.add(GlobalIntervalRangeAggregateDescriptor.FACTORY);
+        fc.add(org.apache.asterix.runtime.aggregates.std.IntermediateUnionIntervalRangeAggregateDescriptor.FACTORY);
         fc.add(GlobalUnionIntervalRangeMapAggregateDescriptor.FACTORY);
         fc.add(UnionMbrAggregateDescriptor.FACTORY);
         fc.add(LocalUnionMbrAggregateDescriptor.FACTORY);
@@ -807,6 +807,7 @@ public final class FunctionCollection implements IFunctionCollection {
         fc.add(ScalarSkewnessDistinctAggregateDescriptor.FACTORY);
         fc.add(ScalarUnionMbrAggregateDescriptor.FACTORY);
         fc.add(ScalarFirstElementAggregateDescriptor.FACTORY);
+        fc.add(org.apache.asterix.runtime.aggregates.scalar.ScalarUnionIntervalRangeAggregateDescriptor.FACTORY);
 
         // SQL aggregates
         fc.add(SqlCountAggregateDescriptor.FACTORY);
@@ -854,6 +855,10 @@ public final class FunctionCollection implements IFunctionCollection {
         fc.add(LocalSqlUnionMbrAggregateDescriptor.FACTORY);
         fc.add(IntermediateSqlUnionMbrAggregateDescriptor.FACTORY);
         fc.add(GlobalSqlUnionMbrAggregateDescriptor.FACTORY);
+        fc.add(org.apache.asterix.runtime.aggregates.std.SqlUnionIntervalRangeAggregateDescriptor.FACTORY);
+        fc.add(org.apache.asterix.runtime.aggregates.std.LocalSqlUnionIntervalRangeAggregateDescriptor.FACTORY);
+        fc.add(org.apache.asterix.runtime.aggregates.std.IntermediateSqlUnionIntervalRangeAggregateDescriptor.FACTORY);
+        fc.add(org.apache.asterix.runtime.aggregates.std.GlobalSqlUnionIntervalRangeAggregateDescriptor.FACTORY);
 
         // SQL serializable aggregates
         fc.add(SerializableSqlCountAggregateDescriptor.FACTORY);
@@ -914,6 +919,7 @@ public final class FunctionCollection implements IFunctionCollection {
         fc.add(ScalarSqlSkewnessAggregateDescriptor.FACTORY);
         fc.add(ScalarSqlSkewnessDistinctAggregateDescriptor.FACTORY);
         fc.add(ScalarSqlUnionMbrAggregateDescriptor.FACTORY);
+        fc.add(org.apache.asterix.runtime.aggregates.scalar.ScalarSqlUnionIntervalRangeAggregateDescriptor.FACTORY);
 
         // window functions
         fc.add(DenseRankRunningAggregateDescriptor.FACTORY);
@@ -1281,6 +1287,7 @@ public final class FunctionCollection implements IFunctionCollection {
         fc.add(PrintTimeDescriptor.FACTORY);
         fc.add(PrintDateTimeDescriptor.FACTORY);
         fc.add(GetOverlappingIntervalDescriptor.FACTORY);
+        fc.add(org.apache.asterix.runtime.evaluators.functions.temporal.UnionIntervalRangeDescriptor.FACTORY);
         fc.add(DurationFromIntervalDescriptor.FACTORY);
 
         // Type functions.
