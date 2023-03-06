@@ -739,6 +739,7 @@ public final class FunctionCollection implements IFunctionCollection {
         fc.add(org.apache.asterix.runtime.aggregates.std.UnionIntervalRangeAggregateDescriptor.FACTORY);
         fc.add(LocalUnionIntervalRangeAggregateDescriptor.FACTORY);
         fc.add(org.apache.asterix.runtime.aggregates.std.IntermediateUnionIntervalRangeAggregateDescriptor.FACTORY);
+        fc.add(org.apache.asterix.runtime.aggregates.std.GlobalUnionIntervalRangeAggregateDescriptor.FACTORY);
         fc.add(GlobalUnionIntervalRangeMapAggregateDescriptor.FACTORY);
         fc.add(UnionMbrAggregateDescriptor.FACTORY);
         fc.add(LocalUnionMbrAggregateDescriptor.FACTORY);
