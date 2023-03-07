@@ -25,4 +25,3 @@
 use TinyCollege;
 
 select `union_interval_range`(employment) from Staff;
-

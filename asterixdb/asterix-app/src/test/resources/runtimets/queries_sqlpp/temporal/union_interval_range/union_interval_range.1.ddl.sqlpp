@@ -46,7 +46,3 @@ create type StudentType as open {
 };
 create dataset Students(StudentType)
 primary key name;
-
-
-
-
