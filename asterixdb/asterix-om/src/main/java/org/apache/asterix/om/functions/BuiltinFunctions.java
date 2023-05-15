@@ -629,8 +629,8 @@ public class BuiltinFunctions {
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "agg-intermediate-union_interval_range", 1);
     public static final FunctionIdentifier GLOBAL_UNION_INTERVAL_RANGE =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "agg-global-union_interval_range", 1);
-    public static final FunctionIdentifier GLOBAL_INTERVAL_RANGE_MAP =
-            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "agg-global-interval-range-map", 1);
+    public static final FunctionIdentifier INTERVAL_RANGE_MAP =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "interval-range-map", 3);
     public static final FunctionIdentifier UNION_MBR =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "agg-union_mbr", 1);
     public static final FunctionIdentifier LOCAL_UNION_MBR =
@@ -1260,6 +1260,7 @@ public class BuiltinFunctions {
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "interval-met-by", 2);
     public static final FunctionIdentifier INTERVAL_OVERLAPS =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "interval-overlaps", 2);
+
     public static final FunctionIdentifier INTERVAL_OVERLAPPED_BY =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "interval-overlapped-by", 2);
     public static final FunctionIdentifier INTERVAL_OVERLAPPING =
@@ -2050,7 +2051,7 @@ public class BuiltinFunctions {
         addPrivateFunction(LOCAL_UNION_INTERVAL_RANGE, AIntervalTypeComputer.INSTANCE, true);
         addPrivateFunction(INTERMEDIATE_UNION_INTERVAL_RANGE, AIntervalTypeComputer.INSTANCE, true);
         addPrivateFunction(GLOBAL_UNION_INTERVAL_RANGE, AIntervalTypeComputer.INSTANCE, true);
-        addPrivateFunction(GLOBAL_INTERVAL_RANGE_MAP, AIntervalTypeComputer.INSTANCE, true);
+        addFunction(INTERVAL_RANGE_MAP, ABinaryTypeComputer.INSTANCE, true);
         addFunction(UNION_MBR, ARectangleTypeComputer.INSTANCE, true);
         addPrivateFunction(LOCAL_UNION_MBR, ARectangleTypeComputer.INSTANCE, true);
         addPrivateFunction(INTERMEDIATE_UNION_MBR, ARectangleTypeComputer.INSTANCE, true);

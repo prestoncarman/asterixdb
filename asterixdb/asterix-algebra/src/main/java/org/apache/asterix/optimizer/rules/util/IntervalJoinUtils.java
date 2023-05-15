@@ -34,6 +34,10 @@ import org.apache.asterix.common.annotations.RangeAnnotation;
 import org.apache.asterix.common.exceptions.CompilationException;
 import org.apache.asterix.common.exceptions.ErrorCode;
 import org.apache.asterix.lang.common.util.FunctionUtil;
+import org.apache.asterix.om.base.ABoolean;
+import org.apache.asterix.om.base.AInt32;
+import org.apache.asterix.om.base.AInt64;
+import org.apache.asterix.om.constants.AsterixConstantValue;
 import org.apache.asterix.om.functions.BuiltinFunctions;
 import org.apache.asterix.om.types.ATypeTag;
 import org.apache.asterix.runtime.operators.joins.interval.utils.AfterIntervalJoinUtilFactory;
@@ -47,6 +51,7 @@ import org.apache.asterix.runtime.operators.joins.interval.utils.OverlapsInterva
 import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.commons.lang3.mutable.MutableObject;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
+import org.apache.hyracks.algebricks.common.utils.ListSet;
 import org.apache.hyracks.algebricks.common.utils.Pair;
 import org.apache.hyracks.algebricks.common.utils.Quadruple;
 import org.apache.hyracks.algebricks.common.utils.Triple;
@@ -56,32 +61,11 @@ import org.apache.hyracks.algebricks.core.algebra.base.IOptimizationContext;
 import org.apache.hyracks.algebricks.core.algebra.base.IPhysicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalExpressionTag;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalVariable;
-import org.apache.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
-import org.apache.hyracks.algebricks.core.algebra.expressions.AbstractLogicalExpression;
-import org.apache.hyracks.algebricks.core.algebra.expressions.AggregateFunctionCallExpression;
-import org.apache.hyracks.algebricks.core.algebra.expressions.ScalarFunctionCallExpression;
-import org.apache.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
+import org.apache.hyracks.algebricks.core.algebra.expressions.*;
 import org.apache.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import org.apache.hyracks.algebricks.core.algebra.functions.IFunctionInfo;
-import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractBinaryJoinOperator;
-import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
-import org.apache.hyracks.algebricks.core.algebra.operators.logical.AggregateOperator;
-import org.apache.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
-import org.apache.hyracks.algebricks.core.algebra.operators.logical.ExchangeOperator;
-import org.apache.hyracks.algebricks.core.algebra.operators.logical.ForwardOperator;
-import org.apache.hyracks.algebricks.core.algebra.operators.logical.OrderOperator;
-import org.apache.hyracks.algebricks.core.algebra.operators.logical.ReplicateOperator;
-import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnionAllOperator;
-import org.apache.hyracks.algebricks.core.algebra.operators.physical.AbstractJoinPOperator;
-import org.apache.hyracks.algebricks.core.algebra.operators.physical.AggregatePOperator;
-import org.apache.hyracks.algebricks.core.algebra.operators.physical.AssignPOperator;
-import org.apache.hyracks.algebricks.core.algebra.operators.physical.BroadcastExchangePOperator;
-import org.apache.hyracks.algebricks.core.algebra.operators.physical.OneToOneExchangePOperator;
-import org.apache.hyracks.algebricks.core.algebra.operators.physical.PartialBroadcastRangeFollowingExchangePOperator;
-import org.apache.hyracks.algebricks.core.algebra.operators.physical.PartialBroadcastRangeIntersectExchangePOperator;
-import org.apache.hyracks.algebricks.core.algebra.operators.physical.RangePartitionExchangePOperator;
-import org.apache.hyracks.algebricks.core.algebra.operators.physical.ReplicatePOperator;
-import org.apache.hyracks.algebricks.core.algebra.operators.physical.SortForwardPOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.*;
+import org.apache.hyracks.algebricks.core.algebra.operators.physical.*;
 import org.apache.hyracks.algebricks.core.algebra.properties.IPartitioningProperty.PartitioningType;
 import org.apache.hyracks.algebricks.core.algebra.properties.IntervalColumn;
 import org.apache.hyracks.algebricks.core.algebra.properties.OrderColumn;
@@ -247,48 +231,52 @@ public class IntervalJoinUtils {
     }
 
     protected static boolean updateJoinPlan(AbstractBinaryJoinOperator op, IOptimizationContext context,
-            AbstractFunctionCallExpression fexp, int left, int right, RangeAnnotation rangeAnnotation)
+            AbstractFunctionCallExpression intervalJoinFuncExpr, int left, int right, RangeAnnotation rangeAnnotation)
             throws AlgebricksException {
 
         List<LogicalVariable> varsLeft = op.getInputs().get(left).getValue().getSchema();
         List<LogicalVariable> varsRight = op.getInputs().get(right).getValue().getSchema();
-        List<LogicalVariable> sideLeft = new ArrayList<>(1);
-        List<LogicalVariable> sideRight = new ArrayList<>(1);
+        List<LogicalVariable> keysLeftBranch = new ArrayList<>(1);
+        List<LogicalVariable> keysRightBranch = new ArrayList<>(1);
 
         boolean switchArguments = false;
-        if (fexp.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
+        if (intervalJoinFuncExpr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
             return false;
         }
 
-        FunctionIdentifier fi = fexp.getFunctionIdentifier();
+
+        FunctionIdentifier fi = intervalJoinFuncExpr.getFunctionIdentifier();
         if (!isIntervalFunction(fi)) {
             return false;
         }
+        // Check for num of arguments
 
-        ILogicalExpression opLeft = fexp.getArguments().get(left).getValue();
-        ILogicalExpression opRight = fexp.getArguments().get(right).getValue();
+        ILogicalExpression intervalJoinLeftArg = intervalJoinFuncExpr.getArguments().get(left).getValue();
+        ILogicalExpression intervalJoinRightArg = intervalJoinFuncExpr.getArguments().get(right).getValue();
 
-        if (opLeft.getExpressionTag() != LogicalExpressionTag.VARIABLE
-                || opRight.getExpressionTag() != LogicalExpressionTag.VARIABLE) {
+        if (intervalJoinLeftArg.getExpressionTag() != LogicalExpressionTag.VARIABLE
+                || intervalJoinRightArg.getExpressionTag() != LogicalExpressionTag.VARIABLE) {
             return false;
         }
 
-        LogicalVariable var1 = ((VariableReferenceExpression) opLeft).getVariableReference();
-        if (varsLeft.contains(var1)) {
-            sideLeft.add(var1);
-        } else if (varsRight.contains(var1)) {
-            sideRight.add(var1);
+        // Extract left and right variable of the predicate
+        LogicalVariable intervalJoinVar0 = ((VariableReferenceExpression) intervalJoinLeftArg).getVariableReference();
+        LogicalVariable intervalJoinVar1 = ((VariableReferenceExpression) intervalJoinRightArg).getVariableReference();
+
+        if (varsLeft.contains(intervalJoinVar0)) {
+            keysLeftBranch.add(intervalJoinVar0);
+        } else if (varsRight.contains(intervalJoinVar0)) {
+            keysRightBranch.add(intervalJoinVar0);
             fi = getInverseIntervalFunction(fi);
             switchArguments = true;
         } else {
             return false;
         }
 
-        LogicalVariable var2 = ((VariableReferenceExpression) opRight).getVariableReference();
-        if (varsLeft.contains(var2) && !sideLeft.contains(var2) && switchArguments) {
-            sideLeft.add(var2);
-        } else if (varsRight.contains(var2) && !sideRight.contains(var2) && !switchArguments) {
-            sideRight.add(var2);
+        if (varsLeft.contains(intervalJoinVar1) && !keysLeftBranch.contains(intervalJoinVar1) && switchArguments) {
+            keysLeftBranch.add(intervalJoinVar1);
+        } else if (varsRight.contains(intervalJoinVar1) && !keysRightBranch.contains(intervalJoinVar1) && !switchArguments) {
+            keysRightBranch.add(intervalJoinVar1);
         } else {
             return false;
         }
@@ -298,12 +286,175 @@ public class IntervalJoinUtils {
         }
 
         if (rangeAnnotation == null) {
-            buildSortMergeIntervalPlanWithDynamicHint(op, context, fi, sideLeft, sideRight, left, right);
+            buildSortMergeIntervalPlanWithDynamicHint(op, context, fi, keysLeftBranch, keysRightBranch, left, right);
         } else {
-            buildSortMergeIntervalPlanWithStaticHint(op, context, fi, sideLeft, sideRight, left, right,
+            buildSortMergeIntervalPlanWithStaticHint(op, context, fi, keysLeftBranch, keysRightBranch, left, right,
                     rangeAnnotation);
         }
         return true;
+    }
+    //change left and right names leftinputkey
+
+    protected static void buildSortMergeIntervalPlanWithStaticHint(AbstractBinaryJoinOperator op,
+                                                                   IOptimizationContext context, FunctionIdentifier fi, List<LogicalVariable> sideLeft,
+                                                                   List<LogicalVariable> sideRight, int left, int right, RangeAnnotation rangeAnnotation)
+            throws AlgebricksException {
+        //Check RangeMap type
+        RangeMap rangeMap = rangeAnnotation.getRangeMap();
+        if (rangeMap.getTag(0, 0) != ATypeTag.DATETIME.serialize() && rangeMap.getTag(0, 0) != ATypeTag.DATE.serialize()
+                && rangeMap.getTag(0, 0) != ATypeTag.TIME.serialize()) {
+            IWarningCollector warningCollector = context.getWarningCollector();
+            if (warningCollector.shouldWarn()) {
+                warningCollector.warn(Warning.of(op.getSourceLocation(),
+                        org.apache.hyracks.api.exceptions.ErrorCode.INAPPLICABLE_HINT,
+                        "Date, DateTime, and Time are only range hints types supported for interval joins"));
+            }
+            return;
+        }
+
+        IntervalPartitions intervalPartitions =
+                createIntervalPartitions(op, fi, sideLeft, sideRight, context, left, right, rangeMap, null);
+        setSortMergeIntervalJoinOp(op, fi, sideLeft, sideRight, context, intervalPartitions);
+    }
+
+    protected static void buildSortMergeIntervalPlanWithDynamicHint(AbstractBinaryJoinOperator op,
+                                                                    IOptimizationContext context, FunctionIdentifier fi, List<LogicalVariable> sideLeft,
+                                                                    List<LogicalVariable> sideRight, int left, int right) throws AlgebricksException {
+
+        Mutable<ILogicalOperator> leftInputOp = op.getInputs().get(left);
+        Mutable<ILogicalOperator> rightInputOp = op.getInputs().get(right);
+
+        // Add a dynamic workflow to compute Range of the left branch
+        Triple<MutableObject<ILogicalOperator>, List<LogicalVariable>, MutableObject<ILogicalOperator>> leftRangeCalculator =
+                createDynamicRangeCalculator(op, context, leftInputOp, sideLeft);
+        MutableObject<ILogicalOperator> leftGlobalRangeAggregateOperator = leftRangeCalculator.first;
+        List<LogicalVariable> leftGlobalAggResultVars = leftRangeCalculator.second;
+        MutableObject<ILogicalOperator> inputToLeftForwardOperator = leftRangeCalculator.third;
+        LogicalVariable leftRangeGlobalAggregateVar = leftGlobalAggResultVars.get(0);
+
+        // Add a dynamic workflow to compute Range of the right branch
+        Triple<MutableObject<ILogicalOperator>, List<LogicalVariable>, MutableObject<ILogicalOperator>> rightRangeCalculator =
+                createDynamicRangeCalculator(op, context, rightInputOp, sideRight);
+        MutableObject<ILogicalOperator> rightGlobalRangeAggregateOperator = rightRangeCalculator.first;
+        List<LogicalVariable> rightGlobalAggResultVars = rightRangeCalculator.second;
+        MutableObject<ILogicalOperator> inputToRightForwardOperator = rightRangeCalculator.third;
+        LogicalVariable rightRangeGlobalAggregateVar = rightGlobalAggResultVars.get(0);
+
+        //TODO remove union
+        //TODO add join operator
+        //TODO add assign operator (use intervalrangemap expresion)
+        //TODO add replicate (connects to forward)
+
+        Triple<List<LogicalVariable>, List<LogicalVariable>, IntervalPartitions> intervalPartitionsInfo =
+               createIntervalPartitionsDynamic(fi, context, null, null);
+        List<LogicalVariable> leftPartitionVar = intervalPartitionsInfo.first;
+        List<LogicalVariable> rightPartitionVar = intervalPartitionsInfo.second;
+        IntervalPartitions intervalPartitions = intervalPartitionsInfo.third;
+
+//        Compute the union Range of the left and the right Range
+//        Pair<MutableObject<ILogicalOperator>, List<LogicalVariable>> globalAggregateOperator =
+//                createGlobalRangeMapAggregateOperator(op, context, unionRangeVar, unionAllOperatorRef,
+//                        intervalPartitions.getLeftStartColumn());
+//        MutableObject<ILogicalOperator> globalAgg = globalAggregateOperator.getFirst();
+//        LogicalVariable rangeMapAggregateOperatorVar = globalAggregateOperator.getSecond().get(0);
+
+        // Join the left and right
+        Mutable<ILogicalExpression> trueCondition =
+                new MutableObject<>(new ConstantExpression(new AsterixConstantValue(ABoolean.TRUE)));
+        InnerJoinOperator unionIntervalJoinOp = new InnerJoinOperator(trueCondition, leftGlobalRangeAggregateOperator, rightGlobalRangeAggregateOperator);
+        unionIntervalJoinOp.setSourceLocation(op.getSourceLocation());
+        unionIntervalJoinOp.setPhysicalOperator(new NestedLoopJoinPOperator(AbstractBinaryJoinOperator.JoinKind.INNER,
+                AbstractJoinPOperator.JoinPartitioningType.BROADCAST));
+        MutableObject<ILogicalOperator> unionIntervalJoinOpRef = new MutableObject<>(unionIntervalJoinOp);
+        unionIntervalJoinOp.recomputeSchema();
+        context.computeAndSetTypeEnvironmentForOperator(unionIntervalJoinOp);
+
+
+        // Compute the rangemap of left MBR and right MBR
+        List<Mutable<ILogicalExpression>> getIntersectionFuncInputExprs = new ArrayList<>();
+        getIntersectionFuncInputExprs.add(new MutableObject<>(new VariableReferenceExpression(leftRangeGlobalAggregateVar)));
+        getIntersectionFuncInputExprs.add(new MutableObject<>(new VariableReferenceExpression(rightRangeGlobalAggregateVar)));
+        getIntersectionFuncInputExprs.add(new MutableObject<>(new ConstantExpression(new AsterixConstantValue(new AInt32(context.getComputationNodeDomain().cardinality())))));
+        ScalarFunctionCallExpression getIntersectionFuncExpr = new ScalarFunctionCallExpression(
+                BuiltinFunctions.getBuiltinFunctionInfo(BuiltinFunctions.INTERVAL_RANGE_MAP),
+                getIntersectionFuncInputExprs);
+        getIntersectionFuncExpr.setSourceLocation(op.getSourceLocation());
+
+        Mutable<ILogicalExpression> intersectionIntervalExpr = new MutableObject<>(getIntersectionFuncExpr);
+        LogicalVariable rangemapVariable = context.newVar();
+        AbstractLogicalOperator intersectionIntervalAssignOperator =
+                new AssignOperator(rangemapVariable, intersectionIntervalExpr);
+        intersectionIntervalAssignOperator.setSourceLocation(op.getSourceLocation());
+        intersectionIntervalAssignOperator.setExecutionMode(op.getExecutionMode());
+        intersectionIntervalAssignOperator.setPhysicalOperator(new AssignPOperator());
+        intersectionIntervalAssignOperator.getInputs().add(new MutableObject<>(unionIntervalJoinOpRef.getValue()));
+        context.computeAndSetTypeEnvironmentForOperator(intersectionIntervalAssignOperator);
+        intersectionIntervalAssignOperator.recomputeSchema();
+        MutableObject<ILogicalOperator> intersectionIntervalAssignOperatorRef =
+                new MutableObject<>(intersectionIntervalAssignOperator);
+
+        //TODO connect to replicate
+        // Replicate the union MBR to left and right nested loop join(NLJ) operator, and another NLJ for reference point test
+        ReplicateOperator intersectionMAPReplicateOperator =
+                createReplicateOperator(intersectionIntervalAssignOperatorRef, context, op.getSourceLocation(), 2);
+
+        ExchangeOperator exchMAPToJoinOpLeft =
+                createBroadcastExchangeOp(intersectionMAPReplicateOperator, context, op.getSourceLocation());
+        MutableObject<ILogicalOperator> exchMAPToJoinOpLeftRef = new MutableObject<>(exchMAPToJoinOpLeft);
+
+
+        // Replicate to the right branch
+        ExchangeOperator exchMAPToJoinOpRight =
+                createBroadcastExchangeOp(intersectionMAPReplicateOperator, context, op.getSourceLocation());
+        MutableObject<ILogicalOperator> exchMAPToJoinOpRightRef = new MutableObject<>(exchMAPToJoinOpRight);
+
+
+
+        // Create the left forward operator
+        String leftRangeMapKey = UUID.randomUUID().toString();
+        ForwardOperator leftForward = createForward(leftRangeMapKey, rangemapVariable,
+                inputToLeftForwardOperator, exchMAPToJoinOpLeftRef, context, op.getSourceLocation());
+        MutableObject<ILogicalOperator> leftForwardRef = new MutableObject<>(leftForward);
+        leftInputOp.setValue(leftForwardRef.getValue());
+
+        // Create the right forward operator
+        String rightRangeMapKey = UUID.randomUUID().toString();
+        ForwardOperator rightForward = createForward(rightRangeMapKey, rangemapVariable,
+                inputToRightForwardOperator, exchMAPToJoinOpRightRef, context, op.getSourceLocation());
+        MutableObject<ILogicalOperator> rightForwardRef = new MutableObject<>(rightForward);
+        rightInputOp.setValue(rightForwardRef.getValue());
+
+        insertPartitionSortKey(op, left, leftPartitionVar, sideLeft.get(0), context);
+        insertPartitionSortKey(op, right, rightPartitionVar, sideRight.get(0), context);
+
+        Mutable<ILogicalOperator> leftPartitionSortOp = op.getInputs().get(left);
+        Mutable<ILogicalOperator> rightPartitionSortOp = op.getInputs().get(right);
+
+        // Set Left Partitioning Physical Operators
+        ExchangeOperator exchangeLeft = setPartitioningExchangeOperator(leftPartitionSortOp, context, fi,
+                intervalPartitions.getLeftPartitioningType(), intervalPartitions.getLeftStartColumn(),
+                intervalPartitions.getLeftIntervalColumn(), leftRangeMapKey);
+
+        // Set Right Partitioning Physical Operators
+        ExchangeOperator exchangeRight = setPartitioningExchangeOperator(rightPartitionSortOp, context, fi,
+                intervalPartitions.getRightPartitioningType(), intervalPartitions.getRightStartColumn(),
+                intervalPartitions.getRightIntervalColumn(), rightRangeMapKey);
+
+
+        // Create the left after forward operator
+//        String leftAfterRangeMapKey = UUID.randomUUID().toString();
+//        ForwardOperator leftAfterForward = createForward(leftAfterRangeMapKey, rangemapVariable,
+//                inputToLeftAfterForwardOperator, exchRangeMapToAfterLeftForwardRef, context, op.getSourceLocation());
+//        MutableObject<ILogicalOperator> leftAfterForwardRef = new MutableObject<>(leftAfterForward);
+//        leftInputOp.setValue(leftAfterForwardRef.getValue());
+
+
+        intervalPartitions.setRangeMapKey(leftRangeMapKey);
+
+        IIntervalJoinUtilFactory mjcf = createIntervalJoinCheckerFactory(fi, null, intervalPartitions.getRangeMapKey());
+        op.setPhysicalOperator(new IntervalMergeJoinPOperator(op.getJoinKind(),
+                AbstractJoinPOperator.JoinPartitioningType.BROADCAST, sideLeft, sideRight,
+                context.getPhysicalOptimizationConfig().getMaxFramesForJoin(), mjcf, intervalPartitions));
     }
 
     private static boolean isIntervalFunction(FunctionIdentifier fi) {
@@ -389,158 +540,23 @@ public class IntervalJoinUtils {
         ao.recomputeSchema();
     }
 
-    protected static void buildSortMergeIntervalPlanWithStaticHint(AbstractBinaryJoinOperator op,
-            IOptimizationContext context, FunctionIdentifier fi, List<LogicalVariable> sideLeft,
-            List<LogicalVariable> sideRight, int left, int right, RangeAnnotation rangeAnnotation)
-            throws AlgebricksException {
-        //Check RangeMap type
-        RangeMap rangeMap = rangeAnnotation.getRangeMap();
-        if (rangeMap.getTag(0, 0) != ATypeTag.DATETIME.serialize() && rangeMap.getTag(0, 0) != ATypeTag.DATE.serialize()
-                && rangeMap.getTag(0, 0) != ATypeTag.TIME.serialize()) {
-            IWarningCollector warningCollector = context.getWarningCollector();
-            if (warningCollector.shouldWarn()) {
-                warningCollector.warn(Warning.of(op.getSourceLocation(),
-                        org.apache.hyracks.api.exceptions.ErrorCode.INAPPLICABLE_HINT,
-                        "Date, DateTime, and Time are only range hints types supported for interval joins"));
-            }
-            return;
-        }
-
-        IntervalPartitions intervalPartitions =
-                createIntervalPartitions(op, fi, sideLeft, sideRight, context, left, right, rangeMap, null);
-        setSortMergeIntervalJoinOp(op, fi, sideLeft, sideRight, context, intervalPartitions);
-    }
-
-    protected static void buildSortMergeIntervalPlanWithDynamicHint(AbstractBinaryJoinOperator op,
-            IOptimizationContext context, FunctionIdentifier fi, List<LogicalVariable> sideLeft,
-            List<LogicalVariable> sideRight, int left, int right) throws AlgebricksException {
-
-        Mutable<ILogicalOperator> leftInputOp = op.getInputs().get(left);
-        Mutable<ILogicalOperator> rightInputOp = op.getInputs().get(right);
-
-        // Add a dynamic workflow to compute Range of the left branch
-        Triple<MutableObject<ILogicalOperator>, List<LogicalVariable>, MutableObject<ILogicalOperator>> leftRangeCalculator =
-                createDynamicRangeCalculator(op, context, leftInputOp, sideLeft);
-        MutableObject<ILogicalOperator> leftGlobalRangeAggregateOperator = leftRangeCalculator.first;
-        List<LogicalVariable> leftGlobalAggResultVars = leftRangeCalculator.second;
-        MutableObject<ILogicalOperator> inputToLeftForwardOperator = leftRangeCalculator.third;
-        LogicalVariable leftRangeGlobalAggregateVar = leftGlobalAggResultVars.get(0);
-
-        // Add a dynamic workflow to compute Range of the right branch
-        Triple<MutableObject<ILogicalOperator>, List<LogicalVariable>, MutableObject<ILogicalOperator>> rightRangeCalculator =
-                createDynamicRangeCalculator(op, context, rightInputOp, sideRight);
-        MutableObject<ILogicalOperator> rightGlobalRangeAggregateOperator = rightRangeCalculator.first;
-        List<LogicalVariable> rightGlobalAggResultVars = rightRangeCalculator.second;
-        MutableObject<ILogicalOperator> inputToRightForwardOperator = rightRangeCalculator.third;
-        LogicalVariable rightRangeGlobalAggregateVar = rightGlobalAggResultVars.get(0);
-
-        // Union the results of left and right aggregators to get the union Range of both left and right input
-        LogicalVariable unionRangeVar = context.newVar();
-        Triple<LogicalVariable, LogicalVariable, LogicalVariable> unionVarMap =
-                new Triple<>(leftRangeGlobalAggregateVar, rightRangeGlobalAggregateVar, unionRangeVar);
-        List<Triple<LogicalVariable, LogicalVariable, LogicalVariable>> unionVarMaps = new ArrayList<>();
-        unionVarMaps.add(unionVarMap);
-        UnionAllOperator unionAllOperator = new UnionAllOperator(unionVarMaps);
-        unionAllOperator.setSourceLocation(op.getSourceLocation());
-        unionAllOperator.getInputs().add(new MutableObject<>(leftGlobalRangeAggregateOperator.getValue()));
-        unionAllOperator.getInputs().add(new MutableObject<>(rightGlobalRangeAggregateOperator.getValue()));
-        OperatorManipulationUtil.setOperatorMode(unionAllOperator);
-        unionAllOperator.recomputeSchema();
-        context.computeAndSetTypeEnvironmentForOperator(unionAllOperator);
-        MutableObject<ILogicalOperator> unionAllOperatorRef = new MutableObject<>(unionAllOperator);
-
-        Triple<List<LogicalVariable>, List<LogicalVariable>, IntervalPartitions> intervalPartitionsInfo =
-                createIntervalPartitionsDynamic(fi, context, null, null);
-        List<LogicalVariable> leftPartitionVar = intervalPartitionsInfo.first;
-        List<LogicalVariable> rightPartitionVar = intervalPartitionsInfo.second;
-        IntervalPartitions intervalPartitions = intervalPartitionsInfo.third;
-
-        // Compute the union Range of the left and the right Range
-        Pair<MutableObject<ILogicalOperator>, List<LogicalVariable>> globalAggregateOperator =
-                createGlobalRangeMapAggregateOperator(op, context, unionRangeVar, unionAllOperatorRef,
-                        intervalPartitions.getLeftStartColumn());
-        MutableObject<ILogicalOperator> globalAgg = globalAggregateOperator.getFirst();
-        LogicalVariable rangeMapAggregateOperatorVar = globalAggregateOperator.getSecond().get(0);
-
-        // Replicate Range Map To Forward Operators
-        Quadruple<MutableObject<ILogicalOperator>, MutableObject<ILogicalOperator>, MutableObject<ILogicalOperator>, MutableObject<ILogicalOperator>> rangeMapOutputs =
-                replicateRangeMap(op, context, globalAgg);
-        MutableObject<ILogicalOperator> exchRangeMapToForwardLeftRef = rangeMapOutputs.getFirst();
-        MutableObject<ILogicalOperator> exchRangeMapToForwardRightRef = rangeMapOutputs.getSecond();
-        MutableObject<ILogicalOperator> exchRangeMapToAfterLeftForwardRef = rangeMapOutputs.getThird();
-        MutableObject<ILogicalOperator> exchRangeMapToAfterRightForwardRef = rangeMapOutputs.getFourth();
-
-        // Create the left forward operator
-        String leftRangeMapKey = UUID.randomUUID().toString();
-        ForwardOperator leftForward = createForward(leftRangeMapKey, rangeMapAggregateOperatorVar,
-                inputToLeftForwardOperator, exchRangeMapToForwardLeftRef, context, op.getSourceLocation());
-        MutableObject<ILogicalOperator> leftForwardRef = new MutableObject<>(leftForward);
-        leftInputOp.setValue(leftForwardRef.getValue());
-
-        // Create the right forward operator
-        String rightRangeMapKey = UUID.randomUUID().toString();
-        ForwardOperator rightForward = createForward(rightRangeMapKey, rangeMapAggregateOperatorVar,
-                inputToRightForwardOperator, exchRangeMapToForwardRightRef, context, op.getSourceLocation());
-        MutableObject<ILogicalOperator> rightForwardRef = new MutableObject<>(rightForward);
-        rightInputOp.setValue(rightForwardRef.getValue());
-
-        insertPartitionSortKey(op, left, leftPartitionVar, sideLeft.get(0), context);
-        insertPartitionSortKey(op, right, rightPartitionVar, sideRight.get(0), context);
-
-        leftInputOp = op.getInputs().get(left);
-        rightInputOp = op.getInputs().get(right);
-
-        // Set Left Partitioning Physical Operators
-        ExchangeOperator exchangeLeft = setPartitioningExchangeOperator(leftInputOp, context, fi,
-                intervalPartitions.getLeftPartitioningType(), intervalPartitions.getLeftStartColumn(),
-                intervalPartitions.getLeftIntervalColumn(), leftRangeMapKey);
-        MutableObject<ILogicalOperator> inputToLeftAfterForwardOperator = new MutableObject<>(exchangeLeft);
-
-        // Set Right Partitioning Physical Operators
-        ExchangeOperator exchangeRight = setPartitioningExchangeOperator(rightInputOp, context, fi,
-                intervalPartitions.getRightPartitioningType(), intervalPartitions.getRightStartColumn(),
-                intervalPartitions.getRightIntervalColumn(), rightRangeMapKey);
-        MutableObject<ILogicalOperator> inputToRightAfterForwardOperator = new MutableObject<>(exchangeRight);
-
-        // Create the left after forward operator
-        String leftAfterRangeMapKey = UUID.randomUUID().toString();
-        ForwardOperator leftAfterForward = createForward(leftAfterRangeMapKey, rangeMapAggregateOperatorVar,
-                inputToLeftAfterForwardOperator, exchRangeMapToAfterLeftForwardRef, context, op.getSourceLocation());
-        MutableObject<ILogicalOperator> leftAfterForwardRef = new MutableObject<>(leftAfterForward);
-        leftInputOp.setValue(leftAfterForwardRef.getValue());
-
-        // Create the right after forward operator
-        String rightAfterRangeMapKey = UUID.randomUUID().toString();
-        ForwardOperator rightAfterForward = createForward(rightAfterRangeMapKey, rangeMapAggregateOperatorVar,
-                inputToRightAfterForwardOperator, exchRangeMapToAfterRightForwardRef, context, op.getSourceLocation());
-        MutableObject<ILogicalOperator> rightAfterForwardRef = new MutableObject<>(rightAfterForward);
-        rightInputOp.setValue(rightAfterForwardRef.getValue());
-
-        intervalPartitions.setRangeMapKey(leftAfterRangeMapKey);
-
-        IIntervalJoinUtilFactory mjcf = createIntervalJoinCheckerFactory(fi, null, intervalPartitions.getRangeMapKey());
-        op.setPhysicalOperator(new IntervalMergeJoinPOperator(op.getJoinKind(),
-                AbstractJoinPOperator.JoinPartitioningType.BROADCAST, sideLeft, sideRight,
-                context.getPhysicalOptimizationConfig().getMaxFramesForJoin(), mjcf, intervalPartitions));
-    }
-
     private static Quadruple<MutableObject<ILogicalOperator>, MutableObject<ILogicalOperator>, MutableObject<ILogicalOperator>, MutableObject<ILogicalOperator>> replicateRangeMap(
             AbstractBinaryJoinOperator op, IOptimizationContext context, Mutable<ILogicalOperator> inputOp)
             throws AlgebricksException {
         // Replicate the union Range Map to left and right forward operator
         ReplicateOperator unionRangeMapReplicateOperator =
                 createReplicateOperator(inputOp, context, op.getSourceLocation(), 4);
-        ExchangeOperator exchRangeMapToForwardLeft = createBroadcastExchangeOp(unionRangeMapReplicateOperator, context);
+        ExchangeOperator exchRangeMapToForwardLeft = createBroadcastExchangeOp(unionRangeMapReplicateOperator, context, op.getSourceLocation());
         MutableObject<ILogicalOperator> exchRangeMapToForwardLeftRef = new MutableObject<>(exchRangeMapToForwardLeft);
         ExchangeOperator exchRangeMapToForwardRight =
-                createBroadcastExchangeOp(unionRangeMapReplicateOperator, context);
+                createBroadcastExchangeOp(unionRangeMapReplicateOperator, context,op.getSourceLocation());
         MutableObject<ILogicalOperator> exchRangeMapToForwardRightRef = new MutableObject<>(exchRangeMapToForwardRight);
         ExchangeOperator exchRangeMapToAfterLeftForward =
-                createBroadcastExchangeOp(unionRangeMapReplicateOperator, context);
+                createBroadcastExchangeOp(unionRangeMapReplicateOperator, context, op.getSourceLocation());
         MutableObject<ILogicalOperator> exchRangeMapToAfterLeftForwardRef =
                 new MutableObject<>(exchRangeMapToAfterLeftForward);
         ExchangeOperator exchRangeMapToAfterRightForward =
-                createBroadcastExchangeOp(unionRangeMapReplicateOperator, context);
+                createBroadcastExchangeOp(unionRangeMapReplicateOperator, context, op.getSourceLocation());
         MutableObject<ILogicalOperator> exchRangeMapToAfterRightForwardRef =
                 new MutableObject<>(exchRangeMapToAfterRightForward);
 
@@ -667,6 +683,7 @@ public class IntervalJoinUtils {
         return new Pair<>(globalAgg, globalAggResultVars);
     }
 
+    //TODO do not and eventually remove
     private static Pair<MutableObject<ILogicalOperator>, List<LogicalVariable>> createGlobalRangeMapAggregateOperator(
             AbstractBinaryJoinOperator op, IOptimizationContext context, LogicalVariable inputVar,
             MutableObject<ILogicalOperator> inputOperator, List<OrderColumn> partitionFields)
@@ -675,7 +692,7 @@ public class IntervalJoinUtils {
         AbstractLogicalExpression inputVarRef = new VariableReferenceExpression(inputVar, op.getSourceLocation());
         globalAggFuncArgs.add(new MutableObject<>(inputVarRef));
         IFunctionInfo globalAggFunc =
-                context.getMetadataProvider().lookupFunction(BuiltinFunctions.GLOBAL_INTERVAL_RANGE_MAP);
+                context.getMetadataProvider().lookupFunction(BuiltinFunctions.INTERVAL_RANGE_MAP);
         AggregateFunctionCallExpression globalAggExpr =
                 new AggregateFunctionCallExpression(globalAggFunc, true, globalAggFuncArgs);
         globalAggExpr.setStepOneAggregate(globalAggFunc);
@@ -722,6 +739,37 @@ public class IntervalJoinUtils {
         return aggregateOperator;
     }
 
+    private static Pair<LogicalVariable, Mutable<ILogicalOperator>> createAssignProjectOperator(
+            AbstractBinaryJoinOperator op, LogicalVariable inputVar, ReplicateOperator replicateOperator,
+            MutableObject<ILogicalOperator> exchMBRToForwardRef, IOptimizationContext context)
+            throws AlgebricksException {
+        LogicalVariable newFinalMbrVar = context.newVar();
+        List<LogicalVariable> finalMBRLiveVars = new ArrayList<>();
+        finalMBRLiveVars.add(newFinalMbrVar);
+        ListSet<LogicalVariable> finalMBRLiveVarsSet = new ListSet<>();
+        finalMBRLiveVarsSet.add(newFinalMbrVar);
+
+        Mutable<ILogicalExpression> finalMBRExpr = new MutableObject<>(new VariableReferenceExpression(inputVar));
+        AbstractLogicalOperator assignOperator = new AssignOperator(newFinalMbrVar, finalMBRExpr);
+        assignOperator.setSourceLocation(op.getSourceLocation());
+        assignOperator.setExecutionMode(replicateOperator.getExecutionMode());
+        assignOperator.setPhysicalOperator(new AssignPOperator());
+        AbstractLogicalOperator projectOperator = new ProjectOperator(finalMBRLiveVars);
+        projectOperator.setSourceLocation(op.getSourceLocation());
+        projectOperator.setPhysicalOperator(new StreamProjectPOperator());
+        projectOperator.setExecutionMode(replicateOperator.getExecutionMode());
+        assignOperator.getInputs().add(exchMBRToForwardRef);
+        projectOperator.getInputs().add(new MutableObject<ILogicalOperator>(assignOperator));
+
+        context.computeAndSetTypeEnvironmentForOperator(assignOperator);
+        assignOperator.recomputeSchema();
+        context.computeAndSetTypeEnvironmentForOperator(projectOperator);
+        projectOperator.recomputeSchema();
+        Mutable<ILogicalOperator> projectOperatorRef = new MutableObject<>(projectOperator);
+
+        return new Pair<>(newFinalMbrVar, projectOperatorRef);
+    }
+
     private static ReplicateOperator createReplicateOperator(Mutable<ILogicalOperator> inputOperator,
             IOptimizationContext context, SourceLocation sourceLocation, int outputArity) throws AlgebricksException {
         ReplicateOperator replicateOperator = new ReplicateOperator(outputArity);
@@ -750,8 +798,9 @@ public class IntervalJoinUtils {
     }
 
     private static ExchangeOperator createBroadcastExchangeOp(ReplicateOperator replicateOperator,
-            IOptimizationContext context) throws AlgebricksException {
+            IOptimizationContext context, SourceLocation sourceLocation) throws AlgebricksException {
         ExchangeOperator exchangeOperator = new ExchangeOperator();
+        exchangeOperator.setSourceLocation(sourceLocation);
         exchangeOperator.setPhysicalOperator(new BroadcastExchangePOperator(context.getComputationNodeDomain()));
         replicateOperator.getOutputs().add(new MutableObject<>(exchangeOperator));
         exchangeOperator.getInputs().add(new MutableObject<>(replicateOperator));

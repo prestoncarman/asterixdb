@@ -91,6 +91,11 @@ public abstract class AbstractUnionIntervalRangeAggregateFunction extends Abstra
 
     @Override
     public void finish(IPointable result) throws HyracksDataException {
+        if (!isValidCoordinates(currentMinStart, currentMaxEnd)) {
+            currentMinStart = Integer.MIN_VALUE;
+            currentMaxEnd = Integer.MAX_VALUE;
+            intervalType = ATypeTag.DATE.serialize();
+        }
         resultStorage.reset();
         try {
             AInterval intervalRange = new AInterval(currentMinStart, currentMaxEnd, intervalType);
@@ -103,9 +108,7 @@ public abstract class AbstractUnionIntervalRangeAggregateFunction extends Abstra
 
     @Override
     public void finishPartial(IPointable result) throws HyracksDataException {
-        if (isValidCoordinates(currentMinStart, currentMaxEnd)) {
-            finish(result);
-        }
+        finish(result);
     }
 
     protected void processNull() throws UnsupportedItemTypeException {
@@ -114,6 +117,6 @@ public abstract class AbstractUnionIntervalRangeAggregateFunction extends Abstra
     }
 
     private boolean isValidCoordinates(long currentStartPoint, long currentEndPoint) {
-        return (currentStartPoint != Long.MIN_VALUE) && (currentEndPoint != Long.MAX_VALUE);
+        return (currentStartPoint != Long.MAX_VALUE) && (currentEndPoint != Long.MIN_VALUE);
     }
 }
