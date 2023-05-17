@@ -125,7 +125,9 @@ public class IntervalMergeJoinOperatorDescriptor extends AbstractOperatorDescrip
 
                 @Override
                 public void close() throws HyracksDataException {
-                    state.joiner.processBuildClose();
+                    if(state.joiner != null) {
+                        state.joiner.processBuildClose();
+                    }
                     ctx.setStateObject(state);
                 }
 

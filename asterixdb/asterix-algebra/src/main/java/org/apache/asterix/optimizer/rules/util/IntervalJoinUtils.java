@@ -345,11 +345,6 @@ public class IntervalJoinUtils {
         //TODO add assign operator (use intervalrangemap expresion)
         //TODO add replicate (connects to forward)
 
-        Triple<List<LogicalVariable>, List<LogicalVariable>, IntervalPartitions> intervalPartitionsInfo =
-               createIntervalPartitionsDynamic(fi, context, null, null);
-        List<LogicalVariable> leftPartitionVar = intervalPartitionsInfo.first;
-        List<LogicalVariable> rightPartitionVar = intervalPartitionsInfo.second;
-        IntervalPartitions intervalPartitions = intervalPartitionsInfo.third;
 
 //        Compute the union Range of the left and the right Range
 //        Pair<MutableObject<ILogicalOperator>, List<LogicalVariable>> globalAggregateOperator =
@@ -409,20 +404,24 @@ public class IntervalJoinUtils {
         MutableObject<ILogicalOperator> exchMAPToJoinOpRightRef = new MutableObject<>(exchMAPToJoinOpRight);
 
 
-
+        String rangeMapKey = UUID.randomUUID().toString();
         // Create the left forward operator
-        String leftRangeMapKey = UUID.randomUUID().toString();
-        ForwardOperator leftForward = createForward(leftRangeMapKey, rangemapVariable,
+        ForwardOperator leftForward = createForward(rangeMapKey, rangemapVariable,
                 inputToLeftForwardOperator, exchMAPToJoinOpLeftRef, context, op.getSourceLocation());
         MutableObject<ILogicalOperator> leftForwardRef = new MutableObject<>(leftForward);
         leftInputOp.setValue(leftForwardRef.getValue());
 
         // Create the right forward operator
-        String rightRangeMapKey = UUID.randomUUID().toString();
-        ForwardOperator rightForward = createForward(rightRangeMapKey, rangemapVariable,
+        ForwardOperator rightForward = createForward(rangeMapKey, rangemapVariable,
                 inputToRightForwardOperator, exchMAPToJoinOpRightRef, context, op.getSourceLocation());
         MutableObject<ILogicalOperator> rightForwardRef = new MutableObject<>(rightForward);
         rightInputOp.setValue(rightForwardRef.getValue());
+
+        Triple<List<LogicalVariable>, List<LogicalVariable>, IntervalPartitions> intervalPartitionsInfo =
+                createIntervalPartitionsDynamic(fi, context, null, rangeMapKey);
+        List<LogicalVariable> leftPartitionVar = intervalPartitionsInfo.first;
+        List<LogicalVariable> rightPartitionVar = intervalPartitionsInfo.second;
+        IntervalPartitions intervalPartitions = intervalPartitionsInfo.third;
 
         insertPartitionSortKey(op, left, leftPartitionVar, sideLeft.get(0), context);
         insertPartitionSortKey(op, right, rightPartitionVar, sideRight.get(0), context);
@@ -433,12 +432,12 @@ public class IntervalJoinUtils {
         // Set Left Partitioning Physical Operators
         ExchangeOperator exchangeLeft = setPartitioningExchangeOperator(leftPartitionSortOp, context, fi,
                 intervalPartitions.getLeftPartitioningType(), intervalPartitions.getLeftStartColumn(),
-                intervalPartitions.getLeftIntervalColumn(), leftRangeMapKey);
+                intervalPartitions.getLeftIntervalColumn(), rangeMapKey);
 
         // Set Right Partitioning Physical Operators
         ExchangeOperator exchangeRight = setPartitioningExchangeOperator(rightPartitionSortOp, context, fi,
                 intervalPartitions.getRightPartitioningType(), intervalPartitions.getRightStartColumn(),
-                intervalPartitions.getRightIntervalColumn(), rightRangeMapKey);
+                intervalPartitions.getRightIntervalColumn(), rangeMapKey);
 
 
         // Create the left after forward operator
@@ -449,7 +448,7 @@ public class IntervalJoinUtils {
 //        leftInputOp.setValue(leftAfterForwardRef.getValue());
 
 
-        intervalPartitions.setRangeMapKey(leftRangeMapKey);
+        intervalPartitions.setRangeMapKey(rangeMapKey);
 
         IIntervalJoinUtilFactory mjcf = createIntervalJoinCheckerFactory(fi, null, intervalPartitions.getRangeMapKey());
         op.setPhysicalOperator(new IntervalMergeJoinPOperator(op.getJoinKind(),
