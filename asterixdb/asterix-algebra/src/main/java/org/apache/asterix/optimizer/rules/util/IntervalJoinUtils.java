@@ -391,12 +391,15 @@ public class IntervalJoinUtils {
         //TODO connect to replicate
         // Replicate the union MBR to left and right nested loop join(NLJ) operator, and another NLJ for reference point test
         ReplicateOperator intersectionMAPReplicateOperator =
-                createReplicateOperator(intersectionIntervalAssignOperatorRef, context, op.getSourceLocation(), 2);
+                createReplicateOperator(intersectionIntervalAssignOperatorRef, context, op.getSourceLocation(), 3);
 
         ExchangeOperator exchMAPToJoinOpLeft =
                 createBroadcastExchangeOp(intersectionMAPReplicateOperator, context, op.getSourceLocation());
         MutableObject<ILogicalOperator> exchMAPToJoinOpLeftRef = new MutableObject<>(exchMAPToJoinOpLeft);
 
+        ExchangeOperator exchMAPToAfterLeftForward =
+                createBroadcastExchangeOp(intersectionMAPReplicateOperator, context, op.getSourceLocation());
+        MutableObject<ILogicalOperator> exchRangeMapToAfterLeftForwardRef = new MutableObject<>(exchMAPToAfterLeftForward);
 
         // Replicate to the right branch
         ExchangeOperator exchMAPToJoinOpRight =
@@ -433,6 +436,7 @@ public class IntervalJoinUtils {
         ExchangeOperator exchangeLeft = setPartitioningExchangeOperator(leftPartitionSortOp, context, fi,
                 intervalPartitions.getLeftPartitioningType(), intervalPartitions.getLeftStartColumn(),
                 intervalPartitions.getLeftIntervalColumn(), rangeMapKey);
+                MutableObject<ILogicalOperator> exchangeLeftRef =  new MutableObject<>(exchangeLeft);
 
         // Set Right Partitioning Physical Operators
         ExchangeOperator exchangeRight = setPartitioningExchangeOperator(rightPartitionSortOp, context, fi,
@@ -440,10 +444,10 @@ public class IntervalJoinUtils {
                 intervalPartitions.getRightIntervalColumn(), rangeMapKey);
 
 
-        // Create the left after forward operator
-//        String leftAfterRangeMapKey = UUID.randomUUID().toString();
-//        ForwardOperator leftAfterForward = createForward(leftAfterRangeMapKey, rangemapVariable,
-//                inputToLeftAfterForwardOperator, exchRangeMapToAfterLeftForwardRef, context, op.getSourceLocation());
+         //Create the left after forward operator
+
+//        ForwardOperator leftAfterForward = createForward(rangeMapKey, rangemapVariable,
+//                exchangeLeftRef, exchRangeMapToAfterLeftForwardRef, context, op.getSourceLocation());
 //        MutableObject<ILogicalOperator> leftAfterForwardRef = new MutableObject<>(leftAfterForward);
 //        leftInputOp.setValue(leftAfterForwardRef.getValue());
 
