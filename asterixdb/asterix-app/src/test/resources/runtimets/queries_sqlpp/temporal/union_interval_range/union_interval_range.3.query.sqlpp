@@ -19,7 +19,7 @@
 /*
  * Description      :   Check union-interval-range functionality for interval on Staff
  * Expected Result  :   Success
- * Date             :   10th Aug, 2020
+ * Date             :   5th Mar, 2023
  */
 
 use TinyCollege;

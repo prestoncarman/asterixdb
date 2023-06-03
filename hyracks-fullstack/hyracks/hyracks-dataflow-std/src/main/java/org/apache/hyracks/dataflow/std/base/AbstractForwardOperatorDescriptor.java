@@ -29,16 +29,20 @@ public abstract class AbstractForwardOperatorDescriptor extends AbstractOperator
     protected static final int SIDE_DATA_ACTIVITY_ID = 1;
     protected String sideDataKey;
 
+    protected  int rangeMapFieldId;
+
     /**
      * @param spec used to create the operator id.
      * @param sideDataKey the key used to store the output of the side activity
      * @param outputRecordDescriptor the output schema of this operator.
      */
     public AbstractForwardOperatorDescriptor(IOperatorDescriptorRegistry spec, String sideDataKey,
-            RecordDescriptor outputRecordDescriptor) {
+            RecordDescriptor outputRecordDescriptor, int rangeMapFieldId) {
         super(spec, 2, 1);
         outRecDescs[0] = outputRecordDescriptor;
         this.sideDataKey = sideDataKey;
+        this.rangeMapFieldId = rangeMapFieldId;
+
     }
 
     /**

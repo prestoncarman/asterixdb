@@ -31,6 +31,7 @@ public enum LogicalOperatorTag {
     FORWARD,
     GROUP,
     INDEX_INSERT_DELETE_UPSERT,
+
     INNERJOIN,
     INSERT_DELETE_UPSERT,
     LEFTOUTERJOIN,

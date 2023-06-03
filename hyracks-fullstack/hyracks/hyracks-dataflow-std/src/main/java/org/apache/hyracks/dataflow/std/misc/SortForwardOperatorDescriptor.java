@@ -57,8 +57,8 @@ public class SortForwardOperatorDescriptor extends AbstractForwardOperatorDescri
      * @param outputRecordDescriptor the output schema of this operator.
      */
     public SortForwardOperatorDescriptor(IOperatorDescriptorRegistry spec, String sideDataKey,
-            RecordDescriptor outputRecordDescriptor) {
-        super(spec, sideDataKey, outputRecordDescriptor);
+            RecordDescriptor outputRecordDescriptor, int rangeMapFieldId) {
+        super(spec, sideDataKey, outputRecordDescriptor, rangeMapFieldId);
     }
 
     @Override
@@ -132,6 +132,7 @@ public class SortForwardOperatorDescriptor extends AbstractForwardOperatorDescri
         private byte[] splitValues;
         private int[] splitValuesEndOffsets;
         private double[] percentages;
+        private int frameCount = 0;
 
         private RangeMapReaderActivityNodePushable(IHyracksTaskContext ctx, RecordDescriptor inputRecordDescriptor,
                 ActivityId activityId, int partition) {
@@ -152,14 +153,15 @@ public class SortForwardOperatorDescriptor extends AbstractForwardOperatorDescri
         public void nextFrame(ByteBuffer buffer) throws HyracksDataException {
             // "buffer" contains the serialized range map sent by a range map computer function.
             // deserialize the range map
+            frameCount++;
             frameTupleAccessor.reset(buffer);
             if (frameTupleAccessor.getTupleCount() != 1) {
                 throw HyracksDataException.create(ErrorCode.ONE_TUPLE_RANGEMAP_EXPECTED, sourceLoc);
             }
             frameTupleReference.reset(frameTupleAccessor, 0);
-            byte[] rangeMap = frameTupleReference.getFieldData(0);
-            int offset = frameTupleReference.getFieldStart(0);
-            int length = frameTupleReference.getFieldLength(0);
+            byte[] rangeMap = frameTupleReference.getFieldData(rangeMapFieldId);
+            int offset = frameTupleReference.getFieldStart(rangeMapFieldId);
+            int length = frameTupleReference.getFieldLength(rangeMapFieldId);
             ByteArrayPointable pointable = new ByteArrayPointable();
             pointable.set(rangeMap, offset + 1, length - 1);
             ByteArrayInputStream rangeMapIn = new ByteArrayInputStream(pointable.getByteArray(),
@@ -180,7 +182,7 @@ public class SortForwardOperatorDescriptor extends AbstractForwardOperatorDescri
         public void close() throws HyracksDataException {
             // expecting a range map
             if (numFields <= 0 || splitValues == null || splitValuesEndOffsets == null) {
-                throw HyracksDataException.create(ErrorCode.NO_RANGEMAP_PRODUCED, sourceLoc);
+                throw HyracksDataException.create(ErrorCode.MISSING_RANGEMAP_DATA, sourceLoc);
             }
             // store the range map in the state object of ctx so that next activity (forward) could retrieve it
             TaskId rangeMapReaderTaskId = new TaskId(activityId, partition);

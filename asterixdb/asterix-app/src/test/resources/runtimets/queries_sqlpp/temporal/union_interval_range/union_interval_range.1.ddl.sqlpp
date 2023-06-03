@@ -19,7 +19,7 @@
 /*
  * Description      :   Check temporal join functionality for interval
  * Expected Result  :   Success
- * Date             :   10th Aug, 2020
+ * Date             :   5th Mar, 2023
  */
 
 drop dataverse TinyCollege if exists;

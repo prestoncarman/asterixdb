@@ -26,6 +26,7 @@ import org.apache.hyracks.algebricks.common.utils.Pair;
 import org.apache.hyracks.algebricks.core.algebra.base.IHyracksJobBuilder;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.base.IOptimizationContext;
+import org.apache.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import org.apache.hyracks.algebricks.core.algebra.base.PhysicalOperatorTag;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.ForwardOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.IOperatorSchema;
@@ -51,6 +52,13 @@ import org.apache.hyracks.dataflow.std.base.AbstractForwardOperatorDescriptor;
  */
 public abstract class AbstractForwardPOperator extends AbstractPhysicalOperator {
 
+
+    protected int rangeMapFieldId;
+    protected final LogicalVariable rangeMapVar;
+
+    public AbstractForwardPOperator(LogicalVariable rangeMapVar){
+        this.rangeMapVar = rangeMapVar;
+    }
     @Override
     public PhysicalOperatorTag getOperatorTag() {
         return PhysicalOperatorTag.FORWARD;
@@ -115,6 +123,9 @@ public abstract class AbstractForwardPOperator extends AbstractPhysicalOperator 
     public void contributeRuntimeOperator(IHyracksJobBuilder builder, JobGenContext context, ILogicalOperator op,
             IOperatorSchema propagatedSchema, IOperatorSchema[] inputSchemas, IOperatorSchema outerPlanSchema)
             throws AlgebricksException {
+        ArrayList<LogicalVariable> temp = new ArrayList<>();
+        temp.add(this.rangeMapVar);
+        this.rangeMapFieldId = JobGenHelper.variablesToFieldIndexes(temp, inputSchemas[1])[0];
         ForwardOperator forwardOp = (ForwardOperator) op;
         RecordDescriptor dataInputDescriptor = JobGenHelper.mkRecordDescriptor(
                 context.getTypeEnvironment(forwardOp.getInputs().get(0).getValue()), inputSchemas[0], context);

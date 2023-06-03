@@ -18,13 +18,20 @@
  */
 package org.apache.asterix.runtime.evaluators.functions.temporal;
 
+import static java.lang.Math.max;
+import static java.lang.Math.min;
+
 import java.io.DataOutput;
 import java.io.IOException;
 
 import org.apache.asterix.common.annotations.MissingNullInOutFunction;
-import org.apache.asterix.dataflow.data.nontagged.serde.*;
+import org.apache.asterix.dataflow.data.nontagged.serde.AInt32SerializerDeserializer;
+import org.apache.asterix.dataflow.data.nontagged.serde.AInt64SerializerDeserializer;
 import org.apache.asterix.formats.nontagged.SerializerDeserializerProvider;
-import org.apache.asterix.om.base.*;
+import org.apache.asterix.om.base.ABinary;
+import org.apache.asterix.om.base.AMutableBinary;
+import org.apache.asterix.om.base.AMutableInt32;
+import org.apache.asterix.om.base.AMutableInterval;
 import org.apache.asterix.om.functions.BuiltinFunctions;
 import org.apache.asterix.om.functions.IFunctionDescriptorFactory;
 import org.apache.asterix.om.pointables.nonvisitor.AIntervalPointable;
@@ -48,9 +55,6 @@ import org.apache.hyracks.dataflow.common.data.marshalling.DoubleArraySerializer
 import org.apache.hyracks.dataflow.common.data.marshalling.IntArraySerializerDeserializer;
 import org.apache.hyracks.dataflow.common.data.marshalling.IntegerSerializerDeserializer;
 
-import static java.lang.Math.max;
-import static java.lang.Math.min;
-
 @MissingNullInOutFunction
 public class IntervalRangeMapDescriptor extends AbstractScalarFunctionDynamicDescriptor {
 
@@ -58,7 +62,8 @@ public class IntervalRangeMapDescriptor extends AbstractScalarFunctionDynamicDes
     public static final IFunctionDescriptorFactory FACTORY = IntervalRangeMapDescriptor::new;
 
     @Override
-    public FunctionIdentifier getIdentifier() { return BuiltinFunctions.INTERVAL_RANGE_MAP;
+    public FunctionIdentifier getIdentifier() {
+        return BuiltinFunctions.INTERVAL_RANGE_MAP;
     }
 
     @Override
@@ -93,7 +98,6 @@ public class IntervalRangeMapDescriptor extends AbstractScalarFunctionDynamicDes
                     private ISerializerDeserializer<ABinary> binarySerde =
                             SerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.ABINARY);
 
-
                     @Override
                     public void evaluate(IFrameTupleReference tuple, IPointable result) throws HyracksDataException {
                         storage.reset();
@@ -110,60 +114,74 @@ public class IntervalRangeMapDescriptor extends AbstractScalarFunctionDynamicDes
                         }
                         byte typeTag1 = argPtr1.getTag();
                         if (typeTag1 != ATypeTag.SERIALIZED_INTERVAL_TYPE_TAG) {
-                            throw new TypeMismatchException(sourceLoc, getIdentifier(), 0, typeTag1,
+                            throw new TypeMismatchException(sourceLoc, getIdentifier(), 1, typeTag1,
                                     ATypeTag.SERIALIZED_INTERVAL_TYPE_TAG);
                         }
                         byte typeTag2 = argPtr2.getTag();
-                        if (typeTag2 != ATypeTag.SERIALIZED_INT32_TYPE_TAG) {
-                            throw new TypeMismatchException(sourceLoc, getIdentifier(), 1, typeTag2,
-                                    ATypeTag.SERIALIZED_INT32_TYPE_TAG);
+                        if (typeTag2 != ATypeTag.SERIALIZED_INT64_TYPE_TAG) {
+                            throw new TypeMismatchException(sourceLoc, getIdentifier(), 2, typeTag2,
+                                    ATypeTag.SERIALIZED_INT64_TYPE_TAG);
                         }
                         argPtr0.getValue(interval0);
                         argPtr1.getValue(interval1);
-                        long currentMinStart = max(interval0.getStartValue(),interval1.getStartValue());
-                        long currentMaxEnd = min(interval0.getEndValue(),interval1.getEndValue());
+                        long currentMinStart = max(interval0.getStartValue(), interval1.getStartValue());
+                        long currentMaxEnd = min(interval0.getEndValue(), interval1.getEndValue());
                         byte[] data = argPtr2.getByteArray();
                         int offset = argPtr2.getStartOffset();
-                        int numOfPartitions = AInt32SerializerDeserializer.getInt(data, offset + 1);
+                        int numOfPartitions = (int) AInt64SerializerDeserializer.getLong(data, offset + 1);
                         long[] splitPoints = new long[numOfPartitions - 1];
                         double[] percentages = new double[numOfPartitions - 1];
                         int numOrderByFields = 1;
                         DataOutput allSplitValuesOut = storage.getDataOutput();
                         int[] endOffsets = new int[splitPoints.length];
                         try {
-
-                            double percentage = 1 / (double) percentages.length;
+                            double percentage = 1.0 / (double) percentages.length;
                             long range = currentMaxEnd - currentMinStart;
                             long nextSplitOffset = (int) range / numOfPartitions;
                             long nextSplitIndex = currentMinStart + nextSplitOffset - 1;
 
+                            if (numOfPartitions < 2) {
+                                splitPoints = new long[2];
+                                percentages = new double[2];
+                                splitPoints[0] = currentMinStart;
+                                splitPoints[1] = currentMaxEnd;
+                                percentages[0] = 0.50;
+                                percentages[1] = 0.50;
+                            }
                             for (int split = 0; split < splitPoints.length; split++) {
                                 splitPoints[split] = nextSplitIndex;
                                 percentages[split] = percentage;
                                 nextSplitIndex += nextSplitOffset;
                             }
-//TODO: Make splitpoints map to different types
+
+
                             for (int i = 0; i < splitPoints.length; i++) {
                                 allSplitValuesOut.writeByte(interval0.getType());
-                                allSplitValuesOut.writeInt((int) splitPoints[i]);
+                                if (interval0.getType() == ATypeTag.SERIALIZED_DATETIME_TYPE_TAG) {
+                                    allSplitValuesOut.writeLong(splitPoints[i]);
+                                } else {
+                                    allSplitValuesOut.writeInt((int) splitPoints[i]);
+                                }
                                 endOffsets[i] = storage.getLength();
                             }
+
 
                         } catch (IOException e) {
                             throw HyracksDataException.create(e);
                         }
                         serializeRangeMap(numOrderByFields, storage.getByteArray(), endOffsets, result, percentages);
 
-
                     }
-                    private void serializeRangeMap(int numberFields, byte[] splitValues, int[] endOffsets, IPointable result, double[] percentages)
-                            throws HyracksDataException {
+
+                    private void serializeRangeMap(int numberFields, byte[] splitValues, int[] endOffsets,
+                                                   IPointable result, double[] percentages) throws HyracksDataException {
                         ArrayBackedValueStorage serRangeMap = new ArrayBackedValueStorage();
                         IntegerSerializerDeserializer.write(numberFields, serRangeMap.getDataOutput());
                         ByteArraySerializerDeserializer.write(splitValues, serRangeMap.getDataOutput());
                         IntArraySerializerDeserializer.write(endOffsets, serRangeMap.getDataOutput());
                         DoubleArraySerializerDeserializer.write(percentages, serRangeMap.getDataOutput());
-                        binary.setValue(serRangeMap.getByteArray(), serRangeMap.getStartOffset(), serRangeMap.getLength());
+                        binary.setValue(serRangeMap.getByteArray(), serRangeMap.getStartOffset(),
+                                serRangeMap.getLength());
                         storage.reset();
                         binarySerde.serialize(binary, storage.getDataOutput());
                         result.set(storage);

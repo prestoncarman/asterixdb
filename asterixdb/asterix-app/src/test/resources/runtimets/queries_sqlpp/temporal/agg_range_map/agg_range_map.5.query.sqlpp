@@ -17,15 +17,9 @@
  * under the License.
  */
 /*
- * Description      :   Check temporal join functionality for interval
+ * Description      :   Check union-interval-range functionality for interval on Staff
  * Expected Result  :   Success
- * Date             :   5th Mar, 2023
+ * Date             :   30th May, 2023
  */
 
-use TinyCollege;
-
-load dataset Staff using localfs
-(("path"="asterix_nc1://data/tinycollege/staff.adm"),("format"="adm"));
-
-load dataset Students using localfs
-(("path"="asterix_nc1://data/tinycollege/students.adm"),("format"="adm"));
+select `interval-range-map`(interval(time("03:00:00.0+00:00"), time("08:00:00.0+00:00")), interval(time("02:00:00.0+00:00"), time("10:00:00.0+00:00")), 2);

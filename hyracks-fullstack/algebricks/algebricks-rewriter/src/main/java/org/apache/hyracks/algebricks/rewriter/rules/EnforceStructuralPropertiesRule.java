@@ -877,7 +877,7 @@ public class EnforceStructuralPropertiesRule implements IAlgebraicRewriteRule {
         AbstractLogicalExpression rangeMapExpression = new VariableReferenceExpression(rangeMapVariable, sourceLoc);
         ForwardOperator forwardOperator = new ForwardOperator(rangeMapKey, new MutableObject<>(rangeMapExpression));
         forwardOperator.setSourceLocation(sourceLoc);
-        forwardOperator.setPhysicalOperator(new SortForwardPOperator());
+        forwardOperator.setPhysicalOperator(new SortForwardPOperator(rangeMapVariable));
         forwardOperator.getInputs().add(exchangeOpFromReplicate);
         forwardOperator.getInputs().add(globalAggInput);
         OperatorManipulationUtil.setOperatorMode(forwardOperator);

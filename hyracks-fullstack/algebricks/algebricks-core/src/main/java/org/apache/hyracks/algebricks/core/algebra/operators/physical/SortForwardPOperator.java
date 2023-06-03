@@ -19,6 +19,7 @@
 package org.apache.hyracks.algebricks.core.algebra.operators.physical;
 
 import org.apache.hyracks.algebricks.core.algebra.base.IHyracksJobBuilder;
+import org.apache.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.ForwardOperator;
 import org.apache.hyracks.api.dataflow.value.RecordDescriptor;
 import org.apache.hyracks.dataflow.std.base.AbstractForwardOperatorDescriptor;
@@ -26,9 +27,16 @@ import org.apache.hyracks.dataflow.std.misc.SortForwardOperatorDescriptor;
 
 public class SortForwardPOperator extends AbstractForwardPOperator {
 
+    public SortForwardPOperator(LogicalVariable rangeMapVar){
+        super(rangeMapVar);
+    }
+
+    public SortForwardPOperator(){
+        super(null);
+    }
     @Override
     public AbstractForwardOperatorDescriptor getOperatorDescriptor(IHyracksJobBuilder builder,
             ForwardOperator forwardOp, RecordDescriptor dataInputDescriptor) {
-        return new SortForwardOperatorDescriptor(builder.getJobSpec(), forwardOp.getSideDataKey(), dataInputDescriptor);
+        return new SortForwardOperatorDescriptor(builder.getJobSpec(), forwardOp.getSideDataKey(), dataInputDescriptor, rangeMapFieldId);
     }
 }

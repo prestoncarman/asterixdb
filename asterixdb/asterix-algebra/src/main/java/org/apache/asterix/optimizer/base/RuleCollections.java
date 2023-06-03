@@ -408,7 +408,7 @@ public final class RuleCollections {
         physicalRewritesTopLevel.add(new PushLimitIntoPrimarySearchRule());
         // remove assigns that could become unused after PushLimitIntoPrimarySearchRule
         physicalRewritesTopLevel.add(new RemoveUnusedAssignAndAggregateRule());
-        physicalRewritesTopLevel.add(new IntroduceProjectsRule());
+        //physicalRewritesTopLevel.add(new IntroduceProjectsRule());
         physicalRewritesTopLevel.add(new SetAsterixPhysicalOperatorsRule());
         physicalRewritesTopLevel.add(new IntroduceRapidFrameFlushProjectAssignRule());
         physicalRewritesTopLevel.add(new SetExecutionModeRule());
