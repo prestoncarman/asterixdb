@@ -403,7 +403,7 @@ public class IntervalJoinUtils {
 
         // Replicate the range map to left and right forward operator and another forward for the join
         ReplicateOperator intersectionMAPReplicateOperator =
-                createReplicateOperator(intersectionIntervalAssignOperatorRef, context, op.getSourceLocation(), 3);
+                createReplicateOperator(intersectionIntervalAssignOperatorRef, context, op.getSourceLocation(), 4);
 
         ExchangeOperator exchMAPToJoinOpLeft =
                 createBroadcastExchangeOp(intersectionMAPReplicateOperator, context, op.getSourceLocation());
@@ -413,6 +413,11 @@ public class IntervalJoinUtils {
                 createBroadcastExchangeOp(intersectionMAPReplicateOperator, context, op.getSourceLocation());
         MutableObject<ILogicalOperator> exchRangeMapToAfterLeftForwardRef =
                 new MutableObject<>(exchMAPToAfterLeftForward);
+
+        ExchangeOperator exchMAPToAfterRightForward =
+                createBroadcastExchangeOp(intersectionMAPReplicateOperator, context, op.getSourceLocation());
+        MutableObject<ILogicalOperator> exchRangeMapToAfterRightForwardRef =
+                new MutableObject<>(exchMAPToAfterRightForward);
 
         // Replicate to the right branch
         ExchangeOperator exchMAPToJoinOpRight =
@@ -445,15 +450,21 @@ public class IntervalJoinUtils {
         MutableObject<ILogicalOperator> exchangeLeftRef = new MutableObject<>(exchangeLeft);
 
         // Set Right Partitioning Physical Operators
-        setPartitioningExchangeOperator(rightPartitionSortOp, context, fi,
+        ExchangeOperator exchangeRight = setPartitioningExchangeOperator(rightPartitionSortOp, context, fi,
                 intervalPartitions.getRightPartitioningType(), intervalPartitions.getRightStartColumn(),
                 intervalPartitions.getRightIntervalColumn(), rangeMapKey);
+        MutableObject<ILogicalOperator> exchangeRightRef = new MutableObject<>(exchangeRight);
 
         //Create the left after forward operator
         ForwardOperator leftAfterForward = createForward(rangeMapKey, rangemapVariable, exchangeLeftRef,
                 exchRangeMapToAfterLeftForwardRef, context, op.getSourceLocation());
         MutableObject<ILogicalOperator> leftAfterForwardRef = new MutableObject<>(leftAfterForward);
         leftPartitionSortOp.setValue(leftAfterForwardRef.getValue());
+
+        ForwardOperator rightAfterForward = createForward(rangeMapKey, rangemapVariable, exchangeRightRef,
+                exchRangeMapToAfterRightForwardRef, context, op.getSourceLocation());
+        MutableObject<ILogicalOperator> rightAfterForwardRef = new MutableObject<>(rightAfterForward);
+        rightPartitionSortOp.setValue(rightAfterForwardRef.getValue());
 
         IIntervalJoinUtilFactory mjcf = createIntervalJoinCheckerFactory(fi, null, intervalPartitions.getRangeMapKey());
         op.setPhysicalOperator(new IntervalMergeJoinPOperator(op.getJoinKind(),
@@ -608,7 +619,6 @@ public class IntervalJoinUtils {
         OperatorPropertiesUtil.computeSchemaAndPropertiesRecIfNull(exchg, context);
         context.computeAndSetTypeEnvironmentForOperator(exchg);
         return exchg;
-
 
     }
 

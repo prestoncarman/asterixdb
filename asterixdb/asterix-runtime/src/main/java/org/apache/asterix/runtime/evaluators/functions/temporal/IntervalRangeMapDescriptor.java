@@ -25,7 +25,6 @@ import java.io.DataOutput;
 import java.io.IOException;
 
 import org.apache.asterix.common.annotations.MissingNullInOutFunction;
-import org.apache.asterix.dataflow.data.nontagged.serde.AInt32SerializerDeserializer;
 import org.apache.asterix.dataflow.data.nontagged.serde.AInt64SerializerDeserializer;
 import org.apache.asterix.formats.nontagged.SerializerDeserializerProvider;
 import org.apache.asterix.om.base.ABinary;
@@ -141,19 +140,18 @@ public class IntervalRangeMapDescriptor extends AbstractScalarFunctionDynamicDes
                             long nextSplitIndex = currentMinStart + nextSplitOffset - 1;
 
                             if (numOfPartitions < 2) {
-                                splitPoints = new long[2];
-                                percentages = new double[2];
-                                splitPoints[0] = currentMinStart;
-                                splitPoints[1] = currentMaxEnd;
-                                percentages[0] = 0.50;
-                                percentages[1] = 0.50;
+                                splitPoints = new long[1];
+                                percentages = new double[1];
+                                endOffsets = new int[1];
+                                percentage = 0.50;
+                                nextSplitOffset = 1000;
+                                nextSplitIndex = 999;
                             }
                             for (int split = 0; split < splitPoints.length; split++) {
                                 splitPoints[split] = nextSplitIndex;
                                 percentages[split] = percentage;
                                 nextSplitIndex += nextSplitOffset;
                             }
-
 
                             for (int i = 0; i < splitPoints.length; i++) {
                                 allSplitValuesOut.writeByte(interval0.getType());
@@ -165,7 +163,6 @@ public class IntervalRangeMapDescriptor extends AbstractScalarFunctionDynamicDes
                                 endOffsets[i] = storage.getLength();
                             }
 
-
                         } catch (IOException e) {
                             throw HyracksDataException.create(e);
                         }
@@ -174,7 +171,7 @@ public class IntervalRangeMapDescriptor extends AbstractScalarFunctionDynamicDes
                     }
 
                     private void serializeRangeMap(int numberFields, byte[] splitValues, int[] endOffsets,
-                                                   IPointable result, double[] percentages) throws HyracksDataException {
+                            IPointable result, double[] percentages) throws HyracksDataException {
                         ArrayBackedValueStorage serRangeMap = new ArrayBackedValueStorage();
                         IntegerSerializerDeserializer.write(numberFields, serRangeMap.getDataOutput());
                         ByteArraySerializerDeserializer.write(splitValues, serRangeMap.getDataOutput());

@@ -27,16 +27,18 @@ import org.apache.hyracks.dataflow.std.misc.SortForwardOperatorDescriptor;
 
 public class SortForwardPOperator extends AbstractForwardPOperator {
 
-    public SortForwardPOperator(LogicalVariable rangeMapVar){
+    public SortForwardPOperator(LogicalVariable rangeMapVar) {
         super(rangeMapVar);
     }
 
-    public SortForwardPOperator(){
+    public SortForwardPOperator() {
         super(null);
     }
+
     @Override
     public AbstractForwardOperatorDescriptor getOperatorDescriptor(IHyracksJobBuilder builder,
             ForwardOperator forwardOp, RecordDescriptor dataInputDescriptor) {
-        return new SortForwardOperatorDescriptor(builder.getJobSpec(), forwardOp.getSideDataKey(), dataInputDescriptor, rangeMapFieldId);
+        return new SortForwardOperatorDescriptor(builder.getJobSpec(), forwardOp.getSideDataKey(), dataInputDescriptor,
+                rangeMapFieldId);
     }
 }

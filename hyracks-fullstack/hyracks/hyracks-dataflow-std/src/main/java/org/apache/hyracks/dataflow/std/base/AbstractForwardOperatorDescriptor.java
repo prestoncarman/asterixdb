@@ -29,7 +29,7 @@ public abstract class AbstractForwardOperatorDescriptor extends AbstractOperator
     protected static final int SIDE_DATA_ACTIVITY_ID = 1;
     protected String sideDataKey;
 
-    protected  int rangeMapFieldId;
+    protected int rangeMapFieldId;
 
     /**
      * @param spec used to create the operator id.

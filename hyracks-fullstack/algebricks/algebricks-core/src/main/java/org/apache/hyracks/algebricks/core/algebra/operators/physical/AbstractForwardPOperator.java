@@ -52,13 +52,13 @@ import org.apache.hyracks.dataflow.std.base.AbstractForwardOperatorDescriptor;
  */
 public abstract class AbstractForwardPOperator extends AbstractPhysicalOperator {
 
-
     protected int rangeMapFieldId;
     protected final LogicalVariable rangeMapVar;
 
-    public AbstractForwardPOperator(LogicalVariable rangeMapVar){
+    public AbstractForwardPOperator(LogicalVariable rangeMapVar) {
         this.rangeMapVar = rangeMapVar;
     }
+
     @Override
     public PhysicalOperatorTag getOperatorTag() {
         return PhysicalOperatorTag.FORWARD;

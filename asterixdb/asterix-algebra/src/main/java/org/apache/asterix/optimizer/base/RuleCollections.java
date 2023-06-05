@@ -125,7 +125,6 @@ import org.apache.hyracks.algebricks.rewriter.rules.InlineSingleReferenceVariabl
 import org.apache.hyracks.algebricks.rewriter.rules.InsertProjectBeforeUnionRule;
 import org.apache.hyracks.algebricks.rewriter.rules.IntroJoinInsideSubplanRule;
 import org.apache.hyracks.algebricks.rewriter.rules.IntroduceAggregateCombinerRule;
-import org.apache.hyracks.algebricks.rewriter.rules.IntroduceProjectsRule;
 import org.apache.hyracks.algebricks.rewriter.rules.IsolateHyracksOperatorsRule;
 import org.apache.hyracks.algebricks.rewriter.rules.PopulateResultMetadataRule;
 import org.apache.hyracks.algebricks.rewriter.rules.PullSelectOutOfEqJoin;
