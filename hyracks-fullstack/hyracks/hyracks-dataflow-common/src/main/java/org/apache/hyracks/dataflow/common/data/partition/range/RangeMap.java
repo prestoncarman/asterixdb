@@ -53,9 +53,13 @@ public class RangeMap implements Serializable {
         return endOffsets.length / fields;
     }
 
+    public int getNumFields() { return fields; }
+
     public byte[] getByteArray() {
         return bytes;
     }
+
+    public int[] getEndOffsets() { return endOffsets; }
 
     public double[] getPercentages() {
         return percentages;

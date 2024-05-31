@@ -18,13 +18,11 @@
  */
 package org.apache.asterix.runtime.evaluators.functions.temporal;
 
-import java.io.DataOutput;
-import java.io.IOException;
-
 import org.apache.asterix.common.annotations.MissingNullInOutFunction;
-import org.apache.asterix.dataflow.data.nontagged.serde.*;
+import org.apache.asterix.dataflow.data.nontagged.serde.AInt32SerializerDeserializer;
 import org.apache.asterix.formats.nontagged.SerializerDeserializerProvider;
-import org.apache.asterix.om.base.*;
+import org.apache.asterix.om.base.ABinary;
+import org.apache.asterix.om.base.AMutableBinary;
 import org.apache.asterix.om.functions.BuiltinFunctions;
 import org.apache.asterix.om.functions.IFunctionDescriptorFactory;
 import org.apache.asterix.om.pointables.nonvisitor.AIntervalPointable;
@@ -51,6 +49,9 @@ import org.apache.hyracks.dataflow.common.data.marshalling.IntegerSerializerDese
 import static java.lang.Math.max;
 import static java.lang.Math.min;
 
+import java.io.DataOutput;
+import java.io.IOException;
+
 @MissingNullInOutFunction
 public class IntervalRangeMapDescriptor extends AbstractScalarFunctionDynamicDescriptor {
 
@@ -58,7 +59,8 @@ public class IntervalRangeMapDescriptor extends AbstractScalarFunctionDynamicDes
     public static final IFunctionDescriptorFactory FACTORY = IntervalRangeMapDescriptor::new;
 
     @Override
-    public FunctionIdentifier getIdentifier() { return BuiltinFunctions.INTERVAL_RANGE_MAP;
+    public FunctionIdentifier getIdentifier() {
+        return BuiltinFunctions.INTERVAL_RANGE_MAP;
     }
 
     @Override
@@ -73,7 +75,6 @@ public class IntervalRangeMapDescriptor extends AbstractScalarFunctionDynamicDes
                 return new IScalarEvaluator() {
 
                     private final ArrayBackedValueStorage storage = new ArrayBackedValueStorage();
-                    private final DataOutput out = storage.getDataOutput();
 
                     private final TaggedValuePointable argPtr0 = TaggedValuePointable.FACTORY.createPointable();
                     private final TaggedValuePointable argPtr1 = TaggedValuePointable.FACTORY.createPointable();
@@ -86,13 +87,9 @@ public class IntervalRangeMapDescriptor extends AbstractScalarFunctionDynamicDes
                     private final IScalarEvaluator eval0 = args[0].createScalarEvaluator(ctx);
                     private final IScalarEvaluator eval1 = args[1].createScalarEvaluator(ctx);
                     private final IScalarEvaluator eval2 = args[2].createScalarEvaluator(ctx);
-
-                    private final AMutableInterval aInterval = new AMutableInterval(0, 0, (byte) -1);
-                    private final AMutableInt32 aInt32 = new AMutableInt32(0);
                     private final AMutableBinary binary = new AMutableBinary(null, 0, 0);
                     private ISerializerDeserializer<ABinary> binarySerde =
                             SerializerDeserializerProvider.INSTANCE.getSerializerDeserializer(BuiltinType.ABINARY);
-
 
                     @Override
                     public void evaluate(IFrameTupleReference tuple, IPointable result) throws HyracksDataException {
@@ -120,8 +117,8 @@ public class IntervalRangeMapDescriptor extends AbstractScalarFunctionDynamicDes
                         }
                         argPtr0.getValue(interval0);
                         argPtr1.getValue(interval1);
-                        long currentMinStart = max(interval0.getStartValue(),interval1.getStartValue());
-                        long currentMaxEnd = min(interval0.getEndValue(),interval1.getEndValue());
+                        long currentMinStart = max(interval0.getStartValue(), interval1.getStartValue());
+                        long currentMaxEnd = min(interval0.getEndValue(), interval1.getEndValue());
                         byte[] data = argPtr2.getByteArray();
                         int offset = argPtr2.getStartOffset();
                         int numOfPartitions = AInt32SerializerDeserializer.getInt(data, offset + 1);
@@ -142,7 +139,7 @@ public class IntervalRangeMapDescriptor extends AbstractScalarFunctionDynamicDes
                                 percentages[split] = percentage;
                                 nextSplitIndex += nextSplitOffset;
                             }
-//TODO: Make splitpoints map to different types
+                            //TODO: Make splitpoints map to different types
                             for (int i = 0; i < splitPoints.length; i++) {
                                 allSplitValuesOut.writeByte(interval0.getType());
                                 allSplitValuesOut.writeInt((int) splitPoints[i]);
@@ -153,17 +150,17 @@ public class IntervalRangeMapDescriptor extends AbstractScalarFunctionDynamicDes
                             throw HyracksDataException.create(e);
                         }
                         serializeRangeMap(numOrderByFields, storage.getByteArray(), endOffsets, result, percentages);
-
-
                     }
-                    private void serializeRangeMap(int numberFields, byte[] splitValues, int[] endOffsets, IPointable result, double[] percentages)
-                            throws HyracksDataException {
+
+                    private void serializeRangeMap(int numberFields, byte[] splitValues, int[] endOffsets,
+                            IPointable result, double[] percentages) throws HyracksDataException {
                         ArrayBackedValueStorage serRangeMap = new ArrayBackedValueStorage();
                         IntegerSerializerDeserializer.write(numberFields, serRangeMap.getDataOutput());
                         ByteArraySerializerDeserializer.write(splitValues, serRangeMap.getDataOutput());
                         IntArraySerializerDeserializer.write(endOffsets, serRangeMap.getDataOutput());
                         DoubleArraySerializerDeserializer.write(percentages, serRangeMap.getDataOutput());
-                        binary.setValue(serRangeMap.getByteArray(), serRangeMap.getStartOffset(), serRangeMap.getLength());
+                        binary.setValue(serRangeMap.getByteArray(), serRangeMap.getStartOffset(),
+                                serRangeMap.getLength());
                         storage.reset();
                         binarySerde.serialize(binary, storage.getDataOutput());
                         result.set(storage);

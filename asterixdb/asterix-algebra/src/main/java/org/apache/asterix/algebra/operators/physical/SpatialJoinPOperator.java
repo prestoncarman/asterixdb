@@ -117,6 +117,7 @@ public class SpatialJoinPOperator extends AbstractJoinPOperator {
     @Override
     public PhysicalRequirements getRequiredPropertiesForChildren(ILogicalOperator op,
             IPhysicalPropertiesVector reqdByParent, IOptimizationContext context) {
+
         List<LogicalVariable> keysLeftBranchTileId = new ArrayList<>();
         keysLeftBranchTileId.add(keysLeftBranch.get(0));
         List<LogicalVariable> keysRightBranchTileId = new ArrayList<>();

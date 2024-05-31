@@ -126,7 +126,7 @@ public class SpatialJoinUtils {
                 right);
     }
 
-    private static void setSpatialJoinOp(AbstractBinaryJoinOperator op, List<LogicalVariable> keysLeftBranch,
+    static void setSpatialJoinOp(AbstractBinaryJoinOperator op, List<LogicalVariable> keysLeftBranch,
             List<LogicalVariable> keysRightBranch, IOptimizationContext context) throws AlgebricksException {
         ISpatialJoinUtilFactory isjuf = new IntersectSpatialJoinUtilFactory();
         op.setPhysicalOperator(new SpatialJoinPOperator(op.getJoinKind(),

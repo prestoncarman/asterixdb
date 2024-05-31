@@ -24,27 +24,27 @@ import org.apache.asterix.dataflow.data.nontagged.serde.ATimeSerializerDeseriali
 import org.apache.asterix.om.types.ATypeTag;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
-import org.apache.hyracks.dataflow.common.data.partition.range.DynamicRangeMapSupplier;
 import org.apache.hyracks.dataflow.common.data.partition.range.RangeMap;
-import org.apache.hyracks.dataflow.common.data.partition.range.RangeMapSupplier;
 
 public class OverlappingIntervalJoinUtilFactory implements IIntervalJoinUtilFactory {
     private static final long serialVersionUID = 1L;
     private RangeMap rangeMap;
-    private final String rangeMapKey;
+
+    public OverlappingIntervalJoinUtilFactory() {
+        this.rangeMap = null;
+    }
 
     public OverlappingIntervalJoinUtilFactory(RangeMap rangeMap, String rangeMapKey) {
         this.rangeMap = rangeMap;
-        this.rangeMapKey = rangeMapKey;
     }
 
     @Override
     public IIntervalJoinUtil createIntervalMergeJoinUtil(int buildKey, int probeKey, IHyracksTaskContext ctx,
             int nPartitions) throws HyracksDataException {
         // May have to happen in the util
+
         if (rangeMap == null) {
-            RangeMapSupplier rangeMapSupplier = new DynamicRangeMapSupplier(rangeMapKey);
-            this.rangeMap = rangeMapSupplier.getRangeMap(ctx);
+            return new OverlappingDynamicIntervalJoinUtil(buildKey, probeKey);
         }
         int fieldIndex = 0;
         int partition = ctx.getTaskAttemptId().getTaskId().getPartition();
@@ -55,7 +55,7 @@ public class OverlappingIntervalJoinUtilFactory implements IIntervalJoinUtilFact
             rangesPerPart = ((double) nRanges) / nPartitions;
         }
         int slot = ((int) Math.ceil(partition * rangesPerPart) % nRanges) - 1;
-        //Find Partitions Start Value based on slot
+        // Find Partition's Start Value based on slot
         long partitionStart = Long.MIN_VALUE;
         if (slot >= 0) {
             switch (ATypeTag.VALUE_TYPE_MAPPING[rangeMap.getTag(fieldIndex, slot)]) {

@@ -1534,6 +1534,8 @@ public class BuiltinFunctions {
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "overlap-bins", 3);
     public static final FunctionIdentifier GET_OVERLAPPING_INTERVAL =
             new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "get-overlapping-interval", 2);
+    public static final FunctionIdentifier INTERVAL_JOIN_REMOVE_DUPLICATES =
+            new FunctionIdentifier(FunctionConstants.ASTERIX_NS, "interval-join-remove-duplicates", 3);
 
     // Temporal functions
     public static final FunctionIdentifier UNIX_TIME_FROM_DATE_IN_DAYS =
@@ -2567,6 +2569,7 @@ public class BuiltinFunctions {
         addFunction(PRINT_DATETIME, AStringTypeComputer.INSTANCE, true);
         addFunction(OVERLAP_BINS, OrderedListOfAIntervalTypeComputer.INSTANCE, true);
         addFunction(GET_OVERLAPPING_INTERVAL, GetOverlappingInvervalTypeComputer.INSTANCE, true);
+        addFunction(INTERVAL_JOIN_REMOVE_DUPLICATES, ABooleanTypeComputer.INSTANCE, true);
         addFunction(DURATION_FROM_INTERVAL, ADayTimeDurationTypeComputer.INSTANCE, true);
 
         // interval constructors
