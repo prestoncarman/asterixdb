@@ -69,5 +69,4 @@ public class RangeMapSerializerDeserializerTest {
         Assert.assertArrayEquals(rangeMapResult.getPercentages(), rangeMap.getPercentages(), 0.01);
         Assert.assertEquals(rangeMapResult, rangeMap);
     }
-
 }
