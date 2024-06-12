@@ -18,6 +18,8 @@
  */
 package org.apache.asterix.app.cc;
 
+import static org.apache.hyracks.control.common.controllers.ControllerConfig.Option.CLOUD_DEPLOYMENT;
+
 import java.io.IOException;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Supplier;
@@ -27,14 +29,18 @@ import org.apache.asterix.common.api.IConfigValidator;
 import org.apache.asterix.common.api.IConfigValidatorFactory;
 import org.apache.asterix.common.api.ICoordinationService;
 import org.apache.asterix.common.api.IMetadataLockManager;
+import org.apache.asterix.common.api.INamespacePathResolver;
+import org.apache.asterix.common.api.INamespaceResolver;
 import org.apache.asterix.common.api.INodeJobTracker;
 import org.apache.asterix.common.api.IReceptionist;
 import org.apache.asterix.common.api.IReceptionistFactory;
 import org.apache.asterix.common.api.IRequestTracker;
 import org.apache.asterix.common.cluster.IClusterStateManager;
 import org.apache.asterix.common.cluster.IGlobalRecoveryManager;
+import org.apache.asterix.common.cluster.IGlobalTxManager;
 import org.apache.asterix.common.config.ActiveProperties;
 import org.apache.asterix.common.config.BuildProperties;
+import org.apache.asterix.common.config.CloudProperties;
 import org.apache.asterix.common.config.CompilerProperties;
 import org.apache.asterix.common.config.ExtensionProperties;
 import org.apache.asterix.common.config.ExternalProperties;
@@ -47,6 +53,7 @@ import org.apache.asterix.common.config.StorageProperties;
 import org.apache.asterix.common.config.TransactionProperties;
 import org.apache.asterix.common.context.IStorageComponentProvider;
 import org.apache.asterix.common.dataflow.ICcApplicationContext;
+import org.apache.asterix.common.dataflow.IDataPartitioningProvider;
 import org.apache.asterix.common.external.IAdapterFactoryService;
 import org.apache.asterix.common.metadata.IMetadataBootstrap;
 import org.apache.asterix.common.metadata.IMetadataLockUtil;
@@ -54,6 +61,7 @@ import org.apache.asterix.common.replication.INcLifecycleCoordinator;
 import org.apache.asterix.common.storage.ICompressionManager;
 import org.apache.asterix.common.transactions.IResourceIdManager;
 import org.apache.asterix.common.transactions.ITxnIdFactory;
+import org.apache.asterix.metadata.utils.DataPartitioningProvider;
 import org.apache.asterix.runtime.compression.CompressionManager;
 import org.apache.asterix.runtime.job.listener.NodeJobTracker;
 import org.apache.asterix.runtime.transaction.ResourceIdManager;
@@ -69,6 +77,7 @@ import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.job.IJobLifecycleListener;
 import org.apache.hyracks.api.result.IResultSet;
 import org.apache.hyracks.client.result.ResultSet;
+import org.apache.hyracks.control.nc.io.IOManager;
 import org.apache.hyracks.ipc.impl.HyracksConnection;
 import org.apache.hyracks.storage.common.IStorageManager;
 import org.apache.hyracks.util.NetworkUtil;
@@ -95,6 +104,7 @@ public class CcApplicationContext implements ICcApplicationContext {
     private ExtensionProperties extensionProperties;
     private MessagingProperties messagingProperties;
     private NodeProperties nodeProperties;
+    private final CloudProperties cloudProperties;
     private Supplier<IMetadataBootstrap> metadataBootstrapSupplier;
     private volatile HyracksConnection hcc;
     private volatile ResultSet resultSet;
@@ -112,6 +122,11 @@ public class CcApplicationContext implements ICcApplicationContext {
     private final IConfigValidator configValidator;
     private final IAdapterFactoryService adapterFactoryService;
     private final ReentrantReadWriteLock compilationLock = new ReentrantReadWriteLock(true);
+    private final IDataPartitioningProvider dataPartitioningProvider;
+    private final IGlobalTxManager globalTxManager;
+    private final IOManager ioManager;
+    private final INamespacePathResolver namespacePathResolver;
+    private final INamespaceResolver namespaceResolver;
 
     public CcApplicationContext(ICCServiceContext ccServiceCtx, HyracksConnection hcc,
             Supplier<IMetadataBootstrap> metadataBootstrapSupplier, IGlobalRecoveryManager globalRecoveryManager,
@@ -119,7 +134,9 @@ public class CcApplicationContext implements ICcApplicationContext {
             IStorageComponentProvider storageComponentProvider, IMetadataLockManager mdLockManager,
             IMetadataLockUtil mdLockUtil, IReceptionistFactory receptionistFactory,
             IConfigValidatorFactory configValidatorFactory, Object extensionManager,
-            IAdapterFactoryService adapterFactoryService) throws AlgebricksException, IOException {
+            IAdapterFactoryService adapterFactoryService, IGlobalTxManager globalTxManager, IOManager ioManager,
+            CloudProperties cloudProperties, INamespaceResolver namespaceResolver,
+            INamespacePathResolver namespacePathResolver) throws AlgebricksException, IOException {
         this.ccServiceCtx = ccServiceCtx;
         this.hcc = hcc;
         this.activeLifeCycleListener = activeLifeCycleListener;
@@ -135,6 +152,7 @@ public class CcApplicationContext implements ICcApplicationContext {
         activeProperties = new ActiveProperties(propertiesAccessor);
         extensionProperties = new ExtensionProperties(propertiesAccessor);
         replicationProperties = new ReplicationProperties(propertiesAccessor);
+        this.cloudProperties = cloudProperties;
         this.ftStrategy = ftStrategy;
         this.buildProperties = new BuildProperties(propertiesAccessor);
         this.messagingProperties = new MessagingProperties(propertiesAccessor);
@@ -154,6 +172,11 @@ public class CcApplicationContext implements ICcApplicationContext {
         requestTracker = new RequestTracker(this);
         configValidator = configValidatorFactory.create();
         this.adapterFactoryService = adapterFactoryService;
+        this.namespacePathResolver = namespacePathResolver;
+        this.namespaceResolver = namespaceResolver;
+        this.globalTxManager = globalTxManager;
+        this.ioManager = ioManager;
+        dataPartitioningProvider = DataPartitioningProvider.create(this);
     }
 
     @Override
@@ -356,5 +379,40 @@ public class CcApplicationContext implements ICcApplicationContext {
     @Override
     public ReentrantReadWriteLock getCompilationLock() {
         return compilationLock;
+    }
+
+    @Override
+    public IDataPartitioningProvider getDataPartitioningProvider() {
+        return dataPartitioningProvider;
+    }
+
+    @Override
+    public INamespaceResolver getNamespaceResolver() {
+        return namespaceResolver;
+    }
+
+    @Override
+    public INamespacePathResolver getNamespacePathResolver() {
+        return namespacePathResolver;
+    }
+
+    @Override
+    public boolean isCloudDeployment() {
+        return ccServiceCtx.getAppConfig().getBoolean(CLOUD_DEPLOYMENT);
+    }
+
+    @Override
+    public CloudProperties getCloudProperties() {
+        return cloudProperties;
+    }
+
+    @Override
+    public IGlobalTxManager getGlobalTxManager() {
+        return globalTxManager;
+    }
+
+    @Override
+    public IOManager getIoManager() {
+        return ioManager;
     }
 }

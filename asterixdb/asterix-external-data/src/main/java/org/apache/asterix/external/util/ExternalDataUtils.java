@@ -18,22 +18,22 @@
  */
 package org.apache.asterix.external.util;
 
-import static org.apache.asterix.common.exceptions.ErrorCode.INVALID_REQ_PARAM_VAL;
-import static org.apache.asterix.common.exceptions.ErrorCode.PARAMETERS_NOT_ALLOWED_AT_SAME_TIME;
-import static org.apache.asterix.common.exceptions.ErrorCode.PARAMETERS_REQUIRED;
-import static org.apache.asterix.external.util.ExternalDataConstants.KEY_ADAPTER_NAME_GCS;
+import static org.apache.asterix.common.metadata.MetadataConstants.DEFAULT_DATABASE;
+import static org.apache.asterix.external.util.ExternalDataConstants.DEFINITION_FIELD_NAME;
 import static org.apache.asterix.external.util.ExternalDataConstants.KEY_DELIMITER;
 import static org.apache.asterix.external.util.ExternalDataConstants.KEY_ESCAPE;
 import static org.apache.asterix.external.util.ExternalDataConstants.KEY_EXCLUDE;
 import static org.apache.asterix.external.util.ExternalDataConstants.KEY_EXTERNAL_SCAN_BUFFER_SIZE;
-import static org.apache.asterix.external.util.ExternalDataConstants.KEY_FORMAT;
 import static org.apache.asterix.external.util.ExternalDataConstants.KEY_INCLUDE;
+import static org.apache.asterix.external.util.ExternalDataConstants.KEY_PATH;
 import static org.apache.asterix.external.util.ExternalDataConstants.KEY_QUOTE;
 import static org.apache.asterix.external.util.ExternalDataConstants.KEY_RECORD_END;
 import static org.apache.asterix.external.util.ExternalDataConstants.KEY_RECORD_START;
 import static org.apache.asterix.external.util.azure.blob_storage.AzureUtils.validateAzureBlobProperties;
 import static org.apache.asterix.external.util.azure.blob_storage.AzureUtils.validateAzureDataLakeProperties;
 import static org.apache.asterix.external.util.google.gcs.GCSUtils.validateProperties;
+import static org.apache.asterix.om.utils.ProjectionFiltrationTypeUtil.ALL_FIELDS_TYPE;
+import static org.apache.asterix.om.utils.ProjectionFiltrationTypeUtil.EMPTY_TYPE;
 import static org.apache.asterix.runtime.evaluators.functions.StringEvaluatorUtils.RESERVED_REGEX_CHARS;
 import static org.msgpack.core.MessagePack.Code.ARRAY16;
 
@@ -48,6 +48,7 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.BiPredicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
@@ -57,10 +58,12 @@ import org.apache.asterix.common.exceptions.AsterixException;
 import org.apache.asterix.common.exceptions.CompilationException;
 import org.apache.asterix.common.exceptions.ErrorCode;
 import org.apache.asterix.common.exceptions.RuntimeDataException;
+import org.apache.asterix.common.external.IExternalFilterEvaluator;
 import org.apache.asterix.common.functions.ExternalFunctionLanguage;
 import org.apache.asterix.common.library.ILibrary;
 import org.apache.asterix.common.library.ILibraryManager;
 import org.apache.asterix.common.metadata.DataverseName;
+import org.apache.asterix.common.metadata.Namespace;
 import org.apache.asterix.external.api.IDataParserFactory;
 import org.apache.asterix.external.api.IExternalDataSourceFactory.DataSourceType;
 import org.apache.asterix.external.api.IInputStreamFactory;
@@ -69,7 +72,10 @@ import org.apache.asterix.external.input.record.reader.abstracts.AbstractExterna
 import org.apache.asterix.external.library.JavaLibrary;
 import org.apache.asterix.external.library.msgpack.MessagePackUtils;
 import org.apache.asterix.external.util.ExternalDataConstants.ParquetOptions;
+import org.apache.asterix.external.util.aws.s3.S3Constants;
 import org.apache.asterix.external.util.aws.s3.S3Utils;
+import org.apache.asterix.external.util.azure.blob_storage.AzureConstants;
+import org.apache.asterix.external.util.google.gcs.GCSConstants;
 import org.apache.asterix.om.types.ARecordType;
 import org.apache.asterix.om.types.ATypeTag;
 import org.apache.asterix.om.types.AUnionType;
@@ -77,8 +83,10 @@ import org.apache.asterix.om.types.EnumDeserializer;
 import org.apache.asterix.om.types.IAType;
 import org.apache.asterix.om.types.TypeTagUtil;
 import org.apache.asterix.runtime.evaluators.common.NumberUtils;
-import org.apache.asterix.runtime.projection.DataProjectionInfo;
+import org.apache.asterix.runtime.projection.ExternalDatasetProjectionFiltrationInfo;
 import org.apache.asterix.runtime.projection.FunctionCallInformation;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.common.exceptions.NotImplementedException;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.exceptions.IWarningCollector;
@@ -94,6 +102,11 @@ import org.apache.hyracks.dataflow.common.data.parsers.IntegerParserFactory;
 import org.apache.hyracks.dataflow.common.data.parsers.LongParserFactory;
 import org.apache.hyracks.dataflow.common.data.parsers.UTF8StringParserFactory;
 import org.apache.hyracks.util.StorageUtil;
+import org.apache.iceberg.BaseTable;
+import org.apache.iceberg.FileScanTask;
+import org.apache.iceberg.Table;
+import org.apache.iceberg.hadoop.HadoopTables;
+import org.apache.iceberg.io.CloseableIterable;
 
 public class ExternalDataUtils {
     private static final Map<ATypeTag, IValueParserFactory> valueParserFactoryMap = new EnumMap<>(ATypeTag.class);
@@ -183,11 +196,11 @@ public class ExternalDataUtils {
     }
 
     public static IInputStreamFactory createExternalInputStreamFactory(ILibraryManager libraryManager,
-            DataverseName dataverse, String stream) throws HyracksDataException {
+            Namespace namespace, String stream) throws HyracksDataException {
         try {
             String libraryName = getLibraryName(stream);
             String className = getExternalClassName(stream);
-            ILibrary lib = libraryManager.getLibrary(dataverse, libraryName);
+            ILibrary lib = libraryManager.getLibrary(namespace, libraryName);
             if (lib.getLanguage() != ExternalFunctionLanguage.JAVA) {
                 throw new HyracksDataException("Unexpected library language: " + lib.getLanguage());
             }
@@ -196,6 +209,10 @@ public class ExternalDataUtils {
         } catch (InstantiationException | IllegalAccessException | ClassNotFoundException e) {
             throw new RuntimeDataException(ErrorCode.UTIL_EXTERNAL_DATA_UTILS_FAIL_CREATE_STREAM_FACTORY, e);
         }
+    }
+
+    public static String getDatasetDatabase(Map<String, String> configuration) throws AsterixException {
+        return configuration.get(ExternalDataConstants.KEY_DATASET_DATABASE);
     }
 
     public static DataverseName getDatasetDataverse(Map<String, String> configuration) throws AsterixException {
@@ -247,7 +264,7 @@ public class ExternalDataUtils {
 
     public static boolean isTrue(Map<String, String> configuration, String key) {
         String value = configuration.get(key);
-        return value == null ? false : Boolean.valueOf(value);
+        return value != null && Boolean.valueOf(value);
     }
 
     // Currently not used.
@@ -272,7 +289,7 @@ public class ExternalDataUtils {
         String libraryName = dataverseAndLibrary[1];
         ILibrary lib;
         try {
-            lib = libraryManager.getLibrary(dataverseName, libraryName);
+            lib = libraryManager.getLibrary(new Namespace(DEFAULT_DATABASE, dataverseName), libraryName);
         } catch (HyracksDataException e) {
             throw new AsterixException("Cannot load library", e);
         }
@@ -295,7 +312,7 @@ public class ExternalDataUtils {
                     parserFactoryName.indexOf(ExternalDataConstants.EXTERNAL_LIBRARY_SEPARATOR));
             ILibrary lib;
             try {
-                lib = libraryManager.getLibrary(dataverse, library);
+                lib = libraryManager.getLibrary(new Namespace(DEFAULT_DATABASE, dataverse), library);
             } catch (HyracksDataException e) {
                 throw new AsterixException("Cannot load library", e);
             }
@@ -320,10 +337,24 @@ public class ExternalDataUtils {
         }
     }
 
-    public static void prepareFeed(Map<String, String> configuration, DataverseName dataverseName, String feedName) {
+    public static boolean isLogIngestionEvents(Map<String, String> configuration) {
+        if (!isFeed(configuration)) {
+            return false;
+        }
+        if (!configuration.containsKey(ExternalDataConstants.KEY_LOG_INGESTION_EVENTS)) {
+            return true;
+        } else {
+            return Boolean.parseBoolean(configuration.get(ExternalDataConstants.KEY_LOG_INGESTION_EVENTS));
+        }
+    }
+
+    public static void prepareFeed(Map<String, String> configuration, String databaseName, DataverseName dataverseName,
+            String feedName) {
         if (!configuration.containsKey(ExternalDataConstants.KEY_IS_FEED)) {
             configuration.put(ExternalDataConstants.KEY_IS_FEED, ExternalDataConstants.TRUE);
         }
+        configuration.putIfAbsent(ExternalDataConstants.KEY_LOG_INGESTION_EVENTS, ExternalDataConstants.TRUE);
+        configuration.put(ExternalDataConstants.KEY_DATASET_DATABASE, databaseName);
         configuration.put(ExternalDataConstants.KEY_DATASET_DATAVERSE, dataverseName.getCanonicalForm());
         configuration.put(ExternalDataConstants.KEY_FEED_NAME, feedName);
     }
@@ -394,8 +425,7 @@ public class ExternalDataUtils {
     /**
      * Fills the configuration of the external dataset and its adapter with default values if not provided by user.
      *
-     * @param configuration
-     *            external data configuration
+     * @param configuration external data configuration
      */
     public static void defaultConfiguration(Map<String, String> configuration) {
         String format = configuration.get(ExternalDataConstants.KEY_FORMAT);
@@ -417,12 +447,10 @@ public class ExternalDataUtils {
      * Prepares the configuration of the external data and its adapter by filling the information required by
      * adapters and parsers.
      *
-     * @param adapterName
-     *            adapter name
-     * @param configuration
-     *            external data configuration
+     * @param adapterName   adapter name
+     * @param configuration external data configuration
      */
-    public static void prepare(String adapterName, Map<String, String> configuration) {
+    public static void prepare(String adapterName, Map<String, String> configuration) throws AlgebricksException {
         if (!configuration.containsKey(ExternalDataConstants.KEY_READER)) {
             configuration.put(ExternalDataConstants.KEY_READER, adapterName);
         }
@@ -436,14 +464,87 @@ public class ExternalDataUtils {
                 && configuration.containsKey(ExternalDataConstants.KEY_FORMAT)) {
             configuration.put(ExternalDataConstants.KEY_PARSER, configuration.get(ExternalDataConstants.KEY_FORMAT));
         }
+
+        if (configuration.containsKey(ExternalDataConstants.TABLE_FORMAT)) {
+            prepareTableFormat(configuration);
+        }
+    }
+
+    /**
+     * Prepares the configuration for data-lake table formats
+     *
+     * @param configuration external data configuration
+     */
+    public static void prepareTableFormat(Map<String, String> configuration) throws AlgebricksException {
+        // Apache Iceberg table format
+        if (configuration.get(ExternalDataConstants.TABLE_FORMAT).equals(ExternalDataConstants.FORMAT_APACHE_ICEBERG)) {
+            Configuration conf = new Configuration();
+
+            String metadata_path = configuration.get(ExternalDataConstants.ICEBERG_METADATA_LOCATION);
+
+            // If the table is in S3
+            if (configuration.get(ExternalDataConstants.KEY_READER)
+                    .equals(ExternalDataConstants.KEY_ADAPTER_NAME_AWS_S3)) {
+
+                conf.set(S3Constants.HADOOP_ACCESS_KEY_ID, configuration.get(S3Constants.ACCESS_KEY_ID_FIELD_NAME));
+                conf.set(S3Constants.HADOOP_SECRET_ACCESS_KEY,
+                        configuration.get(S3Constants.SECRET_ACCESS_KEY_FIELD_NAME));
+                metadata_path = S3Constants.HADOOP_S3_PROTOCOL + "://"
+                        + configuration.get(ExternalDataConstants.CONTAINER_NAME_FIELD_NAME) + '/'
+                        + configuration.get(ExternalDataConstants.DEFINITION_FIELD_NAME);
+            } else if (configuration.get(ExternalDataConstants.KEY_READER).equals(ExternalDataConstants.READER_HDFS)) {
+                conf.set(ExternalDataConstants.KEY_HADOOP_FILESYSTEM_URI,
+                        configuration.get(ExternalDataConstants.KEY_HDFS_URL));
+                metadata_path = configuration.get(ExternalDataConstants.KEY_HDFS_URL) + '/' + metadata_path;
+            }
+
+            HadoopTables tables = new HadoopTables(conf);
+
+            Table icebergTable = tables.load(metadata_path);
+
+            if (icebergTable instanceof BaseTable) {
+                BaseTable baseTable = (BaseTable) icebergTable;
+
+                if (baseTable.operations().current()
+                        .formatVersion() != ExternalDataConstants.SUPPORTED_ICEBERG_FORMAT_VERSION) {
+                    throw new AsterixException(ErrorCode.UNSUPPORTED_ICEBERG_FORMAT_VERSION,
+                            "AsterixDB only supports Iceberg version up to "
+                                    + ExternalDataConstants.SUPPORTED_ICEBERG_FORMAT_VERSION);
+                }
+
+                try (CloseableIterable<FileScanTask> fileScanTasks = baseTable.newScan().planFiles()) {
+
+                    StringBuilder builder = new StringBuilder();
+
+                    for (FileScanTask task : fileScanTasks) {
+                        builder.append(",");
+                        String path = task.file().path().toString();
+                        builder.append(path);
+                    }
+
+                    if (builder.length() > 0) {
+                        builder.deleteCharAt(0);
+                    }
+
+                    configuration.put(ExternalDataConstants.KEY_PATH, builder.toString());
+
+                } catch (IOException e) {
+                    throw new AsterixException(ErrorCode.ERROR_READING_ICEBERG_METADATA, e);
+                }
+
+            } else {
+                throw new AsterixException(ErrorCode.UNSUPPORTED_ICEBERG_TABLE,
+                        "Invalid iceberg base table. Please remove metadata specifiers");
+            }
+
+        }
     }
 
     /**
      * Normalizes the values of certain parameters of the adapter configuration. This should happen before persisting
      * the metadata (e.g. when creating external datasets or feeds) and when creating an adapter factory.
      *
-     * @param configuration
-     *            external data configuration
+     * @param configuration external data configuration
      */
     public static void normalize(Map<String, String> configuration) {
         // normalize the "format" parameter
@@ -463,10 +564,8 @@ public class ExternalDataUtils {
     /**
      * Validates the parameter values of the adapter configuration. This should happen after normalizing the values.
      *
-     * @param configuration
-     *            external data configuration
-     * @throws HyracksDataException
-     *             HyracksDataException
+     * @param configuration external data configuration
+     * @throws HyracksDataException HyracksDataException
      */
     public static void validate(Map<String, String> configuration) throws HyracksDataException {
         String format = configuration.get(ExternalDataConstants.KEY_FORMAT);
@@ -528,8 +627,7 @@ public class ExternalDataUtils {
      * Validates adapter specific external dataset properties. Specific properties for different adapters should be
      * validated here
      *
-     * @param configuration
-     *            properties
+     * @param configuration properties
      */
     public static void validateAdapterSpecificProperties(Map<String, String> configuration, SourceLocation srcLoc,
             IWarningCollector collector, IApplicationContext appCtx) throws CompilationException {
@@ -557,8 +655,7 @@ public class ExternalDataUtils {
     /**
      * Regex matches all the provided patterns against the provided path
      *
-     * @param path
-     *            path to check against
+     * @param path path to check against
      * @return {@code true} if all patterns match, {@code false} otherwise
      */
     public static boolean matchPatterns(List<Matcher> matchers, String path) {
@@ -573,8 +670,7 @@ public class ExternalDataUtils {
     /**
      * Converts the wildcard to proper regex
      *
-     * @param pattern
-     *            wildcard pattern to convert
+     * @param pattern wildcard pattern to convert
      * @return regex expression
      */
     public static String patternToRegex(String pattern) {
@@ -663,26 +759,55 @@ public class ExternalDataUtils {
     /**
      * Adjusts the prefix (if needed) and returns it
      *
-     * @param configuration
-     *            configuration
+     * @param configuration configuration
      */
     public static String getPrefix(Map<String, String> configuration) {
         return getPrefix(configuration, true);
     }
 
     public static String getPrefix(Map<String, String> configuration, boolean appendSlash) {
+        String root = configuration.get(ExternalDataPrefix.PREFIX_ROOT_FIELD_NAME);
         String definition = configuration.get(ExternalDataConstants.DEFINITION_FIELD_NAME);
-        if (definition != null && !definition.isEmpty()) {
-            return appendSlash ? definition + (!definition.endsWith("/") ? "/" : "") : definition;
+        String subPath = configuration.get(ExternalDataConstants.SUBPATH);
+
+        boolean hasRoot = root != null;
+        boolean hasDefinition = definition != null && !definition.isEmpty();
+        boolean hasSubPath = subPath != null && !subPath.isEmpty();
+
+        // if computed fields are used, subpath will not take effect. we can tell if we're using a computed field or
+        // not by checking if the root matches the definition or not, they never match if computed fields are used
+        if (hasRoot && hasDefinition && !root.equals(definition)) {
+            return appendSlash(root, appendSlash);
         }
-        return "";
+
+        if (hasDefinition && !hasSubPath) {
+            return appendSlash(definition, appendSlash);
+        }
+        String fullPath = "";
+        if (hasSubPath) {
+            if (!hasDefinition) {
+                fullPath = subPath.startsWith("/") ? subPath.substring(1) : subPath;
+            } else {
+                // concatenate definition + subPath:
+                if (definition.endsWith("/") && subPath.startsWith("/")) {
+                    subPath = subPath.substring(1);
+                } else if (!definition.endsWith("/") && !subPath.startsWith("/")) {
+                    definition = definition + "/";
+                }
+                fullPath = definition + subPath;
+            }
+            fullPath = appendSlash(fullPath, appendSlash);
+        }
+        return fullPath;
+    }
+
+    public static String appendSlash(String string, boolean appendSlash) {
+        return appendSlash && !string.isEmpty() ? string + (!string.endsWith("/") ? "/" : "") : string;
     }
 
     /**
-     * @param configuration
-     *            configuration map
-     * @throws CompilationException
-     *             Compilation exception
+     * @param configuration configuration map
+     * @throws CompilationException Compilation exception
      */
     public static void validateIncludeExclude(Map<String, String> configuration) throws CompilationException {
         // Ensure that include and exclude are not provided at the same time + ensure valid format or property
@@ -726,6 +851,9 @@ public class ExternalDataUtils {
 
     public static IncludeExcludeMatcher getIncludeExcludeMatchers(Map<String, String> configuration)
             throws CompilationException {
+        // ensure validity of include/exclude matchers
+        validateIncludeExclude(configuration);
+
         // Get and compile the patterns for include/exclude if provided
         List<Matcher> includeMatchers = new ArrayList<>();
         List<Matcher> excludeMatchers = new ArrayList<>();
@@ -766,10 +894,8 @@ public class ExternalDataUtils {
     /**
      * Validate Parquet dataset's declared type and configuration
      *
-     * @param properties
-     *            external dataset configuration
-     * @param datasetRecordType
-     *            dataset declared type
+     * @param properties        external dataset configuration
+     * @param datasetRecordType dataset declared type
      */
     public static void validateParquetTypeAndConfiguration(Map<String, String> properties,
             ARecordType datasetRecordType) throws CompilationException {
@@ -791,10 +917,23 @@ public class ExternalDataUtils {
                 || ExternalDataConstants.FORMAT_PARQUET.equals(properties.get(ExternalDataConstants.KEY_FORMAT));
     }
 
-    public static void setExternalDataProjectionInfo(DataProjectionInfo projectionInfo, Map<String, String> properties)
-            throws IOException {
+    public static void validateAvroTypeAndConfiguration(Map<String, String> properties, ARecordType datasetRecordType)
+            throws CompilationException {
+        if (isAvroFormat(properties)) {
+            if (datasetRecordType.getFieldTypes().length != 0) {
+                throw new CompilationException(ErrorCode.UNSUPPORTED_TYPE_FOR_AVRO, datasetRecordType.getTypeName());
+            }
+        }
+    }
+
+    public static boolean isAvroFormat(Map<String, String> properties) {
+        return ExternalDataConstants.FORMAT_AVRO.equals(properties.get(ExternalDataConstants.KEY_FORMAT));
+    }
+
+    public static void setExternalDataProjectionInfo(ExternalDatasetProjectionFiltrationInfo projectionInfo,
+            Map<String, String> properties) throws IOException {
         properties.put(ExternalDataConstants.KEY_REQUESTED_FIELDS,
-                serializeExpectedTypeToString(projectionInfo.getProjectionInfo()));
+                serializeExpectedTypeToString(projectionInfo.getProjectedType()));
         properties.put(ExternalDataConstants.KEY_HADOOP_ASTERIX_FUNCTION_CALL_INFORMATION,
                 serializeFunctionCallInfoToString(projectionInfo.getFunctionCallInfoMap()));
     }
@@ -802,19 +941,18 @@ public class ExternalDataUtils {
     /**
      * Serialize {@link ARecordType} as Base64 string to pass it to {@link org.apache.hadoop.conf.Configuration}
      *
-     * @param expectedType
-     *            expected type
+     * @param expectedType expected type
      * @return the expected type as Base64 string
      */
     private static String serializeExpectedTypeToString(ARecordType expectedType) throws IOException {
-        if (expectedType == DataProjectionInfo.EMPTY_TYPE || expectedType == DataProjectionInfo.ALL_FIELDS_TYPE) {
+        if (expectedType == EMPTY_TYPE || expectedType == ALL_FIELDS_TYPE) {
             //Return the type name of EMPTY_TYPE and ALL_FIELDS_TYPE
             return expectedType.getTypeName();
         }
         ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
         DataOutputStream dataOutputStream = new DataOutputStream(byteArrayOutputStream);
         Base64.Encoder encoder = Base64.getEncoder();
-        DataProjectionInfo.writeTypeField(expectedType, dataOutputStream);
+        ExternalDatasetProjectionFiltrationInfo.writeTypeField(expectedType, dataOutputStream);
         return encoder.encodeToString(byteArrayOutputStream.toByteArray());
     }
 
@@ -822,8 +960,7 @@ public class ExternalDataUtils {
      * Serialize {@link FunctionCallInformation} map as Base64 string to pass it to
      * {@link org.apache.hadoop.conf.Configuration}
      *
-     * @param functionCallInfoMap
-     *            function information map
+     * @param functionCallInfoMap function information map
      * @return function information map as Base64 string
      */
     static String serializeFunctionCallInfoToString(Map<String, FunctionCallInformation> functionCallInfoMap)
@@ -831,7 +968,8 @@ public class ExternalDataUtils {
         ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
         DataOutputStream dataOutputStream = new DataOutputStream(byteArrayOutputStream);
         Base64.Encoder encoder = Base64.getEncoder();
-        DataProjectionInfo.writeFunctionCallInformationMapField(functionCallInfoMap, dataOutputStream);
+        ExternalDatasetProjectionFiltrationInfo.writeFunctionCallInformationMapField(functionCallInfoMap,
+                dataOutputStream);
         return encoder.encodeToString(byteArrayOutputStream.toByteArray());
     }
 
@@ -871,5 +1009,84 @@ public class ExternalDataUtils {
     public static void setVoidArgument(ArrayBackedValueStorage argHolder) throws IOException {
         argHolder.getDataOutput().writeByte(ARRAY16);
         argHolder.getDataOutput().writeShort((short) 0);
+    }
+
+    /**
+     * Tests the provided key against all the provided predicates/evaluators and return true if they all pass.
+     *
+     * @param key                key
+     * @param predicate          predicate
+     * @param matchers           matchers
+     * @param externalDataPrefix external data prefix
+     * @param evaluator          evaluator
+     * @return true if key passes all tests, false otherwise
+     */
+    public static boolean evaluate(String key, BiPredicate<List<Matcher>, String> predicate, List<Matcher> matchers,
+            ExternalDataPrefix externalDataPrefix, IExternalFilterEvaluator evaluator,
+            IWarningCollector warningCollector) throws HyracksDataException {
+        return !key.endsWith("/") && predicate.test(matchers, key)
+                && externalDataPrefix.evaluate(key, evaluator, warningCollector);
+    }
+
+    public static String getDefinitionOrPath(Map<String, String> configuration) {
+        return configuration.getOrDefault(DEFINITION_FIELD_NAME, configuration.get(KEY_PATH));
+    }
+
+    public static String getProtocolContainerPair(Map<String, String> configurations) {
+        String container = configurations.getOrDefault(ExternalDataConstants.CONTAINER_NAME_FIELD_NAME, "");
+        String type = configurations.getOrDefault(ExternalDataConstants.KEY_EXTERNAL_SOURCE_TYPE, "");
+        String protocol;
+        switch (type) {
+            case ExternalDataConstants.KEY_ADAPTER_NAME_AWS_S3:
+                protocol = S3Constants.HADOOP_S3_PROTOCOL;
+                break;
+            case ExternalDataConstants.KEY_ADAPTER_NAME_AZURE_BLOB:
+                protocol = AzureConstants.HADOOP_AZURE_BLOB_PROTOCOL;
+                break;
+            case ExternalDataConstants.KEY_ADAPTER_NAME_AZURE_DATA_LAKE:
+                protocol = AzureConstants.HADOOP_AZURE_DATALAKE_PROTOCOL;
+                break;
+            case ExternalDataConstants.KEY_ADAPTER_NAME_GCS:
+                protocol = GCSConstants.HADOOP_GCS_PROTOCOL;
+                break;
+            case ExternalDataConstants.KEY_ADAPTER_NAME_LOCALFS:
+                String path = getDefinitionOrPath(configurations);
+                String[] nodePathPair = path.trim().split("://");
+                protocol = nodePathPair[0];
+                break;
+            case ExternalDataConstants.KEY_HDFS_URL:
+                protocol = ExternalDataConstants.KEY_HDFS_URL;
+                break;
+            default:
+                return "";
+        }
+
+        return protocol + "://" + container + "/";
+    }
+
+    public static void validateType(Map<String, String> properties, ARecordType itemType) throws CompilationException {
+        boolean embedValues = Boolean.parseBoolean(
+                properties.getOrDefault(ExternalDataConstants.KEY_EMBED_FILTER_VALUES, ExternalDataConstants.FALSE));
+        if (ExternalDataPrefix.containsComputedFields(properties) && embedValues && !itemType.isOpen()) {
+            throw new CompilationException(ErrorCode.COMPILATION_ERROR, "A closed type cannot be used when '"
+                    + ExternalDataConstants.KEY_EMBED_FILTER_VALUES + "' is enabled");
+        }
+    }
+
+    public static String getPathKey(String adapter) {
+        String normalizedAdapter = adapter.toUpperCase();
+        switch (normalizedAdapter) {
+            case ExternalDataConstants.KEY_ADAPTER_NAME_AWS_S3:
+            case ExternalDataConstants.KEY_ADAPTER_NAME_AZURE_BLOB:
+            case ExternalDataConstants.KEY_ADAPTER_NAME_AZURE_DATA_LAKE:
+            case ExternalDataConstants.KEY_ADAPTER_NAME_GCS:
+                return ExternalDataConstants.DEFINITION_FIELD_NAME;
+            default:
+                return ExternalDataConstants.KEY_PATH;
+        }
+    }
+
+    public static boolean isGzipCompression(String compression) {
+        return ExternalDataConstants.KEY_COMPRESSION_GZIP.equalsIgnoreCase(compression);
     }
 }

@@ -26,6 +26,8 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.asterix.common.dataflow.ICcApplicationContext;
+import org.apache.asterix.common.external.IExternalFilterEvaluatorFactory;
+import org.apache.asterix.external.api.IExternalDataRuntimeContext;
 import org.apache.asterix.external.api.IExternalDataSourceFactory;
 import org.apache.asterix.external.api.IRecordReader;
 import org.apache.asterix.external.api.IRecordReaderFactory;
@@ -33,7 +35,6 @@ import org.apache.asterix.external.util.ExternalDataConstants;
 import org.apache.hyracks.algebricks.common.constraints.AlgebricksAbsolutePartitionConstraint;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.api.application.IServiceContext;
-import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.exceptions.IWarningCollector;
 
@@ -62,7 +63,7 @@ public class RSSRecordReaderFactory implements IRecordReaderFactory<SyndEntry> {
 
     @Override
     public void configure(IServiceContext serviceContext, Map<String, String> configuration,
-            IWarningCollector warningCollector) {
+            IWarningCollector warningCollector, IExternalFilterEvaluatorFactory filterEvaluatorFactory) {
         this.serviceContext = serviceContext;
         String url = configuration.get(ExternalDataConstants.KEY_RSS_URL);
         if (url == null) {
@@ -85,15 +86,10 @@ public class RSSRecordReaderFactory implements IRecordReaderFactory<SyndEntry> {
     }
 
     @Override
-    public boolean isIndexible() {
-        return false;
-    }
-
-    @Override
-    public IRecordReader<? extends SyndEntry> createRecordReader(IHyracksTaskContext ctx, int partition)
+    public IRecordReader<? extends SyndEntry> createRecordReader(IExternalDataRuntimeContext context)
             throws HyracksDataException {
         try {
-            return new RSSRecordReader(urls.get(partition));
+            return new RSSRecordReader(urls.get(context.getPartition()));
         } catch (MalformedURLException e) {
             throw HyracksDataException.create(e);
         }

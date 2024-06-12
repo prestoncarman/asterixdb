@@ -26,7 +26,7 @@
   <parent>
     <groupId>org.apache.hyracks</groupId>
     <artifactId>hyracks</artifactId>
-    <version>0.3.8-SNAPSHOT</version>
+    <version>0.3.10-SNAPSHOT</version>
   </parent>
 
   <licenses>
@@ -52,5 +52,6 @@
     <module>hyracks-storage-am-lsm-invertedindex-test</module>
     <module>hyracks-storage-am-bloomfilter-test</module>
     <module>hyracks-dataflow-common-test</module>
+    <module>hyracks-server-test</module>
   </modules>
 </project>

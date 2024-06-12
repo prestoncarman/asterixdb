@@ -27,16 +27,19 @@ import org.apache.hyracks.api.result.IResultMetadata;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 public class ResultMetadata implements IResultMetadata {
-    private static final long serialVersionUID = 1905367559307369034L;
+    private static final long serialVersionUID = 1905367559307369036L;
 
     private final SessionConfig.OutputFormat format;
     private long jobDuration;
     private long processedObjects;
-    private ObjectNode profile;
     private long diskIoCount;
+    private double bufferCacheHitRatio;
+    private ObjectNode profile;
     private Set<Warning> warnings;
     private long totalWarningsCount;
     private transient List<Object> outputTypes;
+    private long queueWaitTimeInNanos;
+    private long bufferCachePageReadCount;
 
     public ResultMetadata(SessionConfig.OutputFormat format) {
         this.format = format;
@@ -56,6 +59,22 @@ public class ResultMetadata implements IResultMetadata {
 
     public void setJobDuration(long jobDuration) {
         this.jobDuration = jobDuration;
+    }
+
+    public void setBufferCacheHitRatio(double bufferCacheHitRatio) {
+        this.bufferCacheHitRatio = bufferCacheHitRatio;
+    }
+
+    public double getBufferCacheHitRatio() {
+        return bufferCacheHitRatio;
+    }
+
+    public void setBufferCachePageReadCount(long bufferCachePageReadCount) {
+        this.bufferCachePageReadCount = bufferCachePageReadCount;
+    }
+
+    public long getBufferCachePageReadCount() {
+        return bufferCachePageReadCount;
     }
 
     public void setWarnings(Set<Warning> warnings) {
@@ -102,6 +121,14 @@ public class ResultMetadata implements IResultMetadata {
 
     public List<Object> getOutputTypes() {
         return outputTypes;
+    }
+
+    public long getQueueWaitTimeInNanos() {
+        return queueWaitTimeInNanos;
+    }
+
+    public void setQueueWaitTimeInNanos(long queueWaitTimeInNanos) {
+        this.queueWaitTimeInNanos = queueWaitTimeInNanos;
     }
 
     @Override

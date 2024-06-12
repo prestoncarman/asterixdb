@@ -18,27 +18,34 @@
  */
 package org.apache.asterix.utils;
 
+import org.apache.asterix.common.cluster.PartitioningProperties;
 import org.apache.asterix.metadata.declared.MetadataProvider;
 import org.apache.asterix.metadata.entities.Dataverse;
 import org.apache.asterix.runtime.utils.RuntimeUtils;
-import org.apache.hyracks.algebricks.common.constraints.AlgebricksPartitionConstraint;
 import org.apache.hyracks.algebricks.common.constraints.AlgebricksPartitionConstraintHelper;
-import org.apache.hyracks.algebricks.common.utils.Pair;
 import org.apache.hyracks.api.job.JobSpecification;
 import org.apache.hyracks.dataflow.std.file.FileRemoveOperatorDescriptor;
-import org.apache.hyracks.dataflow.std.file.IFileSplitProvider;
 
 public class DataverseUtil {
 
     private DataverseUtil() {
     }
 
-    public static JobSpecification dropDataverseJobSpec(Dataverse dataverse, MetadataProvider metadata) {
+    public static JobSpecification dropDataverseJobSpec(Dataverse dataverse, MetadataProvider md) {
+        PartitioningProperties pp = md.splitAndConstraints(dataverse.getDatabaseName(), dataverse.getDataverseName());
+        return dropJobSpec(md, pp);
+    }
+
+    public static JobSpecification dropDatabaseJobSpec(String database, MetadataProvider md) {
+        PartitioningProperties pp = md.splitAndConstraints(database);
+        return dropJobSpec(md, pp);
+    }
+
+    private static JobSpecification dropJobSpec(MetadataProvider metadata, PartitioningProperties pp) {
         JobSpecification jobSpec = RuntimeUtils.createJobSpecification(metadata.getApplicationContext());
-        Pair<IFileSplitProvider, AlgebricksPartitionConstraint> splitsAndConstraint =
-                metadata.splitAndConstraints(dataverse.getDataverseName());
-        FileRemoveOperatorDescriptor frod = new FileRemoveOperatorDescriptor(jobSpec, splitsAndConstraint.first, false);
-        AlgebricksPartitionConstraintHelper.setPartitionConstraintInJobSpec(jobSpec, frod, splitsAndConstraint.second);
+        FileRemoveOperatorDescriptor frod =
+                new FileRemoveOperatorDescriptor(jobSpec, pp.getSplitsProvider(), false, pp.getComputeStorageMap());
+        AlgebricksPartitionConstraintHelper.setPartitionConstraintInJobSpec(jobSpec, frod, pp.getConstraints());
         jobSpec.addRoot(frod);
         return jobSpec;
     }

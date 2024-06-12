@@ -24,7 +24,7 @@
   <parent>
     <groupId>org.apache.hyracks</groupId>
     <artifactId>hyracks</artifactId>
-    <version>0.3.8-SNAPSHOT</version>
+    <version>0.3.10-SNAPSHOT</version>
   </parent>
 
   <licenses>
@@ -50,6 +50,7 @@
       <groupId>org.apache.hyracks</groupId>
       <artifactId>hyracks-ipc</artifactId>
       <version>${project.version}</version>
+      <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>junit</groupId>

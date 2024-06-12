@@ -25,21 +25,31 @@ import org.apache.hyracks.api.dataflow.value.IRecordDescriptorProvider;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.job.IOperatorDescriptorRegistry;
 import org.apache.hyracks.dataflow.std.base.AbstractSingleActivityOperatorDescriptor;
+import org.apache.hyracks.storage.am.common.api.IIndexBuilder;
 import org.apache.hyracks.storage.am.common.api.IIndexBuilderFactory;
 
 public class IndexCreateOperatorDescriptor extends AbstractSingleActivityOperatorDescriptor {
 
-    private static final long serialVersionUID = 1L;
-    private final IIndexBuilderFactory indexBuilderFactory;
+    private static final long serialVersionUID = 2L;
+    private final IIndexBuilderFactory[][] indexBuilderFactories;
+    private final int[][] partitionsMap;
 
-    public IndexCreateOperatorDescriptor(IOperatorDescriptorRegistry spec, IIndexBuilderFactory indexBuilderFactory) {
+    public IndexCreateOperatorDescriptor(IOperatorDescriptorRegistry spec,
+            IIndexBuilderFactory[][] indexBuilderFactories, int[][] partitionsMap) {
         super(spec, 0, 0);
-        this.indexBuilderFactory = indexBuilderFactory;
+        this.indexBuilderFactories = indexBuilderFactories;
+        this.partitionsMap = partitionsMap;
     }
 
     @Override
     public IOperatorNodePushable createPushRuntime(IHyracksTaskContext ctx,
             IRecordDescriptorProvider recordDescProvider, int partition, int nPartitions) throws HyracksDataException {
-        return new IndexCreateOperatorNodePushable(indexBuilderFactory.create(ctx, partition));
+        int[] storagePartitions = partitionsMap[partition];
+        IIndexBuilderFactory[] partitionIndexBuilderFactories = indexBuilderFactories[partition];
+        IIndexBuilder[] indexBuilders = new IIndexBuilder[storagePartitions.length];
+        for (int i = 0; i < storagePartitions.length; i++) {
+            indexBuilders[i] = partitionIndexBuilderFactories[i].create(ctx, storagePartitions[i]);
+        }
+        return new IndexCreateOperatorNodePushable(indexBuilders);
     }
 }

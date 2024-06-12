@@ -71,7 +71,6 @@ import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOpe
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnnestOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.WindowOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.WriteOperator;
-import org.apache.hyracks.algebricks.core.algebra.operators.logical.WriteResultOperator;
 import org.apache.hyracks.algebricks.core.algebra.properties.LocalOrderProperty;
 import org.apache.hyracks.algebricks.core.algebra.properties.OrderColumn;
 import org.apache.hyracks.algebricks.core.algebra.typing.ITypingContext;
@@ -141,6 +140,7 @@ public class SubstituteVariableVisitor
             substUsedVariables(op.getMinFilterVars(), pair.first, pair.second);
             substUsedVariables(op.getMaxFilterVars(), pair.first, pair.second);
         }
+        op.getProjectionFiltrationInfo().substituteFilterVariable(pair.first, pair.second);
         return null;
     }
 
@@ -258,6 +258,10 @@ public class SubstituteVariableVisitor
     public Void visitSelectOperator(SelectOperator op, Pair<LogicalVariable, LogicalVariable> pair)
             throws AlgebricksException {
         substUsedVariablesInExpr(op.getCondition(), pair.first, pair.second);
+        LogicalVariable missingPlaceholderVar = op.getMissingPlaceholderVariable();
+        if (missingPlaceholderVar != null && missingPlaceholderVar.equals(pair.first)) {
+            op.setMissingPlaceholderVar(pair.second);
+        }
         // SELECT operator may add its used variable
         // to its own output type environment as 'nonMissableVariable' (not(is-missing($used_var))
         // therefore we need perform variable substitution in its own type environment
@@ -314,6 +318,7 @@ public class SubstituteVariableVisitor
         } else {
             substUsedVariablesInExpr(op.getSelectCondition(), pair.first, pair.second);
         }
+        op.getProjectionFiltrationInfo().substituteFilterVariable(pair.first, pair.second);
         return null;
     }
 
@@ -324,6 +329,7 @@ public class SubstituteVariableVisitor
         if (producedVarFound) {
             substProducedVarInTypeEnvironment(op, pair);
         }
+        op.getProjectionFiltrationInfo().substituteFilterVariable(pair.first, pair.second);
         return null;
     }
 
@@ -377,7 +383,13 @@ public class SubstituteVariableVisitor
     @Override
     public Void visitWriteOperator(WriteOperator op, Pair<LogicalVariable, LogicalVariable> pair)
             throws AlgebricksException {
-        substUsedVariablesInExpr(op.getExpressions(), pair.first, pair.second);
+        substUsedVariablesInExpr(op.getSourceExpression(), pair.first, pair.second);
+        substUsedVariablesInExpr(op.getPathExpression(), pair.first, pair.second);
+        substUsedVariablesInExpr(op.getPartitionExpressions(), pair.first, pair.second);
+        for (Pair<IOrder, Mutable<ILogicalExpression>> orderExpr : op.getOrderExpressions()) {
+            substUsedVariablesInExpr(orderExpr.second, pair.first, pair.second);
+        }
+        substUsedVariablesInExpr(op.getKeyExpressions(), pair.first, pair.second);
         return null;
     }
 
@@ -385,15 +397,6 @@ public class SubstituteVariableVisitor
     public Void visitDistributeResultOperator(DistributeResultOperator op, Pair<LogicalVariable, LogicalVariable> pair)
             throws AlgebricksException {
         substUsedVariablesInExpr(op.getExpressions(), pair.first, pair.second);
-        return null;
-    }
-
-    @Override
-    public Void visitWriteResultOperator(WriteResultOperator op, Pair<LogicalVariable, LogicalVariable> pair)
-            throws AlgebricksException {
-        substUsedVariablesInExpr(op.getPayloadExpression(), pair.first, pair.second);
-        substUsedVariablesInExpr(op.getKeyExpressions(), pair.first, pair.second);
-        substUsedVariablesInExpr(op.getAdditionalFilteringExpressions(), pair.first, pair.second);
         return null;
     }
 

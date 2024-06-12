@@ -106,10 +106,9 @@ import org.apache.asterix.common.api.Duration;
 import org.apache.asterix.common.config.DatasetConfig;
 import org.apache.asterix.common.config.GlobalConfig;
 import org.apache.asterix.common.metadata.DataverseName;
+import org.apache.asterix.common.metadata.MetadataConstants;
 import org.apache.asterix.common.utils.Servlets;
 import org.apache.asterix.lang.sqlpp.util.SqlppStatementUtil;
-import org.apache.asterix.metadata.bootstrap.MetadataBuiltinEntities;
-import org.apache.asterix.metadata.utils.MetadataConstants;
 import org.apache.asterix.runtime.evaluators.common.NumberUtils;
 import org.apache.asterix.test.server.ITestServer;
 import org.apache.asterix.test.server.TestServerProvider;
@@ -196,9 +195,9 @@ public class TestExecutor {
     private static final ObjectReader JSON_NODE_READER = OM.readerFor(JsonNode.class);
     private static final ObjectReader SINGLE_JSON_NODE_READER = JSON_NODE_READER
             .with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS, DeserializationFeature.FAIL_ON_READING_DUP_TREE_KEY);
-    private static final ObjectReader RESULT_NODE_READER =
+    protected static final ObjectReader RESULT_NODE_READER =
             JSON_NODE_READER.with(DeserializationFeature.ACCEPT_EMPTY_STRING_AS_NULL_OBJECT);
-    private static final String SQLPP = "sqlpp";
+    protected static final String SQLPP = "sqlpp";
     private static final String DEFAULT_PLAN_FORMAT = "string";
     // see
     // https://stackoverflow.com/questions/417142/what-is-the-maximum-length-of-a-url-in-different-browsers/417184
@@ -252,6 +251,7 @@ public class TestExecutor {
     private static final String PROFILE_QUERY_TYPE = "profile";
     private static final String PLANS_QUERY_TYPE = "plans";
     private static final String SIGNATURE_QUERY_TYPE = "signature";
+    private static final String DEF_REPLACER = "def";
 
     private static final HashMap<Integer, ITestServer> runningTestServers = new HashMap<>();
     private static Map<String, InetSocketAddress> ncEndPoints;
@@ -276,16 +276,18 @@ public class TestExecutor {
     private double timeoutMultiplier = 1;
     protected int loopIteration;
 
+    protected String deltaPath = null;
+    public String stripSubstring = null;
+    public String executorId = null;
+
     public TestExecutor() {
-        this(Inet4Address.getLoopbackAddress().getHostAddress(), 19002);
+        this(Collections.singletonList(
+                InetSocketAddress.createUnresolved(Inet4Address.getLoopbackAddress().getHostAddress(), 19002)));
     }
 
-    public TestExecutor(String host, int port) {
-        this(InetSocketAddress.createUnresolved(host, port));
-    }
-
-    public TestExecutor(InetSocketAddress endpoint) {
-        this(Collections.singletonList(endpoint));
+    public TestExecutor(String resultDeltaPath) {
+        this();
+        this.deltaPath = resultDeltaPath;
     }
 
     public TestExecutor(List<InetSocketAddress> endpoints) {
@@ -690,7 +692,7 @@ public class TestExecutor {
         return checkResponse(executeBasicAuthHttpRequest(method, credentials), responseCodeValidator);
     }
 
-    protected HttpResponse executeHttpRequest(HttpUriRequest method) throws Exception {
+    public HttpResponse executeHttpRequest(HttpUriRequest method) throws Exception {
         // https://issues.apache.org/jira/browse/ASTERIXDB-2315
         ExecutorService executor = Executors.newSingleThreadExecutor();
         CloseableHttpClient client = HttpClients.custom().addInterceptorFirst(new PreemptiveAuthInterceptor())
@@ -829,9 +831,10 @@ public class TestExecutor {
         List<Parameter> newParams = setFormatInAccept(fmt) ? params
                 : upsertParam(params, QueryServiceRequestParameters.Parameter.FORMAT.str(), ParameterTypeEnum.STRING,
                         fmt.extension());
-
-        newParams = upsertParam(newParams, QueryServiceRequestParameters.Parameter.PLAN_FORMAT.str(),
-                ParameterTypeEnum.STRING, DEFAULT_PLAN_FORMAT);
+        String planFormatKey = QueryServiceRequestParameters.Parameter.PLAN_FORMAT.str();
+        if (!newParams.stream().anyMatch(p -> p.getName().equals(planFormatKey))) {
+            newParams = upsertParam(newParams, planFormatKey, ParameterTypeEnum.STRING, DEFAULT_PLAN_FORMAT);
+        }
         final Optional<String> maxReadsOptional = extractMaxResultReads(str);
         if (maxReadsOptional.isPresent()) {
             newParams = upsertParam(newParams, QueryServiceRequestParameters.Parameter.MAX_RESULT_READS.str(),
@@ -861,8 +864,9 @@ public class TestExecutor {
             params = upsertParam(params, param.getName(), param.getType(), param.getValue());
         }
 
-        if (!placeholders.isEmpty()) {
-            str = applyExternalDatasetSubstitution(str, placeholders);
+        str = applyExternalDatasetSubstitution(str, placeholders);
+        if (stripSubstring != null && !stripSubstring.isBlank()) {
+            str = strip(str, stripSubstring);
         }
 
         HttpUriRequest method = jsonEncoded ? constructPostMethodJson(str, uri, "statement", params)
@@ -929,7 +933,7 @@ public class TestExecutor {
         return false;
     }
 
-    protected List<Parameter> upsertParam(List<Parameter> params, String name, ParameterTypeEnum type, String value) {
+    public List<Parameter> upsertParam(List<Parameter> params, String name, ParameterTypeEnum type, String value) {
         boolean replaced = false;
         List<Parameter> result = new ArrayList<>();
         for (Parameter param : params) {
@@ -1827,14 +1831,14 @@ public class TestExecutor {
         return executeUpdateOrDdl(statement, outputFormat, getQueryServiceUri(SQLPP), cUnit);
     }
 
-    private ExtractedResult executeUpdateOrDdl(String statement, OutputFormat outputFormat, URI serviceUri)
+    protected ExtractedResult executeUpdateOrDdl(String statement, OutputFormat outputFormat, URI serviceUri)
             throws Exception {
         try (InputStream resultStream = executeQueryService(statement, serviceUri, outputFormat, UTF_8)) {
             return ResultExtractor.extract(resultStream, UTF_8, outputFormat);
         }
     }
 
-    private ExtractedResult executeUpdateOrDdl(String statement, OutputFormat outputFormat, URI serviceUri,
+    protected ExtractedResult executeUpdateOrDdl(String statement, OutputFormat outputFormat, URI serviceUri,
             CompilationUnit cUnit) throws Exception {
         try (InputStream resultStream = executeQueryService(statement, outputFormat, serviceUri, cUnit.getParameter(),
                 cUnit.getPlaceholder(), false, UTF_8)) {
@@ -1843,13 +1847,8 @@ public class TestExecutor {
     }
 
     protected static boolean isExpected(Exception e, CompilationUnit cUnit) {
-        final List<String> expErrors = cUnit.getExpectedError();
-        for (String exp : expErrors) {
-            if (e.toString().contains(exp) || containsPattern(e.toString(), exp)) {
-                return true;
-            }
-        }
-        return false;
+        return cUnit.getExpectedError().stream().anyMatch(
+                exp -> e.toString().contains(exp.getValue()) || containsPattern(e.toString(), exp.getValue()));
     }
 
     private static boolean containsPattern(String exception, String maybePattern) {
@@ -2146,7 +2145,9 @@ public class TestExecutor {
         int numOfFiles = 0;
         List<CompilationUnit> cUnits = testCaseCtx.getTestCase().getCompilationUnit();
         for (CompilationUnit cUnit : cUnits) {
-            testCaseCtx.expectedErrors = cUnit.getExpectedError();
+            fixupMessages(cUnit);
+            testCaseCtx.expectedErrors = cUnit.getExpectedError().stream().map(CompilationUnit.ExpectedError::getValue)
+                    .collect(Collectors.toList());
             testCaseCtx.expectedWarnings = new BitSet(cUnit.getExpectedWarn().size());
             testCaseCtx.expectedWarnings.set(0, cUnit.getExpectedWarn().size());
             LOGGER.info(
@@ -2157,7 +2158,9 @@ public class TestExecutor {
                 Assert.fail("No test files found for test: " + testCaseCtx.getTestCase().getFilePath() + "/"
                         + cUnit.getName());
             }
-            List<TestFileContext> expectedResultFileCtxs = testCaseCtx.getExpectedResultFiles(cUnit);
+            List<TestFileContext> expectedResultFileCtxs =
+                    deltaPath != null ? testCaseCtx.getExpectedResultsAndDelta(cUnit, deltaPath)
+                            : testCaseCtx.getExpectedResultFiles(cUnit);
             int[] savedQueryCounts = new int[numOfFiles + testFileCtxs.size()];
             loopIteration = 0;
             for (ListIterator<TestFileContext> iter = testFileCtxs.listIterator(); iter.hasNext();) {
@@ -2216,6 +2219,33 @@ public class TestExecutor {
                 }
             }
         }
+    }
+
+    private void fixupMessages(CompilationUnit cUnit) {
+        String replacerId = executorId == null ? DEF_REPLACER : executorId;
+
+        List<CompilationUnit.ExpectedWarn> expectedWarns = cUnit.getExpectedWarn();
+        expectedWarns.stream().filter(w -> w.getReplacers() != null && !w.getReplacers().isEmpty())
+                .forEach(w -> w.setValue(MessageFormat.format(w.getValue(),
+                        (Object[]) getReplacements(cUnit, replacerId, w.getReplacers()))));
+
+        List<CompilationUnit.ExpectedError> expectedErrors = cUnit.getExpectedError();
+        expectedErrors.stream().filter(e -> e.getReplacers() != null && !e.getReplacers().isEmpty())
+                .forEach(e -> e.setValue(MessageFormat.format(e.getValue(),
+                        (Object[]) getReplacements(cUnit, replacerId, e.getReplacers()))));
+    }
+
+    private static String[] getReplacements(CompilationUnit cUnit, String replacerId, String replacersStr) {
+        String[] replacers = replacersStr.split("\\|");
+        Optional<String> replacements = Arrays.stream(replacers).filter(s -> s.startsWith(replacerId)).findFirst();
+        if (replacements.isPresent()) {
+            return replacements.get().substring(replacerId.length() + 1).split(",");
+        }
+        LOGGER.error("Test '{}', could not find message replacements for '{}' in replacements {}", cUnit.getName(),
+                replacerId, replacersStr);
+        throw new RuntimeException(
+                String.format("Test '%s', could not find message replacements for '%s' in replacements %s",
+                        cUnit.getName(), replacerId, replacersStr));
     }
 
     private String applySubstitution(String statement, List<Parameter> parameters) throws Exception {
@@ -2326,6 +2356,10 @@ public class TestExecutor {
         return substitute;
     }
 
+    protected static String strip(String str, String target) {
+        return str.replace(target, "");
+    }
+
     protected String applyExternalDatasetSubstitution(String str, List<Placeholder> placeholders) {
         // This replaces the full template of parameters depending on the adapter type
         for (Placeholder placeholder : placeholders) {
@@ -2342,6 +2376,8 @@ public class TestExecutor {
                     str = applyS3Substitution(str, placeholders);
                 } else if (placeholder.getValue().equalsIgnoreCase("AzureBlob")) {
                     str = applyAzureSubstitution(str, placeholders);
+                } else if (placeholder.getValue().equalsIgnoreCase("GCS")) {
+                    str = applyGCSSubstitution(str, placeholders);
                 }
             } else {
                 // Any other place holders, just replace with the value
@@ -2447,12 +2483,21 @@ public class TestExecutor {
         return str;
     }
 
+    protected String applyGCSSubstitution(String str, List<Placeholder> placeholders) {
+        str = setGCSTemplateDefault(str);
+        return str;
+    }
+
     protected String setAzureTemplate(String str) {
         return str.replace("%template%", TEMPLATE);
     }
 
     protected String setAzureTemplateDefault(String str) {
         return str.replace("%template%", TEMPLATE_DEFAULT);
+    }
+
+    protected String setGCSTemplateDefault(String str) {
+        return str;
     }
 
     protected void fail(boolean runDiagnostics, TestCaseContext testCaseCtx, CompilationUnit cUnit,
@@ -2590,12 +2635,12 @@ public class TestExecutor {
 
     public void cleanup(String testCase, List<String> badtestcases) throws Exception {
         try {
-            List<DataverseName> toBeDropped = new ArrayList<>();
+            List<Pair<String, DataverseName>> toBeDropped = new ArrayList<>();
             listUserDefinedDataverses(toBeDropped);
             if (!toBeDropped.isEmpty()) {
                 badtestcases.add(testCase);
                 LOGGER.info("Last test left some garbage. Dropping dataverses: " + StringUtils.join(toBeDropped, ','));
-                for (DataverseName dv : toBeDropped) {
+                for (Pair<String, DataverseName> dv : toBeDropped) {
                     dropDataverse(dv);
                 }
             }
@@ -2605,8 +2650,9 @@ public class TestExecutor {
         }
     }
 
-    protected void listUserDefinedDataverses(List<DataverseName> outDataverses) throws Exception {
-        String query = "select dv.DataverseName from Metadata.`Dataverse` as dv order by dv.DataverseName";
+    protected void listUserDefinedDataverses(List<Pair<String, DataverseName>> outDataverses) throws Exception {
+        String query =
+                "select dv.DatabaseName, dv.DataverseName from Metadata.`Dataverse` as dv order by dv.DataverseName";
         InputStream resultStream =
                 executeQueryService(query, getEndpoint(Servlets.QUERY_SERVICE), OutputFormat.CLEAN_JSON);
         JsonNode result = extractResult(IOUtils.toString(resultStream, UTF_8));
@@ -2615,17 +2661,27 @@ public class TestExecutor {
             if (json != null) {
                 DataverseName dvName = DataverseName.createFromCanonicalForm(json.get("DataverseName").asText());
                 if (!dvName.equals(MetadataConstants.METADATA_DATAVERSE_NAME)
-                        && !dvName.equals(MetadataBuiltinEntities.DEFAULT_DATAVERSE_NAME)) {
-                    outDataverses.add(dvName);
+                        && !dvName.equals(MetadataConstants.DEFAULT_DATAVERSE_NAME)) {
+                    JsonNode databaseName = json.get("DatabaseName");
+                    String dbName = null;
+                    if (databaseName != null && !databaseName.isNull() && !databaseName.isMissingNode()) {
+                        dbName = databaseName.asText();
+                    }
+                    outDataverses.add(new Pair<>(dbName, dvName));
                 }
             }
         }
     }
 
-    protected void dropDataverse(DataverseName dv) throws Exception {
+    protected void dropDataverse(Pair<String, DataverseName> dv) throws Exception {
         StringBuilder dropStatement = new StringBuilder();
         dropStatement.append("drop dataverse ");
-        SqlppStatementUtil.encloseDataverseName(dropStatement, dv);
+        if (dv.first == null) {
+            SqlppStatementUtil.encloseDataverseName(dropStatement, dv.second);
+        } else {
+            SqlppStatementUtil.enclose(dropStatement, dv.first).append(SqlppStatementUtil.DOT);
+            SqlppStatementUtil.encloseDataverseName(dropStatement, dv.second);
+        }
         dropStatement.append(";\n");
         InputStream resultStream = executeQueryService(dropStatement.toString(), getEndpoint(Servlets.QUERY_SERVICE),
                 OutputFormat.CLEAN_JSON, UTF_8);
@@ -2651,6 +2707,18 @@ public class TestExecutor {
             }
             outDatasets.add(new Pair<>(datasetName, datasetType));
         }
+    }
+
+    protected boolean metadataHasDatabase() throws Exception {
+        String query = "select d.DatabaseName from Metadata.`Dataverse` d limit 1;";
+        InputStream resultStream = executeQueryService(query, getEndpoint(Servlets.QUERY_SERVICE),
+                TestCaseContext.OutputFormat.CLEAN_JSON);
+        JsonNode result = extractResult(IOUtils.toString(resultStream, UTF_8));
+        if (result.size() > 1) {
+            JsonNode json = result.get(0);
+            return json != null && !json.get("DatabaseName").isNull() && !json.get("DatabaseName").isMissingNode();
+        }
+        return false;
     }
 
     private JsonNode extractResult(String jsonString) throws IOException {
@@ -2717,7 +2785,8 @@ public class TestExecutor {
         if (fail) {
             LOGGER.error("Test {} failed to raise (an) expected warning(s):", cUnit.getName());
         }
-        List<String> expectedWarn = cUnit.getExpectedWarn();
+        List<String> expectedWarn =
+                cUnit.getExpectedWarn().stream().map(w -> w.getValue()).collect(Collectors.toList());
         for (int i = expectedWarnings.nextSetBit(0); i >= 0; i = expectedWarnings.nextSetBit(i + 1)) {
             String warning = expectedWarn.get(i);
             LOGGER.error(warning);
@@ -2869,7 +2938,7 @@ public class TestExecutor {
         return ResultExtractor.extract(inputStream, responseCharset, outputFormat).getResult();
     }
 
-    private URI getQueryServiceUri(String extension) throws URISyntaxException {
+    protected URI getQueryServiceUri(String extension) throws URISyntaxException {
         return getEndpoint(Servlets.QUERY_SERVICE);
     }
 
@@ -2882,13 +2951,14 @@ public class TestExecutor {
         }
     }
 
-    protected void validateWarnings(List<String> actualWarnings, List<String> expectedWarn, BitSet expectedWarnings,
-            boolean expectedSourceLoc, File testFile) throws Exception {
+    protected void validateWarnings(List<String> actualWarnings, List<CompilationUnit.ExpectedWarn> expectedWarn,
+            BitSet expectedWarnings, boolean expectedSourceLoc, File testFile) throws Exception {
         if (actualWarnings != null) {
             for (String actualWarn : actualWarnings) {
                 OptionalInt first = IntStream.range(0, expectedWarn.size())
-                        .filter(i -> actualWarn.contains(expectedWarn.get(i)) && expectedWarnings.get(i)).findFirst();
-                if (!first.isPresent()) {
+                        .filter(i -> actualWarn.contains(expectedWarn.get(i).getValue()) && expectedWarnings.get(i))
+                        .findFirst();
+                if (first.isEmpty()) {
                     String msg = "unexpected warning was encountered or has already been matched (" + actualWarn + ")";
                     LOGGER.error(msg);
                     if (!expectedWarnings.isEmpty()) {
@@ -2924,7 +2994,7 @@ public class TestExecutor {
     }
 
     // adapted from https://stackoverflow.com/questions/2014700/preemptive-basic-authentication-with-apache-httpclient-4
-    static class PreemptiveAuthInterceptor implements HttpRequestInterceptor {
+    public static class PreemptiveAuthInterceptor implements HttpRequestInterceptor {
 
         public void process(final HttpRequest request, final HttpContext context) throws HttpException, IOException {
             AuthState authState = (AuthState) context.getAttribute(HttpClientContext.TARGET_AUTH_STATE);

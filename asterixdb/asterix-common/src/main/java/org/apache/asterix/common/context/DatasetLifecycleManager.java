@@ -31,6 +31,7 @@ import java.util.function.IntPredicate;
 import java.util.function.Predicate;
 
 import org.apache.asterix.common.api.IDatasetLifecycleManager;
+import org.apache.asterix.common.api.IIOBlockingOperation;
 import org.apache.asterix.common.config.StorageProperties;
 import org.apache.asterix.common.dataflow.DatasetLocalResource;
 import org.apache.asterix.common.dataflow.LSMIndexUtil;
@@ -59,6 +60,7 @@ import org.apache.hyracks.storage.common.ILocalResourceRepository;
 import org.apache.hyracks.storage.common.LocalResource;
 import org.apache.hyracks.storage.common.buffercache.IRateLimiter;
 import org.apache.hyracks.storage.common.buffercache.SleepRateLimiter;
+import org.apache.hyracks.storage.common.disk.IDiskResourceCacheLockNotifier;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -71,6 +73,7 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
     private final IVirtualBufferCache vbc;
     private final ILogManager logManager;
     private final LogRecord waitLog;
+    private final IDiskResourceCacheLockNotifier lockNotifier;
     private volatile boolean stopped = false;
     private final IIndexCheckpointManagerProvider indexCheckpointManagerProvider;
     // all LSM-trees share the same virtual buffer cache list
@@ -78,7 +81,8 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
 
     public DatasetLifecycleManager(StorageProperties storageProperties, ILocalResourceRepository resourceRepository,
             ILogManager logManager, IVirtualBufferCache vbc,
-            IIndexCheckpointManagerProvider indexCheckpointManagerProvider, int numPartitions) {
+            IIndexCheckpointManagerProvider indexCheckpointManagerProvider,
+            IDiskResourceCacheLockNotifier lockNotifier) {
         this.logManager = logManager;
         this.storageProperties = storageProperties;
         this.resourceRepository = resourceRepository;
@@ -89,6 +93,7 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
             vbcs.add(vbc);
         }
         this.indexCheckpointManagerProvider = indexCheckpointManagerProvider;
+        this.lockNotifier = lockNotifier;
         waitLog = new LogRecord();
         waitLog.setLogType(LogType.WAIT_FOR_FLUSHES);
         waitLog.computeAndSetLogSize();
@@ -118,6 +123,7 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
         int did = getDIDfromResourcePath(resourcePath);
         LocalResource resource = resourceRepository.get(resourcePath);
         DatasetResource datasetResource = datasets.get(did);
+        lockNotifier.onRegister(resource, index);
         if (datasetResource == null) {
             datasetResource = getDatasetLifecycle(did);
         }
@@ -145,14 +151,14 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
         validateDatasetLifecycleManagerState();
         int did = getDIDfromResourcePath(resourcePath);
         long resourceID = getResourceIDfromResourcePath(resourcePath);
-
         DatasetResource dsr = datasets.get(did);
         IndexInfo iInfo = dsr == null ? null : dsr.getIndexInfo(resourceID);
 
         if (dsr == null || iInfo == null) {
-            throw HyracksDataException.create(ErrorCode.INDEX_DOES_NOT_EXIST);
+            throw HyracksDataException.create(ErrorCode.INDEX_DOES_NOT_EXIST, resourcePath);
         }
 
+        lockNotifier.onUnregister(resourceID);
         PrimaryIndexOperationTracker opTracker = dsr.getOpTracker(iInfo.getPartition());
         if (iInfo.getReferenceCount() != 0 || (opTracker != null && opTracker.getNumActiveOperations() != 0)) {
             if (LOGGER.isErrorEnabled()) {
@@ -189,6 +195,9 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
         validateDatasetLifecycleManagerState();
         int did = getDIDfromResourcePath(resourcePath);
         long resourceID = getResourceIDfromResourcePath(resourcePath);
+
+        // Notify first before opening a resource
+        lockNotifier.onOpen(resourceID);
 
         DatasetResource dsr = datasets.get(did);
         DatasetInfo dsInfo = dsr.getDatasetInfo();
@@ -253,6 +262,7 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
             if (iInfo == null) {
                 throw HyracksDataException.create(ErrorCode.NO_INDEX_FOUND_WITH_RESOURCE_ID, resourceID);
             }
+            lockNotifier.onClose(resourceID);
         } finally {
             // Regardless of what exception is thrown in the try-block (e.g., line 279),
             // we have to un-touch the index and dataset.
@@ -339,7 +349,7 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
         ILSMComponentIdGenerator idGenerator =
                 new LSMComponentIdGenerator(storageProperties.getMemoryComponentsNum(), lastValidId);
         PrimaryIndexOperationTracker opTracker = new PrimaryIndexOperationTracker(dataset.getDatasetID(), partition,
-                logManager, dataset.getDatasetInfo(), idGenerator);
+                logManager, dataset.getDatasetInfo(), idGenerator, indexCheckpointManagerProvider);
         dataset.setPrimaryIndexOperationTracker(partition, opTracker);
         dataset.setIdGenerator(partition, idGenerator);
     }
@@ -424,7 +434,12 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
             return;
         }
         // ensure all in-flight flushes gets scheduled
-        logManager.log(waitLog);
+        final boolean requiresWaitLog =
+                dsInfo.getIndexes().values().stream().noneMatch(indexInfo -> indexInfo.getIndex().isAtomic());
+        if (requiresWaitLog) {
+            logManager.log(waitLog);
+        }
+
         for (PrimaryIndexOperationTracker primaryOpTracker : dsr.getOpTrackers()) {
             if (!partitions.test(primaryOpTracker.getPartition())) {
                 continue;
@@ -439,7 +454,9 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
             primaryOpTracker.flushIfNeeded();
         }
         // ensure requested flushes were scheduled
-        logManager.log(waitLog);
+        if (requiresWaitLog) {
+            logManager.log(waitLog);
+        }
         if (!asyncFlush) {
             List<FlushOperation> flushes = new ArrayList<>();
             for (PrimaryIndexOperationTracker primaryOpTracker : dsr.getOpTrackers()) {
@@ -552,12 +569,38 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
     }
 
     @Override
-    public void waitForIO(IReplicationStrategy replicationStrategy) throws HyracksDataException {
+    public void waitForIO(IReplicationStrategy replicationStrategy, int partition) throws HyracksDataException {
         for (DatasetResource dsr : datasets.values()) {
             if (dsr.isOpen() && replicationStrategy.isMatch(dsr.getDatasetID())) {
-                dsr.getDatasetInfo().waitForIO();
+                // Do a simple wait without any operation
+                dsr.getDatasetInfo().waitForIOAndPerform(partition, NoOpBlockingIOOperation.INSTANCE);
             }
         }
+    }
+
+    /**
+     * Waits for all ongoing IO operations on all open datasets and atomically performs the provided {@code operation}
+     * on each opened index before allowing any I/Os to go through.
+     *
+     * @param replicationStrategy replication strategy
+     * @param partition           partition to perform the required operation against
+     * @param operation           operation to perform
+     */
+    @Override
+    public void waitForIOAndPerform(IReplicationStrategy replicationStrategy, int partition,
+            IIOBlockingOperation operation) throws HyracksDataException {
+        // Signal the operation will be performed
+        operation.beforeOperation();
+
+        for (DatasetResource dsr : datasets.values()) {
+            if (dsr.isOpen() && replicationStrategy.isMatch(dsr.getDatasetID())) {
+                // Wait for all I/Os and then perform the requested operation
+                dsr.getDatasetInfo().waitForIOAndPerform(partition, operation);
+            }
+        }
+
+        // Signal the operation has been performed
+        operation.afterOperation();
     }
 
     @Override
@@ -646,5 +689,10 @@ public class DatasetLifecycleManager implements IDatasetLifecycleManager, ILifeC
             LSMIOOperationCallback ioCallback) throws HyracksDataException {
         return !(lsmIndex.isCurrentMutableComponentEmpty() || ioCallback.hasPendingFlush()
                 || opTracker.isFlushLogCreated() || opTracker.isFlushOnExit());
+    }
+
+    @Override
+    public IIndexCheckpointManagerProvider getIndexCheckpointManagerProvider() {
+        return indexCheckpointManagerProvider;
     }
 }

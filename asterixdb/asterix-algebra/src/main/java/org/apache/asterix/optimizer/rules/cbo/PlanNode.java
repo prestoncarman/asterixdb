@@ -19,64 +19,75 @@
 
 package org.apache.asterix.optimizer.rules.cbo;
 
+import java.util.List;
+
+import org.apache.asterix.common.annotations.IndexedNLJoinExpressionAnnotation;
+import org.apache.asterix.metadata.entities.Index;
 import org.apache.asterix.optimizer.cost.ICost;
 import org.apache.hyracks.algebricks.common.utils.Pair;
+import org.apache.hyracks.algebricks.common.utils.Triple;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalExpression;
+import org.apache.hyracks.algebricks.core.algebra.base.ILogicalOperator;
+import org.apache.hyracks.algebricks.core.algebra.expressions.AbstractFunctionCallExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.HashJoinExpressionAnnotation;
-import org.apache.hyracks.algebricks.core.algebra.operators.logical.DataSourceScanOperator;
-import org.apache.hyracks.algebricks.core.algebra.operators.logical.EmptyTupleSourceOperator;
+import org.apache.hyracks.algebricks.core.algebra.expressions.IExpressionAnnotation;
 
 public class PlanNode {
 
-    public static int NO_PLAN = -1;
+    protected static int NO_PLAN = -1;
 
     private final JoinEnum joinEnum;
-    int allPlansIndex;
-    int[] planIndexes;
-    int[] jnIndexes;
-    JoinNode jn;
-    String datasetName;
-    ICost opCost;
-    ICost totalCost;
-    ICost leftExchangeCost;
-    ICost rightExchangeCost;
-    JoinMethod joinOp;
+
+    protected String datasetName;
+    protected ILogicalOperator leafInput;
+
+    protected JoinNode jn;
+    protected boolean outerJoin;
+    protected int allPlansIndex;
+    protected int[] jnIndexes;
+    protected int[] planIndexes;
+
+    protected ScanMethod scanOp;
+    protected boolean indexHint;
+    Index indexUsed;
+
+    protected JoinMethod joinOp;
+
+    protected ILogicalExpression joinExpr;
+
+    Pair<AbstractFunctionCallExpression, IndexedNLJoinExpressionAnnotation> exprAndHint;
+
     // Used to indicate which side to build for HJ and which side to broadcast for BHJ.
-    HashJoinExpressionAnnotation.BuildSide side;
-    ScanMethod scanOp;
-    ILogicalExpression joinExpr;
-    DataSourceScanOperator correspondingDataSourceScanOp;
-    EmptyTupleSourceOperator correspondingEmptyTupleSourceOp;
+    protected HashJoinExpressionAnnotation.BuildSide side;
+    protected IExpressionAnnotation joinHint;
+    protected int numHintsUsed;
+    protected ICost opCost;
+    protected ICost totalCost;
+    protected ICost leftExchangeCost;
+    protected ICost rightExchangeCost;
 
     public enum ScanMethod {
         INDEX_SCAN,
         TABLE_SCAN
     }
 
-    public enum JoinMethod {
+    protected enum JoinMethod {
         HYBRID_HASH_JOIN,
         BROADCAST_HASH_JOIN,
         INDEX_NESTED_LOOP_JOIN,
         CARTESIAN_PRODUCT_JOIN
     }
 
-    public PlanNode(int planIndex, JoinEnum joinE) {
-        this.allPlansIndex = planIndex;
-        joinEnum = joinE;
-        planIndexes = new int[2]; // 0 is for left, 1 is for right
-        jnIndexes = new int[2]; // join node index(es)
-    }
-
     public int getIndex() {
         return allPlansIndex;
     }
 
-    public int[] getPlanIndexes() {
-        return planIndexes;
+    public Index getSoleAccessIndex() {
+        return indexUsed;
     }
 
-    public int getLeftPlanIndex() {
-        return planIndexes[0];
+    private int[] getPlanIndexes() {
+        return planIndexes;
     }
 
     public PlanNode getLeftPlanNode() {
@@ -93,20 +104,44 @@ public class PlanNode {
         return joinEnum.allPlans.get(planIndexes[1]);
     }
 
-    public JoinNode getJoinNode() {
+    protected JoinNode getJoinNode() {
         return jn;
     }
 
-    public int getRightPlanIndex() {
-        return planIndexes[1];
+    protected void setJoinNode(JoinNode jn) {
+        this.jn = jn;
     }
 
     public int getLeftJoinIndex() {
         return jnIndexes[0];
     }
 
+    protected void setLeftJoinIndex(int index) {
+        this.jnIndexes[0] = index;
+    }
+
     public int getRightJoinIndex() {
         return jnIndexes[1];
+    }
+
+    protected void setRightJoinIndex(int index) {
+        this.jnIndexes[1] = index;
+    }
+
+    protected int getLeftPlanIndex() {
+        return planIndexes[0];
+    }
+
+    protected void setLeftPlanIndex(int index) {
+        this.planIndexes[0] = index;
+    }
+
+    protected int getRightPlanIndex() {
+        return planIndexes[1];
+    }
+
+    protected void setRightPlanIndex(int index) {
+        this.planIndexes[1] = index;
     }
 
     public boolean IsScanNode() {
@@ -130,28 +165,40 @@ public class PlanNode {
         return new Pair<>("", "");
     }
 
-    public String getDatasetName() {
+    private String getDatasetName() {
         return datasetName;
     }
 
-    public DataSourceScanOperator getDataSourceScanOp() {
-        return correspondingDataSourceScanOp; // This applies only to singleDataSetPlans
+    protected void setDatasetName(String dsName) {
+        this.datasetName = dsName;
     }
 
-    public EmptyTupleSourceOperator getEmptyTupleSourceOp() {
-        return correspondingEmptyTupleSourceOp; // This applies only to singleDataSetPlans
+    protected ILogicalOperator getLeafInput() {
+        return leafInput; // This applies only to singleDataSetPlans
+    }
+
+    protected void setLeafInput(ILogicalOperator leafInput) {
+        this.leafInput = leafInput; // This applies only to singleDataSetPlans
     }
 
     public ICost getOpCost() {
         return opCost;
     }
 
-    public double computeOpCost() {
+    protected void setOpCost(ICost cost) {
+        this.opCost = cost;
+    }
+
+    protected double computeOpCost() {
         return opCost.computeTotalCost();
     }
 
     public ICost getTotalCost() {
         return totalCost;
+    }
+
+    protected void setTotalCost(ICost tc) {
+        this.totalCost = tc;
     }
 
     public ICost getLeftExchangeCost() {
@@ -162,7 +209,7 @@ public class PlanNode {
         return rightExchangeCost;
     }
 
-    public double computeTotalCost() {
+    protected double computeTotalCost() {
         return totalCost.computeTotalCost();
     }
 
@@ -170,11 +217,118 @@ public class PlanNode {
         return scanOp;
     }
 
-    public JoinMethod getJoinOp() {
+    protected void setScanMethod(ScanMethod sm) {
+        this.scanOp = sm;
+    }
+
+    protected JoinMethod getJoinOp() {
         return joinOp;
     }
 
     public ILogicalExpression getJoinExpr() {
         return joinExpr;
+    }
+
+    // Constructor for DUMMY plan nodes.
+    public PlanNode(int planIndex, JoinEnum joinE) {
+        this.allPlansIndex = planIndex;
+        joinEnum = joinE;
+        jn = null;
+        planIndexes = new int[2]; // 0 is for left, 1 is for right
+        jnIndexes = new int[2]; // join node index(es)
+        indexUsed = null;
+        setLeftJoinIndex(JoinNode.NO_JN);
+        setRightJoinIndex(JoinNode.NO_JN);
+        setLeftPlanIndex(PlanNode.NO_PLAN);
+        setRightPlanIndex(PlanNode.NO_PLAN);
+        opCost = totalCost = joinEnum.getCostHandle().zeroCost();
+        outerJoin = false;
+        indexHint = false;
+        joinHint = null;
+        numHintsUsed = 0;
+    }
+
+    // Constructor for SCAN plan nodes.
+    public PlanNode(int planIndex, JoinEnum joinE, JoinNode joinNode, String datasetName, ILogicalOperator leafInput) {
+        this.allPlansIndex = planIndex;
+        joinEnum = joinE;
+        setJoinNode(joinNode);
+        this.datasetName = datasetName;
+        this.leafInput = leafInput;
+        planIndexes = new int[2]; // 0 is for left, 1 is for right
+        jnIndexes = new int[2]; // join node index(es)
+        indexUsed = null;
+        setLeftJoinIndex(jn.jnArrayIndex);
+        setRightJoinIndex(JoinNode.NO_JN);
+        setLeftPlanIndex(PlanNode.NO_PLAN); // There ane no plans below this plan.
+        setRightPlanIndex(PlanNode.NO_PLAN); // There ane no plans below this plan.
+        indexHint = false;
+        joinHint = null;
+        numHintsUsed = 0;
+    }
+
+    // Constructor for JOIN plan nodes.
+    public PlanNode(int planIndex, JoinEnum joinE, JoinNode joinNode, PlanNode leftPlan, PlanNode rightPlan,
+            boolean outerJoin) {
+        this.allPlansIndex = planIndex;
+        joinEnum = joinE;
+        setJoinNode(joinNode);
+        this.outerJoin = outerJoin;
+        planIndexes = new int[2]; // 0 is for left, 1 is for right
+        jnIndexes = new int[2]; // join node index(es)
+        indexUsed = null; // used for NL costing
+        setLeftJoinIndex(leftPlan.jn.jnArrayIndex);
+        setRightJoinIndex(rightPlan.jn.jnArrayIndex);
+        setLeftPlanIndex(leftPlan.allPlansIndex);
+        setRightPlanIndex(rightPlan.allPlansIndex);
+        indexHint = false;
+        joinHint = null;
+        numHintsUsed = 0;
+    }
+
+    protected void setScanAndHintInfo(ScanMethod scanMethod,
+            List<Triple<Index, Double, AbstractFunctionCallExpression>> mandatoryIndexesInfo,
+            List<Triple<Index, Double, AbstractFunctionCallExpression>> optionalIndexesInfo) {
+        setScanMethod(scanMethod);
+        if (mandatoryIndexesInfo.size() > 0) {
+            indexHint = true;
+            numHintsUsed = 1;
+        }
+        // keeping things simple. When multiple indexes are used, we cannot be sure of the order.
+        // So seeing if only index is used.
+        if (optionalIndexesInfo.size() + mandatoryIndexesInfo.size() == 1) {
+            if (optionalIndexesInfo.size() == 1) {
+                indexUsed = optionalIndexesInfo.get(0).first;
+            } else {
+                indexUsed = mandatoryIndexesInfo.get(0).first;
+            }
+        }
+    }
+
+    protected void setScanCosts(ICost opCost) {
+        this.opCost = opCost;
+        this.totalCost = opCost;
+    }
+
+    protected void setJoinAndHintInfo(JoinMethod joinMethod, ILogicalExpression joinExpr,
+            Pair<AbstractFunctionCallExpression, IndexedNLJoinExpressionAnnotation> exprAndHint,
+            HashJoinExpressionAnnotation.BuildSide side, IExpressionAnnotation hint) {
+        joinOp = joinMethod;
+        this.joinExpr = joinExpr;
+        this.exprAndHint = exprAndHint;
+        this.side = side;
+        joinHint = hint;
+        numHintsUsed = joinEnum.allPlans.get(getLeftPlanIndex()).numHintsUsed
+                + joinEnum.allPlans.get(getRightPlanIndex()).numHintsUsed;
+        if (hint != null) {
+            numHintsUsed++;
+        }
+    }
+
+    protected void setJoinCosts(ICost opCost, ICost totalCost, ICost leftExchangeCost, ICost rightExchangeCost) {
+        this.opCost = opCost;
+        this.totalCost = totalCost;
+        this.leftExchangeCost = leftExchangeCost;
+        this.rightExchangeCost = rightExchangeCost;
     }
 }

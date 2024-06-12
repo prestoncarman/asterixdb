@@ -21,8 +21,9 @@ package org.apache.asterix.common.api;
 import java.util.Collection;
 
 import org.apache.hyracks.api.exceptions.HyracksDataException;
+import org.apache.hyracks.api.job.IJobLifecycleListener;
 
-public interface IRequestTracker {
+public interface IRequestTracker extends IJobLifecycleListener {
 
     /**
      * Starts tracking {@code request}
@@ -75,4 +76,20 @@ public interface IRequestTracker {
      * @return the recently completed requests
      */
     Collection<IClientRequest> getCompletedRequests();
+
+    /**
+     *
+     * @return the total number of requests since cluster start/restart
+     */
+    long getTotalNumberOfRequests();
+
+    /**
+     * increments total number of failed requests
+     */
+    void incrementFailedRequests();
+
+    /**
+     * @return the total number of failed requests
+     */
+    long getTotalNumberOfFailedRequests();
 }

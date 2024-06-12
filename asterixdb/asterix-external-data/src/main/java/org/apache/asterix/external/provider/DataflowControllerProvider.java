@@ -27,8 +27,8 @@ import org.apache.asterix.common.exceptions.RuntimeDataException;
 import org.apache.asterix.external.api.AsterixInputStream;
 import org.apache.asterix.external.api.IDataFlowController;
 import org.apache.asterix.external.api.IDataParserFactory;
+import org.apache.asterix.external.api.IExternalDataRuntimeContext;
 import org.apache.asterix.external.api.IExternalDataSourceFactory;
-import org.apache.asterix.external.api.IIndexingDatasource;
 import org.apache.asterix.external.api.IInputStreamFactory;
 import org.apache.asterix.external.api.IRecordDataParser;
 import org.apache.asterix.external.api.IRecordDataParserFactory;
@@ -43,11 +43,10 @@ import org.apache.asterix.external.dataflow.ChangeFeedWithMetaDataFlowController
 import org.apache.asterix.external.dataflow.FeedRecordDataFlowController;
 import org.apache.asterix.external.dataflow.FeedStreamDataFlowController;
 import org.apache.asterix.external.dataflow.FeedWithMetaDataFlowController;
-import org.apache.asterix.external.dataflow.IndexingDataFlowController;
 import org.apache.asterix.external.dataflow.RecordDataFlowController;
 import org.apache.asterix.external.dataflow.StreamDataFlowController;
 import org.apache.asterix.external.util.ExternalDataUtils;
-import org.apache.asterix.external.util.FeedLogManager;
+import org.apache.asterix.external.util.IFeedLogManager;
 import org.apache.asterix.om.types.ARecordType;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
@@ -61,21 +60,17 @@ public class DataflowControllerProvider {
     @SuppressWarnings({ "rawtypes", "unchecked" })
     public static IDataFlowController getDataflowController(ARecordType recordType, IHyracksTaskContext ctx,
             int partition, IExternalDataSourceFactory dataSourceFactory, IDataParserFactory dataParserFactory,
-            Map<String, String> configuration, boolean indexingOp, boolean isFeed, FeedLogManager feedLogManager)
+            Map<String, String> configuration, boolean isFeed, IFeedLogManager feedLogManager)
             throws HyracksDataException {
+        IExternalDataRuntimeContext runtimeContext = dataSourceFactory.createExternalDataRuntimeContext(ctx, partition);
         try {
             switch (dataSourceFactory.getDataSourceType()) {
                 case RECORDS:
                     IRecordReaderFactory<?> recordReaderFactory = (IRecordReaderFactory<?>) dataSourceFactory;
-                    IRecordReader<?> recordReader = recordReaderFactory.createRecordReader(ctx, partition);
+                    IRecordReader<?> recordReader = recordReaderFactory.createRecordReader(runtimeContext);
                     IRecordDataParserFactory<?> recordParserFactory = (IRecordDataParserFactory<?>) dataParserFactory;
-                    IRecordDataParser<?> dataParser = recordParserFactory.createRecordParser(ctx);
-                    // TODO(ali): revisit to think about passing data source name via setter or via createRecordParser
-                    dataParser.configure(recordReader.getDataSourceName(), recordReader.getLineNumber());
-                    if (indexingOp) {
-                        return new IndexingDataFlowController(ctx, dataParser, recordReader,
-                                ((IIndexingDatasource) recordReader).getIndexer());
-                    } else if (isFeed) {
+                    IRecordDataParser<?> dataParser = recordParserFactory.createRecordParser(runtimeContext);
+                    if (isFeed) {
                         boolean isChangeFeed = ExternalDataUtils.isChangeFeed(configuration);
                         boolean isRecordWithMeta = ExternalDataUtils.isRecordWithMeta(configuration);
                         if (isRecordWithMeta) {
@@ -99,10 +94,10 @@ public class DataflowControllerProvider {
                     }
                 case STREAM:
                     IInputStreamFactory streamFactory = (IInputStreamFactory) dataSourceFactory;
-                    AsterixInputStream stream = streamFactory.createInputStream(ctx, partition);
+                    AsterixInputStream stream = streamFactory.createInputStream(runtimeContext);
                     IStreamDataParserFactory streamParserFactory = (IStreamDataParserFactory) dataParserFactory;
                     // TODO(ali): revisit to think about passing data source name to parser
-                    IStreamDataParser streamParser = streamParserFactory.createInputStreamParser(ctx, partition);
+                    IStreamDataParser streamParser = streamParserFactory.createInputStreamParser(runtimeContext);
                     streamParser.setInputStream(stream);
                     if (isFeed) {
                         return new FeedStreamDataFlowController(ctx, feedLogManager, streamParser, stream);

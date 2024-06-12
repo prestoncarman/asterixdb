@@ -24,9 +24,11 @@ import java.util.List;
 
 import org.apache.asterix.common.functions.FunctionSignature;
 import org.apache.asterix.common.metadata.DataverseName;
+import org.apache.asterix.common.metadata.MetadataUtil;
 import org.apache.asterix.common.transactions.TxnId;
 import org.apache.asterix.external.dataset.adapter.AdapterIdentifier;
 import org.apache.asterix.metadata.entities.CompactionPolicy;
+import org.apache.asterix.metadata.entities.Database;
 import org.apache.asterix.metadata.entities.Dataset;
 import org.apache.asterix.metadata.entities.DatasourceAdapter;
 import org.apache.asterix.metadata.entities.Datatype;
@@ -40,7 +42,6 @@ import org.apache.asterix.metadata.entities.Function;
 import org.apache.asterix.metadata.entities.Index;
 import org.apache.asterix.metadata.entities.Library;
 import org.apache.asterix.metadata.entities.NodeGroup;
-import org.apache.asterix.metadata.utils.MetadataUtil;
 import org.apache.asterix.runtime.fulltext.AbstractFullTextFilterDescriptor;
 import org.apache.asterix.runtime.fulltext.FullTextConfigDescriptor;
 import org.apache.hyracks.storage.am.lsm.invertedindex.fulltext.FullTextFilterType;
@@ -84,6 +85,11 @@ public class MetadataTransactionContext extends MetadataCache {
 
     public TxnId getTxnId() {
         return txnId;
+    }
+
+    public void addDatabase(Database database) {
+        droppedCache.dropDatabase(database);
+        logAndApply(new MetadataLogicalOperation(database, true));
     }
 
     public void addDataverse(Dataverse dataverse) {
@@ -136,141 +142,9 @@ public class MetadataTransactionContext extends MetadataCache {
         logAndApply(new MetadataLogicalOperation(compactionPolicy, true));
     }
 
-    public void dropDataset(DataverseName dataverseName, String datasetName) {
-        Dataset dataset = new Dataset(dataverseName, datasetName, null, null, null, null, null, null, null, null, -1,
-                MetadataUtil.PENDING_NO_OP);
-        droppedCache.addDatasetIfNotExists(dataset);
-        logAndApply(new MetadataLogicalOperation(dataset, false));
-    }
-
-    public void dropIndex(DataverseName dataverseName, String datasetName, String indexName) {
-        Index index =
-                new Index(dataverseName, datasetName, indexName, null, null, false, false, MetadataUtil.PENDING_NO_OP);
-        droppedCache.addIndexIfNotExists(index);
-        logAndApply(new MetadataLogicalOperation(index, false));
-    }
-
-    public void dropDataverse(DataverseName dataverseName) {
-        Dataverse dataverse = new Dataverse(dataverseName, null, MetadataUtil.PENDING_NO_OP);
-        droppedCache.addDataverseIfNotExists(dataverse);
-        logAndApply(new MetadataLogicalOperation(dataverse, false));
-    }
-
     public void addLibrary(Library library) {
         droppedCache.dropLibrary(library);
         logAndApply(new MetadataLogicalOperation(library, true));
-    }
-
-    public void dropDataDatatype(DataverseName dataverseName, String datatypeName) {
-        Datatype datatype = new Datatype(dataverseName, datatypeName, null, false);
-        droppedCache.addDatatypeIfNotExists(datatype);
-        logAndApply(new MetadataLogicalOperation(datatype, false));
-    }
-
-    public void dropNodeGroup(String nodeGroupName) {
-        NodeGroup nodeGroup = new NodeGroup(nodeGroupName, null);
-        droppedCache.addOrUpdateNodeGroup(nodeGroup);
-        logAndApply(new MetadataLogicalOperation(nodeGroup, false));
-    }
-
-    public void dropFunction(FunctionSignature signature) {
-        Function function =
-                new Function(signature, null, null, null, null, null, null, null, null, null, false, false, null, null);
-        droppedCache.addFunctionIfNotExists(function);
-        logAndApply(new MetadataLogicalOperation(function, false));
-    }
-
-    public void dropFullTextConfig(DataverseName dataverseName, String configName) {
-        FullTextConfigDescriptor config = new FullTextConfigDescriptor(dataverseName, configName, null, null);
-        FullTextConfigMetadataEntity configMetadataEntity = new FullTextConfigMetadataEntity(config);
-
-        droppedCache.addFullTextConfigIfNotExists(configMetadataEntity);
-        logAndApply(new MetadataLogicalOperation(configMetadataEntity, false));
-    }
-
-    public void dropFullTextFilter(DataverseName dataverseName, String filterName) {
-        AbstractFullTextFilterDescriptor filter = new AbstractFullTextFilterDescriptor(dataverseName, filterName) {
-            private static final long serialVersionUID = -8222222581298765902L;
-
-            @Override
-            public FullTextFilterType getFilterType() {
-                return null;
-            }
-
-            @Override
-            public IFullTextFilterEvaluatorFactory createEvaluatorFactory() {
-                return null;
-            }
-        };
-        FullTextFilterMetadataEntity filterMetadataEntity = new FullTextFilterMetadataEntity(filter);
-        droppedCache.addFullTextFilterIfNotExists(filterMetadataEntity);
-        logAndApply(new MetadataLogicalOperation(filterMetadataEntity, false));
-    }
-
-    public void dropAdapter(DataverseName dataverseName, String adapterName) {
-        AdapterIdentifier adapterIdentifier = new AdapterIdentifier(dataverseName, adapterName);
-        DatasourceAdapter adapter = new DatasourceAdapter(adapterIdentifier, null, null, null, null);
-        droppedCache.addAdapterIfNotExists(adapter);
-        logAndApply(new MetadataLogicalOperation(adapter, false));
-    }
-
-    public void dropLibrary(DataverseName dataverseName, String libraryName) {
-        Library library = new Library(dataverseName, libraryName, null, null, MetadataUtil.PENDING_NO_OP);
-        droppedCache.addLibraryIfNotExists(library);
-        logAndApply(new MetadataLogicalOperation(library, false));
-    }
-
-    public void logAndApply(MetadataLogicalOperation op) {
-        opLog.add(op);
-        doOperation(op);
-    }
-
-    public boolean dataverseIsDropped(DataverseName dataverseName) {
-        return droppedCache.getDataverse(dataverseName) != null;
-    }
-
-    public boolean datasetIsDropped(DataverseName dataverseName, String datasetName) {
-        if (droppedCache.getDataverse(dataverseName) != null) {
-            return true;
-        }
-        return droppedCache.getDataset(dataverseName, datasetName) != null;
-    }
-
-    public boolean indexIsDropped(DataverseName dataverseName, String datasetName, String indexName) {
-        if (droppedCache.getDataverse(dataverseName) != null) {
-            return true;
-        }
-        if (droppedCache.getDataset(dataverseName, datasetName) != null) {
-            return true;
-        }
-        return droppedCache.getIndex(dataverseName, datasetName, indexName) != null;
-    }
-
-    public boolean datatypeIsDropped(DataverseName dataverseName, String datatypeName) {
-        if (droppedCache.getDataverse(dataverseName) != null) {
-            return true;
-        }
-        return droppedCache.getDatatype(dataverseName, datatypeName) != null;
-    }
-
-    public boolean nodeGroupIsDropped(String nodeGroup) {
-        return droppedCache.getNodeGroup(nodeGroup) != null;
-    }
-
-    public boolean functionIsDropped(FunctionSignature functionSignature) {
-        return droppedCache.getFunction(functionSignature) != null;
-    }
-
-    public boolean fullTextConfigIsDropped(DataverseName dataverseName, String configName) {
-        return droppedCache.getFullTextConfig(dataverseName, configName) != null;
-    }
-
-    public boolean fullTextFilterIsDropped(DataverseName dataverseName, String filterName) {
-        return droppedCache.getFullTextFilter(dataverseName, filterName) != null;
-    }
-
-    public List<MetadataLogicalOperation> getOpLog() {
-        return opLog;
     }
 
     public void addFeedPolicy(FeedPolicyEntity feedPolicy) {
@@ -284,21 +158,180 @@ public class MetadataTransactionContext extends MetadataCache {
         logAndApply(new MetadataLogicalOperation(feed, true));
     }
 
-    public void dropFeed(Feed feed) {
-        droppedCache.addFeedIfNotExists(feed);
-        logAndApply(new MetadataLogicalOperation(feed, false));
-    }
-
     public void addFeedConnection(FeedConnection feedConnection) {
         droppedCache.dropFeedConnection(feedConnection);
         logAndApply(new MetadataLogicalOperation(feedConnection, true));
     }
 
-    public void dropFeedConnection(DataverseName dataverseName, String feedName, String datasetName) {
+    public void dropDataset(String database, DataverseName dataverseName, String datasetName) {
+        Dataset dataset = new Dataset(database, dataverseName, datasetName, null, null, null, null, null, null, null,
+                null, null, -1, MetadataUtil.PENDING_NO_OP);
+        droppedCache.addDatasetIfNotExists(dataset);
+        logAndApply(new MetadataLogicalOperation(dataset, false));
+    }
+
+    public void dropIndex(String database, DataverseName dataverseName, String datasetName, String indexName) {
+        Index index = new Index(database, dataverseName, datasetName, indexName, null, null, false, false,
+                MetadataUtil.PENDING_NO_OP);
+        droppedCache.addIndexIfNotExists(index);
+        logAndApply(new MetadataLogicalOperation(index, false));
+    }
+
+    public void dropDatabase(String databaseName) {
+        Database database = new Database(databaseName, false, MetadataUtil.PENDING_NO_OP);
+        droppedCache.addDatabaseIfNotExists(database);
+        logAndApply(new MetadataLogicalOperation(database, false));
+    }
+
+    public void dropDataverse(String database, DataverseName dataverseName) {
+        Dataverse dataverse = new Dataverse(database, dataverseName, null, MetadataUtil.PENDING_NO_OP);
+        droppedCache.addDataverseIfNotExists(dataverse);
+        logAndApply(new MetadataLogicalOperation(dataverse, false));
+    }
+
+    public void dropDataDatatype(String database, DataverseName dataverseName, String datatypeName) {
+        Datatype datatype = new Datatype(database, dataverseName, datatypeName, null, false);
+        droppedCache.addDatatypeIfNotExists(datatype);
+        logAndApply(new MetadataLogicalOperation(datatype, false));
+    }
+
+    public void dropNodeGroup(String nodeGroupName) {
+        NodeGroup nodeGroup = new NodeGroup(nodeGroupName, null);
+        droppedCache.addOrUpdateNodeGroup(nodeGroup);
+        logAndApply(new MetadataLogicalOperation(nodeGroup, false));
+    }
+
+    public void dropFunction(FunctionSignature signature) {
+        Function function = new Function(signature, null, null, null, null, null, null, null, null, null, null, false,
+                false, null, null);
+        droppedCache.addFunctionIfNotExists(function);
+        logAndApply(new MetadataLogicalOperation(function, false));
+    }
+
+    public void dropFullTextConfig(String database, DataverseName dataverseName, String configName) {
+        FullTextConfigDescriptor config = new FullTextConfigDescriptor(database, dataverseName, configName, null, null);
+        FullTextConfigMetadataEntity configMetadataEntity = new FullTextConfigMetadataEntity(config);
+
+        droppedCache.addFullTextConfigIfNotExists(configMetadataEntity);
+        logAndApply(new MetadataLogicalOperation(configMetadataEntity, false));
+    }
+
+    public void dropFullTextFilter(String database, DataverseName dataverseName, String filterName) {
+        AbstractFullTextFilterDescriptor filter =
+                new AbstractFullTextFilterDescriptor(database, dataverseName, filterName) {
+                    private static final long serialVersionUID = -8222222581298765902L;
+
+                    @Override
+                    public FullTextFilterType getFilterType() {
+                        return null;
+                    }
+
+                    @Override
+                    public IFullTextFilterEvaluatorFactory createEvaluatorFactory() {
+                        return null;
+                    }
+                };
+        FullTextFilterMetadataEntity filterMetadataEntity = new FullTextFilterMetadataEntity(filter);
+        droppedCache.addFullTextFilterIfNotExists(filterMetadataEntity);
+        logAndApply(new MetadataLogicalOperation(filterMetadataEntity, false));
+    }
+
+    public void dropAdapter(String database, DataverseName dataverseName, String adapterName) {
+        AdapterIdentifier adapterIdentifier = new AdapterIdentifier(database, dataverseName, adapterName);
+        DatasourceAdapter adapter = new DatasourceAdapter(adapterIdentifier, null, null, null, null, null);
+        droppedCache.addAdapterIfNotExists(adapter);
+        logAndApply(new MetadataLogicalOperation(adapter, false));
+    }
+
+    public void dropLibrary(String database, DataverseName dataverseName, String libraryName) {
+        Library library = new Library(database, dataverseName, libraryName, null, null, MetadataUtil.PENDING_NO_OP);
+        droppedCache.addLibraryIfNotExists(library);
+        logAndApply(new MetadataLogicalOperation(library, false));
+    }
+
+    public void dropFeed(Feed feed) {
+        droppedCache.addFeedIfNotExists(feed);
+        logAndApply(new MetadataLogicalOperation(feed, false));
+    }
+
+    public void dropFeedConnection(String database, DataverseName dataverseName, String feedName, String datasetName) {
         FeedConnection feedConnection =
-                new FeedConnection(dataverseName, feedName, datasetName, null, null, null, null);
+                new FeedConnection(database, dataverseName, feedName, datasetName, null, null, null, null);
         droppedCache.addFeedConnectionIfNotExists(feedConnection);
         logAndApply(new MetadataLogicalOperation(feedConnection, false));
+    }
+
+    public void logAndApply(MetadataLogicalOperation op) {
+        opLog.add(op);
+        doOperation(op);
+    }
+
+    public boolean databaseIsDropped(String databaseName) {
+        return droppedCache.getDatabase(databaseName) != null;
+    }
+
+    public boolean dataverseIsDropped(String databaseName, DataverseName dataverseName) {
+        if (droppedCache.getDatabase(databaseName) != null) {
+            return true;
+        }
+        return droppedCache.getDataverse(databaseName, dataverseName) != null;
+    }
+
+    public boolean datasetIsDropped(String databaseName, DataverseName dataverseName, String datasetName) {
+        if (droppedCache.getDatabase(databaseName) != null) {
+            return true;
+        }
+        if (droppedCache.getDataverse(databaseName, dataverseName) != null) {
+            return true;
+        }
+        return droppedCache.getDataset(databaseName, dataverseName, datasetName) != null;
+    }
+
+    public boolean indexIsDropped(String databaseName, DataverseName dataverseName, String datasetName,
+            String indexName) {
+        if (droppedCache.getDatabase(databaseName) != null) {
+            return true;
+        }
+        if (droppedCache.getDataverse(databaseName, dataverseName) != null) {
+            return true;
+        }
+        if (droppedCache.getDataset(databaseName, dataverseName, datasetName) != null) {
+            return true;
+        }
+        return droppedCache.getIndex(databaseName, dataverseName, datasetName, indexName) != null;
+    }
+
+    public boolean datatypeIsDropped(String databaseName, DataverseName dataverseName, String datatypeName) {
+        if (droppedCache.getDatabase(databaseName) != null) {
+            return true;
+        }
+        if (droppedCache.getDataverse(databaseName, dataverseName) != null) {
+            return true;
+        }
+        return droppedCache.getDatatype(databaseName, dataverseName, datatypeName) != null;
+    }
+
+    public boolean nodeGroupIsDropped(String nodeGroup) {
+        return droppedCache.getNodeGroup(nodeGroup) != null;
+    }
+
+    public boolean functionIsDropped(FunctionSignature functionSignature) {
+        //TODO(DB): check database and dataverse first?
+        return droppedCache.getFunction(functionSignature) != null;
+    }
+
+    public boolean fullTextConfigIsDropped(String databaseName, DataverseName dataverseName, String configName) {
+        //TODO(DB): check database and dataverse first?
+        return droppedCache.getFullTextConfig(databaseName, dataverseName, configName) != null;
+    }
+
+    public boolean fullTextFilterIsDropped(String databaseName, DataverseName dataverseName, String filterName) {
+        //TODO(DB): check database and dataverse first?
+        return droppedCache.getFullTextFilter(databaseName, dataverseName, filterName) != null;
+    }
+
+    public List<MetadataLogicalOperation> getOpLog() {
+        return opLog;
     }
 
     @Override

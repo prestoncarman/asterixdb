@@ -67,7 +67,7 @@ public class CleanupUtils {
             } catch (Throwable th) { // NOSONAR Will be suppressed
                 try {
                     LOGGER.log(ExceptionUtils.causedByInterrupt(th) ? Level.DEBUG : Level.WARN,
-                            "Failure closing a closeable resource of class {}", writer.getClass().getSimpleName(), th);
+                            "Failure closing a closeable resource of class {}", writer.getClass().getName(), th);
                 } catch (Throwable loggingFailure) { // NOSONAR: Ignore catching Throwable
                     // NOSONAR: Ignore logging failure
                 }
@@ -92,7 +92,7 @@ public class CleanupUtils {
         } catch (Throwable th) { // NOSONAR Will be suppressed
             try {
                 LOGGER.log(ExceptionUtils.causedByInterrupt(th) ? Level.DEBUG : Level.WARN,
-                        "Failure failing " + writer.getClass().getSimpleName(), th);
+                        "Failure failing " + writer.getClass().getName(), th);
             } catch (Throwable loggingFailure) { // NOSONAR: Ignore catching Throwable
                 // NOSONAR ignore logging failure
             }
@@ -100,6 +100,41 @@ public class CleanupUtils {
                 root.addSuppressed(th);
             }
         }
+    }
+
+    public static Throwable close(AutoCloseable[] closables, Throwable root) {
+        return close(closables, root, false);
+    }
+
+    public static Throwable closeSilently(AutoCloseable[] closables, Throwable root) {
+        return close(closables, root, true);
+    }
+
+    /**
+     * Close the AutoCloseable and suppress any Throwable thrown by the close call.
+     * This method must NEVER throw any Throwable
+     *
+     * @param closables
+     *            the resource to close
+     * @param root
+     *            the first exception encountered during release of resources
+     * @return the root Throwable if not null or a new Throwable if any was thrown, otherwise, it returns null
+     */
+    private static Throwable close(AutoCloseable[] closables, Throwable root, boolean silent) {
+        if (closables != null) {
+            for (AutoCloseable closable : closables) {
+                root = close(closable, root, silent);
+            }
+        }
+        return root;
+    }
+
+    public static Throwable close(AutoCloseable closable, Throwable root) {
+        return close(closable, root, false);
+    }
+
+    public static Throwable closeSilently(AutoCloseable closable, Throwable root) {
+        return close(closable, root, true);
     }
 
     /**
@@ -112,16 +147,18 @@ public class CleanupUtils {
      *            the first exception encountered during release of resources
      * @return the root Throwable if not null or a new Throwable if any was thrown, otherwise, it returns null
      */
-    public static Throwable close(AutoCloseable closable, Throwable root) {
+    private static Throwable close(AutoCloseable closable, Throwable root, boolean silent) {
         if (closable != null) {
             try {
                 closable.close();
             } catch (Throwable th) { // NOSONAR Will be suppressed
-                try {
-                    LOGGER.log(ExceptionUtils.causedByInterrupt(th) ? Level.DEBUG : Level.WARN,
-                            "Failure closing a closeable resource", th);
-                } catch (Throwable loggingFailure) { // NOSONAR: Ignore catching Throwable
-                    // NOSONAR ignore logging failure
+                if (!silent) {
+                    try {
+                        LOGGER.log(ExceptionUtils.causedByInterrupt(th) ? Level.DEBUG : Level.WARN,
+                                "Failure closing a closeable resource {}", closable.getClass().getName(), th);
+                    } catch (Throwable loggingFailure) { // NOSONAR: Ignore catching Throwable
+                        // NOSONAR ignore logging failure
+                    }
                 }
                 root = ExceptionUtils.suppress(root, th); // NOSONAR
             }

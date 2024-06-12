@@ -18,20 +18,15 @@
  */
 package org.apache.asterix.external.provider;
 
-import java.util.List;
 import java.util.Map;
 
 import org.apache.asterix.common.dataflow.ICcApplicationContext;
-import org.apache.asterix.external.adapter.factory.GenericAdapterFactory;
-import org.apache.asterix.external.adapter.factory.LookupAdapterFactory;
-import org.apache.asterix.external.api.IIndexingAdapterFactory;
+import org.apache.asterix.common.external.IExternalFilterEvaluatorFactory;
 import org.apache.asterix.external.api.ITypedAdapterFactory;
-import org.apache.asterix.external.indexing.ExternalFile;
 import org.apache.asterix.external.util.ExternalDataUtils;
 import org.apache.asterix.om.types.ARecordType;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.api.application.ICCServiceContext;
-import org.apache.hyracks.api.dataflow.value.IMissingWriterFactory;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.exceptions.IWarningCollector;
 
@@ -46,7 +41,8 @@ public class AdapterFactoryProvider {
     // get adapter factory. this method has the side effect of modifying the configuration as necessary
     public static ITypedAdapterFactory getAdapterFactory(ICCServiceContext serviceCtx, String adapterName,
             Map<String, String> configuration, ARecordType itemType, ARecordType metaType,
-            IWarningCollector warningCollector) throws HyracksDataException, AlgebricksException {
+            IWarningCollector warningCollector, IExternalFilterEvaluatorFactory filterEvaluatorFactory)
+            throws HyracksDataException, AlgebricksException {
         ExternalDataUtils.defaultConfiguration(configuration);
         ExternalDataUtils.prepare(adapterName, configuration);
         ICcApplicationContext context = (ICcApplicationContext) serviceCtx.getApplicationContext();
@@ -54,32 +50,7 @@ public class AdapterFactoryProvider {
                 (ITypedAdapterFactory) context.getAdapterFactoryService().createAdapterFactory();
         adapterFactory.setOutputType(itemType);
         adapterFactory.setMetaType(metaType);
-        adapterFactory.configure(serviceCtx, configuration, warningCollector);
-        return adapterFactory;
-    }
-
-    // get indexing adapter factory. this method has the side effect of modifying the configuration as necessary
-    public static IIndexingAdapterFactory getIndexingAdapterFactory(ICCServiceContext serviceCtx, String adapterName,
-            Map<String, String> configuration, ARecordType itemType, List<ExternalFile> snapshot, boolean indexingOp,
-            ARecordType metaType, IWarningCollector warningCollector) throws HyracksDataException, AlgebricksException {
-        ExternalDataUtils.defaultConfiguration(configuration);
-        ExternalDataUtils.prepare(adapterName, configuration);
-        GenericAdapterFactory adapterFactory = new GenericAdapterFactory();
-        adapterFactory.setOutputType(itemType);
-        adapterFactory.setMetaType(metaType);
-        adapterFactory.setSnapshot(snapshot, indexingOp);
-        adapterFactory.configure(serviceCtx, configuration, warningCollector);
-        return adapterFactory;
-    }
-
-    // Lookup Adapters
-    public static LookupAdapterFactory<?> getLookupAdapterFactory(ICCServiceContext serviceCtx,
-            Map<String, String> configuration, ARecordType recordType, int[] ridFields, boolean retainInput,
-            boolean retainMissing, IMissingWriterFactory missingWriterFactory, IWarningCollector warningCollector)
-            throws HyracksDataException, AlgebricksException {
-        LookupAdapterFactory<?> adapterFactory =
-                new LookupAdapterFactory<>(recordType, ridFields, retainInput, retainMissing, missingWriterFactory);
-        adapterFactory.configure(serviceCtx, configuration, warningCollector);
+        adapterFactory.configure(serviceCtx, configuration, warningCollector, filterEvaluatorFactory);
         return adapterFactory;
     }
 }

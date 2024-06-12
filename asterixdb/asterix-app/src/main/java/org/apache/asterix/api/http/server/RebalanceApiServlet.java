@@ -40,13 +40,14 @@ import org.apache.asterix.app.active.ActiveNotificationHandler;
 import org.apache.asterix.common.api.IMetadataLockManager;
 import org.apache.asterix.common.dataflow.ICcApplicationContext;
 import org.apache.asterix.common.metadata.DataverseName;
+import org.apache.asterix.common.metadata.MetadataConstants;
+import org.apache.asterix.common.metadata.Namespace;
 import org.apache.asterix.metadata.MetadataManager;
 import org.apache.asterix.metadata.MetadataTransactionContext;
 import org.apache.asterix.metadata.declared.MetadataProvider;
 import org.apache.asterix.metadata.entities.Dataset;
 import org.apache.asterix.metadata.entities.Dataverse;
 import org.apache.asterix.metadata.utils.DatasetUtil;
-import org.apache.asterix.metadata.utils.MetadataConstants;
 import org.apache.asterix.rebalance.NoOpDatasetRebalanceCallback;
 import org.apache.asterix.utils.RebalanceUtil;
 import org.apache.commons.collections4.CollectionUtils;
@@ -109,9 +110,9 @@ public class RebalanceApiServlet extends AbstractServlet {
     protected void post(IServletRequest request, IServletResponse response) {
         try {
             // Gets dataverse, dataset, and target nodes for rebalance.
-            DataverseName dataverseName;
+            Namespace namespace;
             try {
-                dataverseName = ServletUtil.getDataverseName(request, "dataverseName");
+                namespace = ServletUtil.getNamespace(appCtx, request, "dataverseName");
             } catch (AlgebricksException e) {
                 sendResponse(response, HttpResponseStatus.BAD_REQUEST, e.getMessage());
                 return;
@@ -130,12 +131,19 @@ public class RebalanceApiServlet extends AbstractServlet {
             }
 
             // If a user gives parameter datasetName, she should give dataverseName as well.
-            if (dataverseName == null && datasetName != null) {
+            if (namespace == null && datasetName != null) {
                 sendResponse(response, HttpResponseStatus.BAD_REQUEST,
                         "to rebalance a particular " + dataset() + ", the parameter dataverseName must be given");
                 return;
             }
 
+            DataverseName dataverseName = null;
+            String databaseName = null;
+            if (namespace != null) {
+                dataverseName = namespace.getDataverseName();
+                databaseName = namespace.getDatabaseName();
+            }
+            //TODO(DB): also check System database
             // Does not allow rebalancing a metadata dataset.
             if (MetadataConstants.METADATA_DATAVERSE_NAME.equals(dataverseName)) {
                 sendResponse(response, HttpResponseStatus.BAD_REQUEST, "cannot rebalance a metadata " + dataset());
@@ -143,7 +151,7 @@ public class RebalanceApiServlet extends AbstractServlet {
             }
             // Schedules a rebalance task and wait for its completion.
             CountDownLatch terminated =
-                    scheduleRebalance(dataverseName, datasetName, targetNodes, response, forceRebalance);
+                    scheduleRebalance(databaseName, dataverseName, datasetName, targetNodes, response, forceRebalance);
             terminated.await();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -165,18 +173,18 @@ public class RebalanceApiServlet extends AbstractServlet {
     }
 
     // Schedules a rebalance task.
-    private synchronized CountDownLatch scheduleRebalance(DataverseName dataverseName, String datasetName,
-            Set<String> targetNodes, IServletResponse response, boolean force) {
+    private synchronized CountDownLatch scheduleRebalance(String database, DataverseName dataverseName,
+            String datasetName, Set<String> targetNodes, IServletResponse response, boolean force) {
         CountDownLatch terminated = new CountDownLatch(1);
-        Future<Void> task = executor
-                .submit(() -> doRebalance(dataverseName, datasetName, targetNodes, response, terminated, force));
+        Future<Void> task = executor.submit(
+                () -> doRebalance(database, dataverseName, datasetName, targetNodes, response, terminated, force));
         rebalanceTasks.add(task);
         rebalanceFutureTerminated.add(terminated);
         return terminated;
     }
 
     // Performs the actual rebalance.
-    private Void doRebalance(DataverseName dataverseName, String datasetName, Set<String> targetNodes,
+    private Void doRebalance(String database, DataverseName dataverseName, String datasetName, Set<String> targetNodes,
             IServletResponse response, CountDownLatch terminated, boolean force) {
         try {
             // Sets the content type.
@@ -185,15 +193,16 @@ public class RebalanceApiServlet extends AbstractServlet {
             if (datasetName == null) {
                 // Rebalances datasets in a given dataverse or all non-metadata datasets.
                 Iterable<Dataset> datasets = dataverseName == null ? getAllDatasetsForRebalance()
-                        : getAllDatasetsForRebalance(dataverseName);
+                        : getAllDatasetsForRebalance(database, dataverseName);
                 for (Dataset dataset : datasets) {
                     // By the time rebalanceDataset(...) is called, the dataset could have been dropped.
                     // If that's the case, rebalanceDataset(...) would be a no-op.
-                    rebalanceDataset(dataset.getDataverseName(), dataset.getDatasetName(), targetNodes, force);
+                    rebalanceDataset(dataset.getDatabaseName(), dataset.getDataverseName(), dataset.getDatasetName(),
+                            targetNodes, force);
                 }
             } else {
                 // Rebalances a given dataset from its current locations to the target nodes.
-                rebalanceDataset(dataverseName, datasetName, targetNodes, force);
+                rebalanceDataset(database, dataverseName, datasetName, targetNodes, force);
             }
 
             // Sends response.
@@ -215,11 +224,12 @@ public class RebalanceApiServlet extends AbstractServlet {
     }
 
     // Lists all datasets that should be rebalanced in a given datavserse.
-    private Iterable<Dataset> getAllDatasetsForRebalance(DataverseName dataverseName) throws Exception {
+    private Iterable<Dataset> getAllDatasetsForRebalance(String database, DataverseName dataverseName)
+            throws Exception {
         Iterable<Dataset> datasets;
         MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
         try {
-            datasets = getDatasetsInDataverseForRebalance(dataverseName, mdTxnCtx);
+            datasets = getDatasetsInDataverseForRebalance(database, dataverseName, mdTxnCtx);
             MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
         } catch (Exception e) {
             MetadataManager.INSTANCE.abortTransaction(mdTxnCtx);
@@ -235,7 +245,8 @@ public class RebalanceApiServlet extends AbstractServlet {
         try {
             List<Dataverse> dataverses = MetadataManager.INSTANCE.getDataverses(mdTxnCtx);
             for (Dataverse dv : dataverses) {
-                CollectionUtils.addAll(datasets, getDatasetsInDataverseForRebalance(dv.getDataverseName(), mdTxnCtx));
+                CollectionUtils.addAll(datasets,
+                        getDatasetsInDataverseForRebalance(dv.getDatabaseName(), dv.getDataverseName(), mdTxnCtx));
             }
             MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
         } catch (Exception e) {
@@ -246,27 +257,28 @@ public class RebalanceApiServlet extends AbstractServlet {
     }
 
     // Gets all datasets in a dataverse for the rebalance operation, with a given metadata transaction context.
-    private Iterable<Dataset> getDatasetsInDataverseForRebalance(DataverseName dvName,
+    private Iterable<Dataset> getDatasetsInDataverseForRebalance(String database, DataverseName dvName,
             MetadataTransactionContext mdTxnCtx) throws Exception {
         return MetadataConstants.METADATA_DATAVERSE_NAME.equals(dvName) ? Collections.emptyList()
-                : IterableUtils.filteredIterable(MetadataManager.INSTANCE.getDataverseDatasets(mdTxnCtx, dvName),
+                : IterableUtils.filteredIterable(
+                        MetadataManager.INSTANCE.getDataverseDatasets(mdTxnCtx, database, dvName),
                         DatasetUtil::isNotView);
     }
 
     // Rebalances a given dataset.
-    private void rebalanceDataset(DataverseName dataverseName, String datasetName, Set<String> targetNodes,
-            boolean force) throws Exception {
+    private void rebalanceDataset(String database, DataverseName dataverseName, String datasetName,
+            Set<String> targetNodes, boolean force) throws Exception {
         IHyracksClientConnection hcc = (IHyracksClientConnection) ctx.get(HYRACKS_CONNECTION_ATTR);
-        MetadataProvider metadataProvider = MetadataProvider.create(appCtx, null);
+        MetadataProvider metadataProvider = MetadataProvider.createWithDefaultNamespace(appCtx);
         try {
             ActiveNotificationHandler activeNotificationHandler =
                     (ActiveNotificationHandler) appCtx.getActiveNotificationHandler();
-            activeNotificationHandler.suspend(metadataProvider);
+            activeNotificationHandler.suspend(metadataProvider, "rebalance api");
             try {
                 IMetadataLockManager lockManager = appCtx.getMetadataLockManager();
-                lockManager.acquireDatasetExclusiveModificationLock(metadataProvider.getLocks(), dataverseName,
-                        datasetName);
-                RebalanceUtil.rebalance(dataverseName, datasetName, targetNodes, metadataProvider, hcc,
+                lockManager.acquireDatasetExclusiveModificationLock(metadataProvider.getLocks(), database,
+                        dataverseName, datasetName);
+                RebalanceUtil.rebalance(database, dataverseName, datasetName, targetNodes, metadataProvider, hcc,
                         NoOpDatasetRebalanceCallback.INSTANCE, force);
             } finally {
                 activeNotificationHandler.resume(metadataProvider);

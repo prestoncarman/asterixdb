@@ -27,9 +27,12 @@ import java.util.Set;
 import org.apache.asterix.common.cluster.IClusterStateManager;
 import org.apache.asterix.common.dataflow.ICcApplicationContext;
 import org.apache.asterix.common.exceptions.AsterixException;
+import org.apache.asterix.common.external.IExternalFilterEvaluatorFactory;
+import org.apache.asterix.external.provider.context.DefaultExternalRuntimeDataContext;
 import org.apache.hyracks.algebricks.common.constraints.AlgebricksAbsolutePartitionConstraint;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.api.application.IServiceContext;
+import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.exceptions.IWarningCollector;
 
@@ -62,18 +65,15 @@ public interface IExternalDataSourceFactory extends Serializable {
      * submitted AQL statement and any additional pairs added by the compiler
      *
      * @param configuration
+     * @param filterEvaluatorFactory
      * @throws AsterixException
      */
-    void configure(IServiceContext ctx, Map<String, String> configuration, IWarningCollector warningCollector)
-            throws AlgebricksException, HyracksDataException;
+    void configure(IServiceContext ctx, Map<String, String> configuration, IWarningCollector warningCollector,
+            IExternalFilterEvaluatorFactory filterEvaluatorFactory) throws AlgebricksException, HyracksDataException;
 
-    /**
-     * Specify whether the external data source can be indexed
-     *
-     * @return
-     */
-    default boolean isIndexible() {
-        return false;
+    default IExternalDataRuntimeContext createExternalDataRuntimeContext(IHyracksTaskContext context, int partition)
+            throws HyracksDataException {
+        return new DefaultExternalRuntimeDataContext(context, partition);
     }
 
     /**

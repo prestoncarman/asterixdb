@@ -22,9 +22,9 @@ package org.apache.asterix.optimizer.rules;
 import java.util.Set;
 import java.util.function.Predicate;
 
+import org.apache.asterix.common.metadata.MetadataConstants;
 import org.apache.asterix.metadata.declared.DataSource;
 import org.apache.asterix.metadata.declared.FunctionDataSource;
-import org.apache.asterix.metadata.utils.MetadataConstants;
 import org.apache.asterix.om.functions.BuiltinFunctions;
 import org.apache.asterix.optimizer.base.AsterixOptimizationContext;
 import org.apache.hyracks.algebricks.core.algebra.base.IOptimizationContext;
@@ -63,9 +63,6 @@ public final class SetAsterixMemoryRequirementsRule extends SetMemoryRequirement
             int dataSourceType = me.getIntKey();
             Predicate<DataSource> dataSourceTest;
             switch (dataSourceType) {
-                case DataSource.Type.INTERNAL_DATASET:
-                    dataSourceTest = SetAsterixMemoryRequirementsRule::isMinMemoryBudgetDataset;
-                    break;
                 case DataSource.Type.FUNCTION:
                     dataSourceTest = SetAsterixMemoryRequirementsRule::isMinMemoryBudgetFunction;
                     break;

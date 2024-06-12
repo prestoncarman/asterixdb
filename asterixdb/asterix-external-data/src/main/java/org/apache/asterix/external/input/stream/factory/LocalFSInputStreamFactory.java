@@ -29,7 +29,9 @@ import java.util.stream.Collectors;
 
 import org.apache.asterix.common.dataflow.ICcApplicationContext;
 import org.apache.asterix.common.exceptions.AsterixException;
+import org.apache.asterix.common.external.IExternalFilterEvaluatorFactory;
 import org.apache.asterix.external.api.AsterixInputStream;
+import org.apache.asterix.external.api.IExternalDataRuntimeContext;
 import org.apache.asterix.external.api.IInputStreamFactory;
 import org.apache.asterix.external.api.INodeResolver;
 import org.apache.asterix.external.api.INodeResolverFactory;
@@ -41,7 +43,6 @@ import org.apache.asterix.external.util.NodeResolverFactory;
 import org.apache.asterix.runtime.utils.RuntimeUtils;
 import org.apache.hyracks.algebricks.common.constraints.AlgebricksAbsolutePartitionConstraint;
 import org.apache.hyracks.api.application.IServiceContext;
-import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.exceptions.IWarningCollector;
 import org.apache.hyracks.api.io.UnmanagedFileSplit;
@@ -65,10 +66,10 @@ public class LocalFSInputStreamFactory implements IInputStreamFactory {
     private transient FileSystemWatcher watcher;
 
     @Override
-    public synchronized AsterixInputStream createInputStream(IHyracksTaskContext ctx, int partition)
+    public synchronized AsterixInputStream createInputStream(IExternalDataRuntimeContext context)
             throws HyracksDataException {
         if (watcher == null) {
-            String nodeName = ctx.getJobletContext().getServiceContext().getNodeId();
+            String nodeName = context.getTaskContext().getJobletContext().getServiceContext().getNodeId();
             ArrayList<Path> inputResources = new ArrayList<>();
             for (int i = 0; i < inputFileSplits.length; i++) {
                 if (inputFileSplits[i].getNodeName().equals(nodeName)) {
@@ -86,13 +87,9 @@ public class LocalFSInputStreamFactory implements IInputStreamFactory {
     }
 
     @Override
-    public boolean isIndexible() {
-        return false;
-    }
-
-    @Override
     public void configure(IServiceContext serviceCtx, Map<String, String> configuration,
-            IWarningCollector warningCollector) throws AsterixException {
+            IWarningCollector warningCollector, IExternalFilterEvaluatorFactory filterEvaluatorFactory)
+            throws AsterixException {
         this.configuration = configuration;
         String[] splits = configuration.get(ExternalDataConstants.KEY_PATH).split(",");
         if (inputFileSplits == null) {

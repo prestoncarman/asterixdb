@@ -37,4 +37,20 @@ public interface IColumnProjectionInfo {
      * @return number of primary keys
      */
     int getNumberOfPrimaryKeys();
+
+    /**
+     * @param ordinal position of the filtered column
+     * @return column index given the ordinal number of the filtered column
+     */
+    int getFilteredColumnIndex(int ordinal);
+
+    /**
+     * @return number of filtered columns
+     */
+    int getNumberOfFilteredColumns();
+
+    /**
+     * @return the type of {@link IColumnTupleProjector} that created this projection info
+     */
+    ColumnProjectorType getProjectorType();
 }

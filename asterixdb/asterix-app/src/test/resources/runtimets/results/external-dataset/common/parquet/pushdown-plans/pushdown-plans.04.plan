@@ -1,34 +1,32 @@
-cardinality: 1000000.0
-cost: 1000000.0
-distribute result [$$69] [cardinality: 1000000.0, op-cost: 0.0, total-cost: 1000000.0]
+distribute result [$$69] [cardinality: 0.0, op-cost: 0.0, total-cost: 0.0]
 -- DISTRIBUTE_RESULT  |PARTITIONED|
-  exchange [cardinality: 1000000.0, op-cost: 0.0, total-cost: 1000000.0]
+  exchange [cardinality: 0.0, op-cost: 0.0, total-cost: 0.0]
   -- ONE_TO_ONE_EXCHANGE  |PARTITIONED|
-    project ([$$69]) [cardinality: 1000000.0, op-cost: 0.0, total-cost: 1000000.0]
+    project ([$$69]) [cardinality: 0.0, op-cost: 0.0, total-cost: 0.0]
     -- STREAM_PROJECT  |PARTITIONED|
-      assign [$$69] <- [{"text": $$text, "$1": $$72}] [cardinality: 1000000.0, op-cost: 0.0, total-cost: 1000000.0]
+      assign [$$69] <- [{"text": $$text, "$1": $$72}] [cardinality: 0.0, op-cost: 0.0, total-cost: 0.0]
       -- ASSIGN  |PARTITIONED|
-        exchange [cardinality: 1000000.0, op-cost: 0.0, total-cost: 1000000.0]
+        exchange [cardinality: 0.0, op-cost: 0.0, total-cost: 0.0]
         -- ONE_TO_ONE_EXCHANGE  |PARTITIONED|
           group by ([$$text := $$80]) decor ([]) {
                     aggregate [$$72] <- [agg-global-sql-sum($$79)] [cardinality: 0.0, op-cost: 0.0, total-cost: 0.0]
                     -- AGGREGATE  |LOCAL|
                       nested tuple source [cardinality: 0.0, op-cost: 0.0, total-cost: 0.0]
                       -- NESTED_TUPLE_SOURCE  |LOCAL|
-                 } [cardinality: 1000000.0, op-cost: 0.0, total-cost: 1000000.0]
+                 } [cardinality: 0.0, op-cost: 0.0, total-cost: 0.0]
           -- SORT_GROUP_BY[$$80]  |PARTITIONED|
-            exchange [cardinality: 1000000.0, op-cost: 0.0, total-cost: 1000000.0]
+            exchange [cardinality: 0.0, op-cost: 0.0, total-cost: 0.0]
             -- HASH_PARTITION_EXCHANGE [$$80]  |PARTITIONED|
               group by ([$$80 := $$71]) decor ([]) {
                         aggregate [$$79] <- [agg-local-sql-sum(array-distinct($$74))] [cardinality: 0.0, op-cost: 0.0, total-cost: 0.0]
                         -- AGGREGATE  |LOCAL|
                           nested tuple source [cardinality: 0.0, op-cost: 0.0, total-cost: 0.0]
                           -- NESTED_TUPLE_SOURCE  |LOCAL|
-                     } [cardinality: 1000000.0, op-cost: 0.0, total-cost: 1000000.0]
+                     } [cardinality: 0.0, op-cost: 0.0, total-cost: 0.0]
               -- SORT_GROUP_BY[$$71]  |PARTITIONED|
-                exchange [cardinality: 1000000.0, op-cost: 0.0, total-cost: 1000000.0]
+                exchange [cardinality: 0.0, op-cost: 0.0, total-cost: 0.0]
                 -- ONE_TO_ONE_EXCHANGE  |PARTITIONED|
-                  select (eq(lowercase($$71), "string")) [cardinality: 1000000.0, op-cost: 0.0, total-cost: 1000000.0]
+                  select (eq(lowercase($$71), "string")) [cardinality: 0.0, op-cost: 0.0, total-cost: 0.0]
                   -- STREAM_SELECT  |PARTITIONED|
                     project ([$$74, $$71]) [cardinality: 0.0, op-cost: 0.0, total-cost: 0.0]
                     -- STREAM_PROJECT  |PARTITIONED|

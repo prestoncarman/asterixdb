@@ -36,11 +36,11 @@ import org.apache.asterix.common.config.GlobalConfig;
 import org.apache.asterix.common.context.DatasetInfo;
 import org.apache.asterix.common.context.PrimaryIndexOperationTracker;
 import org.apache.asterix.common.dataflow.ICcApplicationContext;
+import org.apache.asterix.common.metadata.MetadataConstants;
 import org.apache.asterix.metadata.MetadataManager;
 import org.apache.asterix.metadata.MetadataTransactionContext;
 import org.apache.asterix.metadata.api.IMetadataIndex;
-import org.apache.asterix.metadata.bootstrap.MetadataBuiltinEntities;
-import org.apache.asterix.metadata.bootstrap.MetadataPrimaryIndexes;
+import org.apache.asterix.metadata.bootstrap.NodeGroupEntity;
 import org.apache.asterix.metadata.declared.MetadataProvider;
 import org.apache.asterix.metadata.entities.Dataset;
 import org.apache.asterix.metadata.entities.NodeGroup;
@@ -77,7 +77,7 @@ public class MetadataTxnTest {
     public void abortMetadataTxn() throws Exception {
         ICcApplicationContext appCtx =
                 (ICcApplicationContext) integrationUtil.getClusterControllerService().getApplicationContext();
-        final MetadataProvider metadataProvider = MetadataProvider.create(appCtx, null);
+        final MetadataProvider metadataProvider = MetadataProvider.createWithDefaultNamespace(appCtx);
         final MetadataTransactionContext mdTxn = MetadataManager.INSTANCE.beginTransaction();
         metadataProvider.setMetadataTxnContext(mdTxn);
         final String nodeGroupName = "ng";
@@ -116,24 +116,26 @@ public class MetadataTxnTest {
                 + "(KeyType) PRIMARY KEY id WITH {\"node-group\":{\"name\":\"" + nodeGroup + "\"}};", format);
         // find source dataset
         Dataset sourceDataset;
-        MetadataProvider metadataProvider = MetadataProvider.create(appCtx, null);
+        MetadataProvider metadataProvider = MetadataProvider.createWithDefaultNamespace(appCtx);
         final MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
         metadataProvider.setMetadataTxnContext(mdTxnCtx);
         try {
-            sourceDataset = metadataProvider.findDataset(MetadataBuiltinEntities.DEFAULT_DATAVERSE_NAME, datasetName);
+            sourceDataset = metadataProvider.findDataset(MetadataConstants.DEFAULT_DATABASE,
+                    MetadataConstants.DEFAULT_DATAVERSE_NAME, datasetName);
             MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
         } finally {
             metadataProvider.getLocks().unlock();
         }
 
         // create rebalance metadata provider and metadata txn
-        metadataProvider = MetadataProvider.create(appCtx, null);
+        metadataProvider = MetadataProvider.createWithDefaultNamespace(appCtx);
         final MetadataTransactionContext rebalanceTxn = MetadataManager.INSTANCE.beginTransaction();
         metadataProvider.setMetadataTxnContext(rebalanceTxn);
         try {
             final Set<String> rebalanceToNodes = Stream.of("asterix_nc1").collect(Collectors.toSet());
-            DatasetUtil.createNodeGroupForNewDataset(sourceDataset.getDataverseName(), sourceDataset.getDatasetName(),
-                    sourceDataset.getRebalanceCount() + 1, rebalanceToNodes, metadataProvider);
+            DatasetUtil.createNodeGroupForNewDataset(sourceDataset.getDatabaseName(), sourceDataset.getDataverseName(),
+                    sourceDataset.getDatasetName(), sourceDataset.getRebalanceCount() + 1, rebalanceToNodes,
+                    metadataProvider);
             // rebalance failed --> abort txn
             MetadataManager.INSTANCE.abortTransaction(rebalanceTxn);
         } finally {
@@ -165,12 +167,13 @@ public class MetadataTxnTest {
         // get created dataset
         ICcApplicationContext appCtx =
                 (ICcApplicationContext) integrationUtil.getClusterControllerService().getApplicationContext();
-        MetadataProvider metadataProvider = MetadataProvider.create(appCtx, null);
+        MetadataProvider metadataProvider = MetadataProvider.createWithDefaultNamespace(appCtx);
         final MetadataTransactionContext mdTxnCtx = MetadataManager.INSTANCE.beginTransaction();
         metadataProvider.setMetadataTxnContext(mdTxnCtx);
         Dataset sourceDataset;
         try {
-            sourceDataset = metadataProvider.findDataset(MetadataBuiltinEntities.DEFAULT_DATAVERSE_NAME, datasetName);
+            sourceDataset = metadataProvider.findDataset(MetadataConstants.DEFAULT_DATABASE,
+                    MetadataConstants.DEFAULT_DATAVERSE_NAME, datasetName);
             MetadataManager.INSTANCE.commitTransaction(mdTxnCtx);
         } finally {
             metadataProvider.getLocks().unlock();
@@ -224,7 +227,7 @@ public class MetadataTxnTest {
     public void surviveInterruptOnMetadataTxnCommit() throws Exception {
         ICcApplicationContext appCtx =
                 (ICcApplicationContext) integrationUtil.getClusterControllerService().getApplicationContext();
-        final MetadataProvider metadataProvider = MetadataProvider.create(appCtx, null);
+        final MetadataProvider metadataProvider = MetadataProvider.createWithDefaultNamespace(appCtx);
         final MetadataTransactionContext mdTxn = MetadataManager.INSTANCE.beginTransaction();
         metadataProvider.setMetadataTxnContext(mdTxn);
         final String nodeGroupName = "ng";
@@ -256,7 +259,7 @@ public class MetadataTxnTest {
     public void failedFlushOnUncommittedMetadataTxn() throws Exception {
         ICcApplicationContext ccAppCtx =
                 (ICcApplicationContext) integrationUtil.getClusterControllerService().getApplicationContext();
-        final MetadataProvider metadataProvider = MetadataProvider.create(ccAppCtx, null);
+        final MetadataProvider metadataProvider = MetadataProvider.createWithDefaultNamespace(ccAppCtx);
         final MetadataTransactionContext mdTxn = MetadataManager.INSTANCE.beginTransaction();
         metadataProvider.setMetadataTxnContext(mdTxn);
         final String nodeGroupName = "ng";
@@ -271,7 +274,7 @@ public class MetadataTxnTest {
         INcApplicationContext appCtx = (INcApplicationContext) integrationUtil.ncs[0].getApplicationContext();
         IDatasetLifecycleManager dlcm = appCtx.getDatasetLifecycleManager();
         dlcm.flushAllDatasets();
-        IMetadataIndex idx = MetadataPrimaryIndexes.NODEGROUP_DATASET;
+        IMetadataIndex idx = NodeGroupEntity.of(false).getIndex();
         DatasetInfo datasetInfo = dlcm.getDatasetInfo(idx.getDatasetId().getId());
         AbstractLSMIndex index = (AbstractLSMIndex) appCtx.getDatasetLifecycleManager()
                 .getIndex(idx.getDatasetId().getId(), idx.getResourceId());
@@ -319,10 +322,11 @@ public class MetadataTxnTest {
 
     private void addDataset(ICcApplicationContext appCtx, Dataset source, int datasetPostfix, boolean abort)
             throws Exception {
-        Dataset dataset = new Dataset(source.getDataverseName(), "ds_" + datasetPostfix, source.getDataverseName(),
-                source.getDatasetType().name(), source.getNodeGroupName(), NoMergePolicyFactory.NAME, null,
-                source.getDatasetDetails(), source.getHints(), DatasetConfig.DatasetType.INTERNAL, datasetPostfix, 0);
-        MetadataProvider metadataProvider = MetadataProvider.create(appCtx, null);
+        Dataset dataset = new Dataset(source.getDatabaseName(), source.getDataverseName(), "ds_" + datasetPostfix,
+                source.getDatabaseName(), source.getDataverseName(), source.getDatasetType().name(),
+                source.getNodeGroupName(), NoMergePolicyFactory.NAME, null, source.getDatasetDetails(),
+                source.getHints(), DatasetConfig.DatasetType.INTERNAL, datasetPostfix, 0);
+        MetadataProvider metadataProvider = MetadataProvider.createWithDefaultNamespace(appCtx);
         final MetadataTransactionContext writeTxn = MetadataManager.INSTANCE.beginTransaction();
         metadataProvider.setMetadataTxnContext(writeTxn);
         try {

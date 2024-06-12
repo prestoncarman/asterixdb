@@ -55,7 +55,7 @@ public class RecoveryTask {
             IRetryPolicyFactory retryPolicyFactory) {
         this.listener = listener;
         this.retryPolicyFactory = retryPolicyFactory;
-        this.metadataProvider = MetadataProvider.create(appCtx, null);
+        this.metadataProvider = MetadataProvider.createWithDefaultNamespace(appCtx);
         this.clusterStateManager = appCtx.getClusterStateManager();
     }
 
@@ -140,6 +140,7 @@ public class RecoveryTask {
                         if (!cancelRecovery && listener.getState() == ActivityState.TEMPORARILY_FAILED) {
                             listener.setState(ActivityState.RECOVERING);
                             listener.doRecover(metadataProvider);
+                            listener.setRunning(metadataProvider, true);
                         }
                         LOGGER.log(level, "Recovery completed successfully");
                         return null;
@@ -191,12 +192,14 @@ public class RecoveryTask {
     protected void acquireRecoveryLocks(IMetadataLockManager lockManager, IMetadataLockUtil lockUtil)
             throws AlgebricksException {
         EntityId entityId = listener.getEntityId();
-        lockManager.acquireActiveEntityWriteLock(metadataProvider.getLocks(), entityId.getDataverseName(),
-                entityId.getEntityName());
+        lockManager.acquireActiveEntityWriteLock(metadataProvider.getLocks(), entityId.getDatabaseName(),
+                entityId.getDataverseName(), entityId.getEntityName());
         for (Dataset dataset : listener.getDatasets()) {
-            lockManager.acquireDataverseReadLock(metadataProvider.getLocks(), dataset.getDataverseName());
-            lockManager.acquireDatasetExclusiveModificationLock(metadataProvider.getLocks(), dataset.getDataverseName(),
-                    dataset.getDatasetName());
+            //TODO(DB): read lock on database
+            lockManager.acquireDataverseReadLock(metadataProvider.getLocks(), dataset.getDatabaseName(),
+                    dataset.getDataverseName());
+            lockManager.acquireDatasetExclusiveModificationLock(metadataProvider.getLocks(), dataset.getDatabaseName(),
+                    dataset.getDataverseName(), dataset.getDatasetName());
         }
     }
 
@@ -207,11 +210,11 @@ public class RecoveryTask {
     protected void acquirePostRecoveryLocks(IMetadataLockManager lockManager, IMetadataLockUtil lockUtil)
             throws AlgebricksException {
         EntityId entityId = listener.getEntityId();
-        lockManager.acquireActiveEntityWriteLock(metadataProvider.getLocks(), entityId.getDataverseName(),
-                entityId.getEntityName());
+        lockManager.acquireActiveEntityWriteLock(metadataProvider.getLocks(), entityId.getDatabaseName(),
+                entityId.getDataverseName(), entityId.getEntityName());
         for (Dataset dataset : listener.getDatasets()) {
-            lockUtil.modifyDatasetBegin(lockManager, metadataProvider.getLocks(), dataset.getDataverseName(),
-                    dataset.getDatasetName());
+            lockUtil.modifyDatasetBegin(lockManager, metadataProvider.getLocks(), dataset.getDatabaseName(),
+                    dataset.getDataverseName(), dataset.getDatasetName());
         }
     }
 

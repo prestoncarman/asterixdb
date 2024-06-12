@@ -21,7 +21,7 @@
   <parent>
     <artifactId>apache-asterixdb</artifactId>
     <groupId>org.apache.asterix</groupId>
-    <version>0.9.8-SNAPSHOT</version>
+    <version>0.9.10-SNAPSHOT</version>
   </parent>
   <artifactId>asterix-transactions</artifactId>
   <licenses>
@@ -34,13 +34,14 @@
   </licenses>
   <properties>
     <root.dir>${basedir}/..</root.dir>
+    <record-manager-generator-maven-plugin.version>${project.version}</record-manager-generator-maven-plugin.version>
   </properties>
   <build>
     <plugins>
       <plugin>
         <groupId>org.apache.asterix</groupId>
         <artifactId>record-manager-generator-maven-plugin</artifactId>
-        <version>${project.version}</version>
+        <version>${record-manager-generator-maven-plugin.version}</version>
         <configuration>
           <debug>false</debug>
           <inputFiles>

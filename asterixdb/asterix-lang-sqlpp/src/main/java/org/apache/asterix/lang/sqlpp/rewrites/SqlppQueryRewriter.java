@@ -28,11 +28,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.asterix.common.api.INamespaceResolver;
 import org.apache.asterix.common.exceptions.CompilationException;
 import org.apache.asterix.common.exceptions.ErrorCode;
 import org.apache.asterix.common.functions.FunctionSignature;
 import org.apache.asterix.common.metadata.DatasetFullyQualifiedName;
 import org.apache.asterix.common.metadata.DataverseName;
+import org.apache.asterix.common.metadata.MetadataUtil;
+import org.apache.asterix.common.metadata.Namespace;
 import org.apache.asterix.lang.common.base.AbstractExpression;
 import org.apache.asterix.lang.common.base.Expression;
 import org.apache.asterix.lang.common.base.IParserFactory;
@@ -70,6 +73,7 @@ import org.apache.asterix.lang.sqlpp.rewrites.visitor.SqlppGroupByVisitor;
 import org.apache.asterix.lang.sqlpp.rewrites.visitor.SqlppGroupingSetsVisitor;
 import org.apache.asterix.lang.sqlpp.rewrites.visitor.SqlppInlineUdfsVisitor;
 import org.apache.asterix.lang.sqlpp.rewrites.visitor.SqlppListInputFunctionRewriteVisitor;
+import org.apache.asterix.lang.sqlpp.rewrites.visitor.SqlppLoadAccessedDataset;
 import org.apache.asterix.lang.sqlpp.rewrites.visitor.SqlppRightJoinRewriteVisitor;
 import org.apache.asterix.lang.sqlpp.rewrites.visitor.SqlppSpecialFunctionNameRewriteVisitor;
 import org.apache.asterix.lang.sqlpp.rewrites.visitor.SqlppWindowAggregationSugarVisitor;
@@ -196,6 +200,9 @@ public class SqlppQueryRewriter implements IQueryRewriter {
 
         // Rewrites RIGHT OUTER JOINs into LEFT OUTER JOINs if possible
         rewriteRightJoins();
+
+        // Load all the accessed datasets
+        loadAccessedDatasets();
 
         // Inlines functions and views
         loadAndInlineUdfsAndViews();
@@ -330,6 +337,11 @@ public class SqlppQueryRewriter implements IQueryRewriter {
     protected void rewriteRightJoins() throws CompilationException {
         // Rewrites RIGHT OUTER JOINs into LEFT OUTER JOINs if possible
         SqlppRightJoinRewriteVisitor visitor = new SqlppRightJoinRewriteVisitor(context, externalVars);
+        rewriteTopExpr(visitor, null);
+    }
+
+    protected void loadAccessedDatasets() throws CompilationException {
+        SqlppLoadAccessedDataset visitor = new SqlppLoadAccessedDataset(context);
         rewriteTopExpr(visitor, null);
     }
 
@@ -488,7 +500,8 @@ public class SqlppQueryRewriter implements IQueryRewriter {
         if (viewDecl == null) {
             Dataset dataset;
             try {
-                dataset = metadataProvider.findDataset(viewName.getDataverseName(), viewName.getDatasetName(), true);
+                dataset = metadataProvider.findDataset(viewName.getDatabaseName(), viewName.getDataverseName(),
+                        viewName.getDatasetName(), true);
             } catch (AlgebricksException e) {
                 throw new CompilationException(ErrorCode.UNKNOWN_VIEW, e, sourceLoc, viewName);
             }
@@ -499,13 +512,14 @@ public class SqlppQueryRewriter implements IQueryRewriter {
             viewDecl = ViewUtil.parseStoredView(viewName, viewDetails, parserFactory, context.getWarningCollector(),
                     sourceLoc);
             DataverseName itemTypeDataverseName = dataset.getItemTypeDataverseName();
+            String itemTypeDatabase = dataset.getItemTypeDatabaseName();
             String itemTypeName = dataset.getItemTypeName();
             boolean isAnyType =
                     MetadataBuiltinEntities.ANY_OBJECT_DATATYPE.getDataverseName().equals(itemTypeDataverseName)
                             && MetadataBuiltinEntities.ANY_OBJECT_DATATYPE.getDatatypeName().equals(itemTypeName);
             if (!isAnyType) {
                 try {
-                    viewItemType = metadataProvider.findType(itemTypeDataverseName, itemTypeName);
+                    viewItemType = metadataProvider.findType(itemTypeDatabase, itemTypeDataverseName, itemTypeName);
                 } catch (AlgebricksException e) {
                     throw new CompilationException(ErrorCode.UNKNOWN_TYPE,
                             TypeUtil.getFullyQualifiedDisplayName(itemTypeDataverseName, itemTypeName));
@@ -525,16 +539,17 @@ public class SqlppQueryRewriter implements IQueryRewriter {
 
     private Expression rewriteFunctionBody(FunctionDecl fnDecl) throws CompilationException {
         FunctionSignature fs = fnDecl.getSignature();
-        return rewriteFunctionOrViewBody(fs.getDataverseName(), fs, fnDecl.getFuncBody(), fnDecl.getParamList(),
-                !fnDecl.isStored(), fnDecl.getSourceLocation());
+        return rewriteFunctionOrViewBody(fs.getDatabaseName(), fs.getDataverseName(), fs, fnDecl.getFuncBody(),
+                fnDecl.getParamList(), !fnDecl.isStored(), fnDecl.getSourceLocation());
     }
 
     private Expression rewriteViewBody(ViewDecl viewDecl, IAType viewItemType, Boolean defaultNull,
             Triple<String, String, String> temporalDataFormat) throws CompilationException {
         DatasetFullyQualifiedName viewName = viewDecl.getViewName();
         SourceLocation sourceLoc = viewDecl.getSourceLocation();
-        Expression rewrittenBodyExpr = rewriteFunctionOrViewBody(viewName.getDataverseName(), viewName,
-                viewDecl.getViewBody(), Collections.emptyList(), false, sourceLoc);
+        Expression rewrittenBodyExpr =
+                rewriteFunctionOrViewBody(viewName.getDatabaseName(), viewName.getDataverseName(), viewName,
+                        viewDecl.getViewBody(), Collections.emptyList(), false, sourceLoc);
         if (viewItemType != null) {
             if (!Boolean.TRUE.equals(defaultNull)) {
                 throw new CompilationException(ErrorCode.COMPILATION_ILLEGAL_STATE, sourceLoc,
@@ -546,22 +561,27 @@ public class SqlppQueryRewriter implements IQueryRewriter {
         return rewrittenBodyExpr;
     }
 
-    private Expression rewriteFunctionOrViewBody(DataverseName entityDataverseName, Object entityDisplayName,
-            Expression bodyExpr, List<VarIdentifier> externalVars, boolean allowNonStoredUdfCalls,
-            SourceLocation sourceLoc) throws CompilationException {
-        Dataverse defaultDataverse = metadataProvider.getDefaultDataverse();
-        Dataverse targetDataverse;
-        if (entityDataverseName == null || entityDataverseName.equals(defaultDataverse.getDataverseName())) {
-            targetDataverse = defaultDataverse;
+    private Expression rewriteFunctionOrViewBody(String entityDatabaseName, DataverseName entityDataverseName,
+            Object entityDisplayName, Expression bodyExpr, List<VarIdentifier> externalVars,
+            boolean allowNonStoredUdfCalls, SourceLocation sourceLoc) throws CompilationException {
+        Namespace defaultNamespace = metadataProvider.getDefaultNamespace();
+        Namespace targetNamespace = null;
+        if (entityDataverseName == null || (entityDatabaseName.equals(defaultNamespace.getDatabaseName())
+                && entityDataverseName.equals(defaultNamespace.getDataverseName()))) {
+            targetNamespace = defaultNamespace;
         } else {
             try {
-                targetDataverse = metadataProvider.findDataverse(entityDataverseName);
+                Dataverse dv = metadataProvider.findDataverse(entityDatabaseName, entityDataverseName);
+                if (dv != null) {
+                    targetNamespace = new Namespace(dv.getDatabaseName(), dv.getDataverseName());
+                }
             } catch (AlgebricksException e) {
-                throw new CompilationException(ErrorCode.UNKNOWN_DATAVERSE, e, sourceLoc, entityDataverseName);
+                throw new CompilationException(ErrorCode.UNKNOWN_DATAVERSE, e, sourceLoc, MetadataUtil
+                        .dataverseName(entityDatabaseName, entityDataverseName, metadataProvider.isUsingDatabase()));
             }
         }
 
-        metadataProvider.setDefaultDataverse(targetDataverse);
+        metadataProvider.setDefaultNamespace(targetNamespace);
         try {
             Query wrappedQuery = ExpressionUtils.createWrappedQuery(bodyExpr, sourceLoc);
             getFunctionAndViewBodyRewriter().rewrite(context, wrappedQuery, allowNonStoredUdfCalls, false,
@@ -571,7 +591,7 @@ public class SqlppQueryRewriter implements IQueryRewriter {
             throw new CompilationException(ErrorCode.COMPILATION_BAD_FUNCTION_DEFINITION, e,
                     entityDisplayName.toString(), e.getMessage());
         } finally {
-            metadataProvider.setDefaultDataverse(defaultDataverse);
+            metadataProvider.setDefaultNamespace(defaultNamespace);
         }
     }
 
@@ -595,22 +615,34 @@ public class SqlppQueryRewriter implements IQueryRewriter {
     }
 
     @Override
-    public Query createViewAccessorQuery(ViewDecl viewDecl) {
+    public Query createViewAccessorQuery(ViewDecl viewDecl, INamespaceResolver namespaceResolver) {
+        boolean usingDatabase = namespaceResolver.isUsingDatabase();
         // dataverse_name.view_name
+        String databaseName = viewDecl.getViewName().getDatabaseName();
         DataverseName dataverseName = viewDecl.getViewName().getDataverseName();
         String viewName = viewDecl.getViewName().getDatasetName();
-        Expression vAccessExpr = createDatasetAccessExpression(dataverseName, viewName, viewDecl.getSourceLocation());
+        Expression vAccessExpr = createDatasetAccessExpression(databaseName, dataverseName, viewName,
+                viewDecl.getSourceLocation(), usingDatabase);
         return ExpressionUtils.createWrappedQuery(vAccessExpr, viewDecl.getSourceLocation());
     }
 
-    private static Expression createDatasetAccessExpression(DataverseName dataverseName, String datasetName,
-            SourceLocation sourceLoc) {
-        AbstractExpression resultExpr = null;
+    private static Expression createDatasetAccessExpression(String databaseName, DataverseName dataverseName,
+            String datasetName, SourceLocation sourceLoc, boolean usingDatabase) {
+        AbstractExpression resultExpr;
         List<String> dataverseNameParts = dataverseName.getParts();
-        for (int i = 0, n = dataverseNameParts.size(); i < n; i++) {
+        int startIdx;
+        if (usingDatabase) {
+            resultExpr = new VariableExpr(new VarIdentifier(SqlppVariableUtil.toInternalVariableName(databaseName)));
+            startIdx = 0;
+        } else {
+            resultExpr = new VariableExpr(
+                    new VarIdentifier(SqlppVariableUtil.toInternalVariableName(dataverseNameParts.get(0))));
+            startIdx = 1;
+        }
+        resultExpr.setSourceLocation(sourceLoc);
+        for (int i = startIdx, n = dataverseNameParts.size(); i < n; i++) {
             String part = dataverseNameParts.get(i);
-            resultExpr = i == 0 ? new VariableExpr(new VarIdentifier(SqlppVariableUtil.toInternalVariableName(part)))
-                    : new FieldAccessor(resultExpr, new Identifier(part));
+            resultExpr = new FieldAccessor(resultExpr, new Identifier(part));
             resultExpr.setSourceLocation(sourceLoc);
         }
         resultExpr = new FieldAccessor(resultExpr, new Identifier(datasetName));

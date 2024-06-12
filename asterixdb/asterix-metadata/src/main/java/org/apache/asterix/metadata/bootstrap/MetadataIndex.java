@@ -23,7 +23,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import org.apache.asterix.common.api.INamespacePathResolver;
 import org.apache.asterix.common.metadata.DataverseName;
+import org.apache.asterix.common.metadata.MetadataConstants;
 import org.apache.asterix.common.metadata.MetadataIndexImmutableProperties;
 import org.apache.asterix.common.transactions.DatasetId;
 import org.apache.asterix.common.transactions.ImmutableDatasetId;
@@ -33,7 +35,6 @@ import org.apache.asterix.formats.nontagged.BinaryHashFunctionFactoryProvider;
 import org.apache.asterix.formats.nontagged.SerializerDeserializerProvider;
 import org.apache.asterix.formats.nontagged.TypeTraitProvider;
 import org.apache.asterix.metadata.api.IMetadataIndex;
-import org.apache.asterix.metadata.utils.MetadataConstants;
 import org.apache.asterix.om.types.ARecordType;
 import org.apache.asterix.om.types.IAType;
 import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
@@ -183,6 +184,11 @@ public class MetadataIndex implements IMetadataIndex {
     }
 
     @Override
+    public String getDatabaseName() {
+        return MetadataConstants.SYSTEM_DATABASE;
+    }
+
+    @Override
     public DataverseName getDataverseName() {
         return MetadataConstants.METADATA_DATAVERSE_NAME;
     }
@@ -232,10 +238,10 @@ public class MetadataIndex implements IMetadataIndex {
     }
 
     @Override
-    public String getFileNameRelativePath() {
+    public String getFileNameRelativePath(INamespacePathResolver namespacePathResolver) {
         // The rebalance count for metadata dataset is always 0.
-        return StoragePathUtil.prepareDataverseIndexName(getDataverseName(), getIndexedDatasetName(), getIndexName(),
-                0);
+        String namespacePath = namespacePathResolver.resolve(getDatabaseName(), getDataverseName());
+        return StoragePathUtil.prepareNamespaceIndexName(getIndexedDatasetName(), getIndexName(), 0, namespacePath);
     }
 
     @Override

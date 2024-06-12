@@ -24,8 +24,11 @@ import org.apache.hyracks.dataflow.common.data.accessors.ITupleReference;
 import org.apache.hyracks.storage.am.btree.impls.BTreeCursorInitialState;
 import org.apache.hyracks.storage.am.btree.impls.RangePredicate;
 import org.apache.hyracks.storage.am.common.api.ITreeIndexCursor;
+import org.apache.hyracks.storage.am.common.ophelpers.FindTupleMode;
+import org.apache.hyracks.storage.am.common.ophelpers.FindTupleNoExactMatchPolicy;
 import org.apache.hyracks.storage.am.lsm.btree.column.api.IColumnReadMultiPageOp;
 import org.apache.hyracks.storage.am.lsm.btree.column.api.IColumnTupleIterator;
+import org.apache.hyracks.storage.am.lsm.btree.column.cloud.buffercache.IColumnReadContext;
 import org.apache.hyracks.storage.common.EnforcedIndexCursor;
 import org.apache.hyracks.storage.common.ICursorInitialState;
 import org.apache.hyracks.storage.common.IIndexCursorStats;
@@ -39,6 +42,7 @@ public class ColumnBTreeRangeSearchCursor extends EnforcedIndexCursor
         implements ITreeIndexCursor, IColumnReadMultiPageOp {
 
     protected final ColumnBTreeReadLeafFrame frame;
+    private final IColumnReadContext context;
     protected final IColumnTupleIterator frameTuple;
 
     protected IBufferCache bufferCache = null;
@@ -53,12 +57,19 @@ public class ColumnBTreeRangeSearchCursor extends EnforcedIndexCursor
     protected RangePredicate pred;
     protected ITupleReference lowKey;
     protected ITupleReference highKey;
-    protected boolean firstNextCall;
+
+    protected FindTupleMode lowKeyFtm;
+    protected FindTupleMode highKeyFtm;
+    protected FindTupleNoExactMatchPolicy lowKeyFtp;
+    protected FindTupleNoExactMatchPolicy highKeyFtp;
+    protected boolean yieldFirstCall;
 
     protected final IIndexCursorStats stats;
 
-    public ColumnBTreeRangeSearchCursor(ColumnBTreeReadLeafFrame frame, IIndexCursorStats stats, int index) {
+    public ColumnBTreeRangeSearchCursor(ColumnBTreeReadLeafFrame frame, IIndexCursorStats stats, int index,
+            IColumnReadContext context) {
         this.frame = frame;
+        this.context = context;
         this.frameTuple = frame.createTupleReference(index, this);
         this.reusablePredicate = new RangePredicate();
         this.stats = stats;
@@ -67,7 +78,7 @@ public class ColumnBTreeRangeSearchCursor extends EnforcedIndexCursor
     }
 
     @Override
-    public void doDestroy() throws HyracksDataException {
+    public void doDestroy() {
         // No Op all resources are released in the close call
     }
 
@@ -76,15 +87,14 @@ public class ColumnBTreeRangeSearchCursor extends EnforcedIndexCursor
         return frameTuple;
     }
 
-    private void fetchNextLeafPage(int leafPage) throws HyracksDataException {
-        int nextLeafPage = leafPage;
+    private void fetchNextLeafPage() throws HyracksDataException {
+        int nextLeafPage;
         do {
-            ICachedPage nextLeaf = bufferCache.pin(BufferedFileHandle.getDiskPageId(fileId, nextLeafPage), false);
+            page0 = context.pinNext(frame, bufferCache, fileId);
             stats.getPageCounter().update(1);
-            bufferCache.unpin(page0);
-            page0 = nextLeaf;
-            frame.setPage(page0);
-            frameTuple.reset(0);
+            context.prepareColumns(frame, bufferCache, fileId);
+            frameTuple.newPage();
+            setCursorPosition();
             nextLeafPage = frame.getNextLeaf();
         } while (frame.getTupleCount() == 0 && nextLeafPage > 0);
     }
@@ -92,11 +102,11 @@ public class ColumnBTreeRangeSearchCursor extends EnforcedIndexCursor
     @Override
     public boolean doHasNext() throws HyracksDataException {
         int nextLeafPage;
-        if (frameTuple.isConsumed() && !firstNextCall) {
+        if (frameTuple.isConsumed() && !yieldFirstCall) {
             frameTuple.lastTupleReached();
             nextLeafPage = frame.getNextLeaf();
             if (nextLeafPage >= 0) {
-                fetchNextLeafPage(nextLeafPage);
+                fetchNextLeafPage();
             } else {
                 return false;
             }
@@ -120,26 +130,40 @@ public class ColumnBTreeRangeSearchCursor extends EnforcedIndexCursor
         pageId = ((BTreeCursorInitialState) initialState).getPageId();
         frame.setPage(page0);
         frame.setMultiComparator(originalKeyCmp);
-        frameTuple.reset(0);
-        initCursorPosition(searchPred);
+        if (frame.getTupleCount() > 0) {
+            context.prepareColumns(frame, bufferCache, fileId);
+            frameTuple.newPage();
+            initCursorPosition(searchPred);
+        } else {
+            yieldFirstCall = false;
+            frameTuple.consume();
+        }
     }
 
     protected void initCursorPosition(ISearchPredicate searchPred) throws HyracksDataException {
-        pred = (RangePredicate) searchPred;
-        lowKey = pred.getLowKey();
-        highKey = pred.getHighKey();
-
+        setSearchPredicate(searchPred);
         reusablePredicate.setLowKeyComparator(originalKeyCmp);
         reusablePredicate.setHighKeyComparator(pred.getHighKeyComparator());
         reusablePredicate.setHighKey(pred.getHighKey(), pred.isHighKeyInclusive());
-        firstNextCall = true;
-        advanceTupleToLowKey();
+        yieldFirstCall = false;
+        setCursorPosition();
+    }
+
+    private void setCursorPosition() throws HyracksDataException {
+        int start = getLowKeyIndex();
+        int end = getHighKeyIndex();
+        if (end < start) {
+            frameTuple.consume();
+            return;
+        }
+        frameTuple.reset(start, end);
+        yieldFirstCall = shouldYieldFirstCall();
     }
 
     protected boolean isNextIncluded() throws HyracksDataException {
-        if (firstNextCall) {
+        if (yieldFirstCall) {
             //The first call of frameTuple.next() was done during the opening of the cursor
-            firstNextCall = false;
+            yieldFirstCall = false;
             return true;
         } else if (frameTuple.isConsumed()) {
             //All tuple were consumed
@@ -148,53 +172,97 @@ public class ColumnBTreeRangeSearchCursor extends EnforcedIndexCursor
         //Next tuple
         frameTuple.next();
         //Check whether the frameTuple is not consumed and also include the search key
-        return highKey == null || isLessOrEqual(frameTuple, highKey, pred.isHighKeyInclusive());
+        return highKey == null
+                || isLessOrEqual(frameTuple, highKey, pred.isHighKeyInclusive(), pred.getHighKeyComparator());
     }
 
-    protected void advanceTupleToLowKey() throws HyracksDataException {
-        if (highKey != null && isLessOrEqual(highKey, frame.getLeftmostTuple(), !pred.isHighKeyInclusive())) {
-            /*
-             * Lowest key from the frame is greater than the requested highKey. No tuple will satisfy the search
-             * key. Consume the frameTuple to stop the search
-             */
-            firstNextCall = false;
-            frameTuple.consume();
-            return;
-        } else if (lowKey == null) {
-            //No range was specified.
-            frameTuple.next();
-            return;
-        }
-
-        //The lowKey is somewhere within the frame tuples
-        boolean stop = false;
-        int counter = 0;
-        while (!stop && !frameTuple.isConsumed()) {
-            frameTuple.next();
-            stop = isLessOrEqual(lowKey, frameTuple, pred.isLowKeyInclusive());
-            counter++;
-        }
-        //Advance all columns to the proper position
-        frameTuple.skip(counter - 1);
+    protected boolean shouldYieldFirstCall() throws HyracksDataException {
+        // Proceed if the highKey is null or the current tuple's key is less than (or equal) the highKey
+        return highKey == null
+                || isLessOrEqual(frameTuple, highKey, pred.isHighKeyInclusive(), pred.getHighKeyComparator());
     }
 
     protected void releasePages() throws HyracksDataException {
         //Unpin all column pages first
+        context.release(bufferCache);
         frameTuple.unpinColumnsPages();
         if (page0 != null) {
-            bufferCache.unpin(page0);
+            bufferCache.unpin(page0, context);
         }
     }
 
-    private boolean isLessOrEqual(ITupleReference left, ITupleReference right, boolean inclusive)
-            throws HyracksDataException {
-        int cmp = originalKeyCmp.compare(left, right);
-        return cmp < 0 || cmp == 0 && inclusive;
+    private boolean isLessOrEqual(ITupleReference left, ITupleReference right, boolean inclusive,
+            MultiComparator comparator) throws HyracksDataException {
+        int cmp = comparator.compare(left, right);
+        return cmp < 0 || inclusive && cmp == 0;
+    }
+
+    protected int getLowKeyIndex() throws HyracksDataException {
+        if (lowKey == null) {
+            return 0;
+        } else if (isLessOrEqual(frame.getRightmostTuple(), lowKey, !pred.isLowKeyInclusive(),
+                pred.getLowKeyComparator())) {
+            //The highest key from the frame is less than the requested lowKey
+            return frame.getTupleCount();
+        }
+
+        int index = frameTuple.findTupleIndex(lowKey, pred.getLowKeyComparator(), lowKeyFtm, lowKeyFtp);
+        if (pred.isLowKeyInclusive()) {
+            index++;
+        } else {
+            if (index < 0) {
+                index = frame.getTupleCount();
+            }
+        }
+
+        return index;
+    }
+
+    protected int getHighKeyIndex() throws HyracksDataException {
+        if (highKey == null) {
+            return frame.getTupleCount() - 1;
+        } else if (isLessOrEqual(highKey, frame.getLeftmostTuple(), !pred.isHighKeyInclusive(),
+                pred.getHighKeyComparator())) {
+            return -1;
+        }
+
+        int index = frameTuple.findTupleIndex(highKey, pred.getHighKeyComparator(), highKeyFtm, highKeyFtp);
+        if (pred.isHighKeyInclusive()) {
+            if (index < 0) {
+                index = frame.getTupleCount() - 1;
+            } else {
+                index--;
+            }
+        }
+
+        return index;
+    }
+
+    protected void setSearchPredicate(ISearchPredicate searchPred) {
+        pred = (RangePredicate) searchPred;
+        lowKey = pred.getLowKey();
+        highKey = pred.getHighKey();
+
+        lowKeyFtm = FindTupleMode.EXCLUSIVE;
+        if (pred.isLowKeyInclusive()) {
+            lowKeyFtp = FindTupleNoExactMatchPolicy.LOWER_KEY;
+        } else {
+            lowKeyFtp = FindTupleNoExactMatchPolicy.HIGHER_KEY;
+        }
+
+        highKeyFtm = FindTupleMode.EXCLUSIVE;
+        if (pred.isHighKeyInclusive()) {
+            highKeyFtp = FindTupleNoExactMatchPolicy.HIGHER_KEY;
+        } else {
+            highKeyFtp = FindTupleNoExactMatchPolicy.LOWER_KEY;
+        }
     }
 
     @Override
     public void doClose() throws HyracksDataException {
         releasePages();
+        frameTuple.close();
+        context.close(bufferCache);
         page0 = null;
         pred = null;
     }
@@ -222,7 +290,7 @@ public class ColumnBTreeRangeSearchCursor extends EnforcedIndexCursor
     @Override
     public ICachedPage pin(int pageId) throws HyracksDataException {
         stats.getPageCounter().update(1);
-        return bufferCache.pin(BufferedFileHandle.getDiskPageId(fileId, pageId), false);
+        return bufferCache.pin(BufferedFileHandle.getDiskPageId(fileId, pageId));
     }
 
     @Override

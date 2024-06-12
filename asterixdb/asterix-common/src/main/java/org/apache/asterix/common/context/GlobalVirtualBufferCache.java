@@ -18,6 +18,8 @@
  */
 package org.apache.asterix.common.context;
 
+import static org.apache.hyracks.storage.common.buffercache.context.read.DefaultBufferCacheReadContextProvider.DEFAULT;
+
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
@@ -49,6 +51,8 @@ import org.apache.hyracks.storage.common.buffercache.IFIFOPageWriter;
 import org.apache.hyracks.storage.common.buffercache.IPageWriteCallback;
 import org.apache.hyracks.storage.common.buffercache.IPageWriteFailureCallback;
 import org.apache.hyracks.storage.common.buffercache.VirtualPage;
+import org.apache.hyracks.storage.common.buffercache.context.IBufferCacheReadContext;
+import org.apache.hyracks.storage.common.buffercache.context.IBufferCacheWriteContext;
 import org.apache.hyracks.storage.common.file.BufferedFileHandle;
 import org.apache.hyracks.storage.common.file.IFileMapManager;
 import org.apache.hyracks.util.ExitUtil;
@@ -173,16 +177,19 @@ public class GlobalVirtualBufferCache implements IVirtualBufferCache, ILifeCycle
             // 2. there are still some active readers and memory cannot be reclaimed.
             // But for both cases, we will notify all primary index op trackers to let their writers retry,
             // if they have been blocked. Moreover, we will check whether more flushes are needed.
+            List<ILSMOperationTracker> opTrackers = new ArrayList<>();
             synchronized (this) {
                 final int size = primaryIndexes.size();
                 for (int i = 0; i < size; i++) {
-                    ILSMOperationTracker opTracker = primaryIndexes.get(i).getOperationTracker();
-                    synchronized (opTracker) {
-                        opTracker.notifyAll();
-                    }
+                    opTrackers.add(primaryIndexes.get(i).getOperationTracker());
                 }
             }
-            checkAndNotifyFlushThread();
+            for (ILSMOperationTracker opTracker : opTrackers) {
+                synchronized (opTracker) {
+                    opTracker.notifyAll();
+                }
+            }
+            checkAndNotifyFlushThread(false);
         }
         if (memoryComponent.getLsmIndex().getNumOfFilterFields() > 0
                 && memoryComponent.getLsmIndex().isPrimaryIndex()) {
@@ -203,7 +210,7 @@ public class GlobalVirtualBufferCache implements IVirtualBufferCache, ILifeCycle
     public boolean isFull() {
         boolean full = vbc.isFull();
         if (full) {
-            checkAndNotifyFlushThread();
+            checkAndNotifyFlushThread(true);
         }
         return full;
     }
@@ -264,11 +271,16 @@ public class GlobalVirtualBufferCache implements IVirtualBufferCache, ILifeCycle
     }
 
     @Override
-    public ICachedPage pin(long dpid, boolean newPage) throws HyracksDataException {
-        ICachedPage page = vbc.pin(dpid, newPage);
-        if (newPage) {
+    public ICachedPage pin(long dpid) throws HyracksDataException {
+        return pin(dpid, DEFAULT);
+    }
+
+    @Override
+    public ICachedPage pin(long dpid, IBufferCacheReadContext context) throws HyracksDataException {
+        ICachedPage page = vbc.pin(dpid, context);
+        if (context.isNewPage()) {
             incrementFilteredMemoryComponentUsage(dpid, 1);
-            checkAndNotifyFlushThread();
+            checkAndNotifyFlushThread(false);
         }
         return page;
     }
@@ -287,8 +299,12 @@ public class GlobalVirtualBufferCache implements IVirtualBufferCache, ILifeCycle
         }
     }
 
-    private void checkAndNotifyFlushThread() {
+    private void checkAndNotifyFlushThread(boolean log) {
         if (vbc.getUsage() < flushPageBudget) {
+            if (log) {
+                LOGGER.info("not notifying the flush thread vbcUsage({}) < flushPageBudget({})", vbc.getUsage(),
+                        flushPageBudget);
+            }
             return;
         }
         // Notify the flush thread to schedule flushes. This is used to avoid deadlocks because page pins can be
@@ -305,13 +321,18 @@ public class GlobalVirtualBufferCache implements IVirtualBufferCache, ILifeCycle
         int delta = multiplier - cPage.getFrameSizeMultiplier();
         incrementFilteredMemoryComponentUsage(((VirtualPage) cPage).dpid(), delta);
         if (delta > 0) {
-            checkAndNotifyFlushThread();
+            checkAndNotifyFlushThread(false);
         }
     }
 
     @Override
     public void unpin(ICachedPage page) throws HyracksDataException {
-        vbc.unpin(page);
+        unpin(page, DEFAULT);
+    }
+
+    @Override
+    public void unpin(ICachedPage page, IBufferCacheReadContext context) throws HyracksDataException {
+        vbc.unpin(page, context);
     }
 
     @Override
@@ -386,8 +407,9 @@ public class GlobalVirtualBufferCache implements IVirtualBufferCache, ILifeCycle
     }
 
     @Override
-    public IFIFOPageWriter createFIFOWriter(IPageWriteCallback callback, IPageWriteFailureCallback failureCallback) {
-        return vbc.createFIFOWriter(callback, failureCallback);
+    public IFIFOPageWriter createFIFOWriter(IPageWriteCallback callback, IPageWriteFailureCallback failureCallback,
+            IBufferCacheWriteContext context) {
+        return vbc.createFIFOWriter(callback, failureCallback, context);
     }
 
     @Override
@@ -429,6 +451,11 @@ public class GlobalVirtualBufferCache implements IVirtualBufferCache, ILifeCycle
     @Override
     public String toString() {
         return vbc.toString();
+    }
+
+    @Override
+    public String dumpState() {
+        return "flushingComponents=" + flushingComponents + ", " + vbc.dumpState();
     }
 
     @Override
@@ -498,12 +525,13 @@ public class GlobalVirtualBufferCache implements IVirtualBufferCache, ILifeCycle
                     // note that this is different from flushing a filtered memory component
                     PrimaryIndexOperationTracker opTracker =
                             (PrimaryIndexOperationTracker) primaryIndex.getOperationTracker();
+                    ILSMMemoryComponent memoryComponent = null;
                     synchronized (opTracker) {
                         boolean flushable = !primaryIndex.isCurrentMutableComponentEmpty();
                         if (flushable && !opTracker.isFlushLogCreated()) {
                             // if the flush log has already been created, then we can simply wait for
                             // that flush to complete
-                            ILSMMemoryComponent memoryComponent = primaryIndex.getCurrentMemoryComponent();
+                            memoryComponent = primaryIndex.getCurrentMemoryComponent();
                             if (memoryComponent.getState() == ComponentState.READABLE_WRITABLE) {
                                 // before we schedule the flush, mark the memory component as unwritable to prevent
                                 // future writers
@@ -522,7 +550,9 @@ public class GlobalVirtualBufferCache implements IVirtualBufferCache, ILifeCycle
                         if ((flushable || opTracker.isFlushLogCreated()) && !isMetadataIndex(primaryIndex)) {
                             // global vbc cannot wait on metadata indexes because metadata indexes support full
                             // ACID transactions. Waiting on metadata indexes can introduce deadlocks.
-                            flushingComponents.add(primaryIndex.getCurrentMemoryComponent());
+                            if (memoryComponent != null) {
+                                flushingComponents.add(memoryComponent);
+                            }
                             return primaryIndex;
                         }
                     }

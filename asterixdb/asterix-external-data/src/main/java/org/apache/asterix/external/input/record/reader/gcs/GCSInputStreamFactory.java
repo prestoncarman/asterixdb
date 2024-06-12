@@ -18,20 +18,22 @@
  */
 package org.apache.asterix.external.input.record.reader.gcs;
 
-import static org.apache.asterix.external.util.ExternalDataUtils.getIncludeExcludeMatchers;
-
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
 
+import org.apache.asterix.common.external.IExternalFilterEvaluator;
+import org.apache.asterix.common.external.IExternalFilterEvaluatorFactory;
 import org.apache.asterix.external.api.AsterixInputStream;
+import org.apache.asterix.external.api.IExternalDataRuntimeContext;
+import org.apache.asterix.external.input.filter.embedder.IExternalFilterValueEmbedder;
 import org.apache.asterix.external.input.record.reader.abstracts.AbstractExternalInputStreamFactory;
+import org.apache.asterix.external.util.ExternalDataPrefix;
 import org.apache.asterix.external.util.ExternalDataUtils;
 import org.apache.asterix.external.util.google.gcs.GCSUtils;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.api.application.IServiceContext;
-import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.exceptions.IWarningCollector;
 
@@ -42,21 +44,29 @@ public class GCSInputStreamFactory extends AbstractExternalInputStreamFactory {
     private static final long serialVersionUID = 1L;
 
     @Override
-    public AsterixInputStream createInputStream(IHyracksTaskContext ctx, int partition) throws HyracksDataException {
-        return new GCSInputStream(configuration, partitionWorkLoadsBasedOnSize.get(partition).getFilePaths());
+    public AsterixInputStream createInputStream(IExternalDataRuntimeContext context) throws HyracksDataException {
+        IExternalFilterValueEmbedder valueEmbedder = context.getValueEmbedder();
+        int partition = context.getPartition();
+        return new GCSInputStream(configuration, partitionWorkLoadsBasedOnSize.get(partition).getFilePaths(),
+                valueEmbedder);
     }
 
     @Override
-    public void configure(IServiceContext ctx, Map<String, String> configuration, IWarningCollector warningCollector)
-            throws AlgebricksException {
-        super.configure(ctx, configuration, warningCollector);
+    public void configure(IServiceContext ctx, Map<String, String> configuration, IWarningCollector warningCollector,
+            IExternalFilterEvaluatorFactory filterEvaluatorFactory) throws AlgebricksException, HyracksDataException {
+        super.configure(ctx, configuration, warningCollector, filterEvaluatorFactory);
 
-        // Ensure the validity of include/exclude
-        ExternalDataUtils.validateIncludeExclude(configuration);
-        IncludeExcludeMatcher includeExcludeMatcher = getIncludeExcludeMatchers(configuration);
+        // get include/exclude matchers
+        IncludeExcludeMatcher includeExcludeMatcher = ExternalDataUtils.getIncludeExcludeMatchers(configuration);
+
+        // prepare prefix for computed field calculations
+        IExternalFilterEvaluator evaluator = filterEvaluatorFactory.create(ctx, warningCollector);
+        ExternalDataPrefix externalDataPrefix = new ExternalDataPrefix(configuration);
+        configuration.put(ExternalDataPrefix.PREFIX_ROOT_FIELD_NAME, externalDataPrefix.getRoot());
 
         // get the items
-        List<Blob> filesOnly = GCSUtils.listItems(configuration, includeExcludeMatcher, warningCollector);
+        List<Blob> filesOnly = GCSUtils.listItems(configuration, includeExcludeMatcher, warningCollector,
+                externalDataPrefix, evaluator);
 
         // Distribute work load amongst the partitions
         distributeWorkLoad(filesOnly, getPartitionsCount());
@@ -65,15 +75,15 @@ public class GCSInputStreamFactory extends AbstractExternalInputStreamFactory {
     /**
      * To efficiently utilize the parallelism, work load will be distributed amongst the partitions based on the file
      * size.
-     *
+     * <p>
      * Example:
      * File1 1mb, File2 300kb, File3 300kb, File4 300kb
-     *
+     * <p>
      * Distribution:
      * Partition1: [File1]
      * Partition2: [File2, File3, File4]
      *
-     * @param items items
+     * @param items           items
      * @param partitionsCount Partitions count
      */
     private void distributeWorkLoad(List<Blob> items, int partitionsCount) {

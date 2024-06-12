@@ -20,8 +20,9 @@
 package org.apache.asterix.metadata.entitytupletranslators;
 
 import org.apache.asterix.common.metadata.DataverseName;
-import org.apache.asterix.metadata.bootstrap.MetadataPrimaryIndexes;
+import org.apache.asterix.common.metadata.MetadataUtil;
 import org.apache.asterix.metadata.bootstrap.MetadataRecordTypes;
+import org.apache.asterix.metadata.bootstrap.SynonymEntity;
 import org.apache.asterix.metadata.entities.Synonym;
 import org.apache.asterix.om.base.ARecord;
 import org.apache.asterix.om.base.AString;
@@ -34,34 +35,44 @@ import org.apache.hyracks.dataflow.common.data.accessors.ITupleReference;
  */
 public final class SynonymTupleTranslator extends AbstractTupleTranslator<Synonym> {
 
-    // Payload field containing serialized Synonym.
+    private final SynonymEntity synonymEntity;
 
-    private static final int SYNONYM_PAYLOAD_TUPLE_FIELD_INDEX = 2;
-
-    protected SynonymTupleTranslator(boolean getTuple) {
-        super(getTuple, MetadataPrimaryIndexes.SYNONYM_DATASET, SYNONYM_PAYLOAD_TUPLE_FIELD_INDEX);
+    protected SynonymTupleTranslator(boolean getTuple, SynonymEntity synonymEntity) {
+        super(getTuple, synonymEntity.getIndex(), synonymEntity.payloadPosition());
+        this.synonymEntity = synonymEntity;
     }
 
     @Override
     protected Synonym createMetadataEntityFromARecord(ARecord synonymRecord) throws AlgebricksException {
         String dataverseCanonicalName =
-                ((AString) synonymRecord.getValueByPos(MetadataRecordTypes.SYNONYM_ARECORD_DATAVERSENAME_FIELD_INDEX))
-                        .getStringValue();
+                ((AString) synonymRecord.getValueByPos(synonymEntity.dataverseNameIndex())).getStringValue();
         DataverseName dataverseName = DataverseName.createFromCanonicalForm(dataverseCanonicalName);
+        int databaseNameIndex = synonymEntity.databaseNameIndex();
+        String databaseName;
+        if (databaseNameIndex >= 0) {
+            databaseName = ((AString) synonymRecord.getValueByPos(databaseNameIndex)).getStringValue();
+        } else {
+            databaseName = MetadataUtil.databaseFor(dataverseName);
+        }
+        String synonymName = ((AString) synonymRecord.getValueByPos(synonymEntity.synonymNameIndex())).getStringValue();
 
-        String synonymName =
-                ((AString) synonymRecord.getValueByPos(MetadataRecordTypes.SYNONYM_ARECORD_SYNONYMNAME_FIELD_INDEX))
-                        .getStringValue();
-
-        String objectDataverseCanonicalName = ((AString) synonymRecord
-                .getValueByPos(MetadataRecordTypes.SYNONYM_ARECORD_OBJECTDATAVERSENAME_FIELD_INDEX)).getStringValue();
+        String objectDataverseCanonicalName =
+                ((AString) synonymRecord.getValueByPos(synonymEntity.objectDataverseNameIndex())).getStringValue();
         DataverseName objectDataverseName = DataverseName.createFromCanonicalForm(objectDataverseCanonicalName);
 
-        String objectName =
-                ((AString) synonymRecord.getValueByPos(MetadataRecordTypes.SYNONYM_ARECORD_OBJECTNAME_FIELD_INDEX))
-                        .getStringValue();
+        String objectDatabaseName;
+        int objectDatabaseIdx =
+                synonymRecord.getType().getFieldIndex(MetadataRecordTypes.FIELD_NAME_OBJECT_DATABASE_NAME);
+        if (objectDatabaseIdx >= 0) {
+            objectDatabaseName = ((AString) synonymRecord.getValueByPos(objectDatabaseIdx)).getStringValue();
+        } else {
+            objectDatabaseName = MetadataUtil.databaseFor(objectDataverseName);
+        }
 
-        return new Synonym(dataverseName, synonymName, objectDataverseName, objectName);
+        String objectName = ((AString) synonymRecord.getValueByPos(synonymEntity.objectNameIndex())).getStringValue();
+
+        return new Synonym(databaseName, dataverseName, synonymName, objectDatabaseName, objectDataverseName,
+                objectName);
     }
 
     @Override
@@ -71,6 +82,11 @@ public final class SynonymTupleTranslator extends AbstractTupleTranslator<Synony
         // write the key in the first 2 fields of the tuple
         tupleBuilder.reset();
 
+        if (synonymEntity.databaseNameIndex() >= 0) {
+            aString.setValue(synonym.getDatabaseName());
+            stringSerde.serialize(aString, tupleBuilder.getDataOutput());
+            tupleBuilder.addFieldEndOffset();
+        }
         aString.setValue(dataverseCanonicalName);
         stringSerde.serialize(aString, tupleBuilder.getDataOutput());
         tupleBuilder.addFieldEndOffset();
@@ -79,32 +95,40 @@ public final class SynonymTupleTranslator extends AbstractTupleTranslator<Synony
         tupleBuilder.addFieldEndOffset();
 
         // write the pay-load in the third field of the tuple
+        recordBuilder.reset(synonymEntity.getRecordType());
 
-        recordBuilder.reset(MetadataRecordTypes.SYNONYM_RECORDTYPE);
-
+        if (synonymEntity.databaseNameIndex() >= 0) {
+            fieldValue.reset();
+            aString.setValue(synonym.getDatabaseName());
+            stringSerde.serialize(aString, fieldValue.getDataOutput());
+            recordBuilder.addField(synonymEntity.databaseNameIndex(), fieldValue);
+        }
         // write field 0
         fieldValue.reset();
         aString.setValue(dataverseCanonicalName);
         stringSerde.serialize(aString, fieldValue.getDataOutput());
-        recordBuilder.addField(MetadataRecordTypes.SYNONYM_ARECORD_DATAVERSENAME_FIELD_INDEX, fieldValue);
+        recordBuilder.addField(synonymEntity.dataverseNameIndex(), fieldValue);
 
         // write field 1
         fieldValue.reset();
         aString.setValue(synonym.getSynonymName());
         stringSerde.serialize(aString, fieldValue.getDataOutput());
-        recordBuilder.addField(MetadataRecordTypes.SYNONYM_ARECORD_SYNONYMNAME_FIELD_INDEX, fieldValue);
+        recordBuilder.addField(synonymEntity.synonymNameIndex(), fieldValue);
 
         // write field 2
         fieldValue.reset();
         aString.setValue(synonym.getObjectDataverseName().getCanonicalForm());
         stringSerde.serialize(aString, fieldValue.getDataOutput());
-        recordBuilder.addField(MetadataRecordTypes.SYNONYM_ARECORD_OBJECTDATAVERSENAME_FIELD_INDEX, fieldValue);
+        recordBuilder.addField(synonymEntity.objectDataverseNameIndex(), fieldValue);
 
         // write field 3
         fieldValue.reset();
         aString.setValue(synonym.getObjectName());
         stringSerde.serialize(aString, fieldValue.getDataOutput());
-        recordBuilder.addField(MetadataRecordTypes.SYNONYM_ARECORD_OBJECTNAME_FIELD_INDEX, fieldValue);
+        recordBuilder.addField(synonymEntity.objectNameIndex(), fieldValue);
+
+        // write open fields
+        writeOpenFields(synonym);
 
         // write record
         recordBuilder.write(tupleBuilder.getDataOutput(), true);
@@ -112,5 +136,18 @@ public final class SynonymTupleTranslator extends AbstractTupleTranslator<Synony
 
         tuple.reset(tupleBuilder.getFieldEndOffsets(), tupleBuilder.getByteArray());
         return tuple;
+    }
+
+    private void writeOpenFields(Synonym synonym) throws HyracksDataException {
+        //TODO(DB): should use something better
+        if (synonymEntity.databaseNameIndex() >= 0) {
+            fieldName.reset();
+            aString.setValue(MetadataRecordTypes.FIELD_NAME_OBJECT_DATABASE_NAME);
+            stringSerde.serialize(aString, fieldName.getDataOutput());
+            fieldValue.reset();
+            aString.setValue(synonym.getObjectDatabaseName());
+            stringSerde.serialize(aString, fieldValue.getDataOutput());
+            recordBuilder.addField(fieldName, fieldValue);
+        }
     }
 }

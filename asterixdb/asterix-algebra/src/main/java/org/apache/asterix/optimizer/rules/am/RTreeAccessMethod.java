@@ -20,10 +20,10 @@ package org.apache.asterix.optimizer.rules.am;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
+import org.apache.asterix.common.annotations.AbstractExpressionAnnotationWithIndexNames;
 import org.apache.asterix.common.annotations.SecondaryIndexSearchPreferenceAnnotation;
 import org.apache.asterix.common.config.DatasetConfig.DatasetType;
 import org.apache.asterix.common.config.DatasetConfig.IndexType;
@@ -258,8 +258,9 @@ public class RTreeAccessMethod implements IAccessMethod {
         // We made sure that the indexSubTree has a datasource scan.
         AbstractDataSourceOperator dataSourceOp =
                 (AbstractDataSourceOperator) indexSubTree.getDataSourceRef().getValue();
-        RTreeJobGenParams jobGenParams = new RTreeJobGenParams(chosenIndex.getIndexName(), IndexType.RTREE,
-                dataset.getDataverseName(), dataset.getDatasetName(), retainInput, requiresBroadcast);
+        RTreeJobGenParams jobGenParams =
+                new RTreeJobGenParams(chosenIndex.getIndexName(), IndexType.RTREE, chosenIndex.getDatabaseName(),
+                        dataset.getDataverseName(), dataset.getDatasetName(), retainInput, requiresBroadcast);
         // A spatial object is serialized in the constant of the func expr we are optimizing.
         // The R-Tree expects as input an MBR represented with 1 field per dimension.
         // Here we generate vars and funcs for extracting MBR fields from the constant into fields of a tuple
@@ -377,7 +378,7 @@ public class RTreeAccessMethod implements IAccessMethod {
 
         return AccessMethodUtils.finalizeJoinPlanTransformation(afterJoinRefs, joinRef, indexSubTree, probeSubTree,
                 analysisCtx, context, isLeftOuterJoin, isLeftOuterJoinWithSpecialGroupBy, leftOuterMissingValue,
-                indexSearchOp, newMissingNullPlaceHolderVar, conditionRef, dataset, chosenIndex);
+                indexSearchOp, newMissingNullPlaceHolderVar, conditionRef, dataset, chosenIndex, funcExpr);
     }
 
     @Override
@@ -390,8 +391,8 @@ public class RTreeAccessMethod implements IAccessMethod {
     }
 
     @Override
-    public Collection<String> getSecondaryIndexPreferences(IOptimizableFuncExpr optFuncExpr) {
-        return AccessMethodUtils.getSecondaryIndexPreferences(optFuncExpr,
+    public AbstractExpressionAnnotationWithIndexNames getSecondaryIndexAnnotation(IOptimizableFuncExpr optFuncExpr) {
+        return AccessMethodUtils.getSecondaryIndexAnnotation(optFuncExpr,
                 SecondaryIndexSearchPreferenceAnnotation.class);
     }
 

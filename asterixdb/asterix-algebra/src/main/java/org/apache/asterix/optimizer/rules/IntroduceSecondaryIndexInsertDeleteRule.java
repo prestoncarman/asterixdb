@@ -35,6 +35,7 @@ import org.apache.asterix.common.config.DatasetConfig.IndexType;
 import org.apache.asterix.common.exceptions.CompilationException;
 import org.apache.asterix.common.exceptions.ErrorCode;
 import org.apache.asterix.common.metadata.DataverseName;
+import org.apache.asterix.common.metadata.MetadataUtil;
 import org.apache.asterix.lang.common.util.FunctionUtil;
 import org.apache.asterix.metadata.declared.DataSource;
 import org.apache.asterix.metadata.declared.DataSourceIndex;
@@ -168,11 +169,12 @@ public class IntroduceSecondaryIndexInsertDeleteRule implements IAlgebraicRewrit
         DataSource datasetSource = (DataSource) primaryIndexModificationOp.getDataSource();
         MetadataProvider mp = (MetadataProvider) context.getMetadataProvider();
         DataverseName dataverseName = datasetSource.getId().getDataverseName();
+        String database = datasetSource.getId().getDatabaseName();
         String datasetName = datasetSource.getId().getDatasourceName();
-        Dataset dataset = mp.findDataset(dataverseName, datasetName);
+        Dataset dataset = mp.findDataset(database, dataverseName, datasetName);
         if (dataset == null) {
             throw new CompilationException(ErrorCode.UNKNOWN_DATASET_IN_DATAVERSE, sourceLoc, datasetName,
-                    dataverseName);
+                    MetadataUtil.dataverseName(database, dataverseName, mp.isUsingDatabase()));
         }
         if (dataset.getDatasetType() == DatasetType.EXTERNAL) {
             return false;
@@ -180,7 +182,8 @@ public class IntroduceSecondaryIndexInsertDeleteRule implements IAlgebraicRewrit
 
         // Create operators for secondary index insert / delete.
         String itemTypeName = dataset.getItemTypeName();
-        IAType itemType = mp.findType(dataset.getItemTypeDataverseName(), itemTypeName);
+        IAType itemType =
+                mp.findType(dataset.getItemTypeDatabaseName(), dataset.getItemTypeDataverseName(), itemTypeName);
         if (itemType.getTypeTag() != ATypeTag.OBJECT) {
             throw new CompilationException(ErrorCode.COMPILATION_ERROR, sourceLoc, "Only record types can be indexed.");
         }
@@ -188,9 +191,13 @@ public class IntroduceSecondaryIndexInsertDeleteRule implements IAlgebraicRewrit
         // meta type
         ARecordType metaType = null;
         if (dataset.hasMetaPart()) {
-            metaType = (ARecordType) mp.findType(dataset.getMetaItemTypeDataverseName(), dataset.getMetaItemTypeName());
+            metaType = (ARecordType) mp.findType(dataset.getMetaItemTypeDatabaseName(),
+                    dataset.getMetaItemTypeDataverseName(), dataset.getMetaItemTypeName());
         }
-        List<Index> indexes = mp.getDatasetIndexes(dataset.getDataverseName(), dataset.getDatasetName());
+        recType = (ARecordType) mp.findTypeForDatasetWithoutType(recType, metaType, dataset);
+
+        List<Index> indexes =
+                mp.getDatasetIndexes(dataset.getDatabaseName(), dataset.getDataverseName(), dataset.getDatasetName());
         Stream<Index> indexStream = indexes.stream();
         indexStream = indexStream.filter(index -> index.getIndexType() != IndexType.SAMPLE);
         if (primaryIndexModificationOp.getOperation() == Kind.INSERT && !primaryIndexModificationOp.isBulkload()) {
@@ -358,7 +365,7 @@ public class IntroduceSecondaryIndexInsertDeleteRule implements IAlgebraicRewrit
                             context.getOutputTypeEnvironment(currentTop),
                             index.getIndexDetails().isOverridingKeyFieldTypes());
                 }
-                DataSourceIndex dataSourceIndex = new DataSourceIndex(index, dataverseName, datasetName, mp);
+                DataSourceIndex dataSourceIndex = new DataSourceIndex(index, database, dataverseName, datasetName, mp);
 
                 // Introduce the TokenizeOperator only when doing bulk-load,
                 // and index type is keyword or n-gram.
@@ -615,7 +622,7 @@ public class IntroduceSecondaryIndexInsertDeleteRule implements IAlgebraicRewrit
                     beforeOpFilterExpression = createAnyUnknownFilterExpression(originalKeyVarList,
                             context.getOutputTypeEnvironment(originalAssignCoordinates), forceFilter);
                 }
-                DataSourceIndex dataSourceIndex = new DataSourceIndex(index, dataverseName, datasetName, mp);
+                DataSourceIndex dataSourceIndex = new DataSourceIndex(index, database, dataverseName, datasetName, mp);
                 indexUpdate = new IndexInsertDeleteUpsertOperator(dataSourceIndex,
                         OperatorManipulationUtil
                                 .cloneExpressions(primaryIndexModificationOp.getPrimaryKeyExpressions()),
@@ -690,7 +697,7 @@ public class IntroduceSecondaryIndexInsertDeleteRule implements IAlgebraicRewrit
         int sourceIndicatorForBaseRecord = arrayIndexDetails.getElementList().get(0).getSourceIndicator();
         LogicalVariable sourceVarForBaseRecord = hasMetaPart
                 ? ((sourceIndicatorForBaseRecord == Index.RECORD_INDICATOR) ? recordVar : metaVar) : recordVar;
-        UnnestBranchCreator branchCreator = new UnnestBranchCreator(sourceVarForBaseRecord, unnestSourceOp);
+        UnnestBranchCreator branchCreator = new UnnestBranchCreator(index, sourceVarForBaseRecord, unnestSourceOp);
 
         Set<LogicalVariable> secondaryKeyVars = new LinkedHashSet<>();
         for (Index.ArrayIndexElement workingElement : arrayIndexDetails.getElementList()) {
@@ -712,7 +719,12 @@ public class IntroduceSecondaryIndexInsertDeleteRule implements IAlgebraicRewrit
                         ? getFieldAccessFunction(new MutableObject<>(varRef),
                                 recordType.getFieldIndex(atomicFieldName.get(0)), atomicFieldName)
                         : getFieldAccessFunction(new MutableObject<>(varRef), -1, atomicFieldName);
-
+                IAType fieldType = recordType.getSubFieldType(atomicFieldName);
+                if (fieldType == null) {
+                    newVarRef = castFunction(
+                            index.isEnforced() ? BuiltinFunctions.CAST_TYPE : BuiltinFunctions.CAST_TYPE_LAX,
+                            workingElement.getTypeList().get(0), newVarRef, sourceLoc);
+                }
                 // Add an assign on top to extract the atomic element.
                 AssignOperator newAssignOp = new AssignOperator(newVar, new MutableObject<>(newVarRef));
                 newAssignOp.setSourceLocation(sourceLoc);
@@ -728,16 +740,17 @@ public class IntroduceSecondaryIndexInsertDeleteRule implements IAlgebraicRewrit
                         workingElement.getUnnestList(), workingElement.getProjectList().get(0));
                 List<Boolean> firstUnnestFlags = ArrayIndexUtil.getUnnestFlags(workingElement.getUnnestList(),
                         workingElement.getProjectList().get(0));
-                ArrayIndexUtil.walkArrayPath(index, recordType, flatFirstFieldName, firstUnnestFlags, branchCreator);
+                ArrayIndexUtil.walkArrayPath(index, workingElement, recordType, flatFirstFieldName, firstUnnestFlags,
+                        branchCreator);
                 secondaryKeyVars.add(branchCreator.lastFieldVars.get(0));
 
                 // For all other elements in the PROJECT list, add an assign.
                 for (int j = 1; j < workingElement.getProjectList().size(); j++) {
                     LogicalVariable newVar = context.newVar();
-                    AbstractFunctionCallExpression newVarRef =
+                    ILogicalExpression newVarRef =
                             getFieldAccessFunction(new MutableObject<>(branchCreator.createLastRecordVarRef()), -1,
                                     workingElement.getProjectList().get(j));
-
+                    newVarRef = createCastExpressionForArrayIndex(newVarRef, recordType, index, workingElement, j);
                     AssignOperator newAssignOp = new AssignOperator(newVar, new MutableObject<>(newVarRef));
                     newAssignOp.setSourceLocation(sourceLoc);
                     branchCreator.currentTop = introduceNewOp(branchCreator.currentTop, newAssignOp, true);
@@ -933,7 +946,7 @@ public class IntroduceSecondaryIndexInsertDeleteRule implements IAlgebraicRewrit
     }
 
     private ScalarFunctionCallExpression castFunction(FunctionIdentifier castFun, IAType requiredType,
-            AbstractFunctionCallExpression inputExpr, SourceLocation sourceLoc) throws CompilationException {
+            ILogicalExpression inputExpr, SourceLocation sourceLoc) throws CompilationException {
         BuiltinFunctionInfo castInfo = BuiltinFunctions.getBuiltinFunctionInfo(castFun);
         ScalarFunctionCallExpression castExpr = new ScalarFunctionCallExpression(castInfo);
         castExpr.setSourceLocation(sourceLoc);
@@ -955,6 +968,18 @@ public class IntroduceSecondaryIndexInsertDeleteRule implements IAlgebraicRewrit
         }
         constructorExpr.setSourceLocation(srcLoc);
         return constructorExpr;
+    }
+
+    private ILogicalExpression createCastExpressionForArrayIndex(ILogicalExpression varRef, ARecordType recordType,
+            Index index, Index.ArrayIndexElement workingElement, int fieldPos) throws AlgebricksException {
+        IAType fieldType = ArrayIndexUtil.getSubFieldType(recordType, workingElement.getUnnestList(),
+                workingElement.getProjectList().get(fieldPos));
+        if (fieldType != null) {
+            return varRef;
+        } else {
+            return castFunction(index.isEnforced() ? BuiltinFunctions.CAST_TYPE : BuiltinFunctions.CAST_TYPE_LAX,
+                    workingElement.getTypeList().get(fieldPos), varRef, sourceLoc);
+        }
     }
 
     private ILogicalOperator introduceNewOp(ILogicalOperator currentTopOp, ILogicalOperator newOp, boolean afterOp)
@@ -1092,8 +1117,10 @@ public class IntroduceSecondaryIndexInsertDeleteRule implements IAlgebraicRewrit
         private final List<LogicalVariable> lastFieldVars;
         private LogicalVariable lastRecordVar;
         private ILogicalOperator currentTop, currentBottom = null;
+        private final Index index;
 
-        public UnnestBranchCreator(LogicalVariable recordVar, ILogicalOperator sourceOperator) {
+        public UnnestBranchCreator(Index index, LogicalVariable recordVar, ILogicalOperator sourceOperator) {
+            this.index = index;
             this.lastRecordVar = recordVar;
             this.currentTop = sourceOperator;
             this.lastFieldVars = new ArrayList<>();
@@ -1191,19 +1218,23 @@ public class IntroduceSecondaryIndexInsertDeleteRule implements IAlgebraicRewrit
         }
 
         @Override
-        public void executeActionOnFinalArrayStep(ARecordType startingStepRecordType, List<String> fieldName,
-                boolean isNonArrayStep, boolean requiresOnlyOneUnnest) throws AlgebricksException {
+        public void executeActionOnFinalArrayStep(Index.ArrayIndexElement workingElement, ARecordType baseRecordType,
+                ARecordType startingStepRecordType, List<String> fieldName, boolean isNonArrayStep,
+                boolean requiresOnlyOneUnnest) throws AlgebricksException {
             // If the final value is nested inside a record, add an additional ASSIGN.
+            ILogicalExpression accessToFinalVar;
             if (!isNonArrayStep) {
-                return;
+                accessToFinalVar = createCastExpressionForArrayIndex(createLastRecordVarRef(), baseRecordType, index,
+                        workingElement, 0);
+            } else {
+                // Create the function to access our final field.
+                accessToFinalVar = (startingStepRecordType != null)
+                        ? getFieldAccessFunction(new MutableObject<>(createLastRecordVarRef()),
+                                startingStepRecordType.getFieldIndex(fieldName.get(0)), fieldName)
+                        : getFieldAccessFunction(new MutableObject<>(createLastRecordVarRef()), -1, fieldName);
+                accessToFinalVar =
+                        createCastExpressionForArrayIndex(accessToFinalVar, baseRecordType, index, workingElement, 0);
             }
-
-            // Create the function to access our final field.
-            AbstractFunctionCallExpression accessToFinalVar = (startingStepRecordType != null)
-                    ? getFieldAccessFunction(new MutableObject<>(createLastRecordVarRef()),
-                            startingStepRecordType.getFieldIndex(fieldName.get(0)), fieldName)
-                    : getFieldAccessFunction(new MutableObject<>(createLastRecordVarRef()), -1, fieldName);
-
             LogicalVariable finalVar = context.newVar();
             this.lastFieldVars.add(finalVar);
             AssignOperator assignOperator = new AssignOperator(finalVar, new MutableObject<>(accessToFinalVar));

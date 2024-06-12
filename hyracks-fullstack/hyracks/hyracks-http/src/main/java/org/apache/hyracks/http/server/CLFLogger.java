@@ -47,8 +47,9 @@ public class CLFLogger extends ChannelDuplexHandler {
     private static final Level ACCESS_LOG_LEVEL = Level.forName("ACCESS", 550);
     private static final DateTimeFormatter DATE_TIME_FORMATTER =
             DateTimeFormatter.ofPattern("dd/MMM/yyyy:HH:mm:ss Z").withZone(ZoneId.systemDefault());
-    private StringBuilder logLineBuilder;
+    private final StringBuilder logLineBuilder;
 
+    private final Logger accessLogger;
     private String clientIp;
     private Instant requestTime;
     private String reqLine;
@@ -58,7 +59,12 @@ public class CLFLogger extends ChannelDuplexHandler {
     private boolean lastChunk = false;
 
     public CLFLogger() {
+        this(LOGGER);
+    }
+
+    public CLFLogger(Logger accessLogger) {
         this.logLineBuilder = new StringBuilder();
+        this.accessLogger = accessLogger;
         respSize = 0;
     }
 
@@ -114,21 +120,22 @@ public class CLFLogger extends ChannelDuplexHandler {
     @Override
     public void flush(ChannelHandlerContext ctx) throws Exception {
         if (lastChunk) {
-            printAndPrepare();
+            printAndPrepare(ctx);
             lastChunk = false;
         }
         ctx.flush();
     }
 
-    private void printAndPrepare() {
-        if (!LOGGER.isEnabled(ACCESS_LOG_LEVEL)) {
+    private void printAndPrepare(ChannelHandlerContext ctx) {
+        if (!accessLogger.isEnabled(ACCESS_LOG_LEVEL)) {
             return;
         }
         logLineBuilder.append(clientIp);
         //identd value - not relevant here
         logLineBuilder.append(" - ");
+        logLineBuilder.append(getUserId(ctx));
         //no http auth or any auth either for that matter
-        logLineBuilder.append(" - [");
+        logLineBuilder.append(" [");
         logLineBuilder.append(DATE_TIME_FORMATTER.format(requestTime));
         logLineBuilder.append("] \"");
         logLineBuilder.append(reqLine);
@@ -136,8 +143,12 @@ public class CLFLogger extends ChannelDuplexHandler {
         logLineBuilder.append(" ").append(statusCode);
         logLineBuilder.append(" ").append(respSize);
         logLineBuilder.append(" ").append(userAgentRef);
-        LOGGER.log(ACCESS_LOG_LEVEL, logLineBuilder);
+        accessLogger.log(ACCESS_LOG_LEVEL, logLineBuilder);
         respSize = 0;
         logLineBuilder.setLength(0);
+    }
+
+    protected String getUserId(ChannelHandlerContext ctx) {
+        return "-";
     }
 }

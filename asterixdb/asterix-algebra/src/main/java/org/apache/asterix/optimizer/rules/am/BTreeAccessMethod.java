@@ -24,7 +24,6 @@ import static org.apache.asterix.optimizer.rules.am.AccessMethodUtils.CAST_NULL_
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -307,7 +306,7 @@ public class BTreeAccessMethod implements IAccessMethod {
 
         return AccessMethodUtils.finalizeJoinPlanTransformation(afterJoinRefs, joinRef, indexSubTree, probeSubTree,
                 analysisCtx, context, isLeftOuterJoin, isLeftOuterJoinWithSpecialGroupBy, leftOuterMissingValue,
-                indexSearchOp, newMissingNullPlaceHolderVar, conditionRef, dataset, chosenIndex);
+                indexSearchOp, newMissingNullPlaceHolderVar, conditionRef, dataset, chosenIndex, funcExpr);
     }
 
     /**
@@ -629,8 +628,9 @@ public class BTreeAccessMethod implements IAccessMethod {
                 assignKeyExprList, keyVarList, context, highKeyConstantAtRuntimeExpressions,
                 highKeyConstAtRuntimeExprVars);
 
-        BTreeJobGenParams jobGenParams = new BTreeJobGenParams(chosenIndex.getIndexName(), IndexType.BTREE,
-                dataset.getDataverseName(), dataset.getDatasetName(), retainInput, requiresBroadcast);
+        BTreeJobGenParams jobGenParams =
+                new BTreeJobGenParams(chosenIndex.getIndexName(), IndexType.BTREE, dataset.getDatabaseName(),
+                        dataset.getDataverseName(), dataset.getDatasetName(), retainInput, requiresBroadcast);
         jobGenParams
                 .setLowKeyInclusive(lowKeyInclusive[primaryIndexPostProccessingIsNeeded ? 0 : numSecondaryKeys - 1]);
         jobGenParams
@@ -766,13 +766,12 @@ public class BTreeAccessMethod implements IAccessMethod {
                 primaryIndexSearchFunc.setSourceLocation(dataSourceOp.getSourceLocation());
                 primaryIndexSearchFunc.setReturnsUniqueValues(true);
                 if (!leftOuterUnnestMapRequired) {
-                    unnestMapOp = new UnnestMapOperator(scanVariables,
-                            new MutableObject<ILogicalExpression>(primaryIndexSearchFunc), primaryIndexOutputTypes,
-                            retainInput);
+                    unnestMapOp = new UnnestMapOperator(scanVariables, new MutableObject<>(primaryIndexSearchFunc),
+                            primaryIndexOutputTypes, retainInput);
                 } else {
-                    unnestMapOp = new LeftOuterUnnestMapOperator(scanVariables,
-                            new MutableObject<ILogicalExpression>(primaryIndexSearchFunc), primaryIndexOutputTypes,
-                            leftOuterMissingValue);
+                    unnestMapOp =
+                            new LeftOuterUnnestMapOperator(scanVariables, new MutableObject<>(primaryIndexSearchFunc),
+                                    primaryIndexOutputTypes, leftOuterMissingValue);
                 }
             } else {
                 if (!leftOuterUnnestMapRequired) {
@@ -788,6 +787,7 @@ public class BTreeAccessMethod implements IAccessMethod {
             unnestMapOp.setExecutionMode(ExecutionMode.PARTITIONED);
             unnestMapOp.setSourceLocation(dataSourceOp.getSourceLocation());
             unnestMapOp.getInputs().add(new MutableObject<>(inputOp));
+            context.computeAndSetTypeEnvironmentForOperator(unnestMapOp);
             indexSearchOp = unnestMapOp;
 
             // Adds equivalence classes --- one equivalent class between a primary key
@@ -796,6 +796,7 @@ public class BTreeAccessMethod implements IAccessMethod {
                     metaRecordType, dataset, context);
         }
 
+        OperatorManipulationUtil.copyCardCostAnnotations(dataSourceOp, indexSearchOp);
         return indexSearchOp;
     }
 
@@ -1047,7 +1048,7 @@ public class BTreeAccessMethod implements IAccessMethod {
     }
 
     @Override
-    public Collection<String> getSecondaryIndexPreferences(IOptimizableFuncExpr optFuncExpr) {
+    public AbstractExpressionAnnotationWithIndexNames getSecondaryIndexAnnotation(IOptimizableFuncExpr optFuncExpr) {
         // If we are optimizing a join, check for the indexed nested-loop join hint.
         Class<? extends AbstractExpressionAnnotationWithIndexNames> annotationClass;
         if (optFuncExpr.getNumLogicalVars() == 2) {
@@ -1062,7 +1063,8 @@ public class BTreeAccessMethod implements IAccessMethod {
             // We are in the select case
             annotationClass = SecondaryIndexSearchPreferenceAnnotation.class;
         }
-        return AccessMethodUtils.getSecondaryIndexPreferences(optFuncExpr, annotationClass);
+
+        return AccessMethodUtils.getSecondaryIndexAnnotation(optFuncExpr, annotationClass);
     }
 
     @Override

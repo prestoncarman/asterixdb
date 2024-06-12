@@ -28,7 +28,7 @@ import org.apache.asterix.external.api.IRawRecord;
 import org.apache.asterix.external.api.IRecordDataParser;
 import org.apache.asterix.external.api.IRecordReader;
 import org.apache.asterix.external.util.ExternalDataConstants;
-import org.apache.asterix.external.util.FeedLogManager;
+import org.apache.asterix.external.util.IFeedLogManager;
 import org.apache.hyracks.api.comm.IFrameWriter;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
@@ -59,7 +59,7 @@ public class FeedRecordDataFlowController<T> extends AbstractFeedDataFlowControl
     protected State state = State.CREATED;
     protected long failedRecordsCount = 0;
 
-    public FeedRecordDataFlowController(IHyracksTaskContext ctx, FeedLogManager feedLogManager, int numOfOutputFields,
+    public FeedRecordDataFlowController(IHyracksTaskContext ctx, IFeedLogManager feedLogManager, int numOfOutputFields,
             IRecordDataParser<T> dataParser, IRecordReader<T> recordReader) throws HyracksDataException {
         super(ctx, feedLogManager, numOfOutputFields);
         this.dataParser = dataParser;
@@ -98,7 +98,7 @@ public class FeedRecordDataFlowController<T> extends AbstractFeedDataFlowControl
                 }
             }
         } catch (HyracksDataException e) {
-            LOGGER.log(Level.WARN, "Exception during ingestion", e);
+            logFailure(e);
             if (e.matches(ErrorCode.FEED_FAILED_WHILE_GETTING_A_NEW_RECORD)) {
                 // Failure but we know we can for sure push the previously parsed records safely
                 failure = e;
@@ -113,7 +113,7 @@ public class FeedRecordDataFlowController<T> extends AbstractFeedDataFlowControl
             }
         } catch (Throwable e) {
             failure = e;
-            LOGGER.log(Level.WARN, "Failure while operating a feed source", e);
+            logFailure(e);
         } finally {
             failure = finish(failure);
         }
@@ -126,7 +126,7 @@ public class FeedRecordDataFlowController<T> extends AbstractFeedDataFlowControl
     }
 
     private synchronized void setState(State newState) {
-        LOGGER.log(Level.INFO, "State is being set from " + state + " to " + newState);
+        LOGGER.info("controller is being set from {} to {} ", state, newState);
         state = newState;
     }
 
@@ -288,5 +288,13 @@ public class FeedRecordDataFlowController<T> extends AbstractFeedDataFlowControl
     @Override
     public void handleGenericEvent(ActiveManagerMessage event) {
         recordReader.handleGenericEvent(event);
+    }
+
+    private void logFailure(Throwable th) {
+        if (th instanceof InterruptedException || th.getCause() instanceof InterruptedException) {
+            LOGGER.warn("data flow controller interrupted", th);
+        } else {
+            LOGGER.warn("data flow controller failed", th);
+        }
     }
 }

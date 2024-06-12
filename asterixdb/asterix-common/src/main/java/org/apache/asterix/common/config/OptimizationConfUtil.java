@@ -18,7 +18,11 @@
  */
 package org.apache.asterix.common.config;
 
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.apache.asterix.common.exceptions.AsterixException;
 import org.apache.asterix.common.exceptions.ErrorCode;
@@ -28,13 +32,14 @@ import org.apache.hyracks.algebricks.core.algebra.operators.physical.AbstractJoi
 import org.apache.hyracks.algebricks.core.algebra.operators.physical.AbstractStableSortPOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.physical.WindowPOperator;
 import org.apache.hyracks.algebricks.core.rewriter.base.PhysicalOptimizationConfig;
+import org.apache.hyracks.api.config.IOption;
 import org.apache.hyracks.api.config.IOptionType;
 import org.apache.hyracks.api.exceptions.SourceLocation;
 import org.apache.hyracks.control.common.config.OptionTypes;
 
 public class OptimizationConfUtil {
 
-    private static final int MIN_FRAME_LIMIT_FOR_SORT = AbstractStableSortPOperator.MIN_FRAME_LIMIT_FOR_SORT;
+    public static final int MIN_FRAME_LIMIT_FOR_SORT = AbstractStableSortPOperator.MIN_FRAME_LIMIT_FOR_SORT;
     private static final int MIN_FRAME_LIMIT_FOR_GROUP_BY = AbstractGroupByPOperator.MIN_FRAME_LIMIT_FOR_GROUP_BY;
     private static final int MIN_FRAME_LIMIT_FOR_JOIN = AbstractJoinPOperator.MIN_FRAME_LIMIT_FOR_JOIN;
     private static final int MIN_FRAME_LIMIT_FOR_WINDOW = WindowPOperator.MIN_FRAME_LIMIT_FOR_WINDOW;
@@ -44,7 +49,8 @@ public class OptimizationConfUtil {
     }
 
     public static PhysicalOptimizationConfig createPhysicalOptimizationConf(CompilerProperties compilerProperties,
-            Map<String, Object> querySpecificConfig, SourceLocation sourceLoc) throws AlgebricksException {
+            Map<String, Object> querySpecificConfig, Set<String> parameterNames, SourceLocation sourceLoc)
+            throws AlgebricksException {
         int frameSize = compilerProperties.getFrameSize();
         int sortFrameLimit = getSortNumFrames(compilerProperties, querySpecificConfig, sourceLoc);
         int groupFrameLimit = getFrameLimit(CompilerProperties.COMPILER_GROUPMEMORY_KEY,
@@ -77,7 +83,7 @@ public class OptimizationConfUtil {
         int externalScanBufferSize = getExternalScanBufferSize(
                 (String) querySpecificConfig.get(CompilerProperties.COMPILER_EXTERNALSCANMEMORY_KEY),
                 compilerProperties.getExternalScanMemorySize(), sourceLoc);
-        boolean batchLookup = getBoolean(querySpecificConfig, CompilerProperties.COMPILER_BATCHED_LOOKUP_KEY,
+        boolean batchLookup = getBoolean(querySpecificConfig, CompilerProperties.COMPILER_BATCH_LOOKUP_KEY,
                 compilerProperties.isBatchLookup());
         boolean cbo =
                 getBoolean(querySpecificConfig, CompilerProperties.COMPILER_CBO_KEY, compilerProperties.getCBOMode());
@@ -87,6 +93,8 @@ public class OptimizationConfUtil {
                 compilerProperties.getForceJoinOrderMode());
         String queryPlanShape = getString(querySpecificConfig, CompilerProperties.COMPILER_QUERY_PLAN_SHAPE_KEY,
                 compilerProperties.getQueryPlanShapeMode());
+        boolean columnFilter = getBoolean(querySpecificConfig, CompilerProperties.COMPILER_COLUMN_FILTER_KEY,
+                compilerProperties.isColumnFilter());
 
         PhysicalOptimizationConfig physOptConf = new PhysicalOptimizationConfig();
         physOptConf.setFrameSize(frameSize);
@@ -110,6 +118,18 @@ public class OptimizationConfUtil {
         physOptConf.setCBOTestMode(cboTest);
         physOptConf.setForceJoinOrderMode(forceJoinOrder);
         physOptConf.setQueryPlanShapeMode(queryPlanShape);
+        physOptConf.setColumnFilter(columnFilter);
+
+        // We should have already validated the parameter names at this point...
+        Set<String> filteredParameterNames = new HashSet<>(parameterNames);
+        filteredParameterNames.removeAll(
+                Arrays.stream(CompilerProperties.Option.values()).map(IOption::ini).collect(Collectors.toSet()));
+        for (String parameterName : filteredParameterNames) {
+            Object parameterValue = querySpecificConfig.get(parameterName);
+            if (parameterValue != null) {
+                physOptConf.setExtensionProperty(parameterName, parameterValue);
+            }
+        }
         return physOptConf;
     }
 

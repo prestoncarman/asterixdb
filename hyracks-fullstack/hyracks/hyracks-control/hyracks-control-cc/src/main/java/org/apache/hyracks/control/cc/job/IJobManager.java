@@ -112,6 +112,11 @@ public interface IJobManager {
     Collection<JobRun> getRunningJobs();
 
     /**
+     * @return number of jobs that are currently running.
+     */
+    int getRunningJobsCount();
+
+    /**
      * @return all jobs that are currently waiting in the job queue.
      */
     Collection<JobRun> getPendingJobs();
@@ -125,4 +130,24 @@ public interface IJobManager {
      * @return the maximum number of jobs to queue before rejecting new jobs
      */
     int getJobQueueCapacity();
+
+    /**
+     * @return total successful jobs
+     */
+    long getSuccessfulJobs();
+
+    /**
+     * @return total failed jobs
+     */
+    long getTotalFailedJobs();
+
+    /**
+     * @return total cancelled jobs
+     */
+    long getTotalCancelledJobs();
+
+    /**
+     * @return total rejected jobs
+     */
+    long getTotalRejectedJobs();
 }

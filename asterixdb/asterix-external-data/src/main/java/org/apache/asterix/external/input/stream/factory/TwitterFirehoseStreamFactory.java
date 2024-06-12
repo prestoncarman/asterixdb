@@ -24,12 +24,13 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.asterix.common.dataflow.ICcApplicationContext;
+import org.apache.asterix.common.external.IExternalFilterEvaluatorFactory;
 import org.apache.asterix.external.api.AsterixInputStream;
+import org.apache.asterix.external.api.IExternalDataRuntimeContext;
 import org.apache.asterix.external.api.IInputStreamFactory;
 import org.apache.asterix.external.input.stream.TwitterFirehoseInputStream;
 import org.apache.hyracks.algebricks.common.constraints.AlgebricksAbsolutePartitionConstraint;
 import org.apache.hyracks.api.application.IServiceContext;
-import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.exceptions.IWarningCollector;
 
@@ -86,20 +87,15 @@ public class TwitterFirehoseStreamFactory implements IInputStreamFactory {
 
     @Override
     public void configure(IServiceContext serviceCtx, Map<String, String> configuration,
-            IWarningCollector warningCollector) {
+            IWarningCollector warningCollector, IExternalFilterEvaluatorFactory filterEvaluatorFactory) {
         this.serviceCtx = serviceCtx;
         this.configuration = configuration;
     }
 
     @Override
-    public boolean isIndexible() {
-        return false;
-    }
-
-    @Override
-    public AsterixInputStream createInputStream(IHyracksTaskContext ctx, int partition) throws HyracksDataException {
+    public AsterixInputStream createInputStream(IExternalDataRuntimeContext context) throws HyracksDataException {
         try {
-            return new TwitterFirehoseInputStream(configuration, partition);
+            return new TwitterFirehoseInputStream(configuration, context.getPartition());
         } catch (IOException e) {
             throw HyracksDataException.create(e);
         }

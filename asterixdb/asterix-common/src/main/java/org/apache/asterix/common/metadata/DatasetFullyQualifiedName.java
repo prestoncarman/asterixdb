@@ -23,13 +23,19 @@ import java.util.Objects;
 
 public class DatasetFullyQualifiedName implements Serializable {
 
-    private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 2L;
+    private final String databaseName;
     private final DataverseName dataverseName;
     private final String datasetName;
 
-    public DatasetFullyQualifiedName(DataverseName dataverseName, String datasetName) {
+    public DatasetFullyQualifiedName(String databaseName, DataverseName dataverseName, String datasetName) {
+        this.databaseName = databaseName;
         this.dataverseName = dataverseName;
         this.datasetName = datasetName;
+    }
+
+    public String getDatabaseName() {
+        return databaseName;
     }
 
     public DataverseName getDataverseName() {
@@ -42,7 +48,8 @@ public class DatasetFullyQualifiedName implements Serializable {
 
     @Override
     public String toString() {
-        return dataverseName + "." + datasetName;
+        return (MetadataConstants.DEFAULT_DATABASE.equals(databaseName) ? "" : datasetName + ".") + dataverseName + "."
+                + datasetName;
     }
 
     @Override
@@ -52,13 +59,14 @@ public class DatasetFullyQualifiedName implements Serializable {
         }
         if (o instanceof DatasetFullyQualifiedName) {
             DatasetFullyQualifiedName that = (DatasetFullyQualifiedName) o;
-            return dataverseName.equals(that.dataverseName) && datasetName.equals(that.datasetName);
+            return Objects.equals(databaseName, that.databaseName) && dataverseName.equals(that.dataverseName)
+                    && datasetName.equals(that.datasetName);
         }
         return false;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(dataverseName, datasetName);
+        return Objects.hash(databaseName, dataverseName, datasetName);
     }
 }

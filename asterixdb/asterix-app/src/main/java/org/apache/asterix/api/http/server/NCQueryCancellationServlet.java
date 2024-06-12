@@ -18,7 +18,7 @@
  */
 package org.apache.asterix.api.http.server;
 
-import static org.apache.asterix.api.http.server.CcQueryCancellationServlet.REQUEST_UUID_PARAM_NAME;
+import static org.apache.asterix.api.http.server.ActiveRequestsServlet.REQUEST_UUID_PARAM_NAME;
 import static org.apache.asterix.app.message.ExecuteStatementRequestMessage.DEFAULT_NC_TIMEOUT_MILLIS;
 
 import java.util.concurrent.ConcurrentMap;
@@ -67,6 +67,9 @@ public class NCQueryCancellationServlet extends AbstractServlet {
             CancelQueryRequest cancelQueryMessage = new CancelQueryRequest(serviceCtx.getNodeId(),
                     cancelQueryFuture.getFutureId(), uuid, clientContextId);
             // TODO(mblow): multicc -- need to send cancellation to the correct cc
+            if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug("Sending CancelQueryRequest with uuid:{}, clientContextID:{}", uuid, clientContextId);
+            }
             messageBroker.sendMessageToPrimaryCC(cancelQueryMessage);
             CancelQueryResponse cancelResponse =
                     (CancelQueryResponse) cancelQueryFuture.get(DEFAULT_NC_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);

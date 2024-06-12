@@ -21,8 +21,6 @@ package org.apache.asterix.common.ioopcallbacks;
 
 import static org.apache.asterix.common.storage.ResourceReference.getComponentSequence;
 
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayDeque;
 import java.util.Collection;
 import java.util.Deque;
@@ -56,7 +54,6 @@ import org.apache.hyracks.storage.am.lsm.common.impls.IndexComponentFileReferenc
 import org.apache.hyracks.storage.am.lsm.common.impls.LSMComponentId;
 import org.apache.hyracks.storage.am.lsm.common.util.ComponentUtils;
 import org.apache.hyracks.storage.am.lsm.common.util.LSMComponentIdUtils;
-import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -74,16 +71,18 @@ public class LSMIOOperationCallback implements ILSMIOOperationCallback {
     private final IIndexCheckpointManagerProvider indexCheckpointManagerProvider;
     protected final DatasetInfo dsInfo;
     protected final ILSMIndex lsmIndex;
+    private final int partition;
     private long firstLsnForCurrentMemoryComponent = 0L;
     private long persistenceLsn = 0L;
     private int pendingFlushes = 0;
-    private Deque<ILSMComponentId> componentIds = new ArrayDeque<>();
+    private final Deque<ILSMComponentId> componentIds = new ArrayDeque<>();
 
     public LSMIOOperationCallback(DatasetInfo dsInfo, ILSMIndex lsmIndex, ILSMComponentId componentId,
             IIndexCheckpointManagerProvider indexCheckpointManagerProvider) {
         this.dsInfo = dsInfo;
         this.lsmIndex = lsmIndex;
         this.indexCheckpointManagerProvider = indexCheckpointManagerProvider;
+        this.partition = ResourceReference.ofIndex(lsmIndex.getIndexIdentifier()).getPartitionNum();
         componentIds.add(componentId);
     }
 
@@ -140,7 +139,7 @@ public class LSMIOOperationCallback implements ILSMIOOperationCallback {
         }
     }
 
-    private void addComponentToCheckpoint(ILSMIOOperation operation) throws HyracksDataException {
+    protected void addComponentToCheckpoint(ILSMIOOperation operation) throws HyracksDataException {
         // will always update the checkpoint file even if no new component was created
         FileReference target = operation.getTarget();
         Map<String, Object> map = operation.getParameters();
@@ -152,7 +151,7 @@ public class LSMIOOperationCallback implements ILSMIOOperationCallback {
         indexCheckpointManagerProvider.get(ref).flushed(componentSequence, lsn, id.getMaxId());
     }
 
-    private void deleteComponentsFromCheckpoint(ILSMIOOperation operation) throws HyracksDataException {
+    protected void deleteComponentsFromCheckpoint(ILSMIOOperation operation) throws HyracksDataException {
         // component was deleted... if a flush, do nothing.. if a merge, must update the checkpoint file
         if (operation.getIOOpertionType() == LSMIOOperationType.MERGE) {
             // Get component id of the last disk component
@@ -173,11 +172,11 @@ public class LSMIOOperationCallback implements ILSMIOOperationCallback {
         synchronized (lsmIndex.getOperationTracker()) {
             List<ILSMDiskComponent> diskComponents = lsmIndex.getDiskComponents();
             if (diskComponents.isEmpty()) {
-                LOGGER.log(Level.INFO, "There are no disk components");
+                LOGGER.info("there are no disk components for {}", lsmIndex);
                 return LSMComponentId.EMPTY_INDEX_LAST_COMPONENT_ID;
             }
             if (deletedComponents.contains(diskComponents.get(diskComponents.size() - 1))) {
-                LOGGER.log(Level.INFO, "All disk components have been deleted");
+                LOGGER.info("all disk components have been deleted for {}", lsmIndex);
                 return LSMComponentId.EMPTY_INDEX_LAST_COMPONENT_ID;
             }
             int mostRecentComponentIndex = 0;
@@ -259,7 +258,7 @@ public class LSMIOOperationCallback implements ILSMIOOperationCallback {
 
     @Override
     public synchronized void scheduled(ILSMIOOperation operation) throws HyracksDataException {
-        dsInfo.declareActiveIOOperation(operation.getIOOpertionType());
+        dsInfo.declareActiveIOOperation(operation.getIOOpertionType(), partition);
         if (operation.getIOOpertionType() == LSMIOOperationType.FLUSH) {
             pendingFlushes++;
             FlushOperation flush = (FlushOperation) operation;
@@ -282,7 +281,7 @@ public class LSMIOOperationCallback implements ILSMIOOperationCallback {
                         pendingFlushes == 0 ? firstLsnForCurrentMemoryComponent : (Long) map.get(KEY_FLUSH_LOG_LSN);
             }
         }
-        dsInfo.undeclareActiveIOOperation(operation.getIOOpertionType());
+        dsInfo.undeclareActiveIOOperation(operation.getIOOpertionType(), partition);
     }
 
     public synchronized boolean hasPendingFlush() {
@@ -300,17 +299,15 @@ public class LSMIOOperationCallback implements ILSMIOOperationCallback {
         return indexCheckpointManagerProvider.get(resourceReference).getValidComponentSequence();
     }
 
-    private boolean isMerge(ILSMIOOperation operation) {
+    protected boolean isMerge(ILSMIOOperation operation) {
         return operation.getIOOpertionType() == LSMIOOperationType.MERGE
                 && operation.getAccessor().getOpContext().getOperation() != IndexOperation.DELETE_COMPONENTS;
     }
 
-    private static FileReference getOperationMaskFilePath(ILSMIOOperation operation) {
+    protected static FileReference getOperationMaskFilePath(ILSMIOOperation operation) {
         FileReference target = operation.getTarget();
-        final String componentSequence = getComponentSequence(target.getFile().getAbsolutePath());
-        Path idxRelPath = Paths.get(target.getRelativePath()).getParent();
-        Path maskFileRelPath =
-                Paths.get(idxRelPath.toString(), StorageConstants.COMPONENT_MASK_FILE_PREFIX + componentSequence);
-        return new FileReference(target.getDeviceHandle(), maskFileRelPath.toString());
+        String componentSequence = getComponentSequence(target.getFile().getAbsolutePath());
+        FileReference idxRelPath = target.getParent();
+        return idxRelPath.getChild(StorageConstants.COMPONENT_MASK_FILE_PREFIX + componentSequence);
     }
 }

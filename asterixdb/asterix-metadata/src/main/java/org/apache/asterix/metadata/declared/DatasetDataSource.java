@@ -19,13 +19,16 @@
 package org.apache.asterix.metadata.declared;
 
 import static org.apache.asterix.external.util.ExternalDataConstants.KEY_EXTERNAL_SCAN_BUFFER_SIZE;
+import static org.apache.asterix.external.util.ExternalDataConstants.SUBPATH;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import org.apache.asterix.common.config.DatasetConfig.DatasetType;
+import org.apache.asterix.common.external.IExternalFilterEvaluatorFactory;
 import org.apache.asterix.common.metadata.DataverseName;
 import org.apache.asterix.external.api.ITypedAdapterFactory;
 import org.apache.asterix.external.util.ExternalDataUtils;
@@ -35,17 +38,19 @@ import org.apache.asterix.metadata.entities.Dataset;
 import org.apache.asterix.metadata.entities.ExternalDatasetDetails;
 import org.apache.asterix.metadata.entities.Index;
 import org.apache.asterix.metadata.entities.InternalDatasetDetails;
+import org.apache.asterix.metadata.utils.IndexUtil;
 import org.apache.asterix.metadata.utils.KeyFieldTypeUtil;
 import org.apache.asterix.om.types.ARecordType;
 import org.apache.asterix.om.types.IAType;
-import org.apache.asterix.runtime.projection.DataProjectionInfo;
+import org.apache.asterix.runtime.projection.ExternalDatasetProjectionFiltrationInfo;
 import org.apache.hyracks.algebricks.common.constraints.AlgebricksPartitionConstraint;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.common.utils.Pair;
+import org.apache.hyracks.algebricks.core.algebra.base.DefaultProjectionFiltrationInfo;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import org.apache.hyracks.algebricks.core.algebra.expressions.IVariableTypeEnvironment;
 import org.apache.hyracks.algebricks.core.algebra.metadata.IDataSource;
-import org.apache.hyracks.algebricks.core.algebra.metadata.IProjectionInfo;
+import org.apache.hyracks.algebricks.core.algebra.metadata.IProjectionFiltrationInfo;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.IOperatorSchema;
 import org.apache.hyracks.algebricks.core.algebra.properties.INodeDomain;
 import org.apache.hyracks.algebricks.core.jobgen.impl.JobGenContext;
@@ -53,7 +58,7 @@ import org.apache.hyracks.algebricks.core.rewriter.base.PhysicalOptimizationConf
 import org.apache.hyracks.api.dataflow.IOperatorDescriptor;
 import org.apache.hyracks.api.job.JobSpecification;
 import org.apache.hyracks.storage.am.common.api.ITupleFilterFactory;
-import org.apache.hyracks.storage.am.common.impls.DefaultTupleProjectorFactory;
+import org.apache.hyracks.storage.common.projection.ITupleProjectorFactory;
 
 public class DatasetDataSource extends DataSource {
 
@@ -118,54 +123,88 @@ public class DatasetDataSource extends DataSource {
             List<LogicalVariable> minFilterVars, List<LogicalVariable> maxFilterVars,
             ITupleFilterFactory tupleFilterFactory, long outputLimit, IOperatorSchema opSchema,
             IVariableTypeEnvironment typeEnv, JobGenContext context, JobSpecification jobSpec, Object implConfig,
-            IProjectionInfo<?> projectionInfo) throws AlgebricksException {
+            IProjectionFiltrationInfo projectionFiltrationInfo) throws AlgebricksException {
+        String itemTypeName = dataset.getItemTypeName();
+        String itemTypeDatabase = dataset.getItemTypeDatabaseName();
+        IAType itemType = MetadataManager.INSTANCE.getDatatype(metadataProvider.getMetadataTxnContext(),
+                itemTypeDatabase, dataset.getItemTypeDataverseName(), itemTypeName).getDatatype();
         switch (dataset.getDatasetType()) {
             case EXTERNAL:
-                Dataset externalDataset = ((DatasetDataSource) dataSource).getDataset();
-                String itemTypeName = externalDataset.getItemTypeName();
-                IAType itemType = MetadataManager.INSTANCE.getDatatype(metadataProvider.getMetadataTxnContext(),
-                        externalDataset.getItemTypeDataverseName(), itemTypeName).getDatatype();
-
+                DatasetDataSource externalDataSource = (DatasetDataSource) dataSource;
+                Dataset externalDataset = externalDataSource.getDataset();
                 ExternalDatasetDetails edd = (ExternalDatasetDetails) externalDataset.getDatasetDetails();
                 PhysicalOptimizationConfig physicalOptimizationConfig = context.getPhysicalOptimizationConfig();
                 int externalScanBufferSize = physicalOptimizationConfig.getExternalScanBufferSize();
-                Map<String, String> properties = addExternalProjectionInfo(projectionInfo, edd.getProperties());
+                Map<String, String> properties =
+                        addExternalProjectionInfo(projectionFiltrationInfo, edd.getProperties());
+                properties = addSubPath(externalDataSource.getProperties(), properties);
                 properties.put(KEY_EXTERNAL_SCAN_BUFFER_SIZE, String.valueOf(externalScanBufferSize));
-                ITypedAdapterFactory adapterFactory = metadataProvider.getConfiguredAdapterFactory(externalDataset,
-                        edd.getAdapter(), properties, (ARecordType) itemType, null, context.getWarningCollector());
-                return metadataProvider.buildExternalDatasetDataScannerRuntime(jobSpec, itemType, adapterFactory,
+                IExternalFilterEvaluatorFactory filterEvaluatorFactory = metadataProvider
+                        .createExternalFilterEvaluatorFactory(context, typeEnv, projectionFiltrationInfo, properties);
+                ITypedAdapterFactory adapterFactory =
+                        metadataProvider.getConfiguredAdapterFactory(externalDataset, edd.getAdapter(), properties,
+                                (ARecordType) itemType, context.getWarningCollector(), filterEvaluatorFactory);
+                return metadataProvider.getExternalDatasetScanRuntime(jobSpec, itemType, adapterFactory,
                         tupleFilterFactory, outputLimit);
             case INTERNAL:
                 DataSourceId id = getId();
                 DataverseName dataverseName = id.getDataverseName();
+                String database = id.getDatabaseName();
                 String datasetName = id.getDatasourceName();
                 Index primaryIndex = MetadataManager.INSTANCE.getIndex(metadataProvider.getMetadataTxnContext(),
-                        dataverseName, datasetName, datasetName);
+                        database, dataverseName, datasetName, datasetName);
+
+                ARecordType datasetType = (ARecordType) itemType;
+                ARecordType metaItemType = null;
+                if (dataset.hasMetaPart()) {
+                    String metaItemTypeDatabase = dataset.getMetaItemTypeDatabaseName();
+                    metaItemType = (ARecordType) MetadataManager.INSTANCE
+                            .getDatatype(metadataProvider.getMetadataTxnContext(), metaItemTypeDatabase,
+                                    dataset.getMetaItemTypeDataverseName(), dataset.getMetaItemTypeName())
+                            .getDatatype();
+                }
+                datasetType = (ARecordType) metadataProvider.findTypeForDatasetWithoutType(datasetType, metaItemType,
+                        dataset);
+                int numberOfPrimaryKeys = dataset.getPrimaryKeys().size();
+                ITupleProjectorFactory tupleProjectorFactory =
+                        IndexUtil.createTupleProjectorFactory(context, typeEnv, dataset.getDatasetFormatInfo(),
+                                projectionFiltrationInfo, datasetType, metaItemType, numberOfPrimaryKeys);
 
                 int[] minFilterFieldIndexes = createFilterIndexes(minFilterVars, opSchema);
                 int[] maxFilterFieldIndexes = createFilterIndexes(maxFilterVars, opSchema);
-                return metadataProvider.buildBtreeRuntime(jobSpec, opSchema, typeEnv, context, true, false, null,
+                return metadataProvider.getBtreeSearchRuntime(jobSpec, opSchema, typeEnv, context, true, false, null,
                         ((DatasetDataSource) dataSource).getDataset(), primaryIndex.getIndexName(), null, null, true,
                         true, false, null, minFilterFieldIndexes, maxFilterFieldIndexes, tupleFilterFactory,
-                        outputLimit, false, false, DefaultTupleProjectorFactory.INSTANCE);
+                        outputLimit, false, false, tupleProjectorFactory, false);
             default:
                 throw new AlgebricksException("Unknown datasource type");
         }
     }
 
-    private Map<String, String> addExternalProjectionInfo(IProjectionInfo<?> projectionInfo,
+    private Map<String, String> addExternalProjectionInfo(IProjectionFiltrationInfo projectionInfo,
             Map<String, String> properties) {
         Map<String, String> propertiesCopy = properties;
-        if (projectionInfo != null) {
+        if (projectionInfo != DefaultProjectionFiltrationInfo.INSTANCE) {
             //properties could be cached and reused, so we make a copy per query
             propertiesCopy = new HashMap<>(properties);
             try {
-                DataProjectionInfo externalProjectionInfo = (DataProjectionInfo) projectionInfo;
+                ExternalDatasetProjectionFiltrationInfo externalProjectionInfo =
+                        (ExternalDatasetProjectionFiltrationInfo) projectionInfo;
                 ExternalDataUtils.setExternalDataProjectionInfo(externalProjectionInfo, propertiesCopy);
             } catch (IOException e) {
                 throw new IllegalStateException(e);
             }
         }
+        return propertiesCopy;
+    }
+
+    private Map<String, String> addSubPath(Map<String, Serializable> dataSourceProps, Map<String, String> properties) {
+        Serializable subPath = dataSourceProps.get(SUBPATH);
+        if (!(subPath instanceof String)) {
+            return properties;
+        }
+        Map<String, String> propertiesCopy = new HashMap<>(properties);
+        propertiesCopy.put(SUBPATH, (String) subPath);
         return propertiesCopy;
     }
 
@@ -186,4 +225,8 @@ public class DatasetDataSource extends DataSource {
         return dataset.getDatasetType() == DatasetType.EXTERNAL;
     }
 
+    @Override
+    public boolean compareProperties() {
+        return dataset.getDatasetType() == DatasetType.EXTERNAL;
+    }
 }

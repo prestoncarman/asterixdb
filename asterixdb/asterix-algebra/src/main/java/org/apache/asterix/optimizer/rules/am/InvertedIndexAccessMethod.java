@@ -20,7 +20,6 @@ package org.apache.asterix.optimizer.rules.am;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -28,6 +27,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.asterix.common.annotations.AbstractExpressionAnnotationWithIndexNames;
 import org.apache.asterix.common.annotations.SecondaryIndexSearchPreferenceAnnotation;
 import org.apache.asterix.common.config.DatasetConfig.IndexType;
 import org.apache.asterix.common.exceptions.CompilationException;
@@ -417,9 +417,9 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
         // we made sure indexSubTree has datasource scan
         DataSourceScanOperator dataSourceScan = (DataSourceScanOperator) indexSubTree.getDataSourceRef().getValue();
 
-        InvertedIndexJobGenParams jobGenParams =
-                new InvertedIndexJobGenParams(chosenIndex.getIndexName(), chosenIndex.getIndexType(),
-                        dataset.getDataverseName(), dataset.getDatasetName(), retainInput, requiresBroadcast);
+        InvertedIndexJobGenParams jobGenParams = new InvertedIndexJobGenParams(chosenIndex.getIndexName(),
+                chosenIndex.getIndexType(), chosenIndex.getDatabaseName(), dataset.getDataverseName(),
+                dataset.getDatasetName(), retainInput, requiresBroadcast);
         // Add function-specific args such as search modifier, and possibly a similarity threshold.
         addFunctionSpecificArgs(optFuncExpr, jobGenParams);
         // Add the type of search key from the optFuncExpr.
@@ -1332,8 +1332,8 @@ public class InvertedIndexAccessMethod implements IAccessMethod {
     }
 
     @Override
-    public Collection<String> getSecondaryIndexPreferences(IOptimizableFuncExpr optFuncExpr) {
-        return AccessMethodUtils.getSecondaryIndexPreferences(optFuncExpr,
+    public AbstractExpressionAnnotationWithIndexNames getSecondaryIndexAnnotation(IOptimizableFuncExpr optFuncExpr) {
+        return AccessMethodUtils.getSecondaryIndexAnnotation(optFuncExpr,
                 SecondaryIndexSearchPreferenceAnnotation.class);
     }
 

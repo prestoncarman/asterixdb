@@ -54,6 +54,7 @@ import org.apache.asterix.runtime.aggregates.scalar.ScalarSqlKurtosisAggregateDe
 import org.apache.asterix.runtime.aggregates.scalar.ScalarSqlKurtosisDistinctAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.scalar.ScalarSqlMaxAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.scalar.ScalarSqlMaxDistinctAggregateDescriptor;
+import org.apache.asterix.runtime.aggregates.scalar.ScalarSqlMedianAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.scalar.ScalarSqlMinAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.scalar.ScalarSqlMinDistinctAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.scalar.ScalarSqlSkewnessAggregateDescriptor;
@@ -156,6 +157,7 @@ import org.apache.asterix.runtime.aggregates.std.GlobalSkewnessAggregateDescript
 import org.apache.asterix.runtime.aggregates.std.GlobalSqlAvgAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.GlobalSqlKurtosisAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.GlobalSqlMaxAggregateDescriptor;
+import org.apache.asterix.runtime.aggregates.std.GlobalSqlMedianAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.GlobalSqlMinAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.GlobalSqlSkewnessAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.GlobalSqlStddevAggregateDescriptor;
@@ -178,6 +180,7 @@ import org.apache.asterix.runtime.aggregates.std.IntermediateSkewnessAggregateDe
 import org.apache.asterix.runtime.aggregates.std.IntermediateSqlAvgAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.IntermediateSqlKurtosisAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.IntermediateSqlMaxAggregateDescriptor;
+import org.apache.asterix.runtime.aggregates.std.IntermediateSqlMedianAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.IntermediateSqlMinAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.IntermediateSqlSkewnessAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.IntermediateSqlStddevAggregateDescriptor;
@@ -202,6 +205,7 @@ import org.apache.asterix.runtime.aggregates.std.LocalSkewnessAggregateDescripto
 import org.apache.asterix.runtime.aggregates.std.LocalSqlAvgAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.LocalSqlKurtosisAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.LocalSqlMaxAggregateDescriptor;
+import org.apache.asterix.runtime.aggregates.std.LocalSqlMedianAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.LocalSqlMinAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.LocalSqlSkewnessAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.LocalSqlStddevAggregateDescriptor;
@@ -225,6 +229,7 @@ import org.apache.asterix.runtime.aggregates.std.SqlAvgAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.SqlCountAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.SqlKurtosisAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.SqlMaxAggregateDescriptor;
+import org.apache.asterix.runtime.aggregates.std.SqlMedianAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.SqlMinAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.SqlSkewnessAggregateDescriptor;
 import org.apache.asterix.runtime.aggregates.std.SqlStddevAggregateDescriptor;
@@ -450,10 +455,12 @@ import org.apache.asterix.runtime.evaluators.functions.OrDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.RandomDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.RandomWithSeedDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.ReferenceTileDescriptor;
+import org.apache.asterix.runtime.evaluators.functions.SerializedSizeDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.SleepDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.SpatialAreaDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.SpatialCellDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.SpatialDistanceDescriptor;
+import org.apache.asterix.runtime.evaluators.functions.SpatialIntersectDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.StringConcatDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.StringContainsDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.StringEndsWithDescriptor;
@@ -609,6 +616,7 @@ import org.apache.asterix.runtime.evaluators.functions.temporal.QuarterOfYearDes
 import org.apache.asterix.runtime.evaluators.functions.temporal.TimeFromDatetimeDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.temporal.TimeFromUnixTimeInMsDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.temporal.UnixTimeFromDateInDaysDescriptor;
+import org.apache.asterix.runtime.evaluators.functions.temporal.UnixTimeFromDateInMsDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.temporal.UnixTimeFromDatetimeInMsDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.temporal.UnixTimeFromDatetimeInMsWithTzDescriptor;
 import org.apache.asterix.runtime.evaluators.functions.temporal.UnixTimeFromDatetimeInSecsDescriptor;
@@ -830,6 +838,10 @@ public final class FunctionCollection implements IFunctionCollection {
         fc.add(LocalSqlMinAggregateDescriptor.FACTORY);
         fc.add(IntermediateSqlMinAggregateDescriptor.FACTORY);
         fc.add(GlobalSqlMinAggregateDescriptor.FACTORY);
+        fc.add(SqlMedianAggregateDescriptor.FACTORY);
+        fc.add(LocalSqlMedianAggregateDescriptor.FACTORY);
+        fc.add(IntermediateSqlMedianAggregateDescriptor.FACTORY);
+        fc.add(GlobalSqlMedianAggregateDescriptor.FACTORY);
         fc.add(SqlStddevAggregateDescriptor.FACTORY);
         fc.add(LocalSqlStddevAggregateDescriptor.FACTORY);
         fc.add(IntermediateSqlStddevAggregateDescriptor.FACTORY);
@@ -909,6 +921,7 @@ public final class FunctionCollection implements IFunctionCollection {
         fc.add(ScalarSqlMaxDistinctAggregateDescriptor.FACTORY);
         fc.add(ScalarSqlMinAggregateDescriptor.FACTORY);
         fc.add(ScalarSqlMinDistinctAggregateDescriptor.FACTORY);
+        fc.add(ScalarSqlMedianAggregateDescriptor.FACTORY);
         fc.add(ScalarSqlStddevAggregateDescriptor.FACTORY);
         fc.add(ScalarSqlStddevDistinctAggregateDescriptor.FACTORY);
         fc.add(ScalarSqlStddevPopAggregateDescriptor.FACTORY);
@@ -1190,6 +1203,7 @@ public final class FunctionCollection implements IFunctionCollection {
         fc.add(LineRectanglePolygonAccessor.FACTORY);
         fc.add(ReferenceTileDescriptor.FACTORY);
         fc.add(GetIntersectionDescriptor.FACTORY);
+        fc.add(SpatialIntersectDescriptor.FACTORY);
 
         // full-text function
         fc.add(FullTextContainsFunctionDescriptor.FACTORY);
@@ -1233,6 +1247,7 @@ public final class FunctionCollection implements IFunctionCollection {
 
         // Temporal functions
         fc.add(UnixTimeFromDateInDaysDescriptor.FACTORY);
+        fc.add(UnixTimeFromDateInMsDescriptor.FACTORY);
         fc.add(UnixTimeFromTimeInMsDescriptor.FACTORY);
         fc.add(UnixTimeFromDatetimeInMsDescriptor.FACTORY);
         fc.add(UnixTimeFromDatetimeInMsWithTzDescriptor.FACTORY);
@@ -1337,6 +1352,7 @@ public final class FunctionCollection implements IFunctionCollection {
         // Other functions
         fc.add(DecodeDataverseNameDescriptor.FACTORY);
         fc.add(RandomWithSeedDescriptor.FACTORY);
+        fc.add(SerializedSizeDescriptor.FACTORY);
 
         ServiceLoader.load(IFunctionRegistrant.class).iterator().forEachRemaining(c -> c.register(fc));
         return fc;

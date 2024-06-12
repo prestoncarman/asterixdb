@@ -58,10 +58,15 @@ import java.util.regex.Matcher;
 import org.apache.asterix.common.api.IApplicationContext;
 import org.apache.asterix.common.exceptions.CompilationException;
 import org.apache.asterix.common.exceptions.ErrorCode;
+import org.apache.asterix.common.external.IExternalFilterEvaluator;
 import org.apache.asterix.external.input.record.reader.abstracts.AbstractExternalInputStreamFactory;
 import org.apache.asterix.external.util.ExternalDataConstants;
+import org.apache.asterix.external.util.ExternalDataPrefix;
+import org.apache.asterix.external.util.ExternalDataUtils;
 import org.apache.asterix.external.util.HDFSUtils;
 import org.apache.hadoop.mapred.JobConf;
+import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
+import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.exceptions.IWarningCollector;
 import org.apache.hyracks.api.exceptions.SourceLocation;
 import org.apache.hyracks.api.exceptions.Warning;
@@ -218,7 +223,7 @@ public class AzureUtils {
                         pemCertificate.invoke(certificate, certificateContent, clientCertificatePassword);
                     }
                 } catch (NoSuchMethodException | InvocationTargetException | IllegalAccessException ex) {
-                    throw new CompilationException(EXTERNAL_SOURCE_ERROR, ex.getMessage());
+                    throw new CompilationException(EXTERNAL_SOURCE_ERROR, ex, ex.getMessage());
                 }
                 builder.credential(certificate.build());
             }
@@ -238,7 +243,7 @@ public class AzureUtils {
         try {
             return builder.buildClient();
         } catch (Exception ex) {
-            throw new CompilationException(ErrorCode.EXTERNAL_SOURCE_ERROR, getMessageOrToString(ex));
+            throw new CompilationException(ErrorCode.EXTERNAL_SOURCE_ERROR, ex, getMessageOrToString(ex));
         }
     }
 
@@ -371,7 +376,7 @@ public class AzureUtils {
                         pemCertificate.invoke(certificate, certificateContent, clientCertificatePassword);
                     }
                 } catch (NoSuchMethodException | InvocationTargetException | IllegalAccessException ex) {
-                    throw new CompilationException(EXTERNAL_SOURCE_ERROR, getMessageOrToString(ex));
+                    throw new CompilationException(EXTERNAL_SOURCE_ERROR, ex, getMessageOrToString(ex));
                 }
                 builder.credential(certificate.build());
             }
@@ -391,23 +396,28 @@ public class AzureUtils {
         try {
             return builder.buildClient();
         } catch (Exception ex) {
-            throw new CompilationException(ErrorCode.EXTERNAL_SOURCE_ERROR, getMessageOrToString(ex));
+            throw new CompilationException(ErrorCode.EXTERNAL_SOURCE_ERROR, ex, getMessageOrToString(ex));
         }
+    }
+
+    public static List<BlobItem> listBlobItems(IApplicationContext context, Map<String, String> configuration,
+            AbstractExternalInputStreamFactory.IncludeExcludeMatcher includeExcludeMatcher,
+            IWarningCollector warningCollector, ExternalDataPrefix externalDataPrefix,
+            IExternalFilterEvaluator evaluator) throws CompilationException {
+        BlobServiceClient blobServiceClient = buildAzureBlobClient(context, configuration);
+        return listBlobItems(blobServiceClient, configuration, includeExcludeMatcher, warningCollector,
+                externalDataPrefix, evaluator);
     }
 
     public static List<BlobItem> listBlobItems(BlobServiceClient blobServiceClient, Map<String, String> configuration,
             AbstractExternalInputStreamFactory.IncludeExcludeMatcher includeExcludeMatcher,
-            IWarningCollector warningCollector) throws CompilationException {
+            IWarningCollector warningCollector, ExternalDataPrefix externalDataPrefix,
+            IExternalFilterEvaluator evaluator) throws CompilationException {
         String container = configuration.get(ExternalDataConstants.CONTAINER_NAME_FIELD_NAME);
-
         List<BlobItem> filesOnly = new ArrayList<>();
 
-        // Ensure the validity of include/exclude
-        validateIncludeExclude(configuration);
-
-        BlobContainerClient blobContainer;
         try {
-            blobContainer = blobServiceClient.getBlobContainerClient(container);
+            BlobContainerClient blobContainer = blobServiceClient.getBlobContainerClient(container);
 
             // Get all objects in a container and extract the paths to files
             ListBlobsOptions listBlobsOptions = new ListBlobsOptions();
@@ -416,7 +426,8 @@ public class AzureUtils {
 
             // Collect the paths to files only
             collectAndFilterBlobFiles(blobItems, includeExcludeMatcher.getPredicate(),
-                    includeExcludeMatcher.getMatchersList(), filesOnly);
+                    includeExcludeMatcher.getMatchersList(), filesOnly, externalDataPrefix, evaluator,
+                    warningCollector);
 
             // Warn if no files are returned
             if (filesOnly.isEmpty() && warningCollector.shouldWarn()) {
@@ -424,7 +435,7 @@ public class AzureUtils {
                 warningCollector.warn(warning);
             }
         } catch (Exception ex) {
-            throw new CompilationException(ErrorCode.EXTERNAL_SOURCE_ERROR, getMessageOrToString(ex));
+            throw new CompilationException(ErrorCode.EXTERNAL_SOURCE_ERROR, ex, getMessageOrToString(ex));
         }
 
         return filesOnly;
@@ -439,17 +450,12 @@ public class AzureUtils {
      * @param filesOnly List containing the files only (excluding folders)
      */
     private static void collectAndFilterBlobFiles(Iterable<BlobItem> items,
-            BiPredicate<List<Matcher>, String> predicate, List<Matcher> matchers, List<BlobItem> filesOnly) {
+            BiPredicate<List<Matcher>, String> predicate, List<Matcher> matchers, List<BlobItem> filesOnly,
+            ExternalDataPrefix externalDataPrefix, IExternalFilterEvaluator evaluator,
+            IWarningCollector warningCollector) throws HyracksDataException {
         for (BlobItem item : items) {
-            String uri = item.getName();
-
-            // skip folders
-            if (uri.endsWith("/")) {
-                continue;
-            }
-
-            // No filter, add file
-            if (predicate.test(matchers, uri)) {
+            if (ExternalDataUtils.evaluate(item.getName(), predicate, matchers, externalDataPrefix, evaluator,
+                    warningCollector)) {
                 filesOnly.add(item);
             }
         }
@@ -461,9 +467,6 @@ public class AzureUtils {
         String container = configuration.get(ExternalDataConstants.CONTAINER_NAME_FIELD_NAME);
 
         List<PathItem> filesOnly = new ArrayList<>();
-
-        // Ensure the validity of include/exclude
-        validateIncludeExclude(configuration);
 
         DataLakeFileSystemClient fileSystemClient;
         try {
@@ -486,7 +489,7 @@ public class AzureUtils {
                 warningCollector.warn(warning);
             }
         } catch (Exception ex) {
-            throw new CompilationException(ErrorCode.EXTERNAL_SOURCE_ERROR, getMessageOrToString(ex));
+            throw new CompilationException(ErrorCode.EXTERNAL_SOURCE_ERROR, ex, getMessageOrToString(ex));
         }
 
         return filesOnly;
@@ -532,6 +535,12 @@ public class AzureUtils {
         }
 
         validateIncludeExclude(configuration);
+        try {
+            // TODO(htowaileb): maybe something better, this will check to ensure type is supported before creation
+            new ExternalDataPrefix(configuration);
+        } catch (AlgebricksException ex) {
+            throw new CompilationException(ErrorCode.FAILED_TO_CALCULATE_COMPUTED_FIELDS, ex);
+        }
 
         // Check if the bucket is present
         BlobServiceClient blobServiceClient;
@@ -552,7 +561,7 @@ public class AzureUtils {
         } catch (CompilationException ex) {
             throw ex;
         } catch (Exception ex) {
-            throw new CompilationException(ErrorCode.EXTERNAL_SOURCE_ERROR, getMessageOrToString(ex));
+            throw new CompilationException(ErrorCode.EXTERNAL_SOURCE_ERROR, ex, getMessageOrToString(ex));
         }
     }
 
@@ -591,7 +600,7 @@ public class AzureUtils {
         } catch (CompilationException ex) {
             throw ex;
         } catch (Exception ex) {
-            throw new CompilationException(ErrorCode.EXTERNAL_SOURCE_ERROR, getMessageOrToString(ex));
+            throw new CompilationException(ErrorCode.EXTERNAL_SOURCE_ERROR, ex, getMessageOrToString(ex));
         }
     }
 

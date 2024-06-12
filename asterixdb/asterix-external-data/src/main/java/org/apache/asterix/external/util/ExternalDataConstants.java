@@ -18,12 +18,11 @@
  */
 package org.apache.asterix.external.util;
 
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.Set;
 import java.util.TimeZone;
 import java.util.function.LongSupplier;
 import java.util.function.Supplier;
+import java.util.regex.Pattern;
 
 import org.apache.asterix.om.types.ATypeTag;
 import org.apache.hyracks.util.StorageUtil;
@@ -39,6 +38,8 @@ public class ExternalDataConstants {
      */
     // used to specify the stream factory for an adapter that has a stream data source
     public static final String KEY_STREAM = "stream";
+    //TODO(DB): check adapter configuration
+    public static final String KEY_DATASET_DATABASE = "dataset-database";
     // used to specify the dataverse of the adapter
     public static final String KEY_DATASET_DATAVERSE = "dataset-dataverse";
     // used to specify the socket addresses when reading data from sockets
@@ -90,6 +91,7 @@ public class ExternalDataConstants {
     public static final String KEY_RSS_URL = "url";
     public static final String KEY_INTERVAL = "interval";
     public static final String KEY_IS_FEED = "is-feed";
+    public static final String KEY_LOG_INGESTION_EVENTS = "log-ingestion-events";
     public static final String KEY_WAIT_FOR_DATA = "wait-for-data";
     public static final String KEY_FEED_NAME = "feed";
     // a string representing external bucket name
@@ -116,6 +118,9 @@ public class ExternalDataConstants {
     public static final String FORMAT_RECORD_WITH_METADATA = "record-with-metadata";
     // a string representing the format of the record (for adapters which produces records with additional information like pk or metadata)
     public static final String KEY_RECORD_FORMAT = "record-format";
+    public static final String TABLE_FORMAT = "table-format";
+    public static final String ICEBERG_METADATA_LOCATION = "metadata-path";
+    public static final int SUPPORTED_ICEBERG_FORMAT_VERSION = 1;
     public static final String KEY_META_TYPE_NAME = "meta-type-name";
     public static final String KEY_ADAPTER_NAME = "adapter-name";
     public static final String READER_STREAM = "stream";
@@ -128,6 +133,8 @@ public class ExternalDataConstants {
     public static final String KEY_REDACT_WARNINGS = "redact-warnings";
     public static final String KEY_REQUESTED_FIELDS = "requested-fields";
     public static final String KEY_EXTERNAL_SCAN_BUFFER_SIZE = "external-scan-buffer-size";
+
+    public static final String KEY_EMBED_FILTER_VALUES = "embed-filter-values";
 
     /**
      * Keys for adapter name
@@ -183,6 +190,7 @@ public class ExternalDataConstants {
      */
     public static final String FORMAT_BINARY = "binary";
     public static final String FORMAT_ADM = "adm";
+    public static final String FORMAT_AVRO = "avro";
     public static final String FORMAT_JSON_LOWER_CASE = "json";
     public static final String FORMAT_JSON_UPPER_CASE = "JSON";
     public static final String FORMAT_DELIMITED_TEXT = "delimited-text";
@@ -196,24 +204,15 @@ public class ExternalDataConstants {
     public static final String FORMAT_CSV = "csv";
     public static final String FORMAT_TSV = "tsv";
     public static final String FORMAT_PARQUET = "parquet";
+    public static final String FORMAT_APACHE_ICEBERG = "apache-iceberg";
     public static final Set<String> ALL_FORMATS;
+    public static final Set<String> TEXTUAL_FORMATS;
 
     static {
-        Set<String> formats = new HashSet<>(14);
-        formats.add(FORMAT_BINARY);
-        formats.add(FORMAT_ADM);
-        formats.add(FORMAT_JSON_LOWER_CASE);
-        formats.add(FORMAT_DELIMITED_TEXT);
-        formats.add(FORMAT_TWEET);
-        formats.add(FORMAT_RSS);
-        formats.add(FORMAT_SEMISTRUCTURED);
-        formats.add(FORMAT_LINE_SEPARATED);
-        formats.add(FORMAT_HDFS_WRITABLE);
-        formats.add(FORMAT_KV);
-        formats.add(FORMAT_CSV);
-        formats.add(FORMAT_TSV);
-        formats.add(FORMAT_PARQUET);
-        ALL_FORMATS = Collections.unmodifiableSet(formats);
+        ALL_FORMATS = Set.of(FORMAT_BINARY, FORMAT_ADM, FORMAT_JSON_LOWER_CASE, FORMAT_DELIMITED_TEXT, FORMAT_TWEET,
+                FORMAT_RSS, FORMAT_SEMISTRUCTURED, FORMAT_LINE_SEPARATED, FORMAT_HDFS_WRITABLE, FORMAT_KV, FORMAT_CSV,
+                FORMAT_TSV, FORMAT_PARQUET, FORMAT_AVRO);
+        TEXTUAL_FORMATS = Set.of(FORMAT_ADM, FORMAT_JSON_LOWER_CASE, FORMAT_CSV, FORMAT_TSV);
     }
 
     /**
@@ -297,6 +296,34 @@ public class ExternalDataConstants {
 
     public static final String DEFINITION_FIELD_NAME = "definition";
     public static final String CONTAINER_NAME_FIELD_NAME = "container";
+    public static final String SUBPATH = "subpath";
+    public static final String PREFIX_DEFAULT_DELIMITER = "/";
+    public static final Pattern COMPUTED_FIELD_PATTERN = Pattern.compile("\\{[^{}:]+:[^{}:]+}");
+
+    /**
+     * Compression constants
+     */
+    public static final String KEY_COMPRESSION_GZIP = "gzip";
+    public static final String KEY_COMPRESSION_GZIP_COMPRESSION_LEVEL = "gzipCompressionLevel";
+
+    /**
+     * Writer Constants
+     */
+    public static final String KEY_WRITER_MAX_RESULT = "max-objects-per-file";
+    public static final String KEY_VALIDATE_WRITE_PERMISSION = "validate-write-permission";
+    public static final String KEY_WRITER_COMPRESSION = "compression";
+    public static final int WRITER_MAX_RESULT_DEFAULT = 10000;
+    public static final int WRITER_MAX_RESULT_MINIMUM = 1000;
+    public static final Set<String> WRITER_SUPPORTED_FORMATS;
+    public static final Set<String> WRITER_SUPPORTED_ADAPTERS;
+    public static final Set<String> WRITER_SUPPORTED_COMPRESSION;
+
+    static {
+        WRITER_SUPPORTED_FORMATS = Set.of(FORMAT_JSON_LOWER_CASE);
+        WRITER_SUPPORTED_ADAPTERS = Set.of(ALIAS_LOCALFS_ADAPTER.toLowerCase(), KEY_ADAPTER_NAME_AWS_S3.toLowerCase(),
+                KEY_ADAPTER_NAME_GCS.toLowerCase());
+        WRITER_SUPPORTED_COMPRESSION = Set.of(KEY_COMPRESSION_GZIP);
+    }
 
     public static class ParquetOptions {
         private ParquetOptions() {

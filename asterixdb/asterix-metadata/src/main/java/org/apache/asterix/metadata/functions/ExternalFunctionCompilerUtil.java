@@ -26,12 +26,13 @@ import org.apache.asterix.common.exceptions.AsterixException;
 import org.apache.asterix.common.exceptions.CompilationException;
 import org.apache.asterix.common.exceptions.ErrorCode;
 import org.apache.asterix.common.functions.ExternalFunctionLanguage;
+import org.apache.asterix.common.metadata.Namespace;
 import org.apache.asterix.metadata.declared.MetadataProvider;
-import org.apache.asterix.metadata.entities.BuiltinTypeMap;
 import org.apache.asterix.metadata.entities.Function;
 import org.apache.asterix.om.functions.IExternalFunctionInfo;
 import org.apache.asterix.om.typecomputer.base.IResultTypeComputer;
 import org.apache.asterix.om.types.BuiltinType;
+import org.apache.asterix.om.types.BuiltinTypeMap;
 import org.apache.asterix.om.types.IAType;
 import org.apache.asterix.om.types.TypeSignature;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
@@ -79,9 +80,12 @@ public class ExternalFunctionCompilerUtil {
             throw new AsterixException(ErrorCode.METADATA_ERROR, function.getSignature().toString());
         }
 
+        //TODO(DB): review
         return new ExternalScalarFunctionInfo(function.getSignature().createFunctionIdentifier(), paramTypes,
-                returnType, typeComputer, lang, function.getLibraryDataverseName(), function.getLibraryName(),
-                function.getExternalIdentifier(), function.getResources(), deterministic, function.getNullCall());
+                returnType, typeComputer, lang,
+                new Namespace(function.getLibraryDatabaseName(), function.getLibraryDataverseName()),
+                function.getLibraryName(), function.getExternalIdentifier(), function.getResources(), deterministic,
+                function.getNullCall());
     }
 
     private static IFunctionInfo getUnnestFunctionInfo(MetadataProvider metadataProvider, Function function) {
@@ -136,7 +140,8 @@ public class ExternalFunctionCompilerUtil {
         }
         IAType type = BuiltinTypeMap.getBuiltinType(typeName);
         if (type == null) {
-            type = metadataProvider.findType(typeSignature.getDataverseName(), typeName);
+            type = metadataProvider.findType(typeSignature.getDatabaseName(), typeSignature.getDataverseName(),
+                    typeName);
         }
         return type;
     }

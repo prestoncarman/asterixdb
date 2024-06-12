@@ -154,7 +154,7 @@ public class SecondaryCorrelatedInvertedIndexOperationsHelper extends SecondaryC
         tokenizerFactory = NonTaggedFormatUtil.getBinaryTokenizerFactory(secondaryKeyType.getTypeTag(), indexType,
                 indexDetails.getGramLength());
         fullTextConfigEvaluatorFactory = FullTextUtil.fetchFilterAndCreateConfigEvaluator(metadataProvider,
-                index.getDataverseName(), indexDetails.getFullTextConfigName());
+                index.getDatabaseName(), index.getDataverseName(), indexDetails.getFullTextConfigName());
         // Type traits for inverted-list elements. Inverted lists contain
         // primary keys.
         invListsTypeTraits = new ITypeTraits[numPrimaryKeys];
@@ -216,7 +216,8 @@ public class SecondaryCorrelatedInvertedIndexOperationsHelper extends SecondaryC
         IndexUtil.bindJobEventListener(spec, metadataProvider);
 
         // Create dummy key provider for feeding the primary index scan.
-        IOperatorDescriptor keyProviderOp = DatasetUtil.createDummyKeyProviderOp(spec, dataset, metadataProvider);
+        IOperatorDescriptor keyProviderOp =
+                DatasetUtil.createCorrelatedDummyKeyProviderOp(spec, primaryPartitionConstraint);
 
         // Create primary index scan op.
         IOperatorDescriptor primaryScanOp = createPrimaryIndexScanDiskComponentsOp(spec, metadataProvider,

@@ -21,14 +21,19 @@ package org.apache.asterix.app.function;
 import static org.apache.asterix.common.api.IIdentifierMapper.Modifier.PLURAL;
 import static org.apache.asterix.common.api.IIdentifierMapper.Modifier.SINGULAR;
 import static org.apache.asterix.common.utils.IdentifierUtil.dataset;
+import static org.apache.asterix.external.util.ExternalDataConstants.SUBPATH;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
+import org.apache.asterix.common.config.DatasetConfig;
 import org.apache.asterix.common.exceptions.CompilationException;
 import org.apache.asterix.common.exceptions.ErrorCode;
 import org.apache.asterix.common.metadata.DatasetFullyQualifiedName;
 import org.apache.asterix.common.metadata.DataverseName;
+import org.apache.asterix.common.metadata.MetadataUtil;
 import org.apache.asterix.lang.common.util.FunctionUtil;
 import org.apache.asterix.metadata.declared.DataSource;
 import org.apache.asterix.metadata.declared.DataSourceId;
@@ -94,7 +99,8 @@ public class DatasetRewriter implements IFunctionToDataSourceRewriter, IResultTy
         }
         variables.add(unnest.getVariable());
 
-        DataSourceId dsid = new DataSourceId(dataset.getDataverseName(), dataset.getDatasetName());
+        DataSourceId dsid =
+                new DataSourceId(dataset.getDatabaseName(), dataset.getDataverseName(), dataset.getDatasetName());
         DataSource dataSource = metadataProvider.findDataSource(dsid);
         boolean hasMeta = dataSource.hasMeta();
         if (hasMeta) {
@@ -102,6 +108,15 @@ public class DatasetRewriter implements IFunctionToDataSourceRewriter, IResultTy
         }
         DataSourceScanOperator scan = new DataSourceScanOperator(variables, dataSource);
         scan.setSourceLocation(unnest.getSourceLocation());
+        if (dataset.getDatasetType() == DatasetConfig.DatasetType.EXTERNAL) {
+            Map<String, Object> unnestAnnotations = unnest.getAnnotations();
+            scan.getAnnotations().putAll(unnestAnnotations);
+            Map<String, Serializable> dataSourceProperties = dataSource.getProperties();
+            Object externalSubpath = unnestAnnotations.get(SUBPATH);
+            if (externalSubpath instanceof String) {
+                dataSourceProperties.put(SUBPATH, (String) externalSubpath);
+            }
+        }
         List<Mutable<ILogicalOperator>> scanInpList = scan.getInputs();
         scanInpList.addAll(unnest.getInputs());
         opRef.setValue(scan);
@@ -133,7 +148,8 @@ public class DatasetRewriter implements IFunctionToDataSourceRewriter, IResultTy
         AbstractFunctionCallExpression datasetFnCall = (AbstractFunctionCallExpression) expression;
         MetadataProvider metadata = (MetadataProvider) mp;
         Dataset dataset = fetchDataset(metadata, datasetFnCall);
-        IAType type = metadata.findType(dataset.getItemTypeDataverseName(), dataset.getItemTypeName());
+        IAType type = metadata.findType(dataset.getItemTypeDatabaseName(), dataset.getItemTypeDataverseName(),
+                dataset.getItemTypeName());
         if (type == null) {
             throw new CompilationException(ErrorCode.COMPILATION_ERROR, datasetFnCall.getSourceLocation(),
                     "No type for " + dataset() + " " + dataset.getDatasetName());
@@ -145,10 +161,11 @@ public class DatasetRewriter implements IFunctionToDataSourceRewriter, IResultTy
             throws CompilationException {
         DatasetFullyQualifiedName datasetReference = FunctionUtil.parseDatasetFunctionArguments(datasetFnCall);
         DataverseName dataverseName = datasetReference.getDataverseName();
+        String database = datasetReference.getDatabaseName();
         String datasetName = datasetReference.getDatasetName();
         Dataset dataset;
         try {
-            dataset = metadataProvider.findDataset(dataverseName, datasetName);
+            dataset = metadataProvider.findDataset(database, dataverseName, datasetName);
         } catch (CompilationException e) {
             throw e;
         } catch (AlgebricksException e) {
@@ -157,7 +174,8 @@ public class DatasetRewriter implements IFunctionToDataSourceRewriter, IResultTy
         }
         if (dataset == null) {
             throw new CompilationException(ErrorCode.UNKNOWN_DATASET_IN_DATAVERSE, datasetFnCall.getSourceLocation(),
-                    datasetName, dataverseName);
+                    datasetName,
+                    MetadataUtil.dataverseName(database, dataverseName, metadataProvider.isUsingDatabase()));
         }
         return dataset;
     }

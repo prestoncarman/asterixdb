@@ -27,21 +27,29 @@ public interface Statement extends ILangExpression {
     Kind getKind();
 
     /**
-     *  get a byte representing the statement category.
-     *  Each category describes the type of modifications this statement does.
+     * get a byte representing the statement category.
+     * Each category describes the type of modifications this statement does.
      *
      * @return kind byte
      */
     byte getCategory();
 
     class Category {
-        /** no modifications */
+        /**
+         * no modifications
+         */
         public static final byte QUERY = 0x01;
-        /** modify data */
+        /**
+         * modify data
+         */
         public static final byte UPDATE = 0x02;
-        /** modify metadata */
+        /**
+         * modify metadata
+         */
         public static final byte DDL = 0x04;
-        /** modify anything */
+        /**
+         * modify anything
+         */
         public static final byte PROCEDURE = 0x08;
 
         private Category() {
@@ -66,6 +74,7 @@ public interface Statement extends ILangExpression {
     enum Kind {
         DATASET_DECL,
         DATAVERSE_DECL,
+        DATABASE_DROP,
         DATAVERSE_DROP,
         DATASET_DROP,
         DELETE,
@@ -81,8 +90,8 @@ public interface Statement extends ILangExpression {
         SET,
         TYPE_DECL,
         TYPE_DROP,
-        WRITE,
         CREATE_INDEX,
+        CREATE_DATABASE,
         CREATE_DATAVERSE,
         CREATE_VIEW,
         CREATE_FULL_TEXT_FILTER,
@@ -110,8 +119,9 @@ public interface Statement extends ILangExpression {
         ANALYZE,
         ANALYZE_DROP,
         COMPACT,
-        EXTERNAL_DATASET_REFRESH,
         SUBSCRIBE_FEED,
         EXTENSION,
+        COPY_FROM,
+        COPY_TO,
     }
 }

@@ -43,7 +43,10 @@ import org.apache.hyracks.api.io.IIOManager;
 import org.apache.hyracks.api.lifecycle.ILifeCycleComponent;
 import org.apache.hyracks.api.replication.IIOReplicationManager;
 import org.apache.hyracks.api.util.ExceptionUtils;
-import org.apache.hyracks.api.util.IoUtil;
+import org.apache.hyracks.storage.common.buffercache.context.IBufferCacheReadContext;
+import org.apache.hyracks.storage.common.buffercache.context.IBufferCacheWriteContext;
+import org.apache.hyracks.storage.common.buffercache.context.read.DefaultBufferCacheReadContextProvider;
+import org.apache.hyracks.storage.common.buffercache.context.write.DefaultBufferCacheWriteContext;
 import org.apache.hyracks.storage.common.compression.file.ICompressedPageWriter;
 import org.apache.hyracks.storage.common.file.BufferedFileHandle;
 import org.apache.hyracks.storage.common.file.IFileMapManager;
@@ -53,6 +56,7 @@ import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+// TODO should be trimmed from all useless artifacts that are required by tests
 public class BufferCache implements IBufferCacheInternal, ILifeCycleComponent, IThreadStatsCollector {
 
     private static final Logger LOGGER = LogManager.getLogger();
@@ -68,6 +72,7 @@ public class BufferCache implements IBufferCacheInternal, ILifeCycleComponent, I
 
     private final int pageSize;
     private final int maxOpenFiles;
+    private final IBufferCacheReadContext defaultContext;
     final IIOManager ioManager;
     private final CacheBucket[] pageMap;
     private final IPageReplacementStrategy pageReplacementStrategy;
@@ -93,11 +98,13 @@ public class BufferCache implements IBufferCacheInternal, ILifeCycleComponent, I
 
     public BufferCache(IIOManager ioManager, IPageReplacementStrategy pageReplacementStrategy,
             IPageCleanerPolicy pageCleanerPolicy, IFileMapManager fileMapManager, int maxOpenFiles, int ioQueuelen,
-            ThreadFactory threadFactory) {
+            ThreadFactory threadFactory, Map<Integer, BufferedFileHandle> fileInfoMap,
+            IBufferCacheReadContext defaultContext) {
         this.headerPageCache = new ArrayBlockingQueue<>(ioQueuelen);
         this.ioManager = ioManager;
         this.pageSize = pageReplacementStrategy.getPageSize();
         this.maxOpenFiles = maxOpenFiles;
+        this.defaultContext = defaultContext;
         pageReplacementStrategy.setBufferCache(this);
         pageMap = new CacheBucket[pageReplacementStrategy.getMaxAllowedNumPages() * MAP_FACTOR + 1];
         for (int i = 0; i < pageMap.length; ++i) {
@@ -108,7 +115,7 @@ public class BufferCache implements IBufferCacheInternal, ILifeCycleComponent, I
         this.fileMapManager = fileMapManager;
 
         Executor executor = Executors.newCachedThreadPool(threadFactory);
-        fileInfoMap = new HashMap<>();
+        this.fileInfoMap = fileInfoMap;
         cleanerThread = new CleanerThread();
         executor.execute(cleanerThread);
         closed = false;
@@ -124,10 +131,10 @@ public class BufferCache implements IBufferCacheInternal, ILifeCycleComponent, I
     //this constructor is used when replication is enabled to pass the IIOReplicationManager
     public BufferCache(IIOManager ioManager, IPageReplacementStrategy pageReplacementStrategy,
             IPageCleanerPolicy pageCleanerPolicy, IFileMapManager fileMapManager, int maxOpenFiles, int ioQueueLen,
-            ThreadFactory threadFactory, IIOReplicationManager ioReplicationManager) {
-
+            ThreadFactory threadFactory, IIOReplicationManager ioReplicationManager,
+            Map<Integer, BufferedFileHandle> fileInfoMap) {
         this(ioManager, pageReplacementStrategy, pageCleanerPolicy, fileMapManager, maxOpenFiles, ioQueueLen,
-                threadFactory);
+                threadFactory, fileInfoMap, DefaultBufferCacheReadContextProvider.DEFAULT);
         this.ioReplicationManager = ioReplicationManager;
     }
 
@@ -165,14 +172,20 @@ public class BufferCache implements IBufferCacheInternal, ILifeCycleComponent, I
     }
 
     @Override
-    public ICachedPage pin(long dpid, boolean newPage) throws HyracksDataException {
+    public ICachedPage pin(long dpid) throws HyracksDataException {
+        return pin(dpid, defaultContext);
+    }
+
+    @Override
+    public ICachedPage pin(long dpid, IBufferCacheReadContext context) throws HyracksDataException {
+        boolean newPage = context.isNewPage();
         // Calling the pinSanityCheck should be used only for debugging, since
         // the synchronized block over the fileInfoMap is a hot spot.
         if (DEBUG) {
             pinSanityCheck(dpid);
         }
         final IThreadStats threadStats = statsSubscribers.get(Thread.currentThread());
-        if (threadStats != null) {
+        if (threadStats != null && context.incrementStats()) {
             threadStats.pagePinned();
         }
         CachedPage cPage = findPage(dpid);
@@ -189,12 +202,15 @@ public class BufferCache implements IBufferCacheInternal, ILifeCycleComponent, I
                     confiscateLock.unlock();
                 }
             }
+
             // Resolve race of multiple threads trying to read the page from
             // disk.
             synchronized (cPage) {
+                // Notify context page is going to be pinned
+                context.onPin(cPage);
                 if (!cPage.valid) {
                     try {
-                        tryRead(cPage);
+                        tryRead(cPage, context);
                         cPage.valid = true;
                     } catch (Exception e) {
                         LOGGER.log(ExceptionUtils.causedByInterrupt(e) ? Level.DEBUG : Level.WARN,
@@ -202,7 +218,7 @@ public class BufferCache implements IBufferCacheInternal, ILifeCycleComponent, I
                         throw e;
                     } finally {
                         if (!cPage.valid) {
-                            unpin(cPage);
+                            unpin(cPage, context);
                         }
                     }
                 }
@@ -521,10 +537,10 @@ public class BufferCache implements IBufferCacheInternal, ILifeCycleComponent, I
         return false;
     }
 
-    private void tryRead(CachedPage cPage) throws HyracksDataException {
+    private void tryRead(CachedPage cPage, IBufferCacheReadContext context) throws HyracksDataException {
         for (int i = 1; i <= MAX_PAGE_READ_ATTEMPTS; i++) {
             try {
-                read(cPage);
+                read(cPage, context);
                 return;
             } catch (HyracksDataException readException) {
                 if (readException.matches(ErrorCode.CANNOT_READ_CLOSED_FILE) && i != MAX_PAGE_READ_ATTEMPTS) {
@@ -548,12 +564,18 @@ public class BufferCache implements IBufferCacheInternal, ILifeCycleComponent, I
         }
     }
 
-    private void read(CachedPage cPage) throws HyracksDataException {
+    private void read(CachedPage cPage, IBufferCacheReadContext context) throws HyracksDataException {
         BufferedFileHandle fInfo = getFileHandle(cPage);
         cPage.buffer.clear();
-        fInfo.read(cPage);
+        try {
+            fInfo.read(cPage, context);
+        } catch (Throwable e) {
+            LOGGER.error("Error while reading a page {} in file {}", cPage, fInfo);
+            throw e;
+        }
+
         final IThreadStats threadStats = statsSubscribers.get(Thread.currentThread());
-        if (threadStats != null) {
+        if (threadStats != null && context.incrementStats()) {
             threadStats.coldRead();
         }
     }
@@ -564,23 +586,30 @@ public class BufferCache implements IBufferCacheInternal, ILifeCycleComponent, I
         pageReplacementStrategy.resizePage((ICachedPageInternal) cPage, totalPages, extraPageBlockHelper);
     }
 
-    void write(CachedPage cPage) throws HyracksDataException {
+    void write(CachedPage cPage, IBufferCacheWriteContext context) throws HyracksDataException {
         BufferedFileHandle fInfo = getFileHandle(cPage);
         // synchronize on fInfo to prevent the file handle from being deleted until the page is written.
         synchronized (fInfo) {
             if (fInfo.hasBeenDeleted()) {
                 return;
             }
-            fInfo.write(cPage);
+            fInfo.write(cPage, context);
         }
 
     }
 
     @Override
     public void unpin(ICachedPage page) throws HyracksDataException {
+        unpin(page, defaultContext);
+    }
+
+    @Override
+    public void unpin(ICachedPage page, IBufferCacheReadContext context) throws HyracksDataException {
         if (closed) {
             throw new HyracksDataException("unpin called on a closed cache");
         }
+
+        context.onUnpin(page);
         int pinCount = ((CachedPage) page).pinCount.decrementAndGet();
         if (DEBUG && pinCount == 0) {
             pinnedPageOwner.remove(page);
@@ -618,6 +647,9 @@ public class BufferCache implements IBufferCacheInternal, ILifeCycleComponent, I
         }
     }
 
+    /**
+     * This class is useless in an actual deployment as on-disk pages are immutable. Only tests need those.
+     */
     private class CleanerThread implements Runnable {
         private volatile boolean shutdownStart = false;
         private volatile boolean shutdownComplete = false;
@@ -661,7 +693,7 @@ public class BufferCache implements IBufferCacheInternal, ILifeCycleComponent, I
             }
             boolean cleaned = true;
             try {
-                write(cPage);
+                write(cPage, DefaultBufferCacheWriteContext.INSTANCE);
             } catch (HyracksDataException e) {
                 LOGGER.log(Level.WARN, "Unable to write dirty page", e);
                 cleaned = false;
@@ -761,7 +793,7 @@ public class BufferCache implements IBufferCacheInternal, ILifeCycleComponent, I
         } catch (Exception e) {
             // If file registration failed for any reason, we need to undo the file creation
             try {
-                IoUtil.delete(fileRef);
+                ioManager.delete(fileRef);
             } catch (Exception deleteException) {
                 e.addSuppressed(deleteException);
             }
@@ -890,7 +922,7 @@ public class BufferCache implements IBufferCacheInternal, ILifeCycleComponent, I
             int pinCount;
             if (cPage.dirty.get()) {
                 if (flushDirtyPages) {
-                    write(cPage);
+                    write(cPage, DefaultBufferCacheWriteContext.INSTANCE);
                 }
                 cPage.dirty.set(false);
                 pinCount = cPage.pinCount.decrementAndGet();
@@ -960,7 +992,7 @@ public class BufferCache implements IBufferCacheInternal, ILifeCycleComponent, I
         if (mapped) {
             deleteFile(fileId);
         } else {
-            BufferedFileHandle.deleteFile(fileRef);
+            BufferedFileHandle.deleteFile(fileRef, ioManager);
         }
     }
 
@@ -991,7 +1023,7 @@ public class BufferCache implements IBufferCacheInternal, ILifeCycleComponent, I
                         fInfo.markAsDeleted();
                     }
                 } finally {
-                    BufferedFileHandle.deleteFile(fileRef);
+                    BufferedFileHandle.deleteFile(fileRef, ioManager);
                 }
             }
         }
@@ -1143,11 +1175,13 @@ public class BufferCache implements IBufferCacheInternal, ILifeCycleComponent, I
     }
 
     private ICachedPage confiscatePage(long dpid, int multiplier) throws HyracksDataException {
-        return getPageLoop(dpid, multiplier, true);
+        ICachedPage page = getPageLoop(dpid, multiplier, true);
+        page.getBuffer().clear();
+        return page;
     }
 
     private ICachedPage confiscateInner(long dpid, int multiplier) {
-        ICachedPage returnPage = null;
+        CachedPage returnPage = null;
         CachedPage victim = (CachedPage) pageReplacementStrategy.findVictim(multiplier);
         if (victim == null) {
             return victim;
@@ -1168,7 +1202,7 @@ public class BufferCache implements IBufferCacheInternal, ILifeCycleComponent, I
                 return null;
             }
             returnPage = victim;
-            ((CachedPage) returnPage).dpid = dpid;
+            returnPage.dpid = dpid;
         } else {
             // Case 2a/b
             int pageHash = hash(victim.getDiskPageId());
@@ -1211,7 +1245,7 @@ public class BufferCache implements IBufferCacheInternal, ILifeCycleComponent, I
                 }
                 if (found) {
                     returnPage = victim;
-                    ((CachedPage) returnPage).dpid = dpid;
+                    returnPage.dpid = dpid;
                 } //otherwise, someone took the same victim before we acquired the lock. try again!
             } finally {
                 bucket.bucketLock.unlock();
@@ -1219,12 +1253,17 @@ public class BufferCache implements IBufferCacheInternal, ILifeCycleComponent, I
         }
         // if we found a page after all that, go ahead and finish
         if (returnPage != null) {
-            ((CachedPage) returnPage).confiscated.set(true);
+            int pinCount = returnPage.pinCount.get();
+            if (!returnPage.confiscated.compareAndSet(false, true)) {
+                throw new IllegalStateException("Returned page is already confiscated");
+            } else if (pinCount != 1) {
+                throw new IllegalStateException("Returned page's pinCount is not 1. It is " + pinCount);
+            }
             if (DEBUG) {
                 confiscateLock.lock();
                 try {
-                    confiscatedPages.add((CachedPage) returnPage);
-                    confiscatedPagesOwner.put((CachedPage) returnPage, Thread.currentThread().getStackTrace());
+                    confiscatedPages.add(returnPage);
+                    confiscatedPagesOwner.put(returnPage, Thread.currentThread().getStackTrace());
                 } finally {
                     confiscateLock.unlock();
                 }
@@ -1378,8 +1417,9 @@ public class BufferCache implements IBufferCacheInternal, ILifeCycleComponent, I
     }
 
     @Override
-    public IFIFOPageWriter createFIFOWriter(IPageWriteCallback callback, IPageWriteFailureCallback failureCallback) {
-        return new FIFOLocalWriter(this, callback, failureCallback);
+    public IFIFOPageWriter createFIFOWriter(IPageWriteCallback callback, IPageWriteFailureCallback failureCallback,
+            IBufferCacheWriteContext context) {
+        return new FIFOLocalWriter(this, callback, failureCallback, context);
     }
 
     @Override

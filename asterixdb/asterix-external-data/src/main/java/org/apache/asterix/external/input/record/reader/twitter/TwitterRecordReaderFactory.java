@@ -26,6 +26,8 @@ import java.util.Map;
 import org.apache.asterix.common.dataflow.ICcApplicationContext;
 import org.apache.asterix.common.exceptions.AsterixException;
 import org.apache.asterix.common.exceptions.ErrorCode;
+import org.apache.asterix.common.external.IExternalFilterEvaluatorFactory;
+import org.apache.asterix.external.api.IExternalDataRuntimeContext;
 import org.apache.asterix.external.api.IExternalDataSourceFactory;
 import org.apache.asterix.external.api.IRecordReader;
 import org.apache.asterix.external.api.IRecordReaderFactory;
@@ -36,7 +38,6 @@ import org.apache.asterix.external.util.TwitterUtil.SearchAPIConstants;
 import org.apache.hyracks.algebricks.common.constraints.AlgebricksAbsolutePartitionConstraint;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.api.application.IServiceContext;
-import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.exceptions.IWarningCollector;
 import org.apache.logging.log4j.LogManager;
@@ -80,7 +81,8 @@ public class TwitterRecordReaderFactory implements IRecordReaderFactory<char[]> 
 
     @Override
     public void configure(IServiceContext serviceCtx, Map<String, String> configuration,
-            IWarningCollector warningCollector) throws AsterixException {
+            IWarningCollector warningCollector, IExternalFilterEvaluatorFactory filterEvaluatorFactory)
+            throws AsterixException {
         try {
             Class.forName("twitter4j.Twitter");
         } catch (ClassNotFoundException e) {
@@ -125,12 +127,7 @@ public class TwitterRecordReaderFactory implements IRecordReaderFactory<char[]> 
     }
 
     @Override
-    public boolean isIndexible() {
-        return false;
-    }
-
-    @Override
-    public IRecordReader<? extends char[]> createRecordReader(IHyracksTaskContext ctx, int partition)
+    public IRecordReader<? extends char[]> createRecordReader(IExternalDataRuntimeContext context)
             throws HyracksDataException {
         IRecordReader<? extends char[]> recordReader;
         switch (configuration.get(ExternalDataConstants.KEY_READER)) {

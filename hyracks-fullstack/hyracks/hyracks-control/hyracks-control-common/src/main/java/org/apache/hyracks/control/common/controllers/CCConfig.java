@@ -84,7 +84,14 @@ public class CCConfig extends ControllerConfig {
                 OptionTypes.STRING,
                 (Function<IApplicationConfig, String>) appConfig -> FileUtil
                         .joinPath(appConfig.getString(ControllerConfig.Option.DEFAULT_DIR), "passwd"),
-                ControllerConfig.Option.DEFAULT_DIR.cmdline() + "/passwd");
+                ControllerConfig.Option.DEFAULT_DIR.cmdline() + "/passwd"),
+        GLOBAL_TXN_LOG_DIR(
+                STRING,
+                appConfig -> FileUtil.joinPath(appConfig.getString(ControllerConfig.Option.DEFAULT_DIR),
+                        "global-txn-log"),
+                ControllerConfig.Option.DEFAULT_DIR.cmdline() + "/global-txn-log"),
+        GLOBAL_TXN_COMMIT_TIMEOUT(LONG, 600000L),
+        GLOBAL_TXN_ROLLBACK_TIMEOUT(LONG, 600000L);
 
         private final IOptionType parser;
         private Object defaultValue;
@@ -206,6 +213,12 @@ public class CCConfig extends ControllerConfig {
                     return "The password to the provided key store";
                 case CREDENTIAL_FILE:
                     return "Path to HTTP basic credentials";
+                case GLOBAL_TXN_LOG_DIR:
+                    return "Directory to store global transaction logs";
+                case GLOBAL_TXN_COMMIT_TIMEOUT:
+                    return "Timeout for Commit";
+                case GLOBAL_TXN_ROLLBACK_TIMEOUT:
+                    return "Timeout for Rollback";
                 default:
                     throw new IllegalStateException("NYI: " + this);
             }
@@ -481,4 +494,15 @@ public class CCConfig extends ControllerConfig {
         return getAppConfig().getString(Option.CREDENTIAL_FILE);
     }
 
+    public String getGlobalTxLogDir() {
+        return getAppConfig().getString(Option.GLOBAL_TXN_LOG_DIR);
+    }
+
+    public long getGlobalTxCommitTimeout() {
+        return getAppConfig().getLong(Option.GLOBAL_TXN_COMMIT_TIMEOUT);
+    }
+
+    public long getGlobalTxRollbackTimeout() {
+        return getAppConfig().getLong(Option.GLOBAL_TXN_ROLLBACK_TIMEOUT);
+    }
 }

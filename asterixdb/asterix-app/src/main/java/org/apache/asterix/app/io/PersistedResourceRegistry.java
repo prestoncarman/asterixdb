@@ -25,14 +25,17 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
+import org.apache.asterix.column.ColumnManagerFactory;
 import org.apache.asterix.common.context.AsterixVirtualBufferCacheProvider;
 import org.apache.asterix.common.context.CorrelatedPrefixMergePolicyFactory;
 import org.apache.asterix.common.context.DatasetInfoProvider;
 import org.apache.asterix.common.context.DatasetLSMComponentIdGeneratorFactory;
 import org.apache.asterix.common.dataflow.DatasetLocalResource;
+import org.apache.asterix.common.ioopcallbacks.AtomicLSMIndexIOOperationCallbackFactory;
 import org.apache.asterix.common.ioopcallbacks.LSMIndexIOOperationCallbackFactory;
 import org.apache.asterix.common.ioopcallbacks.LSMIndexPageWriteCallbackFactory;
 import org.apache.asterix.common.library.LibraryDescriptor;
+import org.apache.asterix.common.storage.SizeBoundedConcurrentMergePolicyFactory;
 import org.apache.asterix.common.transactions.Checkpoint;
 import org.apache.asterix.dataflow.data.common.AListElementTokenFactory;
 import org.apache.asterix.dataflow.data.common.AOrderedListBinaryTokenizerFactory;
@@ -103,8 +106,7 @@ import org.apache.hyracks.data.std.primitive.VarLengthTypeTrait;
 import org.apache.hyracks.data.std.primitive.VoidPointable;
 import org.apache.hyracks.storage.am.common.data.PointablePrimitiveValueProviderFactory;
 import org.apache.hyracks.storage.am.common.freepage.AppendOnlyLinkedMetadataPageManagerFactory;
-import org.apache.hyracks.storage.am.lsm.btree.dataflow.ExternalBTreeLocalResource;
-import org.apache.hyracks.storage.am.lsm.btree.dataflow.ExternalBTreeWithBuddyLocalResource;
+import org.apache.hyracks.storage.am.lsm.btree.column.dataflow.LSMColumnBTreeLocalResource;
 import org.apache.hyracks.storage.am.lsm.btree.dataflow.LSMBTreeLocalResource;
 import org.apache.hyracks.storage.am.lsm.common.impls.ConcurrentMergePolicyFactory;
 import org.apache.hyracks.storage.am.lsm.common.impls.ConstantMergePolicyFactory;
@@ -121,7 +123,6 @@ import org.apache.hyracks.storage.am.lsm.invertedindex.tokenizers.HashedUTF8Word
 import org.apache.hyracks.storage.am.lsm.invertedindex.tokenizers.NGramUTF8StringBinaryTokenizerFactory;
 import org.apache.hyracks.storage.am.lsm.invertedindex.tokenizers.UTF8NGramTokenFactory;
 import org.apache.hyracks.storage.am.lsm.invertedindex.tokenizers.UTF8WordTokenFactory;
-import org.apache.hyracks.storage.am.lsm.rtree.dataflow.ExternalRTreeLocalResource;
 import org.apache.hyracks.storage.am.lsm.rtree.dataflow.LSMRTreeLocalResource;
 import org.apache.hyracks.storage.am.lsm.rtree.dataflow.LSMRTreeWithAntiMatterLocalResource;
 import org.apache.hyracks.storage.am.rtree.frames.RTreePolicyType;
@@ -159,14 +160,13 @@ public class PersistedResourceRegistry implements IPersistedResourceRegistry {
         registeredClasses.put("LSMRTreeLocalResource", LSMRTreeLocalResource.class);
         registeredClasses.put("LSMRTreeWithAntiMatterLocalResource", LSMRTreeWithAntiMatterLocalResource.class);
         registeredClasses.put("LSMInvertedIndexLocalResource", LSMInvertedIndexLocalResource.class);
-        registeredClasses.put("ExternalBTreeLocalResource", ExternalBTreeLocalResource.class);
-        registeredClasses.put("ExternalBTreeWithBuddyLocalResource", ExternalBTreeWithBuddyLocalResource.class);
-        registeredClasses.put("ExternalRTreeLocalResource", ExternalRTreeLocalResource.class);
+        registeredClasses.put("LSMColumnBTreeLocalResource", LSMColumnBTreeLocalResource.class);
 
         // ILSMMergePolicyFactory
         registeredClasses.put("NoMergePolicyFactory", NoMergePolicyFactory.class);
         registeredClasses.put("PrefixMergePolicyFactory", PrefixMergePolicyFactory.class);
         registeredClasses.put("ConcurrentMergePolicyFactory", ConcurrentMergePolicyFactory.class);
+        registeredClasses.put("SizeBoundedConcurrentMergePolicy", SizeBoundedConcurrentMergePolicyFactory.class);
         registeredClasses.put("ConstantMergePolicyFactory", ConstantMergePolicyFactory.class);
         registeredClasses.put("CorrelatedPrefixMergePolicyFactory", CorrelatedPrefixMergePolicyFactory.class);
 
@@ -193,6 +193,8 @@ public class PersistedResourceRegistry implements IPersistedResourceRegistry {
         // ILSMOperationTrackerFactory
         registeredClasses.put("NoOpIOOperationCallbackFactory", NoOpIOOperationCallbackFactory.class);
         registeredClasses.put("LSMBTreeIOOperationCallbackFactory", LSMIndexIOOperationCallbackFactory.class);
+        registeredClasses.put("AtomicLSMBTreeIOOperationCallbackFactory",
+                AtomicLSMIndexIOOperationCallbackFactory.class);
         registeredClasses.put("LSMIndexPageWriteCallbackFactory", LSMIndexPageWriteCallbackFactory.class);
         registeredClasses.put("NoOpPageWriteCallbackFactory", NoOpPageWriteCallbackFactory.class);
 
@@ -305,6 +307,9 @@ public class PersistedResourceRegistry implements IPersistedResourceRegistry {
 
         //External Libraries
         registeredClasses.put("LibraryDescriptor", LibraryDescriptor.class);
+
+        //IColumnManagerFactory
+        registeredClasses.put("ColumnManagerFactory", ColumnManagerFactory.class);
     }
 
     @Override

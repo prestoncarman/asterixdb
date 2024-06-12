@@ -160,8 +160,7 @@ public interface IClusterStateManager {
     /**
      * Returns the IO devices configured for a Node Controller
      *
-     * @param nodeId
-     *            unique identifier of the Node Controller
+     * @param nodeId unique identifier of the Node Controller
      * @return a list of IO devices.
      */
     String[] getIODevices(String nodeId);
@@ -172,15 +171,18 @@ public interface IClusterStateManager {
     AlgebricksAbsolutePartitionConstraint getClusterLocations();
 
     /**
-     * @param excludePendingRemoval
-     *            true, if the desired set shouldn't have pending removal nodes
+     * @return the constraint representing all the partitions of the cluster sorted by node name
+     */
+    AlgebricksAbsolutePartitionConstraint getNodeSortedClusterLocations();
+
+    /**
+     * @param excludePendingRemoval true, if the desired set shouldn't have pending removal nodes
      * @return the set of participant nodes
      */
     Set<String> getParticipantNodes(boolean excludePendingRemoval);
 
     /**
-     * @param node
-     *            the node id
+     * @param node the node id
      * @return the number of partitions on that node
      */
     int getNodePartitionsCount(String node);
@@ -262,6 +264,7 @@ public interface IClusterStateManager {
 
     /**
      * Indicate whether one or more datasets must be rebalanced before the cluster becomes ACTIVE
+     *
      * @param rebalanceRequired
      */
     void setRebalanceRequired(boolean rebalanceRequired) throws HyracksDataException;
@@ -280,4 +283,23 @@ public interface IClusterStateManager {
      * @return true if any of the nodes is currently inactive, otherwise false
      */
     boolean nodesFailed(Set<String> nodeIds);
+
+    /**
+     * Gets the count of storage partitions
+     *
+     * @return the count of storage partitions
+     */
+    int getStoragePartitionsCount();
+
+    /**
+     * @return the current compute-storage partitions map
+     */
+    StorageComputePartitionsMap getStorageComputeMap();
+
+    /**
+     * Sets the compute-storage partitions map
+     *
+     * @param map the new map
+     */
+    void setComputeStoragePartitionsMap(StorageComputePartitionsMap map);
 }

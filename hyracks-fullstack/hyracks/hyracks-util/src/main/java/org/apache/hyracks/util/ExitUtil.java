@@ -46,7 +46,7 @@ public class ExitUtil {
     public static final int EC_FAILED_TO_ABORT_METADATA_TXN = 7;
     public static final int EC_INCONSISTENT_METADATA = 8;
     public static final int EC_UNCAUGHT_THROWABLE = 9;
-    public static final int EC_UNHANDLED_EXCEPTION = 11;
+    public static final int EC_HALT_UNHANDLED_EXCEPTION = 11;
     public static final int EC_FAILED_TO_DELETE_CORRUPTED_RESOURCES = 12;
     public static final int EC_ERROR_CREATING_RESOURCES = 13;
     public static final int EC_TXN_LOG_FLUSHER_FAILURE = 14;
@@ -58,6 +58,7 @@ public class ExitUtil {
     public static final int EC_ACTIVE_RECOVERY_FAILURE = 20;
     public static final int EC_FAILED_TO_CANCEL_ACTIVE_START_STOP = 22;
     public static final int EC_INCONSISTENT_STORAGE_REFERENCES = 23;
+    public static final int EC_FAILED_TO_ROLLBACK_ATOMIC_STATEMENT = 24;
     public static final int EC_IMMEDIATE_HALT = 33;
     public static final int EC_HALT_ABNORMAL_RESERVED_44 = 44;
     public static final int EC_IO_SCHEDULER_FAILED = 55;

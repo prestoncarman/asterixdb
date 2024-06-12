@@ -29,6 +29,7 @@ import org.apache.hyracks.algebricks.core.algebra.base.EquivalenceClass;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.base.IOptimizationContext;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalVariable;
+import org.apache.hyracks.api.exceptions.ErrorCode;
 
 /**
  * Implements constraints in between requirements for the children of the same
@@ -42,7 +43,7 @@ public interface IPartitioningRequirementsCoordinator {
         @Override
         public Pair<Boolean, IPartitioningProperty> coordinateRequirements(IPartitioningProperty requirements,
                 IPartitioningProperty firstDeliveredPartitioning, ILogicalOperator op, IOptimizationContext context) {
-            return new Pair<Boolean, IPartitioningProperty>(true, requirements);
+            return new Pair<>(true, requirements);
         }
     };
 
@@ -61,39 +62,54 @@ public interface IPartitioningRequirementsCoordinator {
                                         (UnorderedPartitionedProperty) firstDeliveredPartitioning;
                                 Set<LogicalVariable> set1 = upp1.getColumnSet();
                                 UnorderedPartitionedProperty uppreq = (UnorderedPartitionedProperty) rqdpp;
-                                Set<LogicalVariable> modifuppreq = new ListSet<LogicalVariable>();
+                                Set<LogicalVariable> modifuppreq = new ListSet<>();
                                 Map<LogicalVariable, EquivalenceClass> eqmap = context.getEquivalenceClassMap(op);
-                                Set<LogicalVariable> covered = new ListSet<LogicalVariable>();
+                                Set<LogicalVariable> covered = new ListSet<>();
 
                                 // coordinate from an existing partition property
                                 // (firstDeliveredPartitioning)
                                 for (LogicalVariable v : set1) {
                                     EquivalenceClass ecFirst = eqmap.get(v);
                                     for (LogicalVariable r : uppreq.getColumnSet()) {
-                                        EquivalenceClass ec = eqmap.get(r);
-                                        if (ecFirst == ec) {
-                                            covered.add(v);
-                                            modifuppreq.add(r);
-                                            break;
+                                        if (!modifuppreq.contains(r)) {
+                                            EquivalenceClass ec = eqmap.get(r);
+                                            if (ecFirst == ec) {
+                                                covered.add(v);
+                                                modifuppreq.add(r);
+                                                break;
+                                            }
                                         }
                                     }
                                 }
 
                                 if (!covered.equals(set1)) {
-                                    throw new AlgebricksException("Could not modify " + rqdpp
-                                            + " to agree with partitioning property " + firstDeliveredPartitioning
-                                            + " delivered by previous input operator.");
+                                    throw new AlgebricksException(ErrorCode.ILLEGAL_STATE,
+                                            "Could not modify " + rqdpp + " to agree with partitioning property "
+                                                    + firstDeliveredPartitioning
+                                                    + " delivered by previous input operator.");
                                 }
-                                UnorderedPartitionedProperty upp2 =
-                                        new UnorderedPartitionedProperty(modifuppreq, rqdpp.getNodeDomain());
-                                return new Pair<Boolean, IPartitioningProperty>(false, upp2);
+
+                                if (modifuppreq.size() != set1.size()) {
+                                    throw new AlgebricksException(ErrorCode.ILLEGAL_STATE,
+                                            "The number of variables are not equal in both partitioning sides");
+                                }
+
+                                UnorderedPartitionedProperty upp2;
+                                UnorderedPartitionedProperty rqd = (UnorderedPartitionedProperty) rqdpp;
+                                if (rqd.usesPartitionsMap()) {
+                                    upp2 = UnorderedPartitionedProperty.ofPartitionsMap(modifuppreq,
+                                            rqd.getNodeDomain(), rqd.getPartitionsMap());
+                                } else {
+                                    upp2 = UnorderedPartitionedProperty.of(modifuppreq, rqd.getNodeDomain());
+                                }
+                                return new Pair<>(false, upp2);
                             }
                             case ORDERED_PARTITIONED: {
                                 throw new NotImplementedException();
                             }
                         }
                     }
-                    return new Pair<Boolean, IPartitioningProperty>(true, rqdpp);
+                    return new Pair<>(true, rqdpp);
                 }
 
             };

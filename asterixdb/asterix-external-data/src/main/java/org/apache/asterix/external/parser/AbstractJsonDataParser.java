@@ -30,10 +30,11 @@ import org.apache.asterix.builders.IARecordBuilder;
 import org.apache.asterix.builders.IAsterixListBuilder;
 import org.apache.asterix.common.exceptions.ErrorCode;
 import org.apache.asterix.common.exceptions.RuntimeDataException;
+import org.apache.asterix.external.api.IExternalDataRuntimeContext;
+import org.apache.asterix.external.input.filter.embedder.IExternalFilterValueEmbedder;
 import org.apache.asterix.external.parser.jackson.ADMToken;
 import org.apache.asterix.external.parser.jackson.GeometryCoParser;
 import org.apache.asterix.external.parser.jackson.ParserContext;
-import org.apache.asterix.external.util.ExternalDataConstants;
 import org.apache.asterix.om.base.ABoolean;
 import org.apache.asterix.om.base.ANull;
 import org.apache.asterix.om.base.AUnorderedList;
@@ -48,6 +49,7 @@ import org.apache.asterix.runtime.exceptions.UnsupportedTypeException;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.util.ExceptionUtils;
 import org.apache.hyracks.data.std.api.IMutableValueStorage;
+import org.apache.hyracks.data.std.api.IValueReference;
 import org.apache.hyracks.util.LogRedactionUtil;
 import org.apache.hyracks.util.ParseUtil;
 
@@ -66,8 +68,9 @@ public abstract class AbstractJsonDataParser extends AbstractNestedDataParser<AD
     protected final JsonFactory jsonFactory;
     protected final ARecordType rootType;
     protected final GeometryCoParser geometryCoParser;
-    protected Supplier<String> dataSourceName = ExternalDataConstants.EMPTY_STRING;
-    protected LongSupplier lineNumber = ExternalDataConstants.NO_LINES;
+    protected final Supplier<String> dataSourceName;
+    protected final LongSupplier lineNumber;
+    protected final IExternalFilterValueEmbedder valueEmbedder;
 
     protected JsonParser jsonParser;
 
@@ -77,13 +80,17 @@ public abstract class AbstractJsonDataParser extends AbstractNestedDataParser<AD
      * @param recordType  defined type.
      * @param jsonFactory Jackson JSON parser factory.
      */
-    public AbstractJsonDataParser(ARecordType recordType, JsonFactory jsonFactory) {
+    public AbstractJsonDataParser(ARecordType recordType, JsonFactory jsonFactory,
+            IExternalDataRuntimeContext context) {
         // recordType currently cannot be null, however this is to guarantee for any future changes.
         this.rootType = recordType != null ? recordType : RecordUtil.FULLY_OPEN_RECORD_TYPE;
         this.jsonFactory = jsonFactory;
         //GeometryCoParser to parse GeoJSON objects to AsterixDB internal spatial types.
         geometryCoParser = new GeometryCoParser(jsonParser);
         parserContext = new ParserContext();
+        dataSourceName = context.getDatasourceNameSupplier();
+        lineNumber = context.getLineNumberSupplier();
+        valueEmbedder = context.getValueEmbedder();
     }
 
     /*
@@ -189,6 +196,7 @@ public abstract class AbstractJsonDataParser extends AbstractNestedDataParser<AD
         final IMutableValueStorage valueBuffer = parserContext.enterObject();
         final IARecordBuilder objectBuilder = parserContext.getObjectBuilder(recordType);
         final BitSet nullBitMap = parserContext.getNullBitmap(recordType.getFieldTypes().length);
+        valueEmbedder.enterObject();
         while (nextToken() != ADMToken.OBJECT_END) {
             /*
              * Jackson parser calls String.intern() for field names (if enabled).
@@ -203,11 +211,19 @@ public abstract class AbstractJsonDataParser extends AbstractNestedDataParser<AD
             }
             valueBuffer.reset();
             nextToken();
-
             if (fieldIndex < 0) {
-                //field is not defined and the type is open
-                parseValue(BuiltinType.ANY, valueBuffer.getDataOutput());
-                objectBuilder.addField(parserContext.getSerializedFieldName(fieldName), valueBuffer);
+                IValueReference fieldValue;
+                // field is not defined and the type is open
+                if (valueEmbedder.shouldEmbed(fieldName, currentToken().getTypeTag())) {
+                    // It is an embedded value, set it
+                    fieldValue = valueEmbedder.getEmbeddedValue();
+                    // This would skip the children of a nested value (if the value is nested)
+                    jsonParser.skipChildren();
+                } else {
+                    fieldValue = valueBuffer;
+                    parseValue(BuiltinType.ANY, valueBuffer.getDataOutput());
+                }
+                objectBuilder.addField(parserContext.getSerializedFieldName(fieldName), fieldValue);
             } else {
                 //field is defined
                 final IAType fieldType = recordType.getFieldType(fieldName);
@@ -231,6 +247,9 @@ public abstract class AbstractJsonDataParser extends AbstractNestedDataParser<AD
         if (nullBitMap != null) {
             checkOptionalConstraints(recordType, nullBitMap);
         }
+
+        embedMissingValues(objectBuilder, parserContext, valueEmbedder);
+        valueEmbedder.exitObject();
         parserContext.exitObject(valueBuffer, nullBitMap, objectBuilder);
         objectBuilder.write(out, true);
     }

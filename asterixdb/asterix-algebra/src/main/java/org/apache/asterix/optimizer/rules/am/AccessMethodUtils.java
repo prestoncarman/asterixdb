@@ -64,6 +64,7 @@ import org.apache.asterix.om.typecomputer.base.TypeCastUtils;
 import org.apache.asterix.om.typecomputer.impl.TypeComputeUtils;
 import org.apache.asterix.om.types.ARecordType;
 import org.apache.asterix.om.types.ATypeTag;
+import org.apache.asterix.om.types.AUnionType;
 import org.apache.asterix.om.types.BuiltinType;
 import org.apache.asterix.om.types.IAType;
 import org.apache.asterix.om.types.hierachy.ATypeHierarchy;
@@ -452,7 +453,16 @@ public class AccessMethodUtils {
                     dest.addAll(KeyFieldTypeUtil.getArrayBTreeIndexKeyTypes(index, recordType, metaRecordType));
                     break;
                 case BTREE:
-                    dest.addAll(KeyFieldTypeUtil.getBTreeIndexKeyTypes(index, recordType, metaRecordType));
+                    List<Pair<IAType, Boolean>> bTreeIndexKeyTypes =
+                            KeyFieldTypeUtil.getBTreeIndexKeyTypes(index, recordType, metaRecordType);
+                    boolean overridingKeyFieldTypes = index.getIndexDetails().isOverridingKeyFieldTypes();
+                    for (int i = 0; i < bTreeIndexKeyTypes.size(); i++) {
+                        if (bTreeIndexKeyTypes.get(i).second || overridingKeyFieldTypes) {
+                            dest.add(AUnionType.createUnknownableType(bTreeIndexKeyTypes.get(i).first));
+                        } else {
+                            dest.add(bTreeIndexKeyTypes.get(i).first);
+                        }
+                    }
                     break;
                 case RTREE:
                     dest.addAll(KeyFieldTypeUtil.getRTreeIndexKeyTypes(index, recordType, metaRecordType));
@@ -867,7 +877,7 @@ public class AccessMethodUtils {
             IOptimizationContext context, boolean isLeftOuterJoin, boolean isLeftOuterJoinWithSpecialGroupBy,
             IAlgebricksConstantValue leftOuterMissingValue, ILogicalOperator indexSearchOp,
             LogicalVariable newMissingNullPlaceHolderVar, Mutable<ILogicalExpression> conditionRef, Dataset dataset,
-            Index chosenIndex) throws AlgebricksException {
+            Index chosenIndex, AbstractFunctionCallExpression funcExpr) throws AlgebricksException {
         boolean isIndexOnlyPlan = analysisCtx.getIndexOnlyPlanInfo().getFirst();
         List<LogicalVariable> probePKVars = null;
         ILogicalOperator finalIndexSearchOp = indexSearchOp;
@@ -918,6 +928,9 @@ public class AccessMethodUtils {
                     }
                 }
                 if (probePKVars == null || probePKVars.isEmpty()) {
+                    if (funcExpr != null) {
+                        conditionRef.setValue(funcExpr);
+                    }
                     return false;
                 }
                 if (isIndexOnlyPlan) {
@@ -981,13 +994,14 @@ public class AccessMethodUtils {
                     leftOuterMissingValue, context, sourceLoc);
         }
 
+        OperatorManipulationUtil.copyCardCostAnnotations(joinRef.getValue(), finalOp);
         joinRef.setValue(finalOp);
         return true;
     }
 
     /**
      * In case of a left outer join we look for a special GroupBy above the join operator
-     * (see {@link IntroduceJoinAccessMethodRule#checkAndApplyJoinTransformation(Mutable, IOptimizationContext)}.
+     * (see {@link IntroduceJoinAccessMethodRule#checkAndApplyJoinTransformation(Mutable, IOptimizationContext, boolean)}.
      * A "Special GroupBy" is a GroupBy that eliminates unjoined duplicates that might be produced by the secondary
      * index probe. We probe secondary indexes on each index partition and return a tuple with a right branch variable
      * set to MISSING (or NULL) if there's no match on that partition. Therefore if there's more than one partition
@@ -1092,7 +1106,7 @@ public class AccessMethodUtils {
         if (retainNull) {
             if (retainInput) {
                 LeftOuterUnnestMapOperator secondaryIndexLeftOuterUnnestOp = new LeftOuterUnnestMapOperator(
-                        secondaryIndexUnnestVars, new MutableObject<ILogicalExpression>(secondaryIndexSearchFunc),
+                        secondaryIndexUnnestVars, new MutableObject<>(secondaryIndexSearchFunc),
                         secondaryIndexOutputTypes, leftOuterMissingValue);
                 secondaryIndexLeftOuterUnnestOp.setSourceLocation(sourceLoc);
                 secondaryIndexLeftOuterUnnestOp
@@ -1109,8 +1123,7 @@ public class AccessMethodUtils {
         } else {
             // If this is not a left-outer-join case, then we use UNNEST-MAP operator.
             UnnestMapOperator secondaryIndexUnnestOp = new UnnestMapOperator(secondaryIndexUnnestVars,
-                    new MutableObject<ILogicalExpression>(secondaryIndexSearchFunc), secondaryIndexOutputTypes,
-                    retainInput);
+                    new MutableObject<>(secondaryIndexSearchFunc), secondaryIndexOutputTypes, retainInput);
             secondaryIndexUnnestOp.setSourceLocation(sourceLoc);
             secondaryIndexUnnestOp.setGenerateCallBackProceedResultVar(generateInstantTrylockResultFromIndexSearch);
             secondaryIndexUnnestOp.getInputs().add(new MutableObject<>(inputOp));
@@ -1334,7 +1347,7 @@ public class AccessMethodUtils {
         ILogicalOperator currentOp = inputOp;
 
         boolean constantAssignVarUsedInTopOp = false;
-        if (assignsBeforeTopOpRef != null) {
+        if (assignsBeforeTopOpRef != null && !assignsBeforeTopOpRef.isEmpty()) {
             // From the first ASSIGN (earliest in the plan) to the last ASSGIN (latest)
             for (int i = assignsBeforeTopOpRef.size() - 1; i >= 0; i--) {
                 AssignOperator tmpOp = (AssignOperator) assignsBeforeTopOpRef.get(i).getValue();
@@ -1600,7 +1613,7 @@ public class AccessMethodUtils {
 
         // If there are ASSIGN operators before the SELECT or JOIN operator,
         // we need to put these operators between the SELECT or JOIN and the primary index lookup in the left path.
-        if (assignsBeforeTopOpRef != null) {
+        if (assignsBeforeTopOpRef != null && !assignsBeforeTopOpRef.isEmpty()) {
             // Makes the primary unnest-map as the child of the last ASSIGN (from top) in the path.
             assignBeforeTopOp = assignsBeforeTopOpRef.get(assignsBeforeTopOpRef.size() - 1).getValue();
             assignBeforeTopOp.getInputs().clear();
@@ -1649,7 +1662,7 @@ public class AccessMethodUtils {
         // false positive results in the right path.
         // (e.g., where $a.authors /*+ indexnl */ = $b.authors and $a.id = $b.id   <- authors:SK, id:PK)
         if (((idxType == IndexType.RTREE || uniqueUsedVarsInTopOp.size() > 1) && requireVerificationAfterSIdxSearch)
-                || anyRealTypeConvertedToIntegerType) {
+                || anyRealTypeConvertedToIntegerType || IndexUtil.includesUnknowns(secondaryIndex)) {
             // Creates a new SELECT operator by deep-copying the SELECT operator in the left path
             // since we need to change the variable reference in the SELECT operator.
             // For the index-nested-loop join case, we copy the condition of the join operator.
@@ -1711,8 +1724,9 @@ public class AccessMethodUtils {
             SourceLocation sourceLoc, IAlgebricksConstantValue leftOuterMissingValue) throws AlgebricksException {
         // The job gen parameters are transferred to the actual job gen via the UnnestMapOperator's function arguments.
         List<Mutable<ILogicalExpression>> primaryIndexFuncArgs = new ArrayList<>();
-        BTreeJobGenParams jobGenParams = new BTreeJobGenParams(dataset.getDatasetName(), IndexType.BTREE,
-                dataset.getDataverseName(), dataset.getDatasetName(), retainInput, requiresBroadcast);
+        BTreeJobGenParams jobGenParams =
+                new BTreeJobGenParams(dataset.getDatasetName(), IndexType.BTREE, dataset.getDatabaseName(),
+                        dataset.getDataverseName(), dataset.getDatasetName(), retainInput, requiresBroadcast);
         // Set low/high inclusive to true for a point lookup.
         jobGenParams.setLowKeyInclusive(true);
         jobGenParams.setHighKeyInclusive(true);
@@ -1957,8 +1971,9 @@ public class AccessMethodUtils {
     }
 
     // New < For external datasets indexing>
-    private static void appendExternalRecTypes(Dataset dataset, IAType itemType, List<Object> target) {
-        target.add(itemType);
+    private static void appendExternalRecTypes(IAType itemType, List<Object> target) {
+        // the output of external-lookup could be missing. Make it unknowable
+        target.add(AUnionType.createUnknownableType(itemType));
     }
 
     private static void appendExternalRecPrimaryKeys(Dataset dataset, List<Object> target) throws AlgebricksException {
@@ -2018,7 +2033,7 @@ public class AccessMethodUtils {
         List<Object> outputTypes = new ArrayList<>();
         // Append output variables/types generated by the data scan (not forwarded from input).
         externalUnnestVars.addAll(dataSourceOp.getVariables());
-        appendExternalRecTypes(dataset, recordType, outputTypes);
+        appendExternalRecTypes(recordType, outputTypes);
 
         IFunctionInfo externalLookup = FunctionUtil.getFunctionInfo(BuiltinFunctions.EXTERNAL_LOOKUP);
         AbstractFunctionCallExpression externalLookupFunc =
@@ -2034,7 +2049,8 @@ public class AccessMethodUtils {
         unnestOp.setExecutionMode(ExecutionMode.PARTITIONED);
 
         //set the physical operator
-        DataSourceId dataSourceId = new DataSourceId(dataset.getDataverseName(), dataset.getDatasetName());
+        DataSourceId dataSourceId =
+                new DataSourceId(dataset.getDatabaseName(), dataset.getDataverseName(), dataset.getDatasetName());
         unnestOp.setPhysicalOperator(new ExternalDataLookupPOperator(dataSourceId, dataset, recordType, primaryKeyVars,
                 false, retainInput, retainNull));
         return unnestOp;
@@ -2143,8 +2159,7 @@ public class AccessMethodUtils {
         // an inverted index contains a part of a field value, not all of it.
         if (noIndexOnlyPlanOption || dataset.getDatasetType() == DatasetType.EXTERNAL || chosenIndex.isPrimaryIndex()
                 || chosenIndex.getIndexDetails().isOverridingKeyFieldTypes() || chosenIndex.isEnforced()
-                || isInvertedIndex(chosenIndex) || chosenIndex.getIndexType() == IndexType.ARRAY
-                || IndexUtil.includesUnknowns(chosenIndex)) {
+                || isInvertedIndex(chosenIndex) || chosenIndex.getIndexType() == IndexType.ARRAY) {
             indexOnlyPlanInfo.setFirst(false);
             return;
         }
@@ -2908,10 +2923,10 @@ public class AccessMethodUtils {
         return ann != null && (ann.getIndexNames() == null || ann.getIndexNames().contains(index.getIndexName()));
     }
 
-    static Collection<String> getSecondaryIndexPreferences(IOptimizableFuncExpr optFuncExpr,
+    static AbstractExpressionAnnotationWithIndexNames getSecondaryIndexAnnotation(IOptimizableFuncExpr optFuncExpr,
             Class<? extends AbstractExpressionAnnotationWithIndexNames> annClass) {
         AbstractExpressionAnnotationWithIndexNames ann = optFuncExpr.getFuncExpr().getAnnotation(annClass);
-        return ann == null ? null : ann.getIndexNames();
+        return ann == null ? null : ann;
     }
 
     public static Pair<List<String>, Integer> getFieldNameSetStepsFromSubTree(IOptimizableFuncExpr optFuncExpr,
@@ -3216,7 +3231,7 @@ public class AccessMethodUtils {
                     List<String> flatName = ArrayIndexUtil.getFlattenedKeyFieldNames(e.getUnnestList(), project);
                     List<Boolean> unnestFlags = ArrayIndexUtil.getUnnestFlags(e.getUnnestList(), project);
                     analysisCtx.getArrayIndexStructureMatcher().reset(assignVar, subTree);
-                    ArrayIndexUtil.walkArrayPath(index, subTree.getRecordType(), flatName, unnestFlags,
+                    ArrayIndexUtil.walkArrayPath(index, e, subTree.getRecordType(), flatName, unnestFlags,
                             analysisCtx.getArrayIndexStructureMatcher());
 
                     LogicalVariable varAfterWalk = analysisCtx.getArrayIndexStructureMatcher().getEndVar();

@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.rmi.RemoteException;
 import java.util.concurrent.Executor;
 
+import org.apache.asterix.common.cloud.IPartitionBootstrapper;
 import org.apache.asterix.common.context.IStorageComponentProvider;
 import org.apache.asterix.common.library.ILibraryManager;
 import org.apache.asterix.common.replication.IReplicationChannel;
@@ -42,12 +43,17 @@ import org.apache.hyracks.storage.am.lsm.common.api.ILSMMergePolicyFactory;
 import org.apache.hyracks.storage.am.lsm.common.api.IVirtualBufferCache;
 import org.apache.hyracks.storage.common.ILocalResourceRepository;
 import org.apache.hyracks.storage.common.buffercache.IBufferCache;
+import org.apache.hyracks.storage.common.disk.IDiskCacheMonitoringService;
 import org.apache.hyracks.storage.common.file.IResourceIdFactory;
 import org.apache.hyracks.util.cache.ICacheManager;
 
 public interface INcApplicationContext extends IApplicationContext {
 
     IIOManager getIoManager();
+
+    IIOManager getPersistenceIoManager();
+
+    IPartitionBootstrapper getPartitionBootstrapper();
 
     Executor getThreadExecutor();
 
@@ -147,4 +153,9 @@ public interface INcApplicationContext extends IApplicationContext {
      * @return the disk write rate limiter provider
      */
     IDiskWriteRateLimiterProvider getDiskWriteRateLimiterProvider();
+
+    /**
+     * @return disk cache service
+     */
+    IDiskCacheMonitoringService getDiskCacheService();
 }

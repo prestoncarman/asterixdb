@@ -20,6 +20,7 @@
 package org.apache.hyracks.algebricks.core.algebra.operators.logical.visitors;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 
@@ -33,7 +34,8 @@ import org.apache.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalPlan;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import org.apache.hyracks.algebricks.core.algebra.expressions.AbstractLogicalExpression;
-import org.apache.hyracks.algebricks.core.algebra.metadata.IProjectionInfo;
+import org.apache.hyracks.algebricks.core.algebra.metadata.IProjectionFiltrationInfo;
+import org.apache.hyracks.algebricks.core.algebra.metadata.IWriteDataSink;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AggregateOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.DataSourceScanOperator;
@@ -71,7 +73,6 @@ import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOpe
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnnestOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.WindowOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.WriteOperator;
-import org.apache.hyracks.algebricks.core.algebra.operators.logical.WriteResultOperator;
 import org.apache.hyracks.algebricks.core.algebra.util.OperatorManipulationUtil;
 import org.apache.hyracks.algebricks.core.algebra.visitors.ILogicalOperatorVisitor;
 
@@ -230,7 +231,11 @@ public class OperatorDeepCopyVisitor implements ILogicalOperatorVisitor<ILogical
                 newInputExtraVars.add(new ArrayList<>(op.getInputExtraVariables(i)));
             }
         }
-        return new IntersectOperator(newOutputCompareVars, newOutputExtraVars, newInputCompareVars, newInputExtraVars);
+        int[][] partitionsMap = op.getPartitionsMap();
+        int[][] partitionsMapCopy =
+                partitionsMap == null ? null : Arrays.stream(partitionsMap).map(int[]::clone).toArray(int[][]::new);
+        return new IntersectOperator(newOutputCompareVars, newOutputExtraVars, newInputCompareVars, newInputExtraVars,
+                partitionsMapCopy);
     }
 
     @Override
@@ -245,8 +250,10 @@ public class OperatorDeepCopyVisitor implements ILogicalOperatorVisitor<ILogical
         newInputList.addAll(op.getVariables());
         Mutable<ILogicalExpression> newSelectCondition =
                 op.getSelectCondition() != null ? deepCopyExpressionRef(op.getSelectCondition()) : null;
+        IProjectionFiltrationInfo projectionFiltrationInfo = op.getProjectionFiltrationInfo().createCopy();
         return new UnnestMapOperator(newInputList, deepCopyExpressionRef(op.getExpressionRef()),
-                new ArrayList<>(op.getVariableTypes()), op.propagatesInput(), newSelectCondition, op.getOutputLimit());
+                new ArrayList<>(op.getVariableTypes()), op.propagatesInput(), newSelectCondition, op.getOutputLimit(),
+                projectionFiltrationInfo);
     }
 
     @Override
@@ -254,6 +261,7 @@ public class OperatorDeepCopyVisitor implements ILogicalOperatorVisitor<ILogical
             throws AlgebricksException {
         ArrayList<LogicalVariable> newInputList = new ArrayList<>();
         newInputList.addAll(op.getVariables());
+        IProjectionFiltrationInfo projectionFiltrationInfo = op.getProjectionFiltrationInfo().createCopy();
         return new LeftOuterUnnestMapOperator(newInputList, deepCopyExpressionRef(op.getExpressionRef()),
                 new ArrayList<>(op.getVariableTypes()), op.getMissingValue());
     }
@@ -264,10 +272,9 @@ public class OperatorDeepCopyVisitor implements ILogicalOperatorVisitor<ILogical
         newInputList.addAll(op.getVariables());
         Mutable<ILogicalExpression> newSelectCondition =
                 op.getSelectCondition() != null ? deepCopyExpressionRef(op.getSelectCondition()) : null;
-        IProjectionInfo<?> projectionInfo = op.getProjectionInfo() != null ? op.getProjectionInfo().createCopy() : null;
-
+        IProjectionFiltrationInfo projectionFiltrationInfo = op.getProjectionFiltrationInfo().createCopy();
         return new DataSourceScanOperator(newInputList, op.getDataSource(), newSelectCondition, op.getOutputLimit(),
-                projectionInfo);
+                projectionFiltrationInfo);
     }
 
     @Override
@@ -284,9 +291,17 @@ public class OperatorDeepCopyVisitor implements ILogicalOperatorVisitor<ILogical
 
     @Override
     public ILogicalOperator visitWriteOperator(WriteOperator op, Void arg) throws AlgebricksException {
-        ArrayList<Mutable<ILogicalExpression>> newExpressions = new ArrayList<>();
-        deepCopyExpressionRefs(newExpressions, op.getExpressions());
-        return new WriteOperator(newExpressions, op.getDataSink());
+        Mutable<ILogicalExpression> newSourceExpression = deepCopyExpressionRef(op.getSourceExpression());
+        Mutable<ILogicalExpression> newPathExpression = deepCopyExpressionRef(op.getPathExpression());
+        List<Mutable<ILogicalExpression>> newPartitionExpressions =
+                deepCopyExpressionRefs(new ArrayList<>(), op.getPartitionExpressions());
+        List<Pair<IOrder, Mutable<ILogicalExpression>>> newOrderPairExpressions =
+                deepCopyOrderAndExpression(op.getOrderExpressions());
+        List<Mutable<ILogicalExpression>> newKeyPairExpressions =
+                deepCopyExpressionRefs(new ArrayList<>(), op.getKeyExpressions());
+        IWriteDataSink writeDataSink = op.getWriteDataSink().createCopy();
+        return new WriteOperator(newSourceExpression, newPathExpression, newPartitionExpressions,
+                newOrderPairExpressions, newKeyPairExpressions, op.getAutogenerated(), writeDataSink);
     }
 
     @Override
@@ -295,18 +310,6 @@ public class OperatorDeepCopyVisitor implements ILogicalOperatorVisitor<ILogical
         ArrayList<Mutable<ILogicalExpression>> newExpressions = new ArrayList<>();
         deepCopyExpressionRefs(newExpressions, op.getExpressions());
         return new DistributeResultOperator(newExpressions, op.getDataSink(), op.getResultMetadata());
-    }
-
-    @Override
-    public ILogicalOperator visitWriteResultOperator(WriteResultOperator op, Void arg) throws AlgebricksException {
-        ArrayList<Mutable<ILogicalExpression>> newKeyExpressions = new ArrayList<>();
-        deepCopyExpressionRefs(newKeyExpressions, op.getKeyExpressions());
-        List<Mutable<ILogicalExpression>> newLSMComponentFilterExpressions = new ArrayList<>();
-        deepCopyExpressionRefs(newKeyExpressions, op.getAdditionalFilteringExpressions());
-        WriteResultOperator writeResultOp = new WriteResultOperator(op.getDataSource(),
-                deepCopyExpressionRef(op.getPayloadExpression()), newKeyExpressions);
-        writeResultOp.setAdditionalFilteringExpressions(newLSMComponentFilterExpressions);
-        return writeResultOp;
     }
 
     @Override
@@ -376,11 +379,12 @@ public class OperatorDeepCopyVisitor implements ILogicalOperatorVisitor<ILogical
         return new SinkOperator();
     }
 
-    private void deepCopyExpressionRefs(List<Mutable<ILogicalExpression>> newExprs,
+    private List<Mutable<ILogicalExpression>> deepCopyExpressionRefs(List<Mutable<ILogicalExpression>> newExprs,
             List<Mutable<ILogicalExpression>> oldExprs) {
         for (Mutable<ILogicalExpression> oldExpr : oldExprs) {
-            newExprs.add(new MutableObject<>(((AbstractLogicalExpression) oldExpr.getValue()).cloneExpression()));
+            newExprs.add(new MutableObject<>(oldExpr.getValue().cloneExpression()));
         }
+        return newExprs;
     }
 
     private Mutable<ILogicalExpression> deepCopyExpressionRef(Mutable<ILogicalExpression> oldExprRef) {

@@ -21,7 +21,6 @@ package org.apache.asterix.lang.sqlpp.rewrites.visitor;
 import java.util.function.BiFunction;
 
 import org.apache.asterix.common.exceptions.CompilationException;
-import org.apache.asterix.common.functions.FunctionConstants;
 import org.apache.asterix.common.functions.FunctionSignature;
 import org.apache.asterix.lang.common.base.Expression;
 import org.apache.asterix.lang.common.base.ILangExpression;
@@ -33,7 +32,7 @@ import org.apache.asterix.lang.sqlpp.util.FunctionMapUtil;
 import org.apache.asterix.lang.sqlpp.visitor.base.AbstractSqlppSimpleExpressionVisitor;
 import org.apache.asterix.om.functions.BuiltinFunctions;
 
-public final class SqlppFunctionCallResolverVisitor extends AbstractSqlppSimpleExpressionVisitor {
+public class SqlppFunctionCallResolverVisitor extends AbstractSqlppSimpleExpressionVisitor {
 
     private final LangRewritingContext context;
 
@@ -72,7 +71,7 @@ public final class SqlppFunctionCallResolverVisitor extends AbstractSqlppSimpleE
         if (fs != null) {
             return fs;
         }
-        fs = new FunctionSignature(FunctionConstants.ASTERIX_DV, name, arity);
+        fs = FunctionSignature.newAsterix(name, arity);
         return isAggregateFunction(fs) || isWindowFunction(fs) ? fs : null;
     }
 

@@ -24,13 +24,20 @@ import java.io.FileNotFoundException;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.hyracks.api.exceptions.ErrorCode;
@@ -46,6 +53,7 @@ import org.apache.logging.log4j.Logger;
 public class IoUtil {
 
     public static final String FILE_NOT_FOUND_MSG = "Deleting non-existing file!";
+    public static final FilenameFilter NO_OP_FILTER = (dir, name) -> true;
     private static final Logger LOGGER = LogManager.getLogger();
 
     private IoUtil() {
@@ -188,5 +196,49 @@ public class IoUtil {
                 }
             }
         }
+    }
+
+    public static String getFileNameFromPath(String path) {
+        return path.substring(path.lastIndexOf('/') + 1);
+    }
+
+    public static Collection<FileReference> getMatchingChildren(FileReference root, FilenameFilter filter) {
+        if (!root.getFile().isDirectory()) {
+            throw new IllegalArgumentException("Parameter 'root' is not a directory: " + root);
+        }
+        Objects.requireNonNull(filter);
+        List<FileReference> files = new ArrayList<>();
+        String[] matchingFiles = root.getFile().list(filter);
+        if (matchingFiles != null) {
+            files.addAll(Arrays.stream(matchingFiles).map(root::getChild).collect(Collectors.toList()));
+        }
+        return files;
+    }
+
+    public static long sizeOfDirectory(final Path path) {
+        final AtomicLong size = new AtomicLong(0);
+        try {
+            Files.walkFileTree(path, new SimpleFileVisitor<>() {
+                @Override
+                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
+                    size.addAndGet(attrs.size());
+                    return FileVisitResult.CONTINUE;
+                }
+
+                @Override
+                public FileVisitResult visitFileFailed(Path file, IOException exc) {
+                    return FileVisitResult.CONTINUE;
+                }
+
+                @Override
+                public FileVisitResult postVisitDirectory(Path dir, IOException exc) {
+                    return FileVisitResult.CONTINUE;
+                }
+            });
+        } catch (IOException e) {
+            // This should never happen
+            throw new IllegalStateException("Cannot get the size of directory " + path);
+        }
+        return size.get();
     }
 }

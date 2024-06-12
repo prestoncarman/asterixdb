@@ -98,8 +98,10 @@ public class IntroduceLSMComponentFilterRule implements IAlgebraicRewriteRule {
             filterSourceIndicator = DatasetUtil.getFilterSourceIndicator(dataset);
             filterFieldName = DatasetUtil.getFilterField(dataset);
             IAType filterSourceType = filterSourceIndicator == null || filterSourceIndicator == 0
-                    ? mp.findType(dataset.getItemTypeDataverseName(), dataset.getItemTypeName())
-                    : mp.findType(dataset.getMetaItemTypeDataverseName(), dataset.getMetaItemTypeName());
+                    ? mp.findType(dataset.getItemTypeDatabaseName(), dataset.getItemTypeDataverseName(),
+                            dataset.getItemTypeName())
+                    : mp.findType(dataset.getMetaItemTypeDatabaseName(), dataset.getMetaItemTypeDataverseName(),
+                            dataset.getMetaItemTypeName());
 
             if (filterSourceType.getTypeTag() == ATypeTag.OBJECT) {
                 itemType = (ARecordType) filterSourceType;
@@ -118,7 +120,8 @@ public class IntroduceLSMComponentFilterRule implements IAlgebraicRewriteRule {
         List<IOptimizableFuncExpr> optFuncExprs = new ArrayList<>();
 
         if (!analysisCtx.getMatchedFuncExprs().isEmpty()) {
-            List<Index> datasetIndexes = mp.getDatasetIndexes(dataset.getDataverseName(), dataset.getDatasetName());
+            List<Index> datasetIndexes = mp.getDatasetIndexes(dataset.getDatabaseName(), dataset.getDataverseName(),
+                    dataset.getDatasetName());
 
             for (int i = 0; i < analysisCtx.getMatchedFuncExprs().size(); i++) {
                 IOptimizableFuncExpr optFuncExpr = analysisCtx.getMatchedFuncExpr(i);
@@ -340,7 +343,7 @@ public class IntroduceLSMComponentFilterRule implements IAlgebraicRewriteRule {
             inputCompareVars.add(new ArrayList<>(intersect.getInputCompareVariables(i)));
         }
         IntersectOperator intersectWithFilter = new IntersectOperator(intersect.getOutputCompareVariables(),
-                outputFilterVars, inputCompareVars, filterVars);
+                outputFilterVars, inputCompareVars, filterVars, intersect.getPartitionsMap());
         intersectWithFilter.setSourceLocation(intersect.getSourceLocation());
         intersectWithFilter.getInputs().addAll(intersect.getInputs());
         return intersectWithFilter;
@@ -431,20 +434,24 @@ public class IntroduceLSMComponentFilterRule implements IAlgebraicRewriteRule {
                     FunctionIdentifier fid = f.getFunctionIdentifier();
                     DataverseName dataverseName;
                     String datasetName;
+                    String database;
                     if (BuiltinFunctions.EXTERNAL_LOOKUP.equals(fid)) {
                         dataverseName = DataverseName
                                 .createFromCanonicalForm(AccessMethodUtils.getStringConstant(f.getArguments().get(0)));
                         datasetName = AccessMethodUtils.getStringConstant(f.getArguments().get(1));
+                        database = AccessMethodUtils.getStringConstant(f.getArguments().get(2));
                     } else if (fid.equals(BuiltinFunctions.INDEX_SEARCH)) {
                         AccessMethodJobGenParams jobGenParams = new AccessMethodJobGenParams();
                         jobGenParams.readFromFuncArgs(f.getArguments());
                         dataverseName = jobGenParams.dataverseName;
                         datasetName = jobGenParams.datasetName;
+                        database = jobGenParams.databaseName;
                     } else {
                         throw new CompilationException(ErrorCode.COMPILATION_ERROR, f.getSourceLocation(),
                                 "Unexpected function for Unnest Map: " + fid);
                     }
-                    return ((MetadataProvider) context.getMetadataProvider()).findDataset(dataverseName, datasetName);
+                    return ((MetadataProvider) context.getMetadataProvider()).findDataset(database, dataverseName,
+                            datasetName);
                 }
             }
             if (descendantOp.getInputs().isEmpty()) {
@@ -583,10 +590,12 @@ public class IntroduceLSMComponentFilterRule implements IAlgebraicRewriteRule {
                                 "Could not find the corresponding index for an" + " index search.");
                     }
 
-                    IAType metaItemType = ((MetadataProvider) context.getMetadataProvider())
-                            .findType(dataset.getMetaItemTypeDataverseName(), dataset.getMetaItemTypeName());
-                    IAType recordItemType = ((MetadataProvider) context.getMetadataProvider())
-                            .findType(dataset.getMetaItemTypeDataverseName(), dataset.getItemTypeName());
+                    IAType metaItemType = ((MetadataProvider) context.getMetadataProvider()).findType(
+                            dataset.getMetaItemTypeDatabaseName(), dataset.getMetaItemTypeDataverseName(),
+                            dataset.getMetaItemTypeName());
+                    IAType recordItemType = ((MetadataProvider) context.getMetadataProvider()).findType(
+                            dataset.getItemTypeDatabaseName(), dataset.getItemTypeDataverseName(),
+                            dataset.getItemTypeName());
                     ARecordType recordType = (ARecordType) recordItemType;
                     ARecordType metaRecType = (ARecordType) metaItemType;
                     int numSecondaryKeys = KeyFieldTypeUtil.getNumSecondaryKeys(index, recordType, metaRecType);

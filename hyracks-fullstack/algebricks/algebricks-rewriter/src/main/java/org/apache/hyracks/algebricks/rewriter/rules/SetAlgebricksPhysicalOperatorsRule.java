@@ -80,7 +80,6 @@ import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOpe
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnnestOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.WindowOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.WriteOperator;
-import org.apache.hyracks.algebricks.core.algebra.operators.logical.WriteResultOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.physical.AbstractWindowPOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.physical.AggregatePOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.physical.AssignPOperator;
@@ -118,7 +117,6 @@ import org.apache.hyracks.algebricks.core.algebra.operators.physical.TokenizePOp
 import org.apache.hyracks.algebricks.core.algebra.operators.physical.UnionAllPOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.physical.UnnestPOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.physical.WindowPOperator;
-import org.apache.hyracks.algebricks.core.algebra.operators.physical.WriteResultPOperator;
 import org.apache.hyracks.algebricks.core.algebra.visitors.ILogicalOperatorVisitor;
 import org.apache.hyracks.algebricks.core.rewriter.base.IAlgebraicRewriteRule;
 import org.apache.hyracks.algebricks.core.rewriter.base.PhysicalOptimizationConfig;
@@ -128,6 +126,11 @@ import org.apache.hyracks.api.exceptions.IWarningCollector;
 import org.apache.hyracks.api.exceptions.Warning;
 
 public class SetAlgebricksPhysicalOperatorsRule implements IAlgebraicRewriteRule {
+
+    protected enum GroupByAlgorithm {
+        HASH_GROUP_BY,
+        SORT_GROUP_BY
+    }
 
     @Override
     public boolean rewritePost(Mutable<ILogicalOperator> opRef, IOptimizationContext context)
@@ -146,7 +149,7 @@ public class SetAlgebricksPhysicalOperatorsRule implements IAlgebraicRewriteRule
         return true;
     }
 
-    private static void computeDefaultPhysicalOp(AbstractLogicalOperator op, boolean topLevelOp,
+    protected static void computeDefaultPhysicalOp(AbstractLogicalOperator op, boolean topLevelOp,
             ILogicalOperatorVisitor<IPhysicalOperator, Boolean> physOpFactory) throws AlgebricksException {
         if (op.getPhysicalOperator() == null) {
             IPhysicalOperator physOp = op.accept(physOpFactory, topLevelOp);
@@ -215,19 +218,17 @@ public class SetAlgebricksPhysicalOperatorsRule implements IAlgebraicRewriteRule
                 throws AlgebricksException {
 
             ensureAllVariables(gby.getGroupByList(), Pair::getSecond);
-
-            if (gby.getNestedPlans().size() == 1 && gby.getNestedPlans().get(0).getRoots().size() == 1) {
-                if (topLevelOp && ((gby.getAnnotations().get(OperatorAnnotations.USE_HASH_GROUP_BY) == Boolean.TRUE)
-                        || (gby.getAnnotations().get(OperatorAnnotations.USE_EXTERNAL_GROUP_BY) == Boolean.TRUE))) {
-                    ExternalGroupByPOperator extGby = createExternalGroupByPOperator(gby);
-                    if (extGby != null) {
-                        return extGby;
-                    } else if (gby.getSourceLocation() != null) {
-                        IWarningCollector warningCollector = context.getWarningCollector();
-                        if (warningCollector.shouldWarn()) {
-                            warningCollector.warn(Warning.of(gby.getSourceLocation(), ErrorCode.INAPPLICABLE_HINT,
-                                    "Group By", "hash"));
-                        }
+            if (groupByAlgorithm(gby, topLevelOp) == GroupByAlgorithm.HASH_GROUP_BY) {
+                ExternalGroupByPOperator extGby = createExternalGroupByPOperator(gby);
+                if (extGby != null) {
+                    return extGby;
+                } else if (((gby.getAnnotations().get(OperatorAnnotations.USE_HASH_GROUP_BY) == Boolean.TRUE)
+                        || (gby.getAnnotations().get(OperatorAnnotations.USE_EXTERNAL_GROUP_BY) == Boolean.TRUE))
+                        && gby.getSourceLocation() != null) {
+                    IWarningCollector warningCollector = context.getWarningCollector();
+                    if (warningCollector.shouldWarn()) {
+                        warningCollector.warn(
+                                Warning.of(gby.getSourceLocation(), ErrorCode.INAPPLICABLE_HINT, "Group By", "hash"));
                     }
                 }
             }
@@ -237,6 +238,35 @@ public class SetAlgebricksPhysicalOperatorsRule implements IAlgebraicRewriteRule
             } else {
                 return new MicroPreclusteredGroupByPOperator(gby.getGroupByVarList());
             }
+        }
+
+        protected Enum groupByAlgorithm(GroupByOperator gby, Boolean topLevelOp) {
+            if (hashGroupPossible(gby, topLevelOp) && hashGroupHint(gby)) {
+                return GroupByAlgorithm.HASH_GROUP_BY;
+            }
+            return GroupByAlgorithm.SORT_GROUP_BY;
+        }
+
+        protected boolean hashGroupPossible(GroupByOperator gby, Boolean topLevelOp) {
+            if (topLevelOp && gby.getNestedPlans().size() == 1) {
+                List<Mutable<ILogicalOperator>> gbyRoots = gby.getNestedPlans().get(0).getRoots();
+                if (gbyRoots.size() == 1) {
+                    Mutable<ILogicalOperator> op = gbyRoots.get(0);
+                    if (op.getValue().getInputs().get(0).getValue()
+                            .getOperatorTag() == LogicalOperatorTag.NESTEDTUPLESOURCE) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        protected boolean hashGroupHint(GroupByOperator gby) {
+            if ((gby.getAnnotations().get(OperatorAnnotations.USE_HASH_GROUP_BY) == Boolean.TRUE)
+                    || (gby.getAnnotations().get(OperatorAnnotations.USE_EXTERNAL_GROUP_BY) == Boolean.TRUE)) {
+                return true;
+            }
+            return false;
         }
 
         protected ExternalGroupByPOperator createExternalGroupByPOperator(GroupByOperator gby)
@@ -371,25 +401,19 @@ public class SetAlgebricksPhysicalOperatorsRule implements IAlgebraicRewriteRule
         }
 
         @Override
-        public IPhysicalOperator visitWriteOperator(WriteOperator op, Boolean topLevelOp) {
-            return new SinkWritePOperator();
+        public IPhysicalOperator visitWriteOperator(WriteOperator op, Boolean topLevelOp) throws AlgebricksException {
+            ILogicalExpression sourceExpr = op.getSourceExpression().getValue();
+            if (sourceExpr.getExpressionTag() != LogicalExpressionTag.VARIABLE) {
+                throw AlgebricksException.create(ErrorCode.EXPR_NOT_NORMALIZED, sourceExpr.getSourceLocation());
+            }
+            ensureAllVariables(op.getPartitionExpressions(), v -> v);
+            ensureAllVariables(op.getOrderExpressions(), Pair::getSecond);
+            return new SinkWritePOperator(op.getSourceVariable(), op.getPartitionVariables(), op.getOrderColumns());
         }
 
         @Override
         public IPhysicalOperator visitDistributeResultOperator(DistributeResultOperator op, Boolean topLevelOp) {
             return new DistributeResultPOperator();
-        }
-
-        @Override
-        public IPhysicalOperator visitWriteResultOperator(WriteResultOperator opLoad, Boolean topLevelOp) {
-            List<LogicalVariable> keys = new ArrayList<>();
-            List<LogicalVariable> additionalFilteringKeys = null;
-            LogicalVariable payload = getKeysAndLoad(opLoad.getPayloadExpression(), opLoad.getKeyExpressions(), keys);
-            if (opLoad.getAdditionalFilteringExpressions() != null) {
-                additionalFilteringKeys = new ArrayList<>();
-                getKeys(opLoad.getAdditionalFilteringExpressions(), additionalFilteringKeys);
-            }
-            return new WriteResultPOperator(opLoad.getDataSource(), payload, keys, additionalFilteringKeys);
         }
 
         @Override

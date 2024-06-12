@@ -22,32 +22,21 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-import org.apache.asterix.common.exceptions.AsterixException;
-import org.apache.asterix.common.exceptions.ErrorCode;
+import org.apache.asterix.external.api.IExternalDataRuntimeContext;
 import org.apache.asterix.external.api.IRecordDataParser;
 import org.apache.asterix.external.api.IStreamDataParser;
 import org.apache.asterix.external.parser.JSONDataParser;
 import org.apache.asterix.external.util.ExternalDataConstants;
-import org.apache.asterix.om.types.AOrderedListType;
 import org.apache.asterix.om.types.ARecordType;
-import org.apache.asterix.om.types.ATypeTag;
-import org.apache.asterix.om.types.AUnionType;
-import org.apache.asterix.om.types.IAType;
-import org.apache.hyracks.api.context.IHyracksTaskContext;
-import org.apache.hyracks.api.exceptions.HyracksDataException;
 
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonParser;
 
-public class JSONDataParserFactory extends AbstractRecordStreamParserFactory<char[]> {
+public class JSONDataParserFactory extends AbstractGenericDataParserFactory<char[]> {
 
     private static final long serialVersionUID = 1L;
     private static final List<String> PARSER_FORMAT = Collections.unmodifiableList(
             Arrays.asList(ExternalDataConstants.FORMAT_JSON_LOWER_CASE, ExternalDataConstants.FORMAT_JSON_UPPER_CASE));
-    private static final List<ATypeTag> UNSUPPORTED_TYPES = Collections
-            .unmodifiableList(Arrays.asList(ATypeTag.MULTISET, ATypeTag.POINT3D, ATypeTag.CIRCLE, ATypeTag.RECTANGLE,
-                    ATypeTag.INTERVAL, ATypeTag.DAYTIMEDURATION, ATypeTag.DURATION, ATypeTag.BINARY));
-
     private final JsonFactory jsonFactory;
 
     public JSONDataParserFactory() {
@@ -58,9 +47,8 @@ public class JSONDataParserFactory extends AbstractRecordStreamParserFactory<cha
     }
 
     @Override
-    public IStreamDataParser createInputStreamParser(IHyracksTaskContext ctx, int partition)
-            throws HyracksDataException {
-        return createParser();
+    public IStreamDataParser createInputStreamParser(IExternalDataRuntimeContext context) {
+        return createParser(context);
     }
 
     @Override
@@ -74,8 +62,8 @@ public class JSONDataParserFactory extends AbstractRecordStreamParserFactory<cha
     }
 
     @Override
-    public IRecordDataParser<char[]> createRecordParser(IHyracksTaskContext ctx) throws HyracksDataException {
-        return createParser();
+    public IRecordDataParser<char[]> createRecordParser(IExternalDataRuntimeContext context) {
+        return createParser(context);
     }
 
     @Override
@@ -83,45 +71,8 @@ public class JSONDataParserFactory extends AbstractRecordStreamParserFactory<cha
         return char[].class;
     }
 
-    private JSONDataParser createParser() throws HyracksDataException {
-        return new JSONDataParser(recordType, jsonFactory);
-    }
-
-    /*
-     * check type compatibility before creating the parser.
-     */
-    @Override
-    public void setRecordType(ARecordType recordType) throws AsterixException {
-        checkRecordTypeCompatibility(recordType);
-        super.setRecordType(recordType);
-    }
-
-    /**
-     * Check if the defined type contains ADM special types.
-     * if it contains unsupported types.
-     *
-     * @param recordType
-     * @throws AsterixException
-     */
-    private void checkRecordTypeCompatibility(ARecordType recordType) throws AsterixException {
-        final IAType[] fieldTypes = recordType.getFieldTypes();
-        for (IAType type : fieldTypes) {
-            checkTypeCompatibility(type);
-        }
-    }
-
-    private void checkTypeCompatibility(IAType type) throws AsterixException {
-        if (UNSUPPORTED_TYPES.contains(type.getTypeTag())) {
-            throw new AsterixException(ErrorCode.TYPE_UNSUPPORTED, JSONDataParserFactory.class.getName(),
-                    type.getTypeTag().toString());
-        } else if (type.getTypeTag() == ATypeTag.ARRAY) {
-            checkTypeCompatibility(((AOrderedListType) type).getItemType());
-        } else if (type.getTypeTag() == ATypeTag.OBJECT) {
-            checkRecordTypeCompatibility((ARecordType) type);
-        } else if (type.getTypeTag() == ATypeTag.UNION) {
-            checkTypeCompatibility(((AUnionType) type).getActualType());
-        }
-        //Compatible type
+    private JSONDataParser createParser(IExternalDataRuntimeContext context) {
+        return new JSONDataParser(recordType, jsonFactory, context);
     }
 
 }

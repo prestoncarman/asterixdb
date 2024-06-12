@@ -52,6 +52,7 @@ import org.apache.asterix.common.annotations.AutoDataGen;
 import org.apache.asterix.common.annotations.DateBetweenYearsDataGen;
 import org.apache.asterix.common.annotations.DatetimeAddRandHoursDataGen;
 import org.apache.asterix.common.annotations.DatetimeBetweenYearsDataGen;
+import org.apache.asterix.common.annotations.ExternalSubpathAnnotation;
 import org.apache.asterix.common.annotations.FieldIntervalDataGen;
 import org.apache.asterix.common.annotations.FieldValFileDataGen;
 import org.apache.asterix.common.annotations.FieldValFileSameIndexDataGen;
@@ -66,6 +67,7 @@ import org.apache.asterix.common.annotations.SkipSecondaryIndexSearchExpressionA
 import org.apache.asterix.common.annotations.SpatialJoinAnnotation;
 import org.apache.asterix.common.annotations.TypeDataGen;
 import org.apache.asterix.common.annotations.UndeclaredFieldsDataGen;
+import org.apache.asterix.common.api.INamespaceResolver;
 import org.apache.asterix.common.config.DatasetConfig.DatasetType;
 import org.apache.asterix.common.config.DatasetConfig.IndexType;
 import org.apache.asterix.common.exceptions.AsterixException;
@@ -76,6 +78,10 @@ import org.apache.asterix.common.functions.FunctionConstants;
 import org.apache.asterix.common.functions.FunctionSignature;
 import org.apache.asterix.common.metadata.DataverseName;
 import org.apache.asterix.common.metadata.DatasetFullyQualifiedName;
+import org.apache.asterix.common.metadata.MetadataConstants;
+import org.apache.asterix.common.metadata.MetadataUtil;
+import org.apache.asterix.common.metadata.Namespace;
+import org.apache.asterix.common.metadata.NamespaceResolver;
 import org.apache.asterix.external.dataset.adapter.AdapterIdentifier;
 import org.apache.asterix.lang.common.base.AbstractClause;
 import org.apache.asterix.lang.common.base.AbstractLangExpression;
@@ -132,6 +138,7 @@ import org.apache.asterix.lang.common.statement.ConnectFeedStatement;
 import org.apache.asterix.lang.common.statement.StartFeedStatement;
 import org.apache.asterix.lang.common.statement.StopFeedStatement;
 import org.apache.asterix.lang.common.statement.CreateAdapterStatement;
+import org.apache.asterix.lang.common.statement.CreateDatabaseStatement;
 import org.apache.asterix.lang.common.statement.CreateDataverseStatement;
 import org.apache.asterix.lang.common.statement.CreateFeedPolicyStatement;
 import org.apache.asterix.lang.common.statement.CreateFeedStatement;
@@ -141,6 +148,7 @@ import org.apache.asterix.lang.common.statement.CreateSynonymStatement;
 import org.apache.asterix.lang.common.statement.CreateFullTextFilterStatement;
 import org.apache.asterix.lang.common.statement.CreateFullTextConfigStatement;
 import org.apache.asterix.lang.common.statement.CreateViewStatement;
+import org.apache.asterix.lang.common.statement.DatabaseDropStatement;
 import org.apache.asterix.lang.common.statement.DatasetDecl;
 import org.apache.asterix.lang.common.statement.DataverseDecl;
 import org.apache.asterix.lang.common.statement.DataverseDropStatement;
@@ -158,10 +166,11 @@ import org.apache.asterix.lang.common.statement.FullTextConfigDropStatement;
 import org.apache.asterix.lang.common.statement.InsertStatement;
 import org.apache.asterix.lang.common.statement.InternalDetailsDecl;
 import org.apache.asterix.lang.common.statement.LoadStatement;
+import org.apache.asterix.lang.common.statement.CopyFromStatement;
+import org.apache.asterix.lang.common.statement.CopyToStatement;
 import org.apache.asterix.lang.common.statement.NodeGroupDropStatement;
 import org.apache.asterix.lang.common.statement.NodegroupDecl;
 import org.apache.asterix.lang.common.statement.Query;
-import org.apache.asterix.lang.common.statement.RefreshExternalDatasetStatement;
 import org.apache.asterix.lang.common.statement.SetStatement;
 import org.apache.asterix.lang.common.statement.SynonymDropStatement;
 import org.apache.asterix.lang.common.statement.TypeDecl;
@@ -170,11 +179,11 @@ import org.apache.asterix.lang.common.statement.UpdateStatement;
 import org.apache.asterix.lang.common.statement.UpsertStatement;
 import org.apache.asterix.lang.common.statement.ViewDecl;
 import org.apache.asterix.lang.common.statement.ViewDropStatement;
-import org.apache.asterix.lang.common.statement.WriteStatement;
 import org.apache.asterix.lang.common.struct.Identifier;
 import org.apache.asterix.lang.common.struct.OperatorType;
 import org.apache.asterix.lang.common.struct.QuantifiedPair;
 import org.apache.asterix.lang.common.struct.VarIdentifier;
+import org.apache.asterix.lang.common.util.ConfigurationUtil;
 import org.apache.asterix.lang.common.util.DatasetDeclParametersUtil;
 import org.apache.asterix.lang.common.util.ExpressionUtils;
 import org.apache.asterix.lang.common.util.RangeMapBuilder;
@@ -208,7 +217,7 @@ import org.apache.asterix.lang.sqlpp.struct.SetOperationRight;
 import org.apache.asterix.lang.sqlpp.util.ExpressionToVariableUtil;
 import org.apache.asterix.lang.sqlpp.util.FunctionMapUtil;
 import org.apache.asterix.lang.sqlpp.util.SqlppVariableUtil;
-import org.apache.asterix.metadata.utils.MetadataConstants;
+import org.apache.asterix.metadata.bootstrap.MetadataBuiltinEntities;
 import org.apache.asterix.om.exceptions.TypeMismatchException;
 import org.apache.asterix.om.functions.BuiltinFunctions;
 import org.apache.asterix.om.types.BuiltinType;
@@ -276,6 +285,10 @@ class SQLPPParser extends ScopeChecker implements IParser {
 
     private int externalVarCounter;
 
+    private Namespace defaultNamespace;
+
+    private String defaultDatabase;
+
     private DataverseName defaultDataverse;
 
     private SqlppGroupingSetsParser groupingSetsParser;
@@ -283,6 +296,8 @@ class SQLPPParser extends ScopeChecker implements IParser {
     private final WarningCollector warningCollector = new WarningCollector();
 
     private final Map<SourceLocation, String> hintCollector = new HashMap<SourceLocation, String>();
+
+    private INamespaceResolver namespaceResolver;
 
     private static class IndexParams {
       public IndexType type;
@@ -297,6 +312,8 @@ class SQLPPParser extends ScopeChecker implements IParser {
     }
 
     private static class FunctionName {
+       public Namespace namespace;
+       public String database;
        public DataverseName dataverse;
        public String library;
        public String function;
@@ -354,15 +371,22 @@ class SQLPPParser extends ScopeChecker implements IParser {
       }
     }
 
-    public SQLPPParser(String s) {
+    public SQLPPParser(String s, INamespaceResolver namespaceResolver) {
         this(new StringReader(s));
         super.setInput(s);
+        this.namespaceResolver = namespaceResolver;
+    }
+
+    public SQLPPParser(Reader is, INamespaceResolver namespaceResolver) {
+        this(is);
+        this.namespaceResolver = namespaceResolver;
     }
 
     public static void main(String[] args) throws ParseException, TokenMgrError, IOException, FileNotFoundException, CompilationException {
         File file = new File(args[0]);
         Reader fis = new BufferedReader(new InputStreamReader(new FileInputStream(file), "UTF-8"));
         SQLPPParser parser = new SQLPPParser(fis);
+        parser.namespaceResolver = new NamespaceResolver(false);
         List<Statement> st = parser.parse();
         //st.accept(new SQLPPPrintVisitor(), 0);
     }
@@ -387,8 +411,8 @@ class SQLPPParser extends ScopeChecker implements IParser {
         });
     }
 
-    private static Expression parseExpression(String text) throws CompilationException {
-        return new SQLPPParser(text).parseExpression();
+    private static Expression parseExpression(String text, INamespaceResolver nsr) throws CompilationException {
+        return new SQLPPParser(text, nsr).parseExpression();
     }
 
     @Override
@@ -410,8 +434,8 @@ class SQLPPParser extends ScopeChecker implements IParser {
         });
     }
 
-    private static List<String> parseParenthesizedIdentifierList(String text) throws CompilationException {
-        return new SQLPPParser(text).parseParenthesizedIdentifierList();
+    private static List<String> parseParenthesizedIdentifierList(String text, INamespaceResolver nsr) throws CompilationException {
+        return new SQLPPParser(text, nsr).parseParenthesizedIdentifierList();
     }
 
     private Pair<HashJoinExpressionAnnotation.BuildOrProbe, String> parseHashJoinParams() throws CompilationException {
@@ -423,8 +447,8 @@ class SQLPPParser extends ScopeChecker implements IParser {
         });
     }
 
-    private static Pair<HashJoinExpressionAnnotation.BuildOrProbe, String> parseHashJoinParams(String text) throws CompilationException {
-        return new SQLPPParser(text).parseHashJoinParams();
+    private static Pair<HashJoinExpressionAnnotation.BuildOrProbe, String> parseHashJoinParams(String text, INamespaceResolver nsr) throws CompilationException {
+        return new SQLPPParser(text, nsr).parseHashJoinParams();
     }
 
     private String parseBroadcastJoinParams() throws CompilationException {
@@ -436,8 +460,8 @@ class SQLPPParser extends ScopeChecker implements IParser {
             });
         }
 
-    private static String parseBroadcastJoinParams(String text) throws CompilationException {
-        return new SQLPPParser(text).parseBroadcastJoinParams();
+    private static String parseBroadcastJoinParams(String text, INamespaceResolver nsr) throws CompilationException {
+        return new SQLPPParser(text, nsr).parseBroadcastJoinParams();
     }
 
     private List<Literal> parseParenthesizedLiteralList() throws CompilationException {
@@ -449,8 +473,8 @@ class SQLPPParser extends ScopeChecker implements IParser {
         });
     }
 
-    private static List<Literal> parseParenthesizedLiteralList(String text) throws CompilationException {
-        return new SQLPPParser(text).parseParenthesizedLiteralList();
+    private static List<Literal> parseParenthesizedLiteralList(String text, INamespaceResolver nsr) throws CompilationException {
+        return new SQLPPParser(text, nsr).parseParenthesizedLiteralList();
     }
 
     @Override
@@ -460,7 +484,9 @@ class SQLPPParser extends ScopeChecker implements IParser {
             @Override
             public FunctionDecl parse() throws ParseException {
                 DataverseName dataverse = defaultDataverse;
+                String database = defaultDatabase;
                 defaultDataverse = signature.getDataverseName();
+                defaultDatabase = signature.getDatabaseName();
                 createNewScope();
                 List<VarIdentifier> paramVars = new ArrayList<VarIdentifier>(paramNames.size());
                 for (String paramName : paramNames) {
@@ -469,6 +495,7 @@ class SQLPPParser extends ScopeChecker implements IParser {
                 Expression functionBodyExpr = SQLPPParser.this.FunctionBody();
                 removeCurrentScope();
                 defaultDataverse = dataverse;
+                defaultDatabase = database;
                 return new FunctionDecl(signature, paramVars, functionBodyExpr, isStored);
             }
         });
@@ -480,11 +507,14 @@ class SQLPPParser extends ScopeChecker implements IParser {
             @Override
             public ViewDecl parse() throws ParseException {
                 DataverseName dataverse = defaultDataverse;
+                String database = defaultDatabase;
                 defaultDataverse = viewName.getDataverseName();
+                defaultDatabase = viewName.getDatabaseName();
                 createNewScope();
                 Expression viewBodyExpr = SQLPPParser.this.ViewBody();
                 removeCurrentScope();
                 defaultDataverse = dataverse;
+                defaultDatabase = database;
                 return new ViewDecl(viewName, viewBodyExpr);
             }
         });
@@ -663,6 +693,25 @@ class SQLPPParser extends ScopeChecker implements IParser {
       }
     }
 
+    private List<Token> fetchHints(Token token, SqlppHint... expectedHints) {
+          Token hintToken = token.specialToken;
+          List<Token> hintTokenList = new ArrayList<Token>();
+          while (hintToken != null) {
+              SourceLocation sourceLoc = getSourceLocation(hintToken);
+              hintCollector.remove(sourceLoc);
+              if (hintToken.hint == null) {
+                warnUnexpectedHint(hintToken.hintParams, sourceLoc, expectedHints);
+              } else if (!ArrayUtils.contains(expectedHints, hintToken.hint)) {
+                warnUnexpectedHint(hintToken.hint.getIdentifier(), sourceLoc, expectedHints);
+              } else {
+                hintTokenList.add(hintToken);
+              }
+              hintToken = hintToken.specialToken;
+          }
+          return hintTokenList;
+        }
+
+
     private void reportUnclaimedHints() {
         for (Map.Entry<SourceLocation, String> me : hintCollector.entrySet()) {
             warnUnexpectedHint(me.getValue(), me.getKey(), "None");
@@ -688,42 +737,60 @@ class SQLPPParser extends ScopeChecker implements IParser {
       Pattern lessThanOnePat = Pattern.compile("0\\.\\d+");
       try {
         switch (hintToken.hint) {
-          case SINGLE_DATASET_PREDICATE_SELECTIVITY_HINT:
-            selectivity = 1.0; // uninitialized
-            if (hintToken.hintParams != null) {
-            Matcher mat = lessThanOnePat.matcher(hintToken.hintParams);
-            if (mat.find()) {
-                selectivity = Double.parseDouble (mat.group());
-                }
-            }
-
-            return new PredicateCardinalityAnnotation(selectivity);
-          case JOIN_PREDICATE_PRODUCTIVITY_HINT:
-            productivity = 1.0; // uninitialized
-            String leftSideDataSet = null;
-            if (hintToken.hintParams != null) {
-                Matcher StringNum = stringNumber.matcher(hintToken.hintParams);
-
-                if (StringNum.find()) {
-                    String matchedGroup = StringNum.group();
-                    Pattern var = Pattern.compile("[a-zA-Z]\\w*"); // any word character [a-zA-Z_0-9]
-                    Matcher matVar = var.matcher(matchedGroup);
-                    if (matVar.find())
-                        leftSideDataSet = matVar.group();
-                    Matcher numMat = number.matcher(matchedGroup);
-                    if (numMat.find())
-                        productivity = Double.parseDouble (numMat.group());
-                }
-            }
-            // attach hint to global scope
-            return new JoinProductivityAnnotation (productivity, leftSideDataSet);
+           case SINGLE_DATASET_PREDICATE_SELECTIVITY_HINT:
+             if (hintToken.hintParams == null) {
+               throw new SqlppParseException(getSourceLocation(hintToken), "Expected selectivity value");
+             }
+             else {
+               selectivity = 1.0; // uninitialized
+               Matcher mat = lessThanOnePat.matcher(hintToken.hintParams);
+               if (mat.find()) {
+                 selectivity = Double.parseDouble (mat.group());
+               }
+               else {
+                 throw new SqlppParseException(getSourceLocation(hintToken), "Selectivity has to be a decimal value greater than 0 and less than 1");
+               }
+               return new PredicateCardinalityAnnotation(selectivity);
+             }
+           case JOIN_PREDICATE_PRODUCTIVITY_HINT:
+             if (hintToken.hintParams == null) {
+               throw new SqlppParseException(getSourceLocation(hintToken), "Expected productivity collection name and value");
+             }
+             else {
+               productivity = 1.0; // uninitialized
+               String leftSideDataSet = null;
+               Matcher StringNum = stringNumber.matcher(hintToken.hintParams);
+               if (StringNum.find()) {
+                 String matchedGroup = StringNum.group();
+                 Pattern var = Pattern.compile("[a-zA-Z]\\w*"); // any word character [a-zA-Z_0-9]
+                 Matcher matVar = var.matcher(matchedGroup);
+                 if (matVar.find()) {
+                   leftSideDataSet = matVar.group();
+                 }
+                 else {
+                    throw new SqlppParseException(getSourceLocation(hintToken), "Expected productivity collection name");
+                 }
+                 Matcher numMat = number.matcher(matchedGroup);
+                 if (numMat.find()) {
+                   productivity = Double.parseDouble (numMat.group());
+                 }
+                 else {
+                   throw new SqlppParseException(getSourceLocation(hintToken), "Productivity has to be a decimal value greater than 0");
+                 }
+               }
+               else {
+                 throw new SqlppParseException(getSourceLocation(hintToken), "Invalid format for productivity values");
+               }
+               // attach hint to global scope
+               return new JoinProductivityAnnotation (productivity, leftSideDataSet);
+             }
           case HASH_BROADCAST_JOIN_HINT:
             if (hintToken.hintParams == null) {
               return new BroadcastExpressionAnnotation(BroadcastExpressionAnnotation.BroadcastSide.RIGHT);
             }
             else {
               // if parameter parsing fails then ignore this hint.
-              String name = parseBroadcastJoinParams(hintToken.hintParams);
+              String name = parseBroadcastJoinParams(hintToken.hintParams, this.namespaceResolver);
               return new BroadcastExpressionAnnotation(name);
             }
           case HASH_JOIN_HINT:
@@ -732,7 +799,7 @@ class SQLPPParser extends ScopeChecker implements IParser {
             }
             else {
               // if parameter parsing fails then ignore this hint.
-              Pair<HashJoinExpressionAnnotation.BuildOrProbe, String> pair = parseHashJoinParams(hintToken.hintParams);
+              Pair<HashJoinExpressionAnnotation.BuildOrProbe, String> pair = parseHashJoinParams(hintToken.hintParams, this.namespaceResolver);
               return new HashJoinExpressionAnnotation(pair);
             }
           case INDEXED_NESTED_LOOP_JOIN_HINT:
@@ -741,11 +808,11 @@ class SQLPPParser extends ScopeChecker implements IParser {
             } else {
               // if parameter parsing fails then return hint annotation without parameters
               onParseErrorReturn = IndexedNLJoinExpressionAnnotation.INSTANCE_ANY_INDEX;
-              List<String> indexNames = parseParenthesizedIdentifierList(hintToken.hintParams);
+              List<String> indexNames = parseParenthesizedIdentifierList(hintToken.hintParams, this.namespaceResolver);
               return IndexedNLJoinExpressionAnnotation.newInstance(indexNames);
             }
           case RANGE_HINT:
-            Expression rangeExpr = parseExpression(hintToken.hintParams);
+            Expression rangeExpr = parseExpression(hintToken.hintParams, this.namespaceResolver);
             RangeMap rangeMap = RangeMapBuilder.parseHint(rangeExpr);
             return new RangeAnnotation(rangeMap);
           case SKIP_SECONDARY_INDEX_SEARCH_HINT:
@@ -753,11 +820,11 @@ class SQLPPParser extends ScopeChecker implements IParser {
               return SkipSecondaryIndexSearchExpressionAnnotation.INSTANCE_ANY_INDEX;
             } else {
               // if parameter parsing fails then ignore this hint
-              List<String> indexNames = parseParenthesizedIdentifierList(hintToken.hintParams);
+              List<String> indexNames = parseParenthesizedIdentifierList(hintToken.hintParams, this.namespaceResolver);
               return SkipSecondaryIndexSearchExpressionAnnotation.newInstance(indexNames);
             }
           case SPATIAL_JOIN_HINT:
-            List<Literal> hintValues = parseParenthesizedLiteralList(hintToken.hintParams);
+            List<Literal> hintValues = parseParenthesizedLiteralList(hintToken.hintParams, this.namespaceResolver);
 
             // Handle exceptions
             if (hintValues.size() != 6) {
@@ -802,7 +869,7 @@ class SQLPPParser extends ScopeChecker implements IParser {
               throw new SqlppParseException(getSourceLocation(hintToken), "Expected index name(s)");
             } else {
               // if parameter parsing fails then ignore this hint
-              List<String> indexNames = parseParenthesizedIdentifierList(hintToken.hintParams);
+              List<String> indexNames = parseParenthesizedIdentifierList(hintToken.hintParams, this.namespaceResolver);
               return SecondaryIndexSearchPreferenceAnnotation.newInstance(indexNames);
             }
           default:
@@ -853,6 +920,41 @@ class SQLPPParser extends ScopeChecker implements IParser {
         SqlppParseException pe = new SqlppParseException(getSourceLocation(startToken), e.getMessage());
         pe.initCause(e);
         throw pe;
+      }
+    }
+
+    private Namespace createNamespace(List<String> parts, int fromIndex, int toIndex, Token startToken)
+      throws SqlppParseException {
+      try {
+        return namespaceResolver.resolve(parts, fromIndex, toIndex);
+      } catch (AsterixException e) {
+        SqlppParseException pe = new SqlppParseException(getSourceLocation(startToken), e.getMessage());
+        pe.initCause(e);
+        throw pe;
+      }
+    }
+
+    private Namespace createNamespace(List<String> parts, Token startToken) throws SqlppParseException {
+      try {
+        return namespaceResolver.resolve(parts);
+      } catch (AsterixException e) {
+        SqlppParseException pe = new SqlppParseException(getSourceLocation(startToken), e.getMessage());
+        pe.initCause(e);
+        throw pe;
+      }
+    }
+
+    private void validatePKFields(Object primaryKeyFields, Token startToken) throws SqlppParseException {
+      if (primaryKeyFields == null) {
+        throw new SqlppParseException(getSourceLocation(startToken), "Invalid primary key specification.");
+      }
+    }
+
+    private Map<String, String> getConfiguration(RecordConstructor withRecord) throws SqlppParseException {
+      try {
+        return ConfigurationUtil.toProperties(withRecord);
+      } catch(AlgebricksException e) {
+          throw new SqlppParseException(withRecord.getSourceLocation(), e.getMessage());
       }
     }
 }
@@ -911,8 +1013,8 @@ Statement SingleStatement() throws ParseException:
     | stmt = FunctionDeclaration()
     | stmt = CreateStatement()
     | stmt = LoadStatement()
+    | stmt = CopyStatement()
     | stmt = DropStatement()
-    | stmt = WriteStatement()
     | stmt = SetStatement()
     | stmt = InsertStatement()
     | stmt = DeleteStatement()
@@ -922,7 +1024,6 @@ Statement SingleStatement() throws ParseException:
     | stmt = CompactStatement()
     | stmt = AnalyzeStatement()
     | stmt = Query()
-    | stmt = RefreshExternalDatasetStatement()
   )
   {
     return stmt;
@@ -932,13 +1033,17 @@ Statement SingleStatement() throws ParseException:
 DataverseDecl DataverseDeclaration() throws ParseException:
 {
   Token startToken = null;
-  DataverseName dvName = null;
+  Namespace ns = null;
+  Triple<List<String>, Token, Token> ident = null;
 }
 {
-  <USE> { startToken = token; } dvName = DataverseName()
+  <USE> { startToken = token; } ident = MultipartIdentifier()
     {
-      defaultDataverse = dvName;
-      DataverseDecl dvDecl = new DataverseDecl(defaultDataverse);
+      ns = createNamespace(ident.first, ident.second);
+      defaultDataverse = ns.getDataverseName();
+      defaultDatabase = ns.getDatabaseName();
+      defaultNamespace = ns;
+      DataverseDecl dvDecl = new DataverseDecl(ns);
       return addSourceLocation(dvDecl, startToken);
     }
 }
@@ -956,6 +1061,7 @@ Statement CreateStatement() throws ParseException:
     | stmt = CreateNodegroupStatement(startToken)
     | stmt = CreateDatasetStatement(startToken)
     | stmt = CreateIndexStatement(startToken)
+    | stmt = CreateDatabaseStatement(startToken)
     | stmt = CreateDataverseStatement(startToken)
     | stmt = CreateFunctionStatement(startToken, false)
     | stmt = CreateAdapterStatement(startToken)
@@ -1001,7 +1107,7 @@ TypeDecl CreateTypeStatement(Token startStmtToken) throws ParseException:
 
 TypeDecl TypeSpecification(Token startStmtToken) throws ParseException:
 {
-  Pair<DataverseName,Identifier> nameComponents = null;
+  Pair<Namespace,Identifier> nameComponents = null;
   boolean ifNotExists = false;
   TypeExpression typeExpr = null;
 }
@@ -1095,20 +1201,23 @@ DatasetDecl CreateDatasetStatement(Token startStmtToken) throws ParseException:
 
 DatasetDecl DatasetSpecification(Token startStmtToken) throws ParseException:
 {
-  Pair<DataverseName,Identifier> nameComponents = null;
+  Pair<Namespace,Identifier> nameComponents = null;
   boolean ifNotExists = false;
   TypeExpression typeExpr = null;
   TypeExpression metaTypeExpr = null;
   Pair<List<Integer>, List<List<String>>> primaryKeyFields = null;
+  Triple<List<Integer>, List<List<String>>, List<TypeExpression>> primaryKeyFieldsWithTypes = null;
   Map<String,String> hints = new HashMap<String,String>();
   DatasetDecl stmt = null;
   boolean autogenerated = false;
   Pair<Integer, List<String>> filterField = null;
   RecordConstructor withRecord = null;
+  SelectExpression selectExpr = null;
+  Query query = null;
 }
 {
   nameComponents = QualifiedName()
-  typeExpr = DatasetTypeSpecification()
+  (typeExpr = DatasetTypeSpecification(RecordTypeDefinition.RecordKind.OPEN))?
   (
     { String name; }
     <WITH>
@@ -1119,26 +1228,49 @@ DatasetDecl DatasetSpecification(Token startStmtToken) throws ParseException:
                 "We can only support one additional associated field called \"meta\".");
         }
     }
-    metaTypeExpr = DatasetTypeSpecification()
+    metaTypeExpr = DatasetTypeSpecification(RecordTypeDefinition.RecordKind.OPEN)
   )?
   ifNotExists = IfNotExists()
-  primaryKeyFields = PrimaryKey()
+  (LOOKAHEAD(3) primaryKeyFieldsWithTypes = PrimaryKeyWithType()
+    | primaryKeyFields = PrimaryKey())
   (<AUTOGENERATED> { autogenerated = true; } )?
   ( <HINTS> hints = Properties() )?
   ( LOOKAHEAD(2) <WITH> <FILTER> <ON>  filterField = NestedField() )?
   ( <WITH> withRecord = RecordConstructor() )?
+  ( <AS> selectExpr = SelectExpression(false) )?
   {
     try {
-      InternalDetailsDecl idd = new InternalDetailsDecl(primaryKeyFields.second, primaryKeyFields.first, autogenerated,
-        filterField == null? null : filterField.first, filterField == null? null : filterField.second);
-      DatasetDeclParametersUtil.adjustInlineTypeDecl(typeExpr, primaryKeyFields.second, primaryKeyFields.first, false);
-      if (metaTypeExpr != null) {
-        DatasetDeclParametersUtil.adjustInlineTypeDecl(metaTypeExpr, primaryKeyFields.second, primaryKeyFields.first,
-          true);
+      if (selectExpr != null) {
+        query = new Query();
+        query.setBody(selectExpr);
+        query.setSourceLocation(selectExpr.getSourceLocation());
       }
-      stmt = new DatasetDecl(nameComponents.first, nameComponents.second, typeExpr, metaTypeExpr, hints,
-        DatasetType.INTERNAL, idd, withRecord, ifNotExists);
-      return addSourceLocation(stmt, startStmtToken);
+
+      if (typeExpr == null) {
+        validatePKFields(primaryKeyFieldsWithTypes, startStmtToken);
+        InternalDetailsDecl idd = new InternalDetailsDecl(primaryKeyFieldsWithTypes.second,
+          primaryKeyFieldsWithTypes.first, autogenerated, filterField == null? null : filterField.first,
+          filterField == null? null : filterField.second, primaryKeyFieldsWithTypes.third);
+        final TypeReferenceExpression anyObjectReference = new TypeReferenceExpression(
+          new Pair(new Namespace(MetadataBuiltinEntities.ANY_OBJECT_DATATYPE.getDatabaseName(),
+            MetadataBuiltinEntities.ANY_OBJECT_DATATYPE.getDataverseName()),
+            new Identifier(MetadataBuiltinEntities.ANY_OBJECT_DATATYPE.getDatatypeName())));
+        stmt = new DatasetDecl(nameComponents.first, nameComponents.second, anyObjectReference, null, hints,
+          DatasetType.INTERNAL, idd, withRecord, ifNotExists, query);
+        return addSourceLocation(stmt, startStmtToken);
+      } else {
+        validatePKFields(primaryKeyFields, startStmtToken);
+        InternalDetailsDecl idd = new InternalDetailsDecl(primaryKeyFields.second, primaryKeyFields.first, autogenerated,
+          filterField == null? null : filterField.first, filterField == null? null : filterField.second);
+        DatasetDeclParametersUtil.adjustInlineTypeDecl(typeExpr, primaryKeyFields.second, primaryKeyFields.first, false);
+        if (metaTypeExpr != null) {
+          DatasetDeclParametersUtil.adjustInlineTypeDecl(metaTypeExpr, primaryKeyFields.second, primaryKeyFields.first,
+            true);
+        }
+        stmt = new DatasetDecl(nameComponents.first, nameComponents.second, typeExpr, metaTypeExpr, hints,
+          DatasetType.INTERNAL, idd, withRecord, ifNotExists, query);
+        return addSourceLocation(stmt, startStmtToken);
+      }
     } catch (CompilationException e) {
        throw new SqlppParseException(getSourceLocation(startStmtToken), e.getMessage());
     }
@@ -1147,7 +1279,7 @@ DatasetDecl DatasetSpecification(Token startStmtToken) throws ParseException:
 
 DatasetDecl ExternalDatasetSpecification(Token startStmtToken) throws ParseException:
 {
-  Pair<DataverseName,Identifier> nameComponents = null;
+  Pair<Namespace,Identifier> nameComponents = null;
   TypeExpression typeExpr = null;
   boolean ifNotExists = false;
   String adapterName = null;
@@ -1158,7 +1290,7 @@ DatasetDecl ExternalDatasetSpecification(Token startStmtToken) throws ParseExcep
 }
 {
   nameComponents = QualifiedName()
-  typeExpr = DatasetTypeSpecification()
+  typeExpr = DatasetTypeSpecification(RecordTypeDefinition.RecordKind.OPEN)
   ifNotExists = IfNotExists()
   <USING> adapterName = AdapterName() properties = Configuration()
   ( <HINTS> hints = Properties() )?
@@ -1177,13 +1309,13 @@ DatasetDecl ExternalDatasetSpecification(Token startStmtToken) throws ParseExcep
   }
 }
 
-TypeExpression DatasetTypeSpecification() throws ParseException:
+TypeExpression DatasetTypeSpecification(RecordTypeDefinition.RecordKind defaultRecordKind) throws ParseException:
 {
   TypeExpression typeExpr = null;
 }
 {
   (
-    LOOKAHEAD(3) typeExpr = DatasetRecordTypeSpecification(true)
+    LOOKAHEAD(3) typeExpr = DatasetRecordTypeSpecification(true, defaultRecordKind)
     | typeExpr = DatasetReferenceTypeSpecification()
   )
   {
@@ -1202,7 +1334,7 @@ TypeExpression DatasetReferenceTypeSpecification() throws ParseException:
   }
 }
 
-RecordTypeDefinition DatasetRecordTypeSpecification(boolean allowRecordKindModifier) throws ParseException:
+RecordTypeDefinition DatasetRecordTypeSpecification(boolean allowRecordKindModifier, RecordTypeDefinition.RecordKind defaultRecordKind) throws ParseException:
 {
   RecordTypeDefinition recordTypeDef = null;
   RecordTypeDefinition.RecordKind recordKind = null;
@@ -1213,7 +1345,7 @@ RecordTypeDefinition DatasetRecordTypeSpecification(boolean allowRecordKindModif
    ( recordKind = RecordTypeKind() { recordKindToken = token; } <TYPE> )?
    {
      if (recordKind == null) {
-       recordKind = RecordTypeDefinition.RecordKind.CLOSED;
+       recordKind = defaultRecordKind;
      } else if (!allowRecordKindModifier) {
        throw createUnexpectedTokenError(recordKindToken);
      }
@@ -1247,22 +1379,6 @@ void DatasetRecordField(RecordTypeDefinition recType) throws ParseException:
   }
 }
 
-RefreshExternalDatasetStatement RefreshExternalDatasetStatement() throws ParseException:
-{
-  Token startToken = null;
-  Pair<DataverseName,Identifier> nameComponents = null;
-  String datasetName = null;
-}
-{
-  <REFRESH> { startToken = token; } <EXTERNAL> Dataset() nameComponents = QualifiedName()
-  {
-    RefreshExternalDatasetStatement stmt = new RefreshExternalDatasetStatement();
-    stmt.setDataverseName(nameComponents.first);
-    stmt.setDatasetName(nameComponents.second);
-    return addSourceLocation(stmt, startToken);
-  }
-}
-
 CreateIndexStatement CreateIndexStatement(Token startStmtToken) throws ParseException:
 {
   CreateIndexStatement stmt = null;
@@ -1279,7 +1395,7 @@ CreateIndexStatement CreateIndexStatement(Token startStmtToken) throws ParseExce
 
 CreateIndexStatement IndexSpecification(Token startStmtToken) throws ParseException:
 {
-  Pair<DataverseName,Identifier> nameComponents = null;
+  Pair<Namespace,Identifier> nameComponents = null;
   String indexName = null;
   IndexParams indexParams = null;
   CreateIndexStatement.IndexedElement indexedElement = null;
@@ -1461,7 +1577,7 @@ Pair<List<String>, IndexedTypeExpression> IndexedField() throws ParseException:
 
 CreateIndexStatement PrimaryIndexSpecification(Token startStmtToken) throws ParseException:
 {
-  Pair<DataverseName,Identifier> nameComponents = null;
+  Pair<Namespace,Identifier> nameComponents = null;
   String indexName = null;
   boolean ifNotExists = false;
 }
@@ -1532,6 +1648,30 @@ IndexParams IndexType() throws ParseException:
     }
 }
 
+CreateDatabaseStatement CreateDatabaseStatement(Token startStmtToken) throws ParseException :
+{
+  CreateDatabaseStatement stmt = null;
+}
+{
+  <DATABASE> stmt = DatabaseSpecification(startStmtToken)
+  {
+    return stmt;
+  }
+}
+
+CreateDatabaseStatement DatabaseSpecification(Token startStmtToken) throws ParseException :
+{
+  String dbName = null;
+  boolean ifNotExists = false;
+}
+{
+  dbName = Identifier() ifNotExists = IfNotExists()
+  {
+    CreateDatabaseStatement stmt = new CreateDatabaseStatement(new Identifier(dbName), ifNotExists);
+    return addSourceLocation(stmt, startStmtToken);
+  }
+}
+
 CreateDataverseStatement CreateDataverseStatement(Token startStmtToken) throws ParseException :
 {
   CreateDataverseStatement stmt = null;
@@ -1545,13 +1685,13 @@ CreateDataverseStatement CreateDataverseStatement(Token startStmtToken) throws P
 
 CreateDataverseStatement DataverseSpecification(Token startStmtToken) throws ParseException :
 {
-  DataverseName dvName = null;
+  Namespace ns = null;
   boolean ifNotExists = false;
 }
 {
-  dvName = DataverseName() ifNotExists = IfNotExists()
+  ns = Namespace() ifNotExists = IfNotExists()
   {
-    CreateDataverseStatement stmt = new CreateDataverseStatement(dvName, null, ifNotExists);
+    CreateDataverseStatement stmt = new CreateDataverseStatement(ns, null, ifNotExists);
     return addSourceLocation(stmt, startStmtToken);
   }
 }
@@ -1569,8 +1709,8 @@ CreateAdapterStatement CreateAdapterStatement(Token startStmtToken) throws Parse
 
 CreateAdapterStatement AdapterSpecification(Token startStmtToken) throws ParseException:
 {
-  Pair<DataverseName,Identifier> adapterName = null;
-  Pair<DataverseName,Identifier> libraryName = null;
+  Pair<Namespace,Identifier> adapterName = null;
+  Pair<Namespace,Identifier> libraryName = null;
   List<String> externalIdentifier = null;
   boolean ifNotExists = false;
 }
@@ -1599,7 +1739,7 @@ CreateViewStatement CreateViewStatement(Token startStmtToken, boolean orReplace)
 
 CreateViewStatement ViewSpecification(Token startStmtToken, boolean orReplace) throws ParseException:
 {
-  Pair<DataverseName, Identifier> nameComponents = null;
+  Pair<Namespace, Identifier> nameComponents = null;
   TypeExpression typeExpr = null;
   boolean ifNotExists = false;
   Token beginPos = null, endPos = null;
@@ -1609,15 +1749,17 @@ CreateViewStatement ViewSpecification(Token startStmtToken, boolean orReplace) t
   Map<String, String> viewConfig = null;
   Pair<List<Integer>, List<List<String>>> primaryKeyFields = null;
   Pair<List<Integer>, List<List<String>>> foreignKeyFields = null;
-  Pair<DataverseName, Identifier> refNameComponents = null;
+  Pair<Namespace, Identifier> refNameComponents = null;
   List<CreateViewStatement.ForeignKeyDecl> foreignKeyDecls = null;
   DataverseName currentDataverse = defaultDataverse;
+  String currentDatabase = defaultDatabase;
+  Namespace currentNamespace = defaultNamespace;
 }
 {
   nameComponents = QualifiedName()
   (
       (
-        typeExpr = DatasetTypeSpecification()
+        typeExpr = DatasetTypeSpecification(RecordTypeDefinition.RecordKind.CLOSED)
         ifNotExists = IfNotExists()
         viewConfigDefaultNull = CastDefaultNull()
         {
@@ -1654,7 +1796,9 @@ CreateViewStatement ViewSpecification(Token startStmtToken, boolean orReplace) t
     beginPos = token;
     createNewScope();
     if (nameComponents.first != null) {
-      defaultDataverse = nameComponents.first;
+      defaultNamespace = nameComponents.first;
+      defaultDataverse = nameComponents.first.getDataverseName();
+      defaultDatabase = nameComponents.first.getDatabaseName();
     }
   }
   viewBodyExpr = ViewBody()
@@ -1664,6 +1808,8 @@ CreateViewStatement ViewSpecification(Token startStmtToken, boolean orReplace) t
       endPos.endColumn + 1);
     removeCurrentScope();
     defaultDataverse = currentDataverse;
+    defaultDatabase = currentDatabase;
+    defaultNamespace = currentNamespace;
     if (typeExpr != null && primaryKeyFields != null) {
       DatasetDeclParametersUtil.adjustInlineTypeDecl(typeExpr, primaryKeyFields.second, primaryKeyFields.first, false);
     }
@@ -1733,23 +1879,27 @@ CreateFunctionStatement FunctionSpecification(Token startStmtToken, boolean orRe
   TypeExpression returnType = null;
   Token beginPos = null, endPos = null;
   Expression functionBodyExpr = null;
-  Pair<DataverseName,Identifier> libraryName = null;
+  Pair<Namespace,Identifier> libraryName = null;
   List<String> externalIdentifier = null;
   RecordConstructor withOptions = null;
   boolean ifNotExists = false;
   CreateFunctionStatement stmt = null;
   DataverseName currentDataverse = defaultDataverse;
+  String currentDatabase = defaultDatabase;
+  Namespace currentNamespace = defaultNamespace;
 }
 {
   fctName = FunctionName()
   {
      defaultDataverse = fctName.dataverse;
+     defaultDatabase = fctName.database;
+     defaultNamespace = fctName.namespace;
   }
   paramsWithArity = FunctionParameters()
   {
     arity = paramsWithArity.first;
     params = paramsWithArity.second;
-    signature = new FunctionSignature(fctName.dataverse, fctName.function, arity);
+    signature = new FunctionSignature(fctName.database, fctName.dataverse, fctName.function, arity);
   }
   ifNotExists = IfNotExists()
   {
@@ -1794,6 +1944,8 @@ CreateFunctionStatement FunctionSpecification(Token startStmtToken, boolean orRe
   )
   {
     defaultDataverse = currentDataverse;
+    defaultDatabase = currentDatabase;
+    defaultNamespace = currentNamespace;
     return addSourceLocation(stmt, startStmtToken);
   }
 }
@@ -1911,7 +2063,7 @@ CreateFeedStatement CreateFeedStatement(Token startStmtToken) throws ParseExcept
 
 CreateFeedStatement FeedSpecification(Token startStmtToken) throws ParseException:
 {
-  Pair<DataverseName,Identifier> nameComponents = null;
+  Pair<Namespace,Identifier> nameComponents = null;
   boolean ifNotExists = false;
   String adapterName = null;
   Map<String,String> properties = null;
@@ -1990,7 +2142,7 @@ Statement CreateFullTextStatement(Token startStmtToken) throws ParseException:
 CreateFullTextFilterStatement CreateFullTextFilterSpec(Token startStmtToken) throws ParseException:
 {
   CreateFullTextFilterStatement stmt = null;
-  Pair<DataverseName,Identifier> nameComponents = null;
+  Pair<Namespace,Identifier> nameComponents = null;
   boolean ifNotExists = false;
   RecordConstructor expr = null;
 }
@@ -2013,7 +2165,7 @@ CreateFullTextFilterStatement CreateFullTextFilterSpec(Token startStmtToken) thr
 CreateFullTextConfigStatement CreateFullTextConfigSpec(Token startStmtToken) throws ParseException:
 {
   CreateFullTextConfigStatement stmt = null;
-  Pair<DataverseName,Identifier> nameComponents = null;
+  Pair<Namespace,Identifier> nameComponents = null;
   boolean ifNotExists = false;
   RecordConstructor expr = null;
 }
@@ -2046,8 +2198,8 @@ CreateSynonymStatement CreateSynonymStatement(Token startStmtToken) throws Parse
 
 CreateSynonymStatement SynonymSpecification(Token startStmtToken) throws ParseException:
 {
-  Pair<DataverseName,Identifier> nameComponents = null;
-  Pair<DataverseName,Identifier> objectNameComponents = null;
+  Pair<Namespace,Identifier> nameComponents = null;
+  Pair<Namespace,Identifier> objectNameComponents = null;
   boolean ifNotExists = false;
 }
 {
@@ -2083,13 +2235,13 @@ void ApplyFunction(List<FunctionSignature> funcSigs) throws ParseException:
   <APPLY> <FUNCTION> functionName = FunctionName()
   {
      fqFunctionName = functionName.library == null ? functionName.function : functionName.library + "#" + functionName.function;
-     funcSigs.add(new FunctionSignature(functionName.dataverse, fqFunctionName, 1));
+     funcSigs.add(new FunctionSignature(functionName.database, functionName.dataverse, fqFunctionName, 1));
   }
   (
       <COMMA> functionName = FunctionName()
       {
         fqFunctionName = functionName.library == null ? functionName.function : functionName.library + "#" + functionName.function;
-        funcSigs.add(new FunctionSignature(functionName.dataverse, fqFunctionName, 1));
+        funcSigs.add(new FunctionSignature(functionName.database, functionName.dataverse, fqFunctionName, 1));
       }
   )*
 }
@@ -2120,7 +2272,7 @@ FunctionSignature FunctionSignature() throws ParseException:
   | ( <ATT> arity = FunctionArity() ) // back-compat
   )
   {
-    return new FunctionSignature(fctName.dataverse, fctName.function, arity);
+    return new FunctionSignature(fctName.database, fctName.dataverse, fctName.function, arity);
   }
 }
 
@@ -2141,6 +2293,45 @@ int FunctionArity() throws ParseException:
     }
     return arity;
   }
+}
+
+Triple<List<Integer>, List<List<String>>, List<TypeExpression>> PrimaryKeyWithType() throws ParseException:
+{
+  Triple<List<Integer>, List<List<String>>, List<TypeExpression>> primaryKeyFieldsWithTypes = null;
+}
+{
+  <PRIMARY> <KEY> <LEFTPAREN> primaryKeyFieldsWithTypes = PrimaryKeyFieldsWithType() <RIGHTPAREN>
+  {
+    return primaryKeyFieldsWithTypes;
+  }
+}
+
+Triple<List<Integer>, List<List<String>>, List<TypeExpression>> PrimaryKeyFieldsWithType() throws ParseException:
+{
+  Pair<Integer, List<String>> tmp = null;
+  List<Integer> keyFieldSourceIndicators = new ArrayList<Integer>();
+  List<List<String>> primaryKeyFields = new ArrayList<List<String>>();
+  List<TypeExpression> primaryKeyFieldTypes = new ArrayList<TypeExpression>();
+  TypeExpression type = null;
+}
+{
+  tmp = NestedField() <COLON> type = TypeReference()
+    {
+      keyFieldSourceIndicators.add(tmp.first);
+      primaryKeyFields.add(tmp.second);
+      primaryKeyFieldTypes.add(type);
+    }
+  ( <COMMA> tmp = NestedField() <COLON> type = TypeReference()
+    {
+      keyFieldSourceIndicators.add(tmp.first);
+      primaryKeyFields.add(tmp.second);
+      primaryKeyFieldTypes.add(type);
+    }
+  )*
+    {
+      return new Triple<List<Integer>, List<List<String>>, List<TypeExpression>> (keyFieldSourceIndicators,
+        primaryKeyFields, primaryKeyFieldTypes);
+    }
 }
 
 Pair<List<Integer>, List<List<String>>> PrimaryKey() throws ParseException:
@@ -2189,6 +2380,7 @@ Statement DropStatement() throws ParseException:
     | stmt = DropIndexStatement(startToken)
     | stmt = DropNodeGroupStatement(startToken)
     | stmt = DropTypeStatement(startToken)
+    | stmt = DropDatabaseStatement(startToken)
     | stmt = DropDataverseStatement(startToken)
     | stmt = DropAdapterStatement(startToken)
     | stmt = DropFunctionStatement(startToken)
@@ -2216,7 +2408,7 @@ DropDatasetStatement DropDatasetStatement(Token startStmtToken) throws ParseExce
 
 DropDatasetStatement DropDatasetSpecification(Token startStmtToken) throws ParseException:
 {
-  Pair<DataverseName,Identifier> pairId = null;
+  Pair<Namespace,Identifier> pairId = null;
   boolean ifExists = false;
 }
 {
@@ -2240,7 +2432,7 @@ ViewDropStatement DropViewStatement(Token startStmtToken) throws ParseException:
 
 ViewDropStatement DropViewSpecification(Token startStmtToken) throws ParseException:
 {
-  Pair<DataverseName,Identifier> pairId = null;
+  Pair<Namespace,Identifier> pairId = null;
   boolean ifExists = false;
 }
 {
@@ -2264,7 +2456,7 @@ IndexDropStatement DropIndexStatement(Token startStmtToken) throws ParseExceptio
 
 IndexDropStatement DropIndexSpecification(Token startStmtToken) throws ParseException:
 {
-  Triple<DataverseName,Identifier,Identifier> tripleId = null;
+  Triple<Namespace,Identifier,Identifier> tripleId = null;
   boolean ifExists = false;
 }
 {
@@ -2293,7 +2485,7 @@ Statement DropFullTextStatement(Token startStmtToken) throws ParseException:
 FullTextFilterDropStatement DropFullTextFilterSpec(Token startStmtToken) throws ParseException:
 {
   FullTextFilterDropStatement stmt = null;
-  Pair<DataverseName,Identifier> nameComponents = null;
+  Pair<Namespace,Identifier> nameComponents = null;
   boolean ifExists = false;
 }
 {
@@ -2307,7 +2499,7 @@ FullTextFilterDropStatement DropFullTextFilterSpec(Token startStmtToken) throws 
 FullTextConfigDropStatement DropFullTextConfigSpec(Token startStmtToken) throws ParseException:
 {
   FullTextConfigDropStatement stmt = null;
-  Pair<DataverseName,Identifier> nameComponents = null;
+  Pair<Namespace,Identifier> nameComponents = null;
   boolean ifExists = false;
 }
 {
@@ -2356,13 +2548,37 @@ TypeDropStatement DropTypeStatement(Token startStmtToken) throws ParseException:
 
 TypeDropStatement DropTypeSpecification(Token startStmtToken) throws ParseException:
 {
-  Pair<DataverseName,Identifier> pairId = null;
+  Pair<Namespace,Identifier> pairId = null;
   boolean ifExists = false;
 }
 {
   pairId = TypeName() ifExists = IfExists()
   {
     TypeDropStatement stmt = new TypeDropStatement(pairId.first, pairId.second, ifExists);
+    return addSourceLocation(stmt, startStmtToken);
+  }
+}
+
+DatabaseDropStatement DropDatabaseStatement(Token startStmtToken) throws ParseException:
+{
+  DatabaseDropStatement stmt = null;
+}
+{
+  <DATABASE> stmt = DropDatabaseSpecification(startStmtToken)
+  {
+    return stmt;
+  }
+}
+
+DatabaseDropStatement DropDatabaseSpecification(Token startStmtToken) throws ParseException:
+{
+  String dbName = null;
+  boolean ifExists = false;
+}
+{
+  dbName = Identifier() ifExists = IfExists()
+  {
+    DatabaseDropStatement stmt = new DatabaseDropStatement(new Identifier(dbName), ifExists);
     return addSourceLocation(stmt, startStmtToken);
   }
 }
@@ -2380,13 +2596,13 @@ DataverseDropStatement DropDataverseStatement(Token startStmtToken) throws Parse
 
 DataverseDropStatement DropDataverseSpecification(Token startStmtToken) throws ParseException:
 {
-  DataverseName dvName = null;
+  Namespace ns = null;
   boolean ifExists = false;
 }
 {
-  dvName = DataverseName() ifExists = IfExists()
+  ns = Namespace() ifExists = IfExists()
   {
-    DataverseDropStatement stmt = new DataverseDropStatement(dvName, ifExists);
+    DataverseDropStatement stmt = new DataverseDropStatement(ns, ifExists);
     return addSourceLocation(stmt, startStmtToken);
   }
 }
@@ -2404,7 +2620,7 @@ AdapterDropStatement DropAdapterStatement(Token startStmtToken) throws ParseExce
 
 AdapterDropStatement DropAdapterSpecification(Token startStmtToken) throws ParseException:
 {
-  Pair<DataverseName,Identifier> adapterName = null;
+  Pair<Namespace,Identifier> adapterName = null;
   boolean ifExists = false;
 }
 {
@@ -2452,7 +2668,7 @@ FeedDropStatement DropFeedStatement(Token startStmtToken) throws ParseException:
 
 FeedDropStatement DropFeedSpecification(Token startStmtToken) throws ParseException:
 {
-  Pair<DataverseName,Identifier> pairId = null;
+  Pair<Namespace,Identifier> pairId = null;
   boolean ifExists = false;
 }
 {
@@ -2476,7 +2692,7 @@ FeedPolicyDropStatement DropFeedPolicyStatement(Token startStmtToken) throws Par
 
 FeedPolicyDropStatement DropFeedPolicySpecification(Token startStmtToken) throws ParseException:
 {
-  Pair<DataverseName,Identifier> pairId = null;
+  Pair<Namespace,Identifier> pairId = null;
   boolean ifExists = false;
 }
 {
@@ -2500,7 +2716,7 @@ SynonymDropStatement DropSynonymStatement(Token startStmtToken) throws ParseExce
 
 SynonymDropStatement DropSynonymSpecification(Token startStmtToken) throws ParseException:
 {
-  Pair<DataverseName,Identifier> pairId = null;
+  Pair<Namespace,Identifier> pairId = null;
   boolean ifExists = false;
 }
 {
@@ -2528,7 +2744,7 @@ boolean IfExists() throws ParseException :
 InsertStatement InsertStatement() throws ParseException:
 {
   Token startToken = null;
-  Pair<DataverseName,Identifier> nameComponents = null;
+  Pair<Namespace,Identifier> nameComponents = null;
   VariableExpr var = null;
   Query query = null;
   Expression returnExpression = null;
@@ -2552,7 +2768,7 @@ InsertStatement InsertStatement() throws ParseException:
 UpsertStatement UpsertStatement() throws ParseException:
 {
   Token startToken = null;
-  Pair<DataverseName,Identifier> nameComponents = null;
+  Pair<Namespace,Identifier> nameComponents = null;
   VariableExpr var = null;
   Query query = null;
   Expression returnExpression = null;
@@ -2578,7 +2794,7 @@ DeleteStatement DeleteStatement() throws ParseException:
   Token startToken = null;
   VariableExpr var = null;
   Expression condition = null;
-  Pair<DataverseName, Identifier> nameComponents;
+  Pair<Namespace, Identifier> nameComponents;
 }
 {
   <DELETE> { startToken = token; }
@@ -2661,38 +2877,148 @@ Statement SetStatement() throws ParseException:
     }
 }
 
-Statement WriteStatement() throws ParseException:
+Statement CopyStatement() throws ParseException:
 {
   Token startToken = null;
-  String nodeName = null;
-  String fileName = null;
-  Query query;
-  String writerClass = null;
-  Pair<Identifier,Identifier> nameComponents = null;
+  Pair<Namespace,Identifier> nameComponents = null;
+  Query query = null;
+  Statement stmt = null;
+  TypeExpression typeExpr = null;
+  VariableExpr alias = null;
 }
 {
-  <WRITE> { startToken = token; } <OUTPUT> <TO> nodeName = Identifier() <COLON> fileName = ConstantString()
-    ( <USING> writerClass = ConstantString() )?
+  <COPY>
+  ( <INTO> { startToken = token; }
+    nameComponents = QualifiedName()
+    ((<AS>)? (typeExpr = DatasetTypeSpecification(RecordTypeDefinition.RecordKind.OPEN)))?
+    stmt = CopyFromStatement(startToken, nameComponents, typeExpr)
+  | <LEFTPAREN> { startToken = token; } query = Query() <RIGHTPAREN> (<AS>)? alias = Variable()  stmt = CopyToStatement(startToken, nameComponents, query, alias)
+  | { startToken = token; } nameComponents = QualifiedName()
+      (<AS>)? (typeExpr = DatasetTypeSpecification(RecordTypeDefinition.RecordKind.OPEN) | alias = Variable())?
+      (stmt = CopyFromStatement(startToken, nameComponents, typeExpr) | stmt = CopyToStatement(startToken, nameComponents, query, alias))
+  )
+  {
+    return stmt;
+  }
+}
+
+CopyFromStatement CopyFromStatement(Token startToken, Pair<Namespace, Identifier> nameComponents, TypeExpression typeExpr) throws ParseException:
+{
+  Namespace namespace = nameComponents.first;
+  Identifier datasetName = nameComponents.second;
+  String adapterName;
+  RecordConstructor withRecord;
+  String sourcePath;
+}
+{
+  <FROM> adapterName = AdapterName()
+  <PATH> <LEFTPAREN> sourcePath = ConcatenatedStrings() <RIGHTPAREN>
+  <WITH> withRecord = RecordConstructor()
     {
-      WriteStatement stmt = new WriteStatement(new Identifier(nodeName), fileName, writerClass);
-      return addSourceLocation(stmt, startToken);
+       ExternalDetailsDecl edd = new ExternalDetailsDecl();
+       edd.setAdapter(adapterName);
+       edd.setProperties(getConfiguration(withRecord));
+
+       try {
+         CopyFromStatement stmt = new CopyFromStatement(namespace, datasetName.getValue(), sourcePath, typeExpr, edd);
+         return addSourceLocation(stmt, startToken);
+       } catch (CompilationException e){
+           throw new SqlppParseException(getSourceLocation(startToken), e.getMessage());
+       }
     }
 }
+
+CopyToStatement CopyToStatement(Token startToken, Pair<Namespace, Identifier> nameComponents, Query query, VariableExpr alias) throws ParseException:
+{
+  VariableExpr usedAlias = alias;
+  String adapterName;
+  RecordConstructor withRecord;
+  Namespace namespace = nameComponents == null ? null : nameComponents.first;
+  String datasetName = nameComponents == null ? null : nameComponents.second.getValue();
+  List<Expression> pathExprs;
+
+  List<Expression> partitionExprs = new ArrayList<Expression>();
+  Map<Integer, VariableExpr> partitionVarExprs = new HashMap<Integer, VariableExpr>();
+  List<Expression> orderbyList = new ArrayList<Expression>();
+  List<OrderbyClause.OrderModifier> orderbyModifierList = new ArrayList<OrderbyClause.OrderModifier>();
+  List<OrderbyClause.NullOrderModifier> orderbyNullModifierList = new ArrayList<OrderbyClause.NullOrderModifier>();
+}
+{
+  <TO> adapterName = AdapterName()
+  <PATH> <LEFTPAREN> pathExprs = ExpressionList() <RIGHTPAREN>
+  (CopyToOverClause(partitionExprs, partitionVarExprs, orderbyList, orderbyModifierList, orderbyNullModifierList))?
+  <WITH> withRecord = RecordConstructor()
+    {
+       ExternalDetailsDecl edd = new ExternalDetailsDecl();
+       edd.setAdapter(adapterName);
+       edd.setProperties(getConfiguration(withRecord));
+
+       if(namespace == null) {
+          namespace = defaultNamespace;
+       }
+
+       if(usedAlias == null) {
+          usedAlias = new VariableExpr(SqlppVariableUtil.toInternalVariableIdentifier(datasetName));
+       }
+
+       CopyToStatement stmt = new CopyToStatement(namespace, datasetName, query, usedAlias, edd, pathExprs,
+            partitionExprs, partitionVarExprs, orderbyList, orderbyModifierList, orderbyNullModifierList, getVarCounter());
+       return addSourceLocation(stmt, startToken);
+    }
+}
+
+ void CopyToOverClause(List<Expression> partitionExprs,
+                       Map<Integer, VariableExpr> partitionVarExprs,
+                       List<Expression> orderbyList,
+                       List<OrderbyClause.OrderModifier> orderbyModifierList,
+                       List<OrderbyClause.NullOrderModifier> orderbyNullModifierList) throws ParseException:
+{
+  Expression partitionExpr = null;
+  VariableExpr partitionVar = null;
+  OrderbyClause orderByClause = null;
+}
+{
+   <OVER> <LEFTPAREN>
+
+   (<IDENTIFIER> {expectToken(PARTITION);} <BY>
+   partitionExpr = Expression() { partitionExprs.add(partitionExpr);}
+   ((<AS>)? partitionVar = Variable() { partitionVarExprs.put(0, partitionVar); })?
+   (
+     <COMMA> partitionExpr = Expression() { partitionExprs.add(partitionExpr); }
+     ((<AS>)? partitionVar = Variable() { partitionVarExprs.put(partitionExprs.size() - 1, partitionVar); })?
+   )*)?
+   (
+      orderByClause = OrderbyClause()
+      {
+        orderbyList.addAll(orderByClause.getOrderbyList());
+        orderbyModifierList.addAll(orderByClause.getModifierList());
+        orderbyNullModifierList.addAll(orderByClause.getNullModifierList());
+      }
+   )?
+   <RIGHTPAREN>
+   {
+     if(partitionExprs.isEmpty() && orderbyList.isEmpty()) {
+       throw new SqlppParseException(getSourceLocation(token), "OVER-clause cannot be empty");
+     }
+   }
+}
+
+
 
 LoadStatement LoadStatement() throws ParseException:
 {
   Token startToken = null;
-  DataverseName dataverseName = null;
+  Namespace namespace = null;
   Identifier datasetName = null;
   boolean alreadySorted = false;
   String adapterName;
   Map<String,String> properties;
-  Pair<DataverseName,Identifier> nameComponents = null;
+  Pair<Namespace,Identifier> nameComponents = null;
 }
 {
   <LOAD> { startToken = token; } Dataset() nameComponents = QualifiedName()
     {
-      dataverseName = nameComponents.first;
+      namespace = nameComponents.first;
       datasetName = nameComponents.second;
     }
   <USING> adapterName = AdapterName() properties = Configuration()
@@ -2702,12 +3028,11 @@ LoadStatement LoadStatement() throws ParseException:
     }
   )?
     {
-      LoadStatement stmt = new LoadStatement(dataverseName, datasetName.getValue(), adapterName, properties,
+      LoadStatement stmt = new LoadStatement(namespace, datasetName.getValue(), adapterName, properties,
         alreadySorted);
       return addSourceLocation(stmt, startToken);
     }
 }
-
 
 String AdapterName() throws ParseException :
 {
@@ -2724,7 +3049,7 @@ Statement AnalyzeStatement() throws ParseException:
 {
   Token startToken = null;
   Statement stmt = null;
-  Pair<DataverseName,Identifier> nameComponents = null;
+  Pair<Namespace,Identifier> nameComponents = null;
 }
 {
   <ANALYZE> { startToken = token; } DatasetToken() nameComponents = QualifiedName()
@@ -2737,7 +3062,7 @@ Statement AnalyzeStatement() throws ParseException:
   }
 }
 
-Statement AnalyzeDatasetStatement(Token startToken, DataverseName dvName, Identifier identifier) throws ParseException:
+Statement AnalyzeDatasetStatement(Token startToken, Namespace namespace, Identifier identifier) throws ParseException:
 {
   RecordConstructor withRecord = null;
 }
@@ -2745,7 +3070,7 @@ Statement AnalyzeDatasetStatement(Token startToken, DataverseName dvName, Identi
   ( <WITH> withRecord = RecordConstructor() )?
   {
     try {
-    AnalyzeStatement stmt = new AnalyzeStatement(dvName, identifier.getValue(), withRecord);
+    AnalyzeStatement stmt = new AnalyzeStatement(namespace, identifier.getValue(), withRecord);
     return addSourceLocation(stmt, startToken);
     } catch (CompilationException e) {
        throw new SqlppParseException(getSourceLocation(startToken), e.getMessage());
@@ -2753,13 +3078,13 @@ Statement AnalyzeDatasetStatement(Token startToken, DataverseName dvName, Identi
   }
 }
 
-Statement AnalyzeDatasetDropStatement(Token startToken, DataverseName dvName, Identifier identifier) throws ParseException:
+Statement AnalyzeDatasetDropStatement(Token startToken, Namespace namespace, Identifier identifier) throws ParseException:
 {
 }
 {
   <DROP> <IDENTIFIER> { expectToken(STATISTICS); }
   {
-    AnalyzeDropStatement stmt = new AnalyzeDropStatement(dvName, identifier.getValue());
+    AnalyzeDropStatement stmt = new AnalyzeDropStatement(namespace, identifier.getValue());
     return addSourceLocation(stmt, startToken);
   }
 }
@@ -2767,7 +3092,7 @@ Statement AnalyzeDatasetDropStatement(Token startToken, DataverseName dvName, Id
 Statement CompactStatement() throws ParseException:
 {
   Token startToken = null;
-  Pair<DataverseName,Identifier> nameComponents = null;
+  Pair<Namespace,Identifier> nameComponents = null;
 }
 {
   <COMPACT> { startToken = token; } Dataset() nameComponents = QualifiedName()
@@ -2796,7 +3121,7 @@ Statement ConnectionStatement() throws ParseException:
 
 Statement StartStatement(Token startStmtToken) throws ParseException:
 {
-  Pair<DataverseName,Identifier> feedNameComponents = null;
+  Pair<Namespace,Identifier> feedNameComponents = null;
   AbstractStatement stmt = null;
 }
 {
@@ -2809,7 +3134,7 @@ Statement StartStatement(Token startStmtToken) throws ParseException:
 
 AbstractStatement StopStatement(Token startStmtToken) throws ParseException:
 {
-  Pair<DataverseName,Identifier> feedNameComponents = null;
+  Pair<Namespace,Identifier> feedNameComponents = null;
   AbstractStatement stmt = null;
 }
 {
@@ -2822,8 +3147,8 @@ AbstractStatement StopStatement(Token startStmtToken) throws ParseException:
 
 AbstractStatement DisconnectStatement(Token startStmtToken) throws ParseException:
 {
-  Pair<DataverseName,Identifier> feedNameComponents = null;
-  Pair<DataverseName,Identifier> datasetNameComponents = null;
+  Pair<Namespace,Identifier> feedNameComponents = null;
+  Pair<Namespace,Identifier> datasetNameComponents = null;
 
   AbstractStatement stmt = null;
 }
@@ -2841,8 +3166,8 @@ AbstractStatement DisconnectStatement(Token startStmtToken) throws ParseExceptio
 
 AbstractStatement ConnectStatement(Token startStmtToken) throws ParseException:
 {
-  Pair<DataverseName,Identifier> feedNameComponents = null;
-  Pair<DataverseName,Identifier> datasetNameComponents = null;
+  Pair<Namespace,Identifier> feedNameComponents = null;
+  Pair<Namespace,Identifier> datasetNameComponents = null;
 
   Map<String,String> configuration = null;
   List<FunctionSignature> appliedFunctions = new ArrayList<FunctionSignature>();
@@ -2918,6 +3243,19 @@ Pair<String, String> KeyValuePair() throws ParseException:
     {
       return new Pair<String, String>(key, value);
     }
+}
+
+String ConcatenatedStrings() throws ParseException:
+{
+  String stringVal;
+  StringBuilder stringBuilder = new StringBuilder();
+}
+{
+  stringVal = StringLiteral() { stringBuilder.append(stringVal); }
+  (<COMMA> stringVal = StringLiteral() { stringBuilder.append(',').append(stringVal); })*
+  {
+    return stringBuilder.toString();
+  }
 }
 
 Map<String,String> Properties() throws ParseException:
@@ -3077,7 +3415,7 @@ void RecordField(RecordTypeDefinition recType) throws ParseException:
 
 TypeReferenceExpression TypeReference() throws ParseException:
 {
-  Pair<DataverseName,Identifier> id = null;
+  Pair<Namespace,Identifier> id = null;
 }
 {
   id = QualifiedName()
@@ -3153,10 +3491,12 @@ FunctionName FunctionName() throws ParseException:
       result.function = suffix;
     }
     if (ln > 1) {
-      result.dataverse = createDataverseName(list, 0, ln - 1, startToken);
+      result.namespace = createNamespace(list, 0, ln - 1, startToken);
     } else {
-      result.dataverse = defaultDataverse;
+      result.namespace = defaultNamespace;
     }
+    result.dataverse = result.namespace == null ? null : result.namespace.getDataverseName();
+    result.database = result.namespace == null ? null : result.namespace.getDatabaseName();
 
     if (result.function.equalsIgnoreCase(INT_TYPE_NAME)) {
        result.function = BuiltinType.AINT64.getTypeName();
@@ -3165,15 +3505,15 @@ FunctionName FunctionName() throws ParseException:
   }
 }
 
-Pair<DataverseName,Identifier> TypeName() throws ParseException:
+Pair<Namespace,Identifier> TypeName() throws ParseException:
 {
-  Pair<DataverseName,Identifier> name = null;
+  Pair<Namespace,Identifier> name = null;
 }
 {
   name = QualifiedName()
     {
       if (name.first == null) {
-        name.first = defaultDataverse;
+        name.first = defaultNamespace;
       }
       return name;
     }
@@ -3441,6 +3781,19 @@ Triple<List<String>, Token, Token> MultipartIdentifierWithHints(SqlppHint... exp
   }
 }
 
+Namespace Namespace() throws ParseException:
+{
+  Triple<List<String>, Token, Token> ident = null;
+}
+{
+  ident = MultipartIdentifier()
+  {
+    List<String> list = ident.first;
+    Token startToken = ident.second;
+    return createNamespace(list, startToken);
+  }
+}
+
 DataverseName DataverseName() throws ParseException:
 {
   Triple<List<String>, Token, Token> ident = null;
@@ -3454,7 +3807,7 @@ DataverseName DataverseName() throws ParseException:
   }
 }
 
-Pair<DataverseName,Identifier> QualifiedName() throws ParseException:
+Pair<Namespace,Identifier> QualifiedName() throws ParseException:
 {
   Triple<List<String>, Token, Token> ident = null;
 }
@@ -3464,13 +3817,13 @@ Pair<DataverseName,Identifier> QualifiedName() throws ParseException:
     List<String> list = ident.first;
     Token startToken = ident.second;
     int len = list.size();
-    DataverseName id1 = len > 1 ? createDataverseName(list, 0, len - 1, startToken) : null;
+    Namespace id1 = len > 1 ? createNamespace(list, 0, len - 1, startToken) : null;
     Identifier id2 = new Identifier(list.get(len - 1));
-    return new Pair<DataverseName,Identifier>(id1, id2);
+    return new Pair<Namespace,Identifier>(id1, id2);
   }
 }
 
-Triple<DataverseName, Identifier, Identifier> DoubleQualifiedName() throws ParseException:
+Triple<Namespace, Identifier, Identifier> DoubleQualifiedName() throws ParseException:
 {
   List<String> list = new ArrayList<String>();
   String item = null;
@@ -3481,10 +3834,10 @@ Triple<DataverseName, Identifier, Identifier> DoubleQualifiedName() throws Parse
   (<DOT> item = Identifier() { list.add(item); } )+
   {
     int len = list.size();
-    DataverseName id1 = len > 2 ? createDataverseName(list, 0, len - 2, startToken) : null;
+    Namespace id1 = len > 2 ? createNamespace(list, 0, len - 2, startToken) : null;
     Identifier id2 = new Identifier(list.get(len - 2));
     Identifier id3 = new Identifier(list.get(len - 1));
-    return new Triple<DataverseName,Identifier,Identifier>(id1, id2, id3);
+    return new Triple<Namespace,Identifier,Identifier>(id1, id2, id3);
   }
 }
 
@@ -3506,7 +3859,7 @@ FunctionDecl FunctionDeclaration() throws ParseException:
   {
     int arity = paramsWithArity.first;
     List<Pair<VarIdentifier,TypeExpression>> paramList = paramsWithArity.second;
-    FunctionSignature signature = new FunctionSignature(defaultDataverse, functionName, arity);
+    FunctionSignature signature = new FunctionSignature(defaultDatabase, defaultDataverse, functionName, arity);
     getCurrentScope().addFunctionDescriptor(signature, false);
     ensureNoTypeDeclsInFunction(functionName, paramList, null, startToken);
     List<VarIdentifier> params = new ArrayList<VarIdentifier>(paramList.size());
@@ -3662,18 +4015,16 @@ Expression RelExpr() throws ParseException:
           if (opToken == null) {
             opToken = token;
           }
-          Token hintToken = fetchHint(token,
+          List<Token> hintTokens = fetchHints(token,
             SqlppHint.HASH_BROADCAST_JOIN_HINT, SqlppHint.INDEXED_NESTED_LOOP_JOIN_HINT,
             SqlppHint.HASH_JOIN_HINT, SqlppHint.SKIP_SECONDARY_INDEX_SEARCH_HINT, SqlppHint.USE_SECONDARY_INDEX_SEARCH_HINT,
             SqlppHint.SINGLE_DATASET_PREDICATE_SELECTIVITY_HINT, SqlppHint.JOIN_PREDICATE_PRODUCTIVITY_HINT
           );
-          while (hintToken != null) {
+          for (Token hintToken : hintTokens) {
             annotation = parseExpressionAnnotation(hintToken);
-            annotationList.add(annotation);
-            hintToken = hintToken.specialToken;
-            if (hintToken != null) {
-                SourceLocation sourceLoc = getSourceLocation(hintToken);
-                hintCollector.remove(sourceLoc);
+            if (annotation != null) {
+                // annotation may be null if hints are malformed
+                annotationList.add(annotation);
             }
           }
           String operator = opToken.image.toLowerCase();
@@ -3703,7 +4054,7 @@ Expression RelExpr() throws ParseException:
     )?
 
      {
-       if (annotation != null) {
+       if (annotationList.size() > 0) {
          op.addHints(annotationList);
        }
        return op==null? operand: op;
@@ -3716,6 +4067,7 @@ Expression BetweenExpr() throws ParseException:
   OperatorExpr op = null;
   Expression operand = null;
   IExpressionAnnotation annotation = null;
+  List<IExpressionAnnotation> annotationList = new ArrayList<IExpressionAnnotation>();
 }
 {
     operand = IsExpr()
@@ -3723,13 +4075,18 @@ Expression BetweenExpr() throws ParseException:
       LOOKAHEAD(2)
       (<NOT> { not = true; })? <BETWEEN>
         {
-          Token hintToken = fetchHint(token,
+          List<Token> hintTokens = fetchHints(token,
             SqlppHint.INDEXED_NESTED_LOOP_JOIN_HINT, SqlppHint.SKIP_SECONDARY_INDEX_SEARCH_HINT, SqlppHint.HASH_JOIN_HINT,
             SqlppHint.USE_SECONDARY_INDEX_SEARCH_HINT, SqlppHint.SINGLE_DATASET_PREDICATE_SELECTIVITY_HINT
           );
-          if (hintToken != null) {
-            annotation = parseExpressionAnnotation(hintToken);
+          for (Token hintToken : hintTokens) {
+             annotation = parseExpressionAnnotation(hintToken);
+             if (annotation != null) {
+                // annotation may be null if hints are malformed
+                annotationList.add(annotation);
+             }
           }
+
           String operator = token.image.toLowerCase();
           if(not){
             operator = "not_" + operator;
@@ -3761,8 +4118,8 @@ Expression BetweenExpr() throws ParseException:
     )?
 
     {
-       if (annotation != null) {
-         op.addHint(annotation);
+       if (annotationList.size() > 0) {
+         op.addHints(annotationList);
        }
        return op==null ? operand: op;
     }
@@ -4393,9 +4750,9 @@ Expression FunctionCallExpr() throws ParseException:
     }
     String fqFunctionName = funcName.library == null ? name : funcName.library + "#" + name;
     int arity = argList.size();
-    FunctionSignature signature = lookupFunctionSignature(funcName.dataverse, fqFunctionName, arity);
+    FunctionSignature signature = lookupFunctionSignature(funcName.database, funcName.dataverse, fqFunctionName, arity);
     if (signature == null) {
-      signature = new FunctionSignature(funcName.dataverse, fqFunctionName, arity);
+      signature = new FunctionSignature(funcName.database, funcName.dataverse, fqFunctionName, arity);
     }
   }
 
@@ -5008,7 +5365,16 @@ FromTerm FromTerm() throws ParseException :
   List<AbstractBinaryCorrelateClause> correlateClauses = new ArrayList<AbstractBinaryCorrelateClause>();
 }
 {
-  leftExpr = Expression() ((<AS>)? leftVar = Variable())? (<AT> posVar = Variable())?
+  leftExpr = Expression()
+  {
+    if (leftExpr.getKind() == Expression.Kind.VARIABLE_EXPRESSION) {
+      Token hintToken = fetchHint(token, SqlppHint.SUBPATH_HINT);
+      if (hintToken != null) {
+        String subPath = hintToken.hintParams;
+        ((VariableExpr) leftExpr).addHint(new ExternalSubpathAnnotation(subPath));
+      }
+    }
+  } ((<AS>)? leftVar = Variable())? (<AT> posVar = Variable())?
   (
      (
       correlateClause = JoinOrUnnestClause(JoinType.INNER, UnnestType.INNER)
@@ -5079,7 +5445,16 @@ Triple<Expression, VariableExpr, VariableExpr> JoinClauseRightInput() throws Par
     VariableExpr posVar = null;
 }
 {
-  rightExpr = Expression() ((<AS>)? rightVar = Variable())? (<AT> posVar = Variable())?
+  rightExpr = Expression()
+  {
+    if (rightExpr.getKind() == Expression.Kind.VARIABLE_EXPRESSION) {
+        Token hintToken = fetchHint(token, SqlppHint.SUBPATH_HINT);
+        if (hintToken != null) {
+          String subPath = hintToken.hintParams;
+          ((VariableExpr) rightExpr).addHint(new ExternalSubpathAnnotation(subPath));
+        }
+    }
+  } ((<AS>)? rightVar = Variable())? (<AT> posVar = Variable())?
   {
     if (rightVar == null) {
       rightVar = ExpressionToVariableUtil.getGeneratedVariable(rightExpr, true);
@@ -5161,7 +5536,7 @@ OrderbyClause OrderbyClause() throws ParseException :
           break;
         case RANGE_HINT:
           try {
-            Expression rangeExpr = parseExpression(hintToken.hintParams);
+            Expression rangeExpr = parseExpression(hintToken.hintParams, this.namespaceResolver);
             RangeMap rangeMap = RangeMapBuilder.parseHint(rangeExpr);
             oc.setRangeMap(rangeMap);
           } catch (CompilationException e) {
@@ -5552,6 +5927,7 @@ TOKEN [IGNORE_CASE]:
   | <CORRELATE : "correlate">
   | <DATASET : "dataset">
   | <COLLECTION : "collection">
+  | <DATABASE : "database">
   | <DATAVERSE : "dataverse">
   | <DECLARE : "declare">
   | <DEFINITION : "definition">
@@ -5621,7 +5997,6 @@ TOKEN [IGNORE_CASE]:
   | <PRESORTED : "pre-sorted">
   | <PRIMARY : "primary">
   | <RAW : "raw">
-  | <REFRESH : "refresh">
   | <RETURN : "return">
   | <RETURNING : "returning">
   | <RIGHT : "right">
@@ -5654,6 +6029,7 @@ TOKEN [IGNORE_CASE]:
   | <WHERE : "where">
   | <WITH : "with">
   | <WRITE : "write">
+  | <COPY : "copy">
 }
 
 <DEFAULT,IN_DBL_BRACE>
@@ -5759,6 +6135,8 @@ TOKEN :
         | <EscapeNl>
         | <EscapeCr>
         | <EscapeTab>
+        | <EscapeBTickWithBslash>
+        | <EscapeBtickWithBtick>
         | ~["`","\\"])* "`">
   | <STRING_LITERAL : ( ("E")? "\"" (
           <EscapeQuot>
@@ -5767,6 +6145,7 @@ TOKEN :
         | <EscapeBspace>
         | <EscapeFormf>
         | <EscapeNl>
+        | <EscapeBTickWithBslash>
         | <EscapeCr>
         | <EscapeTab>
         | ~["\"","\\"])* "\"")
@@ -5777,9 +6156,12 @@ TOKEN :
         | <EscapeBspace>
         | <EscapeFormf>
         | <EscapeNl>
+        | <EscapeBTickWithBslash>
         | <EscapeCr>
         | <EscapeTab>
         | ~["\'","\\"])* "\'")>
+  | < #EscapeBTickWithBslash: "\\`" >
+  | < #EscapeBtickWithBtick: "``" >
   | < #EscapeQuot: "\\\"" >
   | < #EscapeApos: "\\\'" >
   | < #EscapeBslash: "\\\\" >

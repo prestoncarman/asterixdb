@@ -29,12 +29,16 @@ public class ResponseMetrics {
     private long warnCount;
     private long diskIoCount;
     private long compileTime;
+    private long queueWaitTime;
+    private double bufferCacheHitRatio;
+    private long bufferCachePageReadCount;
 
     private ResponseMetrics() {
     }
 
     public static ResponseMetrics of(long elapsedTime, long executionTime, long resultCount, long resultSize,
-            long processedObjects, long errorCount, long warnCount, long compileTime) {
+            long processedObjects, long errorCount, long warnCount, long compileTime, long queueWaitTime,
+            double bufferCacheHitRatio, long bufferCachePageReadCount) {
         ResponseMetrics metrics = new ResponseMetrics();
         metrics.elapsedTime = elapsedTime;
         metrics.executionTime = executionTime;
@@ -44,6 +48,9 @@ public class ResponseMetrics {
         metrics.errorCount = errorCount;
         metrics.warnCount = warnCount;
         metrics.compileTime = compileTime;
+        metrics.queueWaitTime = queueWaitTime;
+        metrics.bufferCacheHitRatio = bufferCacheHitRatio;
+        metrics.bufferCachePageReadCount = bufferCachePageReadCount;
         return metrics;
     }
 
@@ -77,5 +84,17 @@ public class ResponseMetrics {
 
     public long getCompileTime() {
         return compileTime;
+    }
+
+    public long getQueueWaitTime() {
+        return queueWaitTime;
+    }
+
+    public double getBufferCacheHitRatio() {
+        return bufferCacheHitRatio;
+    }
+
+    public long getBufferCachePageReadCount() {
+        return bufferCachePageReadCount;
     }
 }

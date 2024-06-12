@@ -18,26 +18,24 @@
  */
 package org.apache.hyracks.control.common.job.profiling;
 
+import static org.apache.hyracks.api.job.profiling.NoOpOperatorStats.INVALID_ODID;
+
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
-import java.util.ArrayDeque;
 import java.util.Collections;
-import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import org.apache.hyracks.api.dataflow.IPassableTimer;
 import org.apache.hyracks.api.job.profiling.IOperatorStats;
 import org.apache.hyracks.api.job.profiling.IStatsCollector;
 import org.apache.hyracks.api.job.profiling.NoOpOperatorStats;
 import org.apache.hyracks.api.job.profiling.OperatorStats;
 
 public class StatsCollector implements IStatsCollector {
-    private static final long serialVersionUID = 6858817639895434572L;
+    private static final long serialVersionUID = 6858817639895434379L;
 
     private final Map<String, IOperatorStats> operatorStatsMap = new LinkedHashMap<>();
-    private transient Deque<IPassableTimer> clockHolder = new ArrayDeque<>();
 
     @Override
     public void add(IOperatorStats operatorStats) {
@@ -65,11 +63,12 @@ public class StatsCollector implements IStatsCollector {
 
     @Override
     public IOperatorStats getAggregatedStats() {
-        IOperatorStats aggregatedStats = new OperatorStats("aggregated");
+        IOperatorStats aggregatedStats = new OperatorStats("aggregated", INVALID_ODID);
         for (IOperatorStats stats : operatorStatsMap.values()) {
             aggregatedStats.getInputTupleCounter().update(stats.getInputTupleCounter().get());
             aggregatedStats.getTimeCounter().update(stats.getTimeCounter().get());
             aggregatedStats.getPageReads().update(stats.getPageReads().get());
+            aggregatedStats.coldReadCounter().update(stats.coldReadCounter().get());
         }
         return aggregatedStats;
     }
@@ -77,8 +76,8 @@ public class StatsCollector implements IStatsCollector {
     @Override
     public void writeFields(DataOutput output) throws IOException {
         output.writeInt(operatorStatsMap.size());
-        for (IOperatorStats operatorStats : operatorStatsMap.values()) {
-            operatorStats.writeFields(output);
+        for (IOperatorStats stats : operatorStatsMap.values()) {
+            stats.writeFields(output);
         }
     }
 
@@ -86,27 +85,8 @@ public class StatsCollector implements IStatsCollector {
     public void readFields(DataInput input) throws IOException {
         int operatorCount = input.readInt();
         for (int i = 0; i < operatorCount; i++) {
-            IOperatorStats opStats = OperatorStats.create(input);
+            IOperatorStats opStats = IOperatorStats.create(input);
             operatorStatsMap.put(opStats.getName(), opStats);
-        }
-    }
-
-    @Override
-    public long takeClock(IPassableTimer newHolder) {
-        if (newHolder != null) {
-            if (clockHolder.peek() != null) {
-                clockHolder.peek().pause();
-            }
-            clockHolder.push(newHolder);
-        }
-        return System.nanoTime();
-    }
-
-    @Override
-    public void giveClock(IPassableTimer currHolder) {
-        clockHolder.removeLastOccurrence(currHolder);
-        if (clockHolder.peek() != null) {
-            clockHolder.peek().resume();
         }
     }
 

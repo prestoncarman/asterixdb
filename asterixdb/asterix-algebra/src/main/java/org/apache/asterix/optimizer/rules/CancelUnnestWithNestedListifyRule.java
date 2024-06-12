@@ -194,7 +194,7 @@ public class CancelUnnestWithNestedListifyRule implements IAlgebraicRewriteRule 
         AggregateOperator agg = (AggregateOperator) nestedPlanRoot;
         Mutable<ILogicalOperator> aggInputOpRef = agg.getInputs().get(0);
 
-        if (agg.getVariables().size() > 1) {
+        if (agg.getVariables().size() != 1) {
             return false;
         }
 
@@ -217,6 +217,10 @@ public class CancelUnnestWithNestedListifyRule implements IAlgebraicRewriteRule 
         }
         ILogicalExpression arg0 = f.getArguments().get(0).getValue();
         if (arg0.getExpressionTag() != LogicalExpressionTag.VARIABLE) {
+            return false;
+        }
+        AbstractLogicalOperator aggChild = (AbstractLogicalOperator) agg.getInputs().get(0).getValue();
+        if (aggChild.getOperatorTag() == LogicalOperatorTag.AGGREGATE) {
             return false;
         }
         LogicalVariable paramVar = ((VariableReferenceExpression) arg0).getVariableReference();
@@ -246,6 +250,9 @@ public class CancelUnnestWithNestedListifyRule implements IAlgebraicRewriteRule 
             Mutable<ILogicalOperator> bottomOpRef = aggInputOpRef;
             AbstractLogicalOperator bottomOp = (AbstractLogicalOperator) bottomOpRef.getValue();
             while (bottomOp.getOperatorTag() != LogicalOperatorTag.NESTEDTUPLESOURCE) {
+                if (bottomOp.getOperatorTag() == LogicalOperatorTag.AGGREGATE) {
+                    return false;
+                }
                 bottomOpRef = bottomOp.getInputs().get(0);
                 bottomOp = (AbstractLogicalOperator) bottomOpRef.getValue();
             }

@@ -21,8 +21,11 @@ package org.apache.asterix.optimizer.base;
 
 import java.util.HashSet;
 import java.util.Set;
+import java.util.function.Predicate;
 
+import org.apache.asterix.common.metadata.MetadataConstants;
 import org.apache.asterix.metadata.declared.DataSource;
+import org.apache.asterix.metadata.declared.FunctionDataSource;
 import org.apache.hyracks.algebricks.common.constraints.AlgebricksPartitionConstraint;
 import org.apache.hyracks.algebricks.core.algebra.expressions.IConflictingTypeResolver;
 import org.apache.hyracks.algebricks.core.algebra.expressions.IExpressionEvalSizeComputer;
@@ -72,5 +75,31 @@ public final class AsterixOptimizationContext extends AlgebricksOptimizationCont
 
     public Int2ObjectMap<Set<DataSource>> getDataSourceMap() {
         return dataSourceMap;
+    }
+
+    @Override
+    public boolean skipJobCapacityAssignment() {
+        if (dataSourceMap.isEmpty()) {
+            return false;
+        }
+        for (Int2ObjectMap.Entry<Set<DataSource>> me : dataSourceMap.int2ObjectEntrySet()) {
+            int dataSourceType = me.getIntKey();
+            if (dataSourceType != DataSource.Type.INTERNAL_DATASET && dataSourceType != DataSource.Type.FUNCTION) {
+                return false;
+            }
+            Predicate<DataSource> dataSourceTest = AsterixOptimizationContext::skipJobCapacityAssignment;
+            if (!me.getValue().stream().allMatch(dataSourceTest)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean skipJobCapacityAssignment(DataSource ds) {
+        return MetadataConstants.METADATA_DATAVERSE_NAME.equals(ds.getId().getDataverseName()) || isSkipping(ds);
+    }
+
+    private static boolean isSkipping(DataSource ds) {
+        return (ds instanceof FunctionDataSource) && ((FunctionDataSource) ds).skipJobCapacityAssignment();
     }
 }

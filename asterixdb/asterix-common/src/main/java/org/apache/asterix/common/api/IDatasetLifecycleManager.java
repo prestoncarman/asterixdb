@@ -27,6 +27,7 @@ import org.apache.asterix.common.context.DatasetInfo;
 import org.apache.asterix.common.context.IndexInfo;
 import org.apache.asterix.common.context.PrimaryIndexOperationTracker;
 import org.apache.asterix.common.replication.IReplicationStrategy;
+import org.apache.asterix.common.storage.IIndexCheckpointManagerProvider;
 import org.apache.asterix.common.storage.StorageIOStats;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponentIdGenerator;
@@ -86,10 +87,8 @@ public interface IDatasetLifecycleManager extends IResourceLifecycleManager<IInd
     DatasetInfo getDatasetInfo(int datasetID);
 
     /**
-     * @param datasetId
-     *            the dataset id to be flushed.
-     * @param asyncFlush
-     *            a flag indicating whether to wait for the flush to complete or not.
+     * @param datasetId  the dataset id to be flushed.
+     * @param asyncFlush a flag indicating whether to wait for the flush to complete or not.
      * @throws HyracksDataException
      */
     void flushDataset(int datasetId, boolean asyncFlush) throws HyracksDataException;
@@ -161,12 +160,26 @@ public interface IDatasetLifecycleManager extends IResourceLifecycleManager<IInd
     void flushDataset(IReplicationStrategy replicationStrategy, IntPredicate partitions) throws HyracksDataException;
 
     /**
-     * Waits for all ongoing IO operations on all open datasets that are matching {@code replicationStrategy}.
+     * Waits for all ongoing IO operations on all open datasets that are matching {@code replicationStrategy} and
+     * {@code partition}.
      *
      * @param replicationStrategy
+     * @param partition
      * @throws HyracksDataException
      */
-    void waitForIO(IReplicationStrategy replicationStrategy) throws HyracksDataException;
+    void waitForIO(IReplicationStrategy replicationStrategy, int partition) throws HyracksDataException;
+
+    /**
+     * Waits for all ongoing IO operations on all open datasets and atomically performs the provided {@code operation}
+     * on each opened index before allowing any I/Os to go through.
+     *
+     * @param replicationStrategy replication strategy
+     * @param partition           partition to perform the required operation against
+     * @param operation           operation to perform
+     */
+
+    void waitForIOAndPerform(IReplicationStrategy replicationStrategy, int partition, IIOBlockingOperation operation)
+            throws HyracksDataException;
 
     /**
      * @return the current datasets io stats
@@ -175,6 +188,7 @@ public interface IDatasetLifecycleManager extends IResourceLifecycleManager<IInd
 
     /**
      * Closes {@code resourcePath} if open
+     *
      * @param resourcePath
      * @throws HyracksDataException
      */
@@ -182,7 +196,10 @@ public interface IDatasetLifecycleManager extends IResourceLifecycleManager<IInd
 
     /**
      * Removes all memory references of {@code partition}
+     *
      * @param partitionId
      */
     void closePartition(int partitionId);
+
+    IIndexCheckpointManagerProvider getIndexCheckpointManagerProvider();
 }

@@ -18,6 +18,12 @@
  */
 package org.apache.asterix.common.config;
 
+import java.util.HashMap;
+import java.util.Map;
+
+import org.apache.asterix.common.exceptions.CompilationException;
+import org.apache.asterix.common.exceptions.ErrorCode;
+
 public class DatasetConfig {
 
     /*
@@ -42,7 +48,7 @@ public class DatasetConfig {
         LENGTH_PARTITIONED_WORD_INVIX,
         LENGTH_PARTITIONED_NGRAM_INVIX,
         ARRAY,
-        SAMPLE;
+        SAMPLE
     }
 
     public enum TransactionState {
@@ -78,5 +84,40 @@ public class DatasetConfig {
          * the stored file is part of an ongoing transaction (will be updated if transaction succeed)
          */
         APPEND_OP
+    }
+
+    public enum DatasetFormat {
+        /**
+         * Row format using ADM
+         */
+        ROW("row"),
+        /**
+         * Column format using AMAX
+         */
+        COLUMN("column");
+
+        private final String format;
+        private static final Map<String, DatasetFormat> FORMATS = createFormats();
+
+        DatasetFormat(String format) {
+            this.format = format;
+        }
+
+        private static Map<String, DatasetFormat> createFormats() {
+            Map<String, DatasetFormat> formats = new HashMap<>();
+            for (DatasetFormat format : DatasetFormat.values()) {
+                formats.put(format.format, format);
+            }
+            return formats;
+        }
+
+        public static DatasetFormat getFormat(String format) throws CompilationException {
+            DatasetFormat formatEnum = FORMATS.get(format.trim().toLowerCase());
+            if (formatEnum == null) {
+                throw CompilationException.create(ErrorCode.UNKNOWN_STORAGE_FORMAT, format);
+            }
+
+            return formatEnum;
+        }
     }
 }

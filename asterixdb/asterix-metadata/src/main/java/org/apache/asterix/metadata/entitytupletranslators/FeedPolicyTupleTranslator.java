@@ -27,7 +27,7 @@ import org.apache.asterix.builders.IARecordBuilder;
 import org.apache.asterix.builders.RecordBuilder;
 import org.apache.asterix.builders.UnorderedListBuilder;
 import org.apache.asterix.common.metadata.DataverseName;
-import org.apache.asterix.metadata.bootstrap.MetadataPrimaryIndexes;
+import org.apache.asterix.common.metadata.MetadataUtil;
 import org.apache.asterix.metadata.bootstrap.MetadataRecordTypes;
 import org.apache.asterix.metadata.entities.FeedPolicyEntity;
 import org.apache.asterix.om.base.AMutableString;
@@ -42,29 +42,37 @@ import org.apache.hyracks.data.std.util.ArrayBackedValueStorage;
 import org.apache.hyracks.dataflow.common.data.accessors.ITupleReference;
 
 /**
- * Translates a Dataset metadata entity to an ITupleReference and vice versa.
+ * Translates a FeedPolicyEntity metadata entity to an ITupleReference and vice versa.
  */
 public class FeedPolicyTupleTranslator extends AbstractTupleTranslator<FeedPolicyEntity> {
 
-    // Payload field containing serialized feedPolicy.
-    private static final int FEED_POLICY_PAYLOAD_TUPLE_FIELD_INDEX = 2;
+    private final org.apache.asterix.metadata.bootstrap.FeedPolicyEntity feedPolicyEntity;
 
-    protected FeedPolicyTupleTranslator(boolean getTuple) {
-        super(getTuple, MetadataPrimaryIndexes.FEED_POLICY_DATASET, FEED_POLICY_PAYLOAD_TUPLE_FIELD_INDEX);
+    protected FeedPolicyTupleTranslator(boolean getTuple,
+            org.apache.asterix.metadata.bootstrap.FeedPolicyEntity feedPolicyEntity) {
+        super(getTuple, feedPolicyEntity.getIndex(), feedPolicyEntity.payloadPosition());
+        this.feedPolicyEntity = feedPolicyEntity;
     }
 
     @Override
     protected FeedPolicyEntity createMetadataEntityFromARecord(ARecord feedPolicyRecord) throws AlgebricksException {
-        String dataverseCanonicalName = ((AString) feedPolicyRecord
-                .getValueByPos(MetadataRecordTypes.FEED_POLICY_ARECORD_DATAVERSE_NAME_FIELD_INDEX)).getStringValue();
+        String dataverseCanonicalName =
+                ((AString) feedPolicyRecord.getValueByPos(feedPolicyEntity.dataverseNameIndex())).getStringValue();
         DataverseName dataverseName = DataverseName.createFromCanonicalForm(dataverseCanonicalName);
-        String policyName = ((AString) feedPolicyRecord
-                .getValueByPos(MetadataRecordTypes.FEED_POLICY_ARECORD_POLICY_NAME_FIELD_INDEX)).getStringValue();
-        String description = ((AString) feedPolicyRecord
-                .getValueByPos(MetadataRecordTypes.FEED_POLICY_ARECORD_DESCRIPTION_FIELD_INDEX)).getStringValue();
+        int databaseNameIndex = feedPolicyEntity.databaseNameIndex();
+        String databaseName;
+        if (databaseNameIndex >= 0) {
+            databaseName = ((AString) feedPolicyRecord.getValueByPos(databaseNameIndex)).getStringValue();
+        } else {
+            databaseName = MetadataUtil.databaseFor(dataverseName);
+        }
+        String policyName =
+                ((AString) feedPolicyRecord.getValueByPos(feedPolicyEntity.policyNameIndex())).getStringValue();
+        String description =
+                ((AString) feedPolicyRecord.getValueByPos(feedPolicyEntity.descriptionIndex())).getStringValue();
 
-        IACursor cursor = ((AUnorderedList) feedPolicyRecord
-                .getValueByPos(MetadataRecordTypes.FEED_POLICY_ARECORD_PROPERTIES_FIELD_INDEX)).getCursor();
+        IACursor cursor =
+                ((AUnorderedList) feedPolicyRecord.getValueByPos(feedPolicyEntity.propertiesIndex())).getCursor();
         Map<String, String> policyParamters = new HashMap<>();
         while (cursor.next()) {
             ARecord field = (ARecord) cursor.get();
@@ -75,7 +83,7 @@ public class FeedPolicyTupleTranslator extends AbstractTupleTranslator<FeedPolic
             policyParamters.put(key, value);
         }
 
-        return new FeedPolicyEntity(dataverseName, policyName, description, policyParamters);
+        return new FeedPolicyEntity(databaseName, dataverseName, policyName, description, policyParamters);
     }
 
     @Override
@@ -84,6 +92,11 @@ public class FeedPolicyTupleTranslator extends AbstractTupleTranslator<FeedPolic
 
         // write the key in the first three fields of the tuple
         tupleBuilder.reset();
+        if (feedPolicyEntity.databaseNameIndex() >= 0) {
+            aString.setValue(feedPolicy.getDatabaseName());
+            stringSerde.serialize(aString, tupleBuilder.getDataOutput());
+            tupleBuilder.addFieldEndOffset();
+        }
         aString.setValue(dataverseCanonicalName);
         stringSerde.serialize(aString, tupleBuilder.getDataOutput());
         tupleBuilder.addFieldEndOffset();
@@ -92,31 +105,37 @@ public class FeedPolicyTupleTranslator extends AbstractTupleTranslator<FeedPolic
         stringSerde.serialize(aString, tupleBuilder.getDataOutput());
         tupleBuilder.addFieldEndOffset();
 
-        recordBuilder.reset(MetadataRecordTypes.FEED_POLICY_RECORDTYPE);
+        recordBuilder.reset(feedPolicyEntity.getRecordType());
 
         // write field 0
+        if (feedPolicyEntity.databaseNameIndex() >= 0) {
+            fieldValue.reset();
+            aString.setValue(feedPolicy.getDatabaseName());
+            stringSerde.serialize(aString, fieldValue.getDataOutput());
+            recordBuilder.addField(feedPolicyEntity.databaseNameIndex(), fieldValue);
+        }
         fieldValue.reset();
         aString.setValue(dataverseCanonicalName);
         stringSerde.serialize(aString, fieldValue.getDataOutput());
-        recordBuilder.addField(MetadataRecordTypes.FEED_POLICY_ARECORD_DATAVERSE_NAME_FIELD_INDEX, fieldValue);
+        recordBuilder.addField(feedPolicyEntity.dataverseNameIndex(), fieldValue);
 
         // write field 1
         fieldValue.reset();
         aString.setValue(feedPolicy.getPolicyName());
         stringSerde.serialize(aString, fieldValue.getDataOutput());
-        recordBuilder.addField(MetadataRecordTypes.FEED_POLICY_ARECORD_POLICY_NAME_FIELD_INDEX, fieldValue);
+        recordBuilder.addField(feedPolicyEntity.policyNameIndex(), fieldValue);
 
         // write field 2
         fieldValue.reset();
         aString.setValue(feedPolicy.getDescription());
         stringSerde.serialize(aString, fieldValue.getDataOutput());
-        recordBuilder.addField(MetadataRecordTypes.FEED_POLICY_ARECORD_DESCRIPTION_FIELD_INDEX, fieldValue);
+        recordBuilder.addField(feedPolicyEntity.descriptionIndex(), fieldValue);
 
         // write field 3 (properties)
         Map<String, String> properties = feedPolicy.getProperties();
         UnorderedListBuilder listBuilder = new UnorderedListBuilder();
-        listBuilder.reset((AUnorderedListType) MetadataRecordTypes.FEED_POLICY_RECORDTYPE
-                .getFieldTypes()[MetadataRecordTypes.FEED_POLICY_ARECORD_PROPERTIES_FIELD_INDEX]);
+        listBuilder.reset((AUnorderedListType) feedPolicyEntity.getRecordType().getFieldTypes()[feedPolicyEntity
+                .propertiesIndex()]);
         ArrayBackedValueStorage itemValue = new ArrayBackedValueStorage();
         for (Map.Entry<String, String> property : properties.entrySet()) {
             String name = property.getKey();
@@ -127,7 +146,7 @@ public class FeedPolicyTupleTranslator extends AbstractTupleTranslator<FeedPolic
         }
         fieldValue.reset();
         listBuilder.write(fieldValue.getDataOutput(), true);
-        recordBuilder.addField(MetadataRecordTypes.FEED_POLICY_ARECORD_PROPERTIES_FIELD_INDEX, fieldValue);
+        recordBuilder.addField(feedPolicyEntity.propertiesIndex(), fieldValue);
 
         // write record
         recordBuilder.write(tupleBuilder.getDataOutput(), true);

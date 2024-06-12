@@ -25,7 +25,9 @@ import java.util.TimeZone;
 
 import org.apache.asterix.dataflow.data.nontagged.serde.ABinarySerializerDeserializer;
 import org.apache.asterix.dataflow.data.nontagged.serde.AStringSerializerDeserializer;
-import org.apache.asterix.external.input.stream.StandardUTF8ToModifiedUTF8DataOutput;
+import org.apache.asterix.external.input.filter.NoOpFilterValueEmbedder;
+import org.apache.asterix.external.input.filter.embedder.IExternalFilterValueEmbedder;
+import org.apache.asterix.external.input.stream.StandardUTF8ToModifiedUTF8OutputStream;
 import org.apache.asterix.external.parser.jackson.ParserContext;
 import org.apache.asterix.external.util.ExternalDataConstants.ParquetOptions;
 import org.apache.asterix.formats.nontagged.SerializerDeserializerProvider;
@@ -47,6 +49,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hyracks.api.dataflow.value.ISerializerDeserializer;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.exceptions.Warning;
+import org.apache.hyracks.data.std.api.IMutableValueStorage;
 import org.apache.hyracks.util.encoding.VarLenIntEncoderDecoder;
 import org.apache.hyracks.util.string.UTF8StringReader;
 import org.apache.hyracks.util.string.UTF8StringWriter;
@@ -88,7 +91,7 @@ public class ParquetConverterContext extends ParserContext {
      * Binary values members
      * ************************************************************************
      */
-    private final StandardUTF8ToModifiedUTF8DataOutput modifiedUTF8DataOutput;
+    private final StandardUTF8ToModifiedUTF8OutputStream modifiedUTF8DataOutput;
     private byte[] lengthBytes;
 
     /*
@@ -119,9 +122,22 @@ public class ParquetConverterContext extends ParserContext {
     private final String timeZoneId;
     private final int timeZoneOffset;
 
+    /*
+     * ************************************************************************
+     * Value Embedder
+     * ************************************************************************
+     */
+    private final IExternalFilterValueEmbedder valueEmbedder;
+
     public ParquetConverterContext(Configuration configuration, List<Warning> warnings) {
+        this(configuration, NoOpFilterValueEmbedder.INSTANCE, warnings);
+    }
+
+    public ParquetConverterContext(Configuration configuration, IExternalFilterValueEmbedder valueEmbedder,
+            List<Warning> warnings) {
         this.warnings = warnings;
-        modifiedUTF8DataOutput = new StandardUTF8ToModifiedUTF8DataOutput(
+        this.valueEmbedder = valueEmbedder;
+        modifiedUTF8DataOutput = new StandardUTF8ToModifiedUTF8OutputStream(
                 new AStringSerializerDeserializer(new UTF8StringWriter(), new UTF8StringReader()));
 
         parseJson = configuration.getBoolean(ParquetOptions.HADOOP_PARSE_JSON_STRING, false);
@@ -135,6 +151,10 @@ public class ParquetConverterContext extends ParserContext {
             timeZoneId = "";
             timeZoneOffset = 0;
         }
+    }
+
+    public IExternalFilterValueEmbedder getValueEmbedder() {
+        return valueEmbedder;
     }
 
     public List<Warning> getWarnings() {
@@ -164,6 +184,16 @@ public class ParquetConverterContext extends ParserContext {
      * do not throw any exceptions
      * ************************************************************************
      */
+
+    @Override
+    public IMutableValueStorage getSerializedFieldName(String fieldName) throws IOException {
+        if (fieldName == null) {
+            // Could happen in the context of Parquet's converters (i.e., in array item converter)
+            return null;
+        }
+
+        return super.getSerializedFieldName(fieldName);
+    }
 
     public void serializeBoolean(boolean value, DataOutput output) {
         try {

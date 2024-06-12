@@ -27,6 +27,7 @@ import org.apache.asterix.common.config.DatasetConfig;
 import org.apache.asterix.common.exceptions.CompilationException;
 import org.apache.asterix.common.exceptions.ErrorCode;
 import org.apache.asterix.common.metadata.DataverseName;
+import org.apache.asterix.metadata.declared.DataSourceId;
 import org.apache.asterix.metadata.declared.MetadataProvider;
 import org.apache.asterix.om.base.AInt16;
 import org.apache.asterix.om.base.AInt32;
@@ -34,7 +35,6 @@ import org.apache.asterix.om.base.AInt64;
 import org.apache.asterix.om.base.AInt8;
 import org.apache.asterix.om.constants.AsterixConstantValue;
 import org.apache.asterix.om.functions.BuiltinFunctions;
-import org.apache.asterix.optimizer.base.AnalysisUtil;
 import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.commons.lang3.mutable.MutableObject;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
@@ -78,10 +78,11 @@ abstract public class AbstractOperatorFromSubplanRewrite<T> implements IIntroduc
         boolean isApplicableForRewrite = false;
         if (workingOp.getOperatorTag() == LogicalOperatorTag.DATASOURCESCAN) {
             DataSourceScanOperator dataSourceScanOperator = (DataSourceScanOperator) workingOp;
-            Pair<DataverseName, String> datasetInfo = AnalysisUtil.getDatasetInfo(dataSourceScanOperator);
-            DataverseName dataverseName = datasetInfo.first;
-            String datasetName = datasetInfo.second;
-            if (metadataProvider.getDatasetIndexes(dataverseName, datasetName).stream()
+            DataSourceId srcId = (DataSourceId) dataSourceScanOperator.getDataSource().getId();
+            DataverseName dataverseName = srcId.getDataverseName();
+            String database = srcId.getDatabaseName();
+            String datasetName = srcId.getDatasourceName();
+            if (metadataProvider.getDatasetIndexes(database, dataverseName, datasetName).stream()
                     .anyMatch(i -> i.getIndexType() == DatasetConfig.IndexType.ARRAY)) {
                 return true;
             }
@@ -100,20 +101,44 @@ abstract public class AbstractOperatorFromSubplanRewrite<T> implements IIntroduc
         this.context = context;
     }
 
-    protected LogicalVariable getConditioningVariable(ILogicalExpression condition) {
+    protected void gatherBooleanVariables(ILogicalExpression condition, List<VariableReferenceExpression> outputList,
+            List<ILogicalExpression> miscExpressions) {
         List<Mutable<ILogicalExpression>> selectConjuncts = new ArrayList<>();
         if (splitIntoConjuncts(condition, selectConjuncts)) {
             for (Mutable<ILogicalExpression> conjunct : selectConjuncts) {
                 if (conjunct.getValue().getExpressionTag().equals(LogicalExpressionTag.VARIABLE)) {
-                    return ((VariableReferenceExpression) conjunct.getValue()).getVariableReference();
+                    outputList.add(((VariableReferenceExpression) conjunct.getValue()));
+                } else {
+                    miscExpressions.add(conjunct.getValue());
                 }
             }
-
         } else if (condition.getExpressionTag().equals(LogicalExpressionTag.VARIABLE)) {
-            return ((VariableReferenceExpression) condition).getVariableReference();
-
+            outputList.add(((VariableReferenceExpression) condition));
+        } else {
+            miscExpressions.add(condition);
         }
-        return null;
+    }
+
+    protected void gatherSubplanOperators(ILogicalOperator rootOperator, List<SubplanOperator> outputList) {
+        for (Mutable<ILogicalOperator> inputOpRef : rootOperator.getInputs()) {
+            LogicalOperatorTag operatorTag = inputOpRef.getValue().getOperatorTag();
+            switch (operatorTag) {
+                case SUBPLAN:
+                    outputList.add((SubplanOperator) inputOpRef.getValue());
+                    gatherSubplanOperators(inputOpRef.getValue(), outputList);
+                    break;
+
+                case ASSIGN:
+                case UNNEST:
+                case SELECT:
+                    gatherSubplanOperators(inputOpRef.getValue(), outputList);
+                    break;
+
+                default:
+                    // We will break early if we encounter any other operator.
+                    return;
+            }
+        }
     }
 
     protected Pair<SelectOperator, UnnestOperator> traverseSubplanBranch(SubplanOperator subplanOperator,
@@ -132,7 +157,7 @@ abstract public class AbstractOperatorFromSubplanRewrite<T> implements IIntroduc
         // Ensure that this SELECT represents a predicate for an existential query, and is a query we can optimize.
         ILogicalExpression normalizedSelectCondition =
                 normalizeCondition(workingSubplanRootAsAggregate, optimizableSelect.getCondition().getValue());
-        normalizedSelectCondition = keepOptimizableFunctions(normalizedSelectCondition).cloneExpression();
+        normalizedSelectCondition = keepOptimizableFunctions(normalizedSelectCondition);
 
         // Create a copy of this SELECT, and set this to our rewrite root.
         SelectOperator rewriteRootSelect = new SelectOperator(new MutableObject<>(normalizedSelectCondition),
@@ -283,10 +308,10 @@ abstract public class AbstractOperatorFromSubplanRewrite<T> implements IIntroduc
                 break;
         }
 
-        return combinedCondition;
+        return combinedCondition.cloneExpression();
     }
 
-    private SelectOperator getSelectFromPlan(AggregateOperator subplanRoot) {
+    public static SelectOperator getSelectFromPlan(AggregateOperator subplanRoot) {
         ILogicalExpression aggregateCondition = null;
         boolean isNonEmptyStream = false;
         for (Mutable<ILogicalExpression> expression : subplanRoot.getExpressions()) {
@@ -321,7 +346,8 @@ abstract public class AbstractOperatorFromSubplanRewrite<T> implements IIntroduc
         if (isNonEmptyStream && aggregateCondition != null) {
             SelectOperator selectFromAgg = new SelectOperator(new MutableObject<>(aggregateCondition));
             selectFromAgg.getInputs().addAll(subplanRoot.getInputs());
-            selectFromAgg.setSourceLocation(sourceLocation);
+            selectFromAgg.setSourceLocation(subplanRoot.getSourceLocation());
+
             return selectFromAgg;
         }
 
@@ -374,7 +400,7 @@ abstract public class AbstractOperatorFromSubplanRewrite<T> implements IIntroduc
         return ConstantExpression.TRUE;
     }
 
-    private AggregateOperator getAggregateFromSubplan(SubplanOperator subplanOperator) {
+    protected AggregateOperator getAggregateFromSubplan(SubplanOperator subplanOperator) {
         // We only expect one plan, and one root.
         if (subplanOperator.getNestedPlans().size() > 1
                 || subplanOperator.getNestedPlans().get(0).getRoots().size() > 1) {
@@ -487,6 +513,9 @@ abstract public class AbstractOperatorFromSubplanRewrite<T> implements IIntroduc
 
         } else {
             // We are working with a strict universal quantification query.
+            if (expr.getExpressionTag() != LogicalExpressionTag.FUNCTION_CALL) {
+                return expr;
+            }
             ScalarFunctionCallExpression notFunction = (ScalarFunctionCallExpression) expr;
             if (!notFunction.getFunctionIdentifier().equals(BuiltinFunctions.NOT)) {
                 return expr;
@@ -497,7 +526,8 @@ abstract public class AbstractOperatorFromSubplanRewrite<T> implements IIntroduc
             if (!ifMissingOrNullFunction.getFunctionIdentifier().equals(BuiltinFunctions.IF_MISSING_OR_NULL)) {
                 return expr;
             }
-            return ifMissingOrNullFunction.getArguments().get(0).getValue().cloneExpression();
+            return ifMissingOrNullFunction.getArguments().get(0).getValue();
+
         }
     }
 
@@ -509,7 +539,7 @@ abstract public class AbstractOperatorFromSubplanRewrite<T> implements IIntroduc
                 if (splitIntoConjuncts(conjunct.getValue(), innerExprConjuncts)) {
                     conjuncts.addAll(innerExprConjuncts);
                 } else {
-                    conjuncts.add(new MutableObject<>(conjunct.getValue().cloneExpression()));
+                    conjuncts.add(new MutableObject<>(conjunct.getValue()));
                 }
             }
             return true;

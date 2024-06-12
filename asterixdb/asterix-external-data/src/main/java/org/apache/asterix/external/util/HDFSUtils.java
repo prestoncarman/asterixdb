@@ -18,6 +18,9 @@
  */
 package org.apache.asterix.external.util;
 
+import static org.apache.asterix.om.utils.ProjectionFiltrationTypeUtil.ALL_FIELDS_TYPE;
+import static org.apache.asterix.om.utils.ProjectionFiltrationTypeUtil.EMPTY_TYPE;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -35,14 +38,12 @@ import org.apache.asterix.common.dataflow.ICcApplicationContext;
 import org.apache.asterix.common.exceptions.ErrorCode;
 import org.apache.asterix.common.exceptions.RuntimeDataException;
 import org.apache.asterix.external.indexing.ExternalFile;
-import org.apache.asterix.external.indexing.IndexingScheduler;
-import org.apache.asterix.external.indexing.RecordId.RecordIdType;
 import org.apache.asterix.external.input.record.reader.hdfs.parquet.MapredParquetInputFormat;
 import org.apache.asterix.external.input.record.reader.hdfs.parquet.ParquetReadSupport;
 import org.apache.asterix.external.input.stream.HDFSInputStream;
 import org.apache.asterix.external.util.ExternalDataConstants.ParquetOptions;
 import org.apache.asterix.om.types.ARecordType;
-import org.apache.asterix.runtime.projection.DataProjectionInfo;
+import org.apache.asterix.runtime.projection.ExternalDatasetProjectionFiltrationInfo;
 import org.apache.asterix.runtime.projection.FunctionCallInformation;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.BlockLocation;
@@ -56,7 +57,6 @@ import org.apache.hadoop.mapred.SequenceFileInputFormat;
 import org.apache.hadoop.mapred.TextInputFormat;
 import org.apache.hyracks.algebricks.common.constraints.AlgebricksAbsolutePartitionConstraint;
 import org.apache.hyracks.api.application.ICCServiceContext;
-import org.apache.hyracks.api.client.IHyracksClientConnection;
 import org.apache.hyracks.api.context.ICCContext;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.exceptions.HyracksException;
@@ -79,19 +79,6 @@ public class HDFSUtils {
             scheduler = new Scheduler(ccContext.getClusterControllerInfo().getClientNetAddress(),
                     ccContext.getClusterControllerInfo().getClientNetPort(),
                     networkSecurityManager.getSocketChannelFactory());
-        } catch (HyracksException e) {
-            throw new RuntimeDataException(ErrorCode.UTIL_HDFS_UTILS_CANNOT_OBTAIN_HDFS_SCHEDULER);
-        }
-        return scheduler;
-    }
-
-    public static IndexingScheduler initializeIndexingHDFSScheduler(ICCServiceContext serviceCtx)
-            throws HyracksDataException {
-        IndexingScheduler scheduler = null;
-        try {
-            ICcApplicationContext appCtx = (ICcApplicationContext) serviceCtx.getApplicationContext();
-            IHyracksClientConnection hcc = appCtx.getHcc();
-            scheduler = new IndexingScheduler(hcc.getNodeControllerInfos());
         } catch (HyracksException e) {
             throw new RuntimeDataException(ErrorCode.UTIL_HDFS_UTILS_CANNOT_OBTAIN_HDFS_SCHEDULER);
         }
@@ -242,7 +229,7 @@ public class HDFSUtils {
         String requestedValues = configuration.get(ExternalDataConstants.KEY_REQUESTED_FIELDS);
         if (requestedValues == null) {
             //No value is requested, return the entire record
-            requestedValues = DataProjectionInfo.ALL_FIELDS_TYPE.getTypeName();
+            requestedValues = ALL_FIELDS_TYPE.getTypeName();
         } else {
             //Subset of the values were requested, set the functionCallInformation
             conf.set(ExternalDataConstants.KEY_HADOOP_ASTERIX_FUNCTION_CALL_INFORMATION,
@@ -265,37 +252,26 @@ public class HDFSUtils {
     public static AlgebricksAbsolutePartitionConstraint getPartitionConstraints(IApplicationContext appCtx,
             AlgebricksAbsolutePartitionConstraint clusterLocations) {
         if (clusterLocations == null) {
-            return ((ICcApplicationContext) appCtx).getClusterStateManager().getClusterLocations();
+            return ((ICcApplicationContext) appCtx).getDataPartitioningProvider().getClusterLocations();
         }
         return clusterLocations;
 
     }
 
-    public static RecordIdType getRecordIdType(Map<String, String> configuration) {
-        String inputFormatParameter = configuration.get(ExternalDataConstants.KEY_INPUT_FORMAT).trim();
-        switch (inputFormatParameter) {
-            case ExternalDataConstants.INPUT_FORMAT_TEXT:
-            case ExternalDataConstants.INPUT_FORMAT_SEQUENCE:
-                return RecordIdType.OFFSET;
-            default:
-                return null;
-        }
-    }
-
     public static ARecordType getExpectedType(Configuration configuration) throws IOException {
         String encoded = configuration.get(ExternalDataConstants.KEY_REQUESTED_FIELDS, "");
-        if (encoded.isEmpty() || encoded.equals(DataProjectionInfo.ALL_FIELDS_TYPE.getTypeName())) {
+        if (ALL_FIELDS_TYPE.getTypeName().equals(encoded)) {
             //By default, return the entire records
-            return DataProjectionInfo.ALL_FIELDS_TYPE;
-        } else if (encoded.equals(DataProjectionInfo.EMPTY_TYPE.getTypeName())) {
+            return ALL_FIELDS_TYPE;
+        } else if (EMPTY_TYPE.getTypeName().equals(encoded)) {
             //No fields were requested
-            return DataProjectionInfo.EMPTY_TYPE;
+            return EMPTY_TYPE;
         }
         //A subset of the fields was requested
         Base64.Decoder decoder = Base64.getDecoder();
         byte[] typeBytes = decoder.decode(encoded);
         DataInputStream dataInputStream = new DataInputStream(new ByteArrayInputStream(typeBytes));
-        return DataProjectionInfo.createTypeField(dataInputStream);
+        return ExternalDatasetProjectionFiltrationInfo.createTypeField(dataInputStream);
     }
 
     public static void setFunctionCallInformationMap(Map<String, FunctionCallInformation> funcCallInfoMap,
@@ -311,7 +287,7 @@ public class HDFSUtils {
             Base64.Decoder decoder = Base64.getDecoder();
             byte[] functionCallInfoMapBytes = decoder.decode(encoded);
             DataInputStream dataInputStream = new DataInputStream(new ByteArrayInputStream(functionCallInfoMapBytes));
-            return DataProjectionInfo.createFunctionCallInformationMap(dataInputStream);
+            return ExternalDatasetProjectionFiltrationInfo.createFunctionCallInformationMap(dataInputStream);
         }
         return null;
     }

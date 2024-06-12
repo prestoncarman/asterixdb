@@ -26,6 +26,8 @@ import java.util.Optional;
 import java.util.TreeMap;
 
 import org.apache.asterix.algebra.operators.CommitOperator;
+import org.apache.asterix.common.cluster.PartitioningProperties;
+import org.apache.asterix.common.config.DatasetConfig;
 import org.apache.asterix.common.exceptions.CompilationException;
 import org.apache.asterix.common.exceptions.ErrorCode;
 import org.apache.asterix.metadata.declared.MetadataProvider;
@@ -284,7 +286,8 @@ public class IntroduceSelectAccessMethodRule extends AbstractIntroduceAccessMeth
             subRoots.add(subRoot);
         }
         // Connect each secondary index utilization plan to a common intersect operator.
-        ILogicalOperator primaryUnnestOp = connectAll2ndarySearchPlanWithIntersect(subRoots, context);
+        Index idx = chosenIndexes.get(0).getSecond();
+        ILogicalOperator primaryUnnestOp = connectAll2ndarySearchPlanWithIntersect(subRoots, context, idx);
 
         subTree.getDataSourceRef().setValue(primaryUnnestOp);
         return primaryUnnestOp != null;
@@ -312,7 +315,7 @@ public class IntroduceSelectAccessMethodRule extends AbstractIntroduceAccessMeth
      * Connect each secondary index utilization plan to a common INTERSECT operator.
      */
     private ILogicalOperator connectAll2ndarySearchPlanWithIntersect(List<ILogicalOperator> subRoots,
-            IOptimizationContext context) throws AlgebricksException {
+            IOptimizationContext context, Index idx) throws AlgebricksException {
         ILogicalOperator lop = subRoots.get(0);
         List<List<LogicalVariable>> inputVars = new ArrayList<>(subRoots.size());
         for (int i = 0; i < subRoots.size(); i++) {
@@ -359,8 +362,9 @@ public class IntroduceSelectAccessMethodRule extends AbstractIntroduceAccessMeth
             outputVars.add(outputVar);
             VariableUtilities.substituteVariables(lop, inputVar, outputVar, context);
         }
-
-        IntersectOperator intersect = new IntersectOperator(outputVars, inputVars);
+        PartitioningProperties partitioningProperties = metadataProvider.getPartitioningProperties(idx);
+        IntersectOperator intersect =
+                new IntersectOperator(outputVars, inputVars, partitioningProperties.getComputeStorageMap());
         intersect.setSourceLocation(lop.getSourceLocation());
         for (ILogicalOperator secondarySearch : subRoots) {
             intersect.getInputs().add(secondarySearch.getInputs().get(0));
@@ -368,6 +372,76 @@ public class IntroduceSelectAccessMethodRule extends AbstractIntroduceAccessMeth
         context.computeAndSetTypeEnvironmentForOperator(intersect);
         lop.getInputs().set(0, new MutableObject<>(intersect));
         return lop;
+    }
+
+    // list1 is <= list2 in terms of size; so check if everything in list1 is also in list2 in the same order
+    protected boolean prefix(List<List<String>> list1, List<List<String>> list2) {
+        int i, j;
+
+        for (i = 0; i < list1.size(); i++) {
+            List<String> l1 = list1.get(i);
+            List<String> l2 = list2.get(i);
+            if (l1.size() != l2.size()) {
+                return false;
+            }
+            for (j = 0; j < l1.size(); j++) {
+                String s1 = l1.get(j);
+                String s2 = l2.get(j);
+                if (!(s1.equals(s2))) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    protected void removeSmallerPrefixIndexes(List<Pair<IAccessMethod, Index>> indexes) throws CompilationException {
+        int len = indexes.size();
+        int i, j;
+        Index indexI, indexJ;
+        boolean include[];
+        include = new boolean[len];
+        for (i = 0; i < len; i++) {
+            include[i] = true; // Initially every index is included.
+        }
+
+        List<List<String>> fieldNamesI, fieldNamesJ;
+
+        for (i = 0; i < len - 1; i++) {
+            if (include[i]) {
+                IAccessMethod ami = indexes.get(i).first;
+                indexI = indexes.get(i).second;
+                DatasetConfig.IndexType typeI = indexI.getIndexType();
+                fieldNamesI = findKeyFieldNames(indexI);
+
+                for (j = i + 1; j < len; j++) {
+                    if (include[j]) {
+                        IAccessMethod amj = indexes.get(j).first;
+                        if (ami == amj) { // should be the same accessMethods
+                            indexJ = indexes.get(j).second;
+                            DatasetConfig.IndexType typeJ = indexJ.getIndexType();
+                            if (typeI == typeJ) {
+                                fieldNamesJ = findKeyFieldNames(indexJ);
+                                if (fieldNamesI.size() <= fieldNamesJ.size()) {
+                                    if (prefix(fieldNamesI, fieldNamesJ)) {
+                                        include[i] = false;
+                                    }
+                                } else if (prefix(fieldNamesJ, fieldNamesI)) {
+                                    include[j] = false;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // remove the shorter indexes if any
+        for (i = len - 1; i >= 0; i--) { // removing from the end; seems safer that way
+            if (!include[i]) { // if this index can be removed it, do so;
+                indexes.remove(i);
+            }
+        }
     }
 
     /**
@@ -437,14 +511,17 @@ public class IntroduceSelectAccessMethodRule extends AbstractIntroduceAccessMeth
                 // If there exists a composite atomic-array index, our conjuncts will be split across multiple
                 // SELECTs. This rewrite is to be used **solely** for the purpose of changing a DATA-SCAN into a
                 // non-index-only plan branch. No nodes introduced from this rewrite will be used beyond this point.
-                if (!checkApplicableOnly && rewriteLocallyAndTransform(selectRef, context, mergedSelectRewrite)) {
+
+                if (rewriteLocallyAndTransform(selectRef, context, mergedSelectRewrite, checkApplicableOnly,
+                        chosenIndexes, analyzedAMs)) {
                     return true;
                 }
 
                 // If there exists a SUBPLAN in our plan, and we are conditioning on a variable, attempt to rewrite
                 // this subplan to allow an array-index AM to be introduced. Again, this rewrite is to be used
                 // **solely** for the purpose of changing a DATA-SCAN into a non-index-only plan branch.
-                if (!checkApplicableOnly && rewriteLocallyAndTransform(selectRef, context, selectFromSubplanRewrite)) {
+                if (rewriteLocallyAndTransform(selectRef, context, selectFromSubplanRewrite, checkApplicableOnly,
+                        chosenIndexes, analyzedAMs)) {
                     return true;
                 }
             }
@@ -477,10 +554,11 @@ public class IntroduceSelectAccessMethodRule extends AbstractIntroduceAccessMeth
                 fillSubTreeIndexExprs(subTree, analyzedAMs, context, false);
 
                 // Prune the access methods based on the function expression and access methods.
-                pruneIndexCandidates(analyzedAMs, context, typeEnvironment, false);
+                pruneIndexCandidates(analyzedAMs, context, typeEnvironment, checkApplicableOnly);
 
                 // Choose all indexes that will be applied.
                 chooseAllIndexes(analyzedAMs, chosenIndexes);
+                removeSmallerPrefixIndexes(chosenIndexes);
 
                 if (chosenIndexes == null || chosenIndexes.isEmpty()) {
                     // We can't apply any index for this SELECT operator
@@ -545,15 +623,23 @@ public class IntroduceSelectAccessMethodRule extends AbstractIntroduceAccessMeth
     }
 
     private boolean rewriteLocallyAndTransform(Mutable<ILogicalOperator> opRef, IOptimizationContext context,
-            IIntroduceAccessMethodRuleLocalRewrite<SelectOperator> rewriter) throws AlgebricksException {
+            IIntroduceAccessMethodRuleLocalRewrite<SelectOperator> rewriter, boolean checkApplicableOnly,
+            List<Pair<IAccessMethod, Index>> chosenIndexes, Map<IAccessMethod, AccessMethodAnalysisContext> analyzedAMs)
+            throws AlgebricksException {
+
         SelectOperator selectRewrite = rewriter.createOperator(selectOp, context);
         boolean transformationResult = false;
         if (selectRewrite != null) {
             Mutable<ILogicalOperator> selectRuleInput = new MutableObject<>(selectRewrite);
-            List<Pair<IAccessMethod, Index>> chosenIndexes = new ArrayList<>();
-            Map<IAccessMethod, AccessMethodAnalysisContext> analyzedAMs = null;
-            transformationResult =
-                    checkAndApplyTheSelectTransformation(selectRuleInput, context, false, chosenIndexes, analyzedAMs);
+            if (checkApplicableOnly) {
+                transformationResult = checkAndApplyTheSelectTransformation(selectRuleInput, context,
+                        checkApplicableOnly, chosenIndexes, analyzedAMs);
+            } else {
+                List<Pair<IAccessMethod, Index>> chosenIndexes2 = new ArrayList<>();
+                Map<IAccessMethod, AccessMethodAnalysisContext> analyzedAMs2 = null;
+                transformationResult = checkAndApplyTheSelectTransformation(selectRuleInput, context,
+                        checkApplicableOnly, chosenIndexes2, analyzedAMs2);
+            }
         }
 
         // Restore our state, so we can look for more optimizations if this transformation failed.

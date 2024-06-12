@@ -21,6 +21,7 @@ package org.apache.hyracks.storage.am.lsm.btree.column.api;
 import org.apache.hyracks.storage.am.common.api.ITreeIndexTupleWriter;
 import org.apache.hyracks.storage.am.common.api.ITreeIndexTupleWriterFactory;
 import org.apache.hyracks.storage.am.lsm.btree.column.api.projection.IColumnProjectionInfo;
+import org.apache.hyracks.storage.am.lsm.btree.column.cloud.buffercache.IColumnWriteContext;
 import org.apache.hyracks.storage.common.buffercache.IBufferCache;
 
 /**
@@ -30,7 +31,8 @@ public abstract class AbstractColumnTupleReaderWriterFactory implements ITreeInd
     private static final long serialVersionUID = -2377235465942457248L;
     protected final int pageSize;
     protected final int maxNumberOfTuples;
-    protected final float tolerance;
+    protected final double tolerance;
+    protected final int maxLeafNodeSize;
 
     /**
      * Tuple reader/writer factory
@@ -38,19 +40,24 @@ public abstract class AbstractColumnTupleReaderWriterFactory implements ITreeInd
      * @param pageSize          {@link IBufferCache} page size
      * @param maxNumberOfTuples maximum number of tuples stored per a mega leaf page
      * @param tolerance         percentage of tolerated empty space
+     * @param maxLeafNodeSize   the maximum size a mega leaf node can occupy
      */
-    protected AbstractColumnTupleReaderWriterFactory(int pageSize, int maxNumberOfTuples, float tolerance) {
+    protected AbstractColumnTupleReaderWriterFactory(int pageSize, int maxNumberOfTuples, double tolerance,
+            int maxLeafNodeSize) {
         this.pageSize = pageSize;
         this.maxNumberOfTuples = maxNumberOfTuples;
         this.tolerance = tolerance;
+        this.maxLeafNodeSize = maxLeafNodeSize;
     }
 
     /**
      * Create columnar tuple writer
      *
      * @param columnMetadata writer column metadata
+     * @param writeContext   write context
      */
-    public abstract AbstractColumnTupleWriter createColumnWriter(IColumnMetadata columnMetadata);
+    public abstract AbstractColumnTupleWriter createColumnWriter(IColumnMetadata columnMetadata,
+            IColumnWriteContext writeContext);
 
     /**
      * Create columnar tuple reader

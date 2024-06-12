@@ -19,9 +19,12 @@
 
 package org.apache.asterix.metadata.entitytupletranslators;
 
+import static org.apache.asterix.metadata.bootstrap.MetadataRecordTypes.FIELD_NAME_DATABASE_NAME;
 import static org.apache.asterix.metadata.bootstrap.MetadataRecordTypes.FIELD_NAME_DATAVERSE_NAME;
+import static org.apache.asterix.metadata.bootstrap.MetadataRecordTypes.FIELD_NAME_LIBRARY_DATABASE_NAME;
 import static org.apache.asterix.metadata.bootstrap.MetadataRecordTypes.FIELD_NAME_LIBRARY_DATAVERSE_NAME;
 import static org.apache.asterix.metadata.bootstrap.MetadataRecordTypes.FIELD_NAME_NAME;
+import static org.apache.asterix.metadata.bootstrap.MetadataRecordTypes.FIELD_NAME_RETURN_TYPE_DATABASE_NAME;
 import static org.apache.asterix.metadata.bootstrap.MetadataRecordTypes.FIELD_NAME_RETURN_TYPE_DATAVERSE_NAME;
 import static org.apache.asterix.metadata.bootstrap.MetadataRecordTypes.FIELD_NAME_TYPE;
 import static org.apache.asterix.metadata.bootstrap.MetadataRecordTypes.FIELD_NAME_VALUE;
@@ -51,11 +54,12 @@ import org.apache.asterix.common.exceptions.ErrorCode;
 import org.apache.asterix.common.functions.ExternalFunctionLanguage;
 import org.apache.asterix.common.functions.FunctionSignature;
 import org.apache.asterix.common.metadata.DataverseName;
+import org.apache.asterix.common.metadata.DependencyFullyQualifiedName;
+import org.apache.asterix.common.metadata.MetadataUtil;
 import org.apache.asterix.common.transactions.TxnId;
 import org.apache.asterix.metadata.MetadataNode;
-import org.apache.asterix.metadata.bootstrap.MetadataPrimaryIndexes;
+import org.apache.asterix.metadata.bootstrap.FunctionEntity;
 import org.apache.asterix.metadata.bootstrap.MetadataRecordTypes;
-import org.apache.asterix.metadata.entities.BuiltinTypeMap;
 import org.apache.asterix.metadata.entities.Function;
 import org.apache.asterix.om.base.ABoolean;
 import org.apache.asterix.om.base.ANull;
@@ -68,9 +72,9 @@ import org.apache.asterix.om.pointables.base.DefaultOpenFieldType;
 import org.apache.asterix.om.types.AOrderedListType;
 import org.apache.asterix.om.types.ARecordType;
 import org.apache.asterix.om.types.BuiltinType;
+import org.apache.asterix.om.types.BuiltinTypeMap;
 import org.apache.asterix.om.types.TypeSignature;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
-import org.apache.hyracks.algebricks.common.utils.Triple;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.data.std.util.ArrayBackedValueStorage;
 import org.apache.hyracks.dataflow.common.data.accessors.ITupleReference;
@@ -80,9 +84,7 @@ import org.apache.hyracks.dataflow.common.data.accessors.ITupleReference;
  */
 public class FunctionTupleTranslator extends AbstractDatatypeTupleTranslator<Function> {
 
-    // Payload field containing serialized Function.
-    private static final int FUNCTION_PAYLOAD_TUPLE_FIELD_INDEX = 3;
-
+    private final FunctionEntity functionEntity;
     protected OrderedListBuilder dependenciesListBuilder;
     protected OrderedListBuilder dependencyListBuilder;
     protected OrderedListBuilder dependencyNameListBuilder;
@@ -90,14 +92,15 @@ public class FunctionTupleTranslator extends AbstractDatatypeTupleTranslator<Fun
     protected AOrderedListType stringList;
     protected AOrderedListType listOfLists;
 
-    protected FunctionTupleTranslator(TxnId txnId, MetadataNode metadataNode, boolean getTuple) {
-        super(txnId, metadataNode, getTuple, MetadataPrimaryIndexes.FUNCTION_DATASET,
-                FUNCTION_PAYLOAD_TUPLE_FIELD_INDEX);
+    protected FunctionTupleTranslator(TxnId txnId, MetadataNode metadataNode, boolean getTuple,
+            FunctionEntity functionEntity) {
+        super(txnId, metadataNode, getTuple, functionEntity.getIndex(), functionEntity.payloadPosition());
+        this.functionEntity = functionEntity;
         if (getTuple) {
             dependenciesListBuilder = new OrderedListBuilder();
             dependencyListBuilder = new OrderedListBuilder();
             dependencyNameListBuilder = new OrderedListBuilder();
-            dependencySubnames = new ArrayList<>(3);
+            dependencySubnames = new ArrayList<>(4);
             stringList = new AOrderedListType(BuiltinType.ASTRING, null);
             listOfLists = new AOrderedListType(new AOrderedListType(BuiltinType.ASTRING, null), null);
         }
@@ -105,43 +108,48 @@ public class FunctionTupleTranslator extends AbstractDatatypeTupleTranslator<Fun
 
     protected Function createMetadataEntityFromARecord(ARecord functionRecord) throws AlgebricksException {
         String dataverseCanonicalName =
-                ((AString) functionRecord.getValueByPos(MetadataRecordTypes.FUNCTION_ARECORD_DATAVERSENAME_FIELD_INDEX))
-                        .getStringValue();
+                ((AString) functionRecord.getValueByPos(functionEntity.dataverseNameIndex())).getStringValue();
         DataverseName dataverseName = DataverseName.createFromCanonicalForm(dataverseCanonicalName);
+        int databaseNameIndex = functionEntity.databaseNameIndex();
+        String databaseName;
+        if (databaseNameIndex >= 0) {
+            databaseName = ((AString) functionRecord.getValueByPos(databaseNameIndex)).getStringValue();
+        } else {
+            databaseName = MetadataUtil.databaseFor(dataverseName);
+        }
         String functionName =
-                ((AString) functionRecord.getValueByPos(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTIONNAME_FIELD_INDEX))
-                        .getStringValue();
-        int arity = Integer.parseInt(((AString) functionRecord
-                .getValueByPos(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_ARITY_FIELD_INDEX)).getStringValue());
+                ((AString) functionRecord.getValueByPos(functionEntity.functionNameIndex())).getStringValue();
+        int arity = Integer.parseInt(
+                ((AString) functionRecord.getValueByPos(functionEntity.functionArityIndex())).getStringValue());
 
-        IACursor paramNameCursor = ((AOrderedList) functionRecord
-                .getValueByPos(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_PARAM_LIST_FIELD_INDEX)).getCursor();
+        IACursor paramNameCursor =
+                ((AOrderedList) functionRecord.getValueByPos(functionEntity.functionParamListIndex())).getCursor();
         List<String> paramNames = new ArrayList<>();
         while (paramNameCursor.next()) {
             paramNames.add(((AString) paramNameCursor.get()).getStringValue());
         }
 
-        List<TypeSignature> paramTypes = getParamTypes(functionRecord, dataverseName);
+        List<TypeSignature> paramTypes = getParamTypes(functionRecord, databaseName, dataverseName);
 
         TypeSignature returnType;
-        String returnTypeName = ((AString) functionRecord
-                .getValueByPos(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_RETURN_TYPE_FIELD_INDEX)).getStringValue();
+        String returnTypeName =
+                ((AString) functionRecord.getValueByPos(functionEntity.functionReturnTypeIndex())).getStringValue();
         if (returnTypeName.isEmpty()) {
             returnType = null; // == any
         } else {
-            String returnTypeDataverseNameCanonical = getString(functionRecord, FIELD_NAME_RETURN_TYPE_DATAVERSE_NAME);
-            returnType = getTypeSignature(returnTypeName, returnTypeDataverseNameCanonical, dataverseName);
+            returnType = getTypeSignature(functionRecord, returnTypeName, FIELD_NAME_RETURN_TYPE_DATABASE_NAME,
+                    FIELD_NAME_RETURN_TYPE_DATAVERSE_NAME, databaseName, dataverseName);
         }
 
-        String definition = ((AString) functionRecord
-                .getValueByPos(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_DEFINITION_FIELD_INDEX)).getStringValue();
-        String language = ((AString) functionRecord
-                .getValueByPos(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_LANGUAGE_FIELD_INDEX)).getStringValue();
+        String definition =
+                ((AString) functionRecord.getValueByPos(functionEntity.functionDefinitionIndex())).getStringValue();
+        String language =
+                ((AString) functionRecord.getValueByPos(functionEntity.functionLanguageIndex())).getStringValue();
         String functionKind =
-                ((AString) functionRecord.getValueByPos(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_KIND_FIELD_INDEX))
-                        .getStringValue();
+                ((AString) functionRecord.getValueByPos(functionEntity.functionKindIndex())).getStringValue();
 
         Map<String, String> resources = null;
+        String libraryDatabaseName = null;
         DataverseName libraryDataverseName = null;
         String libraryName;
         List<String> externalIdentifier = null;
@@ -156,12 +164,17 @@ public class FunctionTupleTranslator extends AbstractDatatypeTupleTranslator<Fun
             libraryName = getString(functionRecord, MetadataRecordTypes.FIELD_NAME_LIBRARY_NAME);
             String libraryDataverseCanonicalName = getString(functionRecord, FIELD_NAME_LIBRARY_DATAVERSE_NAME);
             libraryDataverseName = DataverseName.createFromCanonicalForm(libraryDataverseCanonicalName);
+            libraryDatabaseName = getString(functionRecord, FIELD_NAME_LIBRARY_DATABASE_NAME);
+            if (libraryDatabaseName == null) {
+                libraryDatabaseName = MetadataUtil.databaseFor(libraryDataverseName);
+            }
             resources = getResources(functionRecord, FUNCTION_ARECORD_FUNCTION_RESOURCES_FIELD_NAME);
             definition = null;
         } else {
             // back-compat. get external identifier from function body
             libraryName = getString(functionRecord, FUNCTION_ARECORD_FUNCTION_LIBRARY_FIELD_NAME);
             if (libraryName != null) {
+                libraryDatabaseName = databaseName;
                 libraryDataverseName = dataverseName;
                 externalIdentifier =
                         decodeExternalIdentifierBackCompat(definition, ExternalFunctionLanguage.valueOf(language));
@@ -176,29 +189,28 @@ public class FunctionTupleTranslator extends AbstractDatatypeTupleTranslator<Fun
             deterministic = getBoolean(functionRecord, FUNCTION_ARECORD_FUNCTION_DETERMINISTIC_FIELD_NAME);
         }
 
-        IACursor dependenciesCursor = ((AOrderedList) functionRecord
-                .getValueByPos(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_DEPENDENCIES_FIELD_INDEX)).getCursor();
-        List<List<Triple<DataverseName, String, String>>> dependencies = new ArrayList<>();
+        IACursor dependenciesCursor =
+                ((AOrderedList) functionRecord.getValueByPos(functionEntity.functionDependenciesIndex())).getCursor();
+        List<List<DependencyFullyQualifiedName>> dependencies = new ArrayList<>();
         while (dependenciesCursor.next()) {
-            List<Triple<DataverseName, String, String>> dependencyList = new ArrayList<>();
+            List<DependencyFullyQualifiedName> dependencyList = new ArrayList<>();
             IACursor qualifiedDependencyCursor = ((AOrderedList) dependenciesCursor.get()).getCursor();
             while (qualifiedDependencyCursor.next()) {
-                Triple<DataverseName, String, String> dependency =
-                        getDependency((AOrderedList) qualifiedDependencyCursor.get());
+                DependencyFullyQualifiedName dependency = getDependency((AOrderedList) qualifiedDependencyCursor.get());
                 dependencyList.add(dependency);
             }
             dependencies.add(dependencyList);
         }
 
-        FunctionSignature signature = new FunctionSignature(dataverseName, functionName, arity);
+        FunctionSignature signature = new FunctionSignature(databaseName, dataverseName, functionName, arity);
 
         return new Function(signature, paramNames, paramTypes, returnType, definition, functionKind, language,
-                libraryDataverseName, libraryName, externalIdentifier, nullCall, deterministic, resources,
-                dependencies);
+                libraryDatabaseName, libraryDataverseName, libraryName, externalIdentifier, nullCall, deterministic,
+                resources, dependencies);
     }
 
-    private List<TypeSignature> getParamTypes(ARecord functionRecord, DataverseName functionDataverseName)
-            throws AlgebricksException {
+    private List<TypeSignature> getParamTypes(ARecord functionRecord, String functionDatabaseName,
+            DataverseName functionDataverseName) throws AlgebricksException {
         ARecordType functionRecordType = functionRecord.getType();
         int paramTypesFieldIdx = functionRecordType.getFieldIndex(FUNCTION_ARECORD_FUNCTION_PARAMTYPES_FIELD_NAME);
         if (paramTypesFieldIdx < 0) {
@@ -218,8 +230,8 @@ public class FunctionTupleTranslator extends AbstractDatatypeTupleTranslator<Fun
                 case OBJECT:
                     ARecord paramTypeRecord = (ARecord) paramTypeObject;
                     String paramTypeName = getString(paramTypeRecord, FIELD_NAME_TYPE);
-                    String paramTypeDataverseNameCanonical = getString(paramTypeRecord, FIELD_NAME_DATAVERSE_NAME);
-                    paramType = getTypeSignature(paramTypeName, paramTypeDataverseNameCanonical, functionDataverseName);
+                    paramType = getTypeSignature(paramTypeRecord, paramTypeName, FIELD_NAME_DATABASE_NAME,
+                            FIELD_NAME_DATAVERSE_NAME, functionDatabaseName, functionDataverseName);
                     break;
                 default:
                     throw new AsterixException(ErrorCode.METADATA_ERROR, paramTypeObject.getType().getTypeName());
@@ -229,8 +241,8 @@ public class FunctionTupleTranslator extends AbstractDatatypeTupleTranslator<Fun
         return paramTypes;
     }
 
-    private TypeSignature getTypeSignature(String typeName, String typeDataverseNameCanonical,
-            DataverseName functionDataverseName) throws AlgebricksException {
+    private TypeSignature getTypeSignature(ARecord record, String typeName, String dbFieldName, String dvFieldName,
+            String functionDatabaseName, DataverseName functionDataverseName) throws AlgebricksException {
         // back-compat: handle "any"
         if (BuiltinType.ANY.getTypeName().equals(typeName)) {
             return null; // == any
@@ -239,9 +251,22 @@ public class FunctionTupleTranslator extends AbstractDatatypeTupleTranslator<Fun
         if (builtinType != null) {
             return new TypeSignature(builtinType);
         }
-        DataverseName typeDataverseName = typeDataverseNameCanonical == null ? functionDataverseName
-                : DataverseName.createFromCanonicalForm(typeDataverseNameCanonical);
-        return new TypeSignature(typeDataverseName, typeName);
+
+        String typeDatabaseName;
+        DataverseName typeDataverseName;
+        String typeDataverseNameCanonical = getString(record, dvFieldName);
+        if (typeDataverseNameCanonical == null) {
+            typeDataverseName = functionDataverseName;
+            typeDatabaseName = functionDatabaseName;
+        } else {
+            typeDataverseName = DataverseName.createFromCanonicalForm(typeDataverseNameCanonical);
+            typeDatabaseName = getString(record, dbFieldName);
+            if (typeDatabaseName == null) {
+                typeDatabaseName = MetadataUtil.databaseFor(typeDataverseName);
+            }
+        }
+
+        return new TypeSignature(typeDatabaseName, typeDataverseName, typeName);
     }
 
     private Map<String, String> getResources(ARecord functionRecord, String resourcesFieldName) {
@@ -289,6 +314,11 @@ public class FunctionTupleTranslator extends AbstractDatatypeTupleTranslator<Fun
 
         // write the key in the first 2 fields of the tuple
         tupleBuilder.reset();
+        if (functionEntity.databaseNameIndex() >= 0) {
+            aString.setValue(function.getDatabaseName());
+            stringSerde.serialize(aString, tupleBuilder.getDataOutput());
+            tupleBuilder.addFieldEndOffset();
+        }
         aString.setValue(dataverseCanonicalName);
         stringSerde.serialize(aString, tupleBuilder.getDataOutput());
         tupleBuilder.addFieldEndOffset();
@@ -301,31 +331,37 @@ public class FunctionTupleTranslator extends AbstractDatatypeTupleTranslator<Fun
 
         // write the pay-load in the fourth field of the tuple
 
-        recordBuilder.reset(MetadataRecordTypes.FUNCTION_RECORDTYPE);
+        recordBuilder.reset(functionEntity.getRecordType());
 
+        if (functionEntity.databaseNameIndex() >= 0) {
+            fieldValue.reset();
+            aString.setValue(function.getDatabaseName());
+            stringSerde.serialize(aString, fieldValue.getDataOutput());
+            recordBuilder.addField(functionEntity.databaseNameIndex(), fieldValue);
+        }
         // write field 0
         fieldValue.reset();
         aString.setValue(dataverseCanonicalName);
         stringSerde.serialize(aString, fieldValue.getDataOutput());
-        recordBuilder.addField(MetadataRecordTypes.FUNCTION_ARECORD_DATAVERSENAME_FIELD_INDEX, fieldValue);
+        recordBuilder.addField(functionEntity.dataverseNameIndex(), fieldValue);
 
         // write field 1
         fieldValue.reset();
         aString.setValue(function.getName());
         stringSerde.serialize(aString, fieldValue.getDataOutput());
-        recordBuilder.addField(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTIONNAME_FIELD_INDEX, fieldValue);
+        recordBuilder.addField(functionEntity.functionNameIndex(), fieldValue);
 
         // write field 2
         fieldValue.reset();
         aString.setValue(String.valueOf(function.getArity()));
         stringSerde.serialize(aString, fieldValue.getDataOutput());
-        recordBuilder.addField(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_ARITY_FIELD_INDEX, fieldValue);
+        recordBuilder.addField(functionEntity.functionArityIndex(), fieldValue);
 
         // write field 3
         OrderedListBuilder listBuilder = new OrderedListBuilder();
         ArrayBackedValueStorage itemValue = new ArrayBackedValueStorage();
-        listBuilder.reset((AOrderedListType) MetadataRecordTypes.FUNCTION_RECORDTYPE
-                .getFieldTypes()[MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_PARAM_LIST_FIELD_INDEX]);
+        listBuilder.reset((AOrderedListType) functionEntity.getRecordType().getFieldTypes()[functionEntity
+                .functionParamListIndex()]);
         for (String p : function.getParameterNames()) {
             itemValue.reset();
             aString.setValue(p);
@@ -334,7 +370,7 @@ public class FunctionTupleTranslator extends AbstractDatatypeTupleTranslator<Fun
         }
         fieldValue.reset();
         listBuilder.write(fieldValue.getDataOutput(), true);
-        recordBuilder.addField(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_PARAM_LIST_FIELD_INDEX, fieldValue);
+        recordBuilder.addField(functionEntity.functionParamListIndex(), fieldValue);
 
         // write field 4
         // Note: return type's dataverse name is written later in the open part
@@ -342,55 +378,42 @@ public class FunctionTupleTranslator extends AbstractDatatypeTupleTranslator<Fun
         fieldValue.reset();
         aString.setValue(returnType != null ? returnType.getName() : "");
         stringSerde.serialize(aString, fieldValue.getDataOutput());
-        recordBuilder.addField(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_RETURN_TYPE_FIELD_INDEX, fieldValue);
+        recordBuilder.addField(functionEntity.functionReturnTypeIndex(), fieldValue);
 
         // write field 5
         fieldValue.reset();
         aString.setValue(function.isExternal() ? "" : function.getFunctionBody());
         stringSerde.serialize(aString, fieldValue.getDataOutput());
-        recordBuilder.addField(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_DEFINITION_FIELD_INDEX, fieldValue);
+        recordBuilder.addField(functionEntity.functionDefinitionIndex(), fieldValue);
 
         // write field 6
         fieldValue.reset();
         aString.setValue(function.getLanguage());
         stringSerde.serialize(aString, fieldValue.getDataOutput());
-        recordBuilder.addField(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_LANGUAGE_FIELD_INDEX, fieldValue);
+        recordBuilder.addField(functionEntity.functionLanguageIndex(), fieldValue);
 
         // write field 7
         fieldValue.reset();
         aString.setValue(function.getKind());
         stringSerde.serialize(aString, fieldValue.getDataOutput());
-        recordBuilder.addField(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_KIND_FIELD_INDEX, fieldValue);
+        recordBuilder.addField(functionEntity.functionKindIndex(), fieldValue);
 
         // write field 8
-        dependenciesListBuilder.reset((AOrderedListType) MetadataRecordTypes.FUNCTION_RECORDTYPE
-                .getFieldTypes()[MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_DEPENDENCIES_FIELD_INDEX]);
-        List<List<Triple<DataverseName, String, String>>> dependenciesList = function.getDependencies();
-        List<String> subNames = new ArrayList<>();
-        for (List<Triple<DataverseName, String, String>> dependencies : dependenciesList) {
+        dependenciesListBuilder.reset((AOrderedListType) functionEntity.getRecordType().getFieldTypes()[functionEntity
+                .functionDependenciesIndex()]);
+        List<List<DependencyFullyQualifiedName>> dependenciesList = function.getDependencies();
+        boolean writeDatabase = functionEntity.databaseNameIndex() >= 0;
+        for (List<DependencyFullyQualifiedName> dependencies : dependenciesList) {
             dependencyListBuilder.reset(listOfLists);
-            for (Triple<DataverseName, String, String> dependency : dependencies) {
-                dependencyNameListBuilder.reset(stringList);
-                subNames.clear();
-                getDependencySubNames(dependency, subNames);
-                for (String subName : subNames) {
-                    itemValue.reset();
-                    aString.setValue(subName);
-                    stringSerde.serialize(aString, itemValue.getDataOutput());
-                    dependencyNameListBuilder.addItem(itemValue);
-                }
-                itemValue.reset();
-                dependencyNameListBuilder.write(itemValue.getDataOutput(), true);
-                dependencyListBuilder.addItem(itemValue);
-
-            }
+            writeDeps(dependencyListBuilder, itemValue, dependencies, dependencyNameListBuilder, stringList,
+                    writeDatabase, aString, stringSerde);
             itemValue.reset();
             dependencyListBuilder.write(itemValue.getDataOutput(), true);
             dependenciesListBuilder.addItem(itemValue);
         }
         fieldValue.reset();
         dependenciesListBuilder.write(fieldValue.getDataOutput(), true);
-        recordBuilder.addField(MetadataRecordTypes.FUNCTION_ARECORD_FUNCTION_DEPENDENCIES_FIELD_INDEX, fieldValue);
+        recordBuilder.addField(functionEntity.functionDependenciesIndex(), fieldValue);
 
         writeOpenFields(function);
 
@@ -448,8 +471,8 @@ public class FunctionTupleTranslator extends AbstractDatatypeTupleTranslator<Fun
             if (paramType == null) {
                 nullSerde.serialize(ANull.NULL, itemValue.getDataOutput());
             } else {
-                writeTypeRecord(paramType.getDataverseName(), paramType.getName(), function.getDataverseName(),
-                        itemValue.getDataOutput());
+                writeTypeRecord(paramType.getDatabaseName(), paramType.getDataverseName(), paramType.getName(),
+                        function.getDatabaseName(), function.getDataverseName(), itemValue.getDataOutput());
             }
             listBuilder.addItem(itemValue);
         }
@@ -466,6 +489,16 @@ public class FunctionTupleTranslator extends AbstractDatatypeTupleTranslator<Fun
     protected void writeLibrary(Function function) throws HyracksDataException {
         if (!function.isExternal()) {
             return;
+        }
+
+        if (functionEntity.databaseNameIndex() >= 0) {
+            fieldName.reset();
+            aString.setValue(FIELD_NAME_LIBRARY_DATABASE_NAME);
+            stringSerde.serialize(aString, fieldName.getDataOutput());
+            fieldValue.reset();
+            aString.setValue(function.getLibraryDatabaseName());
+            stringSerde.serialize(aString, fieldValue.getDataOutput());
+            recordBuilder.addField(fieldName, fieldValue);
         }
 
         fieldName.reset();
@@ -507,8 +540,19 @@ public class FunctionTupleTranslator extends AbstractDatatypeTupleTranslator<Fun
             return;
         }
         DataverseName returnTypeDataverseName = returnType.getDataverseName();
-        if (returnTypeDataverseName == null || returnTypeDataverseName.equals(function.getDataverseName())) {
+        String returnTypeDatabaseName = returnType.getDatabaseName();
+        if (returnTypeDataverseName == null || (returnTypeDatabaseName.equals(function.getDatabaseName())
+                && returnTypeDataverseName.equals(function.getDataverseName()))) {
             return;
+        }
+        if (functionEntity.databaseNameIndex() >= 0) {
+            fieldName.reset();
+            aString.setValue(FIELD_NAME_RETURN_TYPE_DATABASE_NAME);
+            stringSerde.serialize(aString, fieldName.getDataOutput());
+            fieldValue.reset();
+            aString.setValue(returnTypeDatabaseName);
+            stringSerde.serialize(aString, fieldValue.getDataOutput());
+            recordBuilder.addField(fieldName, fieldValue);
         }
         fieldName.reset();
         aString.setValue(FIELD_NAME_RETURN_TYPE_DATAVERSE_NAME);
@@ -570,8 +614,9 @@ public class FunctionTupleTranslator extends AbstractDatatypeTupleTranslator<Fun
         propertyRecordBuilder.write(out, true);
     }
 
-    public void writeTypeRecord(DataverseName typeDataverseName, String typeName, DataverseName functionDataverseName,
-            DataOutput out) throws HyracksDataException {
+    public void writeTypeRecord(String typeDatabaseName, DataverseName typeDataverseName, String typeName,
+            String functionDatabaseName, DataverseName functionDataverseName, DataOutput out)
+            throws HyracksDataException {
         IARecordBuilder propertyRecordBuilder = new RecordBuilder();
         propertyRecordBuilder.reset(DefaultOpenFieldType.NESTED_OPEN_RECORD_TYPE);
 
@@ -585,8 +630,19 @@ public class FunctionTupleTranslator extends AbstractDatatypeTupleTranslator<Fun
         propertyRecordBuilder.addField(fieldName, fieldValue);
 
         // write field "DataverseName"
-        boolean skipTypeDataverseName = typeDataverseName == null || typeDataverseName.equals(functionDataverseName);
+        boolean skipTypeDataverseName = typeDataverseName == null
+                || (typeDatabaseName.equals(functionDatabaseName) && typeDataverseName.equals(functionDataverseName));
         if (!skipTypeDataverseName) {
+            if (functionEntity.databaseNameIndex() >= 0) {
+                fieldName.reset();
+                aString.setValue(FIELD_NAME_DATABASE_NAME);
+                stringSerde.serialize(aString, fieldName.getDataOutput());
+                fieldValue.reset();
+                aString.setValue(typeDatabaseName);
+                stringSerde.serialize(aString, fieldValue.getDataOutput());
+                propertyRecordBuilder.addField(fieldName, fieldValue);
+            }
+
             fieldName.reset();
             aString.setValue(FIELD_NAME_DATAVERSE_NAME);
             stringSerde.serialize(aString, fieldName.getDataOutput());

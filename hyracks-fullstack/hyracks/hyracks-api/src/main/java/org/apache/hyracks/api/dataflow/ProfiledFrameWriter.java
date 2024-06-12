@@ -18,8 +18,11 @@
  */
 package org.apache.hyracks.api.dataflow;
 
+import static org.apache.hyracks.api.job.profiling.NoOpOperatorStats.INVALID_ODID;
+
 import java.nio.ByteBuffer;
 
+import org.apache.hyracks.api.com.job.profiling.counters.Counter;
 import org.apache.hyracks.api.comm.FrameConstants;
 import org.apache.hyracks.api.comm.FrameHelper;
 import org.apache.hyracks.api.comm.IFrameWriter;
@@ -27,131 +30,100 @@ import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.job.profiling.IOperatorStats;
 import org.apache.hyracks.api.job.profiling.IStatsCollector;
+import org.apache.hyracks.api.job.profiling.NoOpOperatorStats;
 import org.apache.hyracks.api.job.profiling.OperatorStats;
 import org.apache.hyracks.api.job.profiling.counters.ICounter;
+import org.apache.hyracks.api.util.HyracksRunnable;
+import org.apache.hyracks.api.util.HyracksThrowingConsumer;
 import org.apache.hyracks.util.IntSerDeUtils;
 
-public class ProfiledFrameWriter implements IFrameWriter, IPassableTimer {
+public class ProfiledFrameWriter implements ITimedWriter {
 
     // The downstream data consumer of this writer.
     private final IFrameWriter writer;
-    private long frameStart = 0;
-    final ICounter timeCounter;
-    final ICounter tupleCounter;
-    final IStatsCollector collector;
-    final IOperatorStats stats;
-    final IOperatorStats parentStats;
+    protected IOperatorStats upstreamStats = NoOpOperatorStats.INSTANCE;
     private int minSz = Integer.MAX_VALUE;
     private int maxSz = -1;
     private long avgSz;
-    final String name;
+    private ICounter totalTime;
 
-    public ProfiledFrameWriter(IFrameWriter writer, IStatsCollector collector, String name, IOperatorStats stats,
-            IOperatorStats parentStats) {
+    public ProfiledFrameWriter(IFrameWriter writer) {
         this.writer = writer;
-        this.collector = collector;
-        this.name = name;
-        this.stats = stats;
-        this.parentStats = parentStats;
-        this.timeCounter = stats.getTimeCounter();
-        this.tupleCounter = parentStats != null ? parentStats.getTupleCounter() : null;
+        this.totalTime = new Counter("totalTime");
+    }
+
+    @Override
+    public void setUpstreamStats(IOperatorStats stats) {
+        this.upstreamStats = stats;
+    }
+
+    public static void timeMethod(HyracksRunnable r, ICounter c) throws HyracksDataException {
+        long nt = 0;
+        try {
+            nt = System.nanoTime();
+            r.run();
+        } finally {
+            c.update(System.nanoTime() - nt);
+        }
+    }
+
+    private void timeMethod(HyracksThrowingConsumer<ByteBuffer> c, ByteBuffer buffer) throws HyracksDataException {
+        long nt = 0;
+        try {
+            nt = System.nanoTime();
+            c.accept(buffer);
+        } finally {
+            totalTime.update(System.nanoTime() - nt);
+        }
     }
 
     @Override
     public final void open() throws HyracksDataException {
-        try {
-            startClock();
-            writer.open();
-        } finally {
-            stopClock();
+        timeMethod(writer::open, totalTime);
+    }
+
+    private void updateTupleStats(ByteBuffer buffer) {
+        int tupleCountOffset = FrameHelper.getTupleCountOffset(buffer.limit());
+        int tupleCount = IntSerDeUtils.getInt(buffer.array(), tupleCountOffset);
+        ICounter tupleCounter = upstreamStats.getTupleCounter();
+        long prevCount = tupleCounter.get();
+        for (int i = 0; i < tupleCount; i++) {
+            int tupleLen = getTupleLength(i, tupleCountOffset, buffer);
+            if (maxSz < tupleLen) {
+                maxSz = tupleLen;
+            }
+            if (minSz > tupleLen) {
+                minSz = tupleLen;
+            }
+            long prev = avgSz * prevCount;
+            avgSz = (prev + tupleLen) / (prevCount + 1);
+            prevCount++;
         }
+        upstreamStats.getMaxTupleSz().set(maxSz);
+        upstreamStats.getMinTupleSz().set(minSz);
+        upstreamStats.getAverageTupleSz().set(avgSz);
+        tupleCounter.update(tupleCount);
     }
 
     @Override
     public final void nextFrame(ByteBuffer buffer) throws HyracksDataException {
-        try {
-            int tupleCountOffset = FrameHelper.getTupleCountOffset(buffer.limit());
-            int tupleCount = IntSerDeUtils.getInt(buffer.array(), tupleCountOffset);
-            if (tupleCounter != null) {
-                long prevCount = tupleCounter.get();
-                for (int i = 0; i < tupleCount; i++) {
-                    int tupleLen = getTupleLength(i, tupleCountOffset, buffer);
-                    if (maxSz < tupleLen) {
-                        maxSz = tupleLen;
-                    }
-                    if (minSz > tupleLen) {
-                        minSz = tupleLen;
-                    }
-                    long prev = avgSz * prevCount;
-                    avgSz = (prev + tupleLen) / (prevCount + 1);
-                    prevCount++;
-                }
-                parentStats.getMaxTupleSz().set(maxSz);
-                parentStats.getMinTupleSz().set(minSz);
-                parentStats.getAverageTupleSz().set(avgSz);
-                tupleCounter.update(tupleCount);
-            }
-            startClock();
-            writer.nextFrame(buffer);
-        } finally {
-            stopClock();
-        }
+        updateTupleStats(buffer);
+        timeMethod(writer::nextFrame, buffer);
     }
 
     @Override
     public final void flush() throws HyracksDataException {
-        try {
-            startClock();
-            writer.flush();
-        } finally {
-            stopClock();
-        }
+        timeMethod(writer::flush, totalTime);
     }
 
     @Override
     public final void fail() throws HyracksDataException {
-        writer.fail();
+        timeMethod(writer::fail, totalTime);
     }
 
     @Override
     public void close() throws HyracksDataException {
-        try {
-            startClock();
-            writer.close();
-        } finally {
-            stopClock();
-        }
-    }
-
-    private void stopClock() {
-        pause();
-        collector.giveClock(this);
-    }
-
-    private void startClock() {
-        if (frameStart > 0) {
-            return;
-        }
-        frameStart = collector.takeClock(this);
-    }
-
-    @Override
-    public void resume() {
-        if (frameStart > 0) {
-            return;
-        }
-        long nt = System.nanoTime();
-        frameStart = nt;
-    }
-
-    @Override
-    public void pause() {
-        if (frameStart > 1) {
-            long nt = System.nanoTime();
-            long delta = nt - frameStart;
-            timeCounter.update(delta);
-            frameStart = -1;
-        }
+        timeMethod(writer::close, totalTime);
     }
 
     private int getTupleStartOffset(int tupleIndex, int tupleCountOffset, ByteBuffer buffer) {
@@ -172,11 +144,17 @@ public class ProfiledFrameWriter implements IFrameWriter, IPassableTimer {
             throws HyracksDataException {
         if (!(writer instanceof ProfiledFrameWriter)) {
             IStatsCollector statsCollector = ctx.getStatsCollector();
-            IOperatorStats stats = new OperatorStats(name);
+            IOperatorStats stats = new OperatorStats(name, INVALID_ODID);
             statsCollector.add(stats);
-            return new ProfiledFrameWriter(writer, ctx.getStatsCollector(), name, stats, null);
-
-        } else
+            return new ProfiledFrameWriter(writer);
+        } else {
             return writer;
+        }
     }
+
+    @Override
+    public long getTotalTime() {
+        return totalTime.get();
+    }
+
 }

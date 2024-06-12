@@ -42,6 +42,7 @@ import org.apache.asterix.app.nc.NCAppRuntimeContext;
 import org.apache.asterix.app.result.ResponsePrinter;
 import org.apache.asterix.common.exceptions.ErrorCode;
 import org.apache.asterix.common.metadata.DataverseName;
+import org.apache.asterix.common.metadata.MetadataUtil;
 import org.apache.asterix.external.feed.watch.WaitForStateSubscriber;
 import org.apache.asterix.external.operators.FeedIntakeOperatorNodePushable;
 import org.apache.asterix.metadata.declared.MetadataProvider;
@@ -53,6 +54,7 @@ import org.apache.hyracks.algebricks.common.constraints.AlgebricksAbsolutePartit
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.api.job.JobSpecification;
+import org.apache.hyracks.api.job.resource.IJobCapacityController;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -74,8 +76,9 @@ public class ActiveStatsTest {
     @Test
     public void refreshStatsTest() throws Exception {
         // Entities to be used
-        EntityId entityId =
-                new EntityId("MockExtension", DataverseName.createSinglePartName("MockDataverse"), "MockEntity");
+        DataverseName mockDataverse = DataverseName.createSinglePartName("MockDataverse");
+        String mockDatabase = MetadataUtil.databaseFor(mockDataverse);
+        EntityId entityId = new EntityId("MockExtension", mockDatabase, mockDataverse, "MockEntity");
         ActiveRuntimeId activeRuntimeId =
                 new ActiveRuntimeId(entityId, FeedIntakeOperatorNodePushable.class.getSimpleName(), 0);
         List<Dataset> datasetList = new ArrayList<>();
@@ -105,7 +108,7 @@ public class ActiveStatsTest {
                 .create(appCtx, Collections.emptyList(), sessionOutput,
                         extensionManager.getCompilationProvider(Language.SQLPP), appCtx.getStorageComponentProvider(),
                         new ResponsePrinter(sessionOutput));
-        MetadataProvider mdProvider = MetadataProvider.create(appCtx, null);
+        MetadataProvider mdProvider = MetadataProvider.createWithDefaultNamespace(appCtx);
         // Add event listener
         ActiveEntityEventsListener eventsListener = new DummyFeedEventsListener(statementExecutor, appCtx, null,
                 entityId, datasetList, partitionConstraint, FeedIntakeOperatorNodePushable.class.getSimpleName(),
@@ -135,8 +138,9 @@ public class ActiveStatsTest {
         TestUserActor user = new TestUserActor("Xikui", mdProvider, null);
         Action start = user.startActivity(eventsListener);
         startingSubscriber.sync();
-        activeJobNotificationHandler.notifyJobCreation(jobId, jobSpec);
-        activeJobNotificationHandler.notifyJobStart(jobId);
+        activeJobNotificationHandler.notifyJobCreation(jobId, jobSpec,
+                IJobCapacityController.JobSubmissionStatus.EXECUTE);
+        activeJobNotificationHandler.notifyJobStart(jobId, jobSpec);
         try {
             eventsListener.refreshStats(1000);
         } catch (HyracksDataException e) {
@@ -146,7 +150,7 @@ public class ActiveStatsTest {
         Assert.assertTrue(requestedStats.contains("N/A"));
         // Fake partition message and notify eventListener
         ActivePartitionMessage partitionMessage =
-                new ActivePartitionMessage(activeRuntimeId, jobId, Event.RUNTIME_REGISTERED, null);
+                new ActivePartitionMessage(activeRuntimeId, jobId, Event.RUNTIME_REGISTERED, null, "");
         partitionMessage.handle(appCtx);
         start.sync();
         if (start.hasFailed()) {

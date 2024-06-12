@@ -20,24 +20,27 @@
 package org.apache.asterix.optimizer.rules.cbo;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import org.apache.asterix.common.annotations.IndexedNLJoinExpressionAnnotation;
+import org.apache.asterix.common.annotations.SkipSecondaryIndexSearchExpressionAnnotation;
 import org.apache.asterix.metadata.entities.Index;
 import org.apache.commons.lang3.mutable.Mutable;
+import org.apache.commons.lang3.mutable.MutableBoolean;
 import org.apache.commons.lang3.mutable.MutableInt;
 import org.apache.commons.lang3.mutable.MutableObject;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.common.utils.Pair;
+import org.apache.hyracks.algebricks.common.utils.Quadruple;
+import org.apache.hyracks.algebricks.common.utils.Triple;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.base.IOptimizationContext;
+import org.apache.hyracks.algebricks.core.algebra.base.LogicalExpressionTag;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalOperatorTag;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import org.apache.hyracks.algebricks.core.algebra.base.OperatorAnnotations;
@@ -46,7 +49,6 @@ import org.apache.hyracks.algebricks.core.algebra.expressions.BroadcastExpressio
 import org.apache.hyracks.algebricks.core.algebra.expressions.ConstantExpression;
 import org.apache.hyracks.algebricks.core.algebra.expressions.HashJoinExpressionAnnotation;
 import org.apache.hyracks.algebricks.core.algebra.expressions.IExpressionAnnotation;
-import org.apache.hyracks.algebricks.core.algebra.expressions.VariableReferenceExpression;
 import org.apache.hyracks.algebricks.core.algebra.functions.AlgebricksBuiltinFunctions;
 import org.apache.hyracks.algebricks.core.algebra.functions.FunctionIdentifier;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractBinaryJoinOperator;
@@ -54,10 +56,15 @@ import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogi
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AssignOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.DataSourceScanOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.EmptyTupleSourceOperator;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.SelectOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.visitors.VariableUtilities;
+import org.apache.hyracks.algebricks.core.algebra.plan.ALogicalPlanImpl;
 import org.apache.hyracks.algebricks.core.algebra.prettyprint.IPlanPrettyPrinter;
+import org.apache.hyracks.algebricks.core.algebra.util.OperatorManipulationUtil;
 import org.apache.hyracks.algebricks.core.rewriter.base.IAlgebraicRewriteRule;
 import org.apache.hyracks.algebricks.core.rewriter.base.PhysicalOptimizationConfig;
+import org.apache.hyracks.api.exceptions.IWarningCollector;
+import org.apache.hyracks.api.exceptions.Warning;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -65,10 +72,34 @@ public class EnumerateJoinsRule implements IAlgebraicRewriteRule {
 
     private static final Logger LOGGER = LogManager.getLogger();
 
-    protected final JoinEnum joinEnum;
+    private final JoinEnum joinEnum;
+    private int leafInputNumber;
+    private List<ILogicalOperator> newJoinOps;
+    private List<JoinOperator> allJoinOps; // can be inner join or left outer join
+    // Will be in the order of the from clause. Important for position ordering when assigning bits to join expressions.
+    private List<ILogicalOperator> leafInputs;
+    private HashMap<LogicalVariable, Integer> varLeafInputIds;
+    private List<Triple<Integer, Integer, Boolean>> buildSets; // the first is the bits and the second is the number of tables.
+    private List<Quadruple<Integer, Integer, JoinOperator, Integer>> outerJoinsDependencyList;
+    private List<AssignOperator> assignOps;
+    private List<ILogicalExpression> assignJoinExprs; // These are the join expressions below the assign operator.
+
+    // The Distinct operators for each DataSourceScan operator (if applicable)
+    private HashMap<DataSourceScanOperator, ILogicalOperator> dataScanAndGroupByDistinctOps;
+
+    // The Distinct/GroupBy operator at root of the query tree (if exists)
+    private ILogicalOperator rootGroupByDistinctOp;
+
+    // The OrderBy operator at root of the query tree (if exists)
+    private ILogicalOperator rootOrderByOp;
+
+    private List<LogicalVariable> resultAndJoinVars = new ArrayList();
 
     public EnumerateJoinsRule(JoinEnum joinEnum) {
         this.joinEnum = joinEnum;
+        dataScanAndGroupByDistinctOps = new HashMap<>(); // initialized only once at the beginning of the rule
+        rootGroupByDistinctOp = null;
+        rootOrderByOp = null;
     }
 
     @Override
@@ -84,19 +115,40 @@ public class EnumerateJoinsRule implements IAlgebraicRewriteRule {
     @Override
     public boolean rewritePre(Mutable<ILogicalOperator> opRef, IOptimizationContext context)
             throws AlgebricksException {
+
         boolean cboMode = this.getCBOMode(context);
         boolean cboTestMode = this.getCBOTestMode(context);
+
         if (!(cboMode || cboTestMode)) {
             return false;
         }
+
         // If we reach here, then either cboMode or cboTestMode is true.
         // If cboTestMode is true, then we use predefined cardinalities for datasets for asterixdb regression tests.
         // If cboMode is true, then all datasets need to have samples, otherwise the check in doAllDataSourcesHaveSamples()
         // further below will return false.
         ILogicalOperator op = opRef.getValue();
-        if (!((op.getOperatorTag() == LogicalOperatorTag.INNERJOIN)
-                || ((op.getOperatorTag() == LogicalOperatorTag.DISTRIBUTE_RESULT)))) {
+        if (!(joinClause(op) || ((op.getOperatorTag() == LogicalOperatorTag.DISTRIBUTE_RESULT)))) {
             return false;
+        }
+
+        if (op.getOperatorTag() == LogicalOperatorTag.DISTRIBUTE_RESULT) {
+            // If cboMode or cboTestMode is true, identify each DistinctOp or GroupByOp for the corresponding DataScanOp
+            getDistinctOpsForJoinNodes(op, context);
+
+            // Find the order by op, so we can annotate cost/cards
+            findOrderByOp(op);
+
+            // Find the topmost assign, so we can find all the final projected variables.
+            ILogicalOperator tmp = op;
+
+            while (tmp.getOperatorTag() != LogicalOperatorTag.EMPTYTUPLESOURCE) {
+                if (tmp.getOperatorTag().equals(LogicalOperatorTag.ASSIGN)) {
+                    addAllAssignExprVars(resultAndJoinVars, (AssignOperator) tmp);
+                    break;
+                }
+                tmp = tmp.getInputs().get(0).getValue();
+            }
         }
 
         // if this join has already been seen before, no need to apply the rule again
@@ -104,86 +156,183 @@ public class EnumerateJoinsRule implements IAlgebraicRewriteRule {
             return false;
         }
 
-        List<ILogicalOperator> joinOps = new ArrayList<>();
-        List<ILogicalOperator> internalEdges = new ArrayList<>();
-        HashMap<EmptyTupleSourceOperator, ILogicalOperator> joinLeafInputsHashMap = new HashMap<>();
-        // The data scan operators. Will be in the order of the from clause.
-        // Important for position ordering when assigning bits to join expressions.
-        List<Pair<EmptyTupleSourceOperator, DataSourceScanOperator>> emptyTupleAndDataSourceOps = new ArrayList<>();
-        HashMap<DataSourceScanOperator, EmptyTupleSourceOperator> dataSourceEmptyTupleHashMap = new HashMap<>();
-
+        //joinOps = new ArrayList<>();
+        allJoinOps = new ArrayList<>();
+        newJoinOps = new ArrayList<>();
+        leafInputs = new ArrayList<>();
+        varLeafInputIds = new HashMap<>();
+        outerJoinsDependencyList = new ArrayList<>();
+        assignOps = new ArrayList<>();
+        assignJoinExprs = new ArrayList<>();
+        buildSets = new ArrayList<>();
         IPlanPrettyPrinter pp = context.getPrettyPrinter();
         printPlan(pp, (AbstractLogicalOperator) op, "Original Whole plan1");
-        boolean canTransform = getJoinOpsAndLeafInputs(op, emptyTupleAndDataSourceOps, joinLeafInputsHashMap,
-                dataSourceEmptyTupleHashMap, internalEdges, joinOps);
+        leafInputNumber = 0;
+        boolean canTransform = getJoinOpsAndLeafInputs(op);
 
         if (!canTransform) {
             return false;
         }
 
-        // if this happens, something in the input plan is not acceptable to the new code.
-        if (emptyTupleAndDataSourceOps.size() != joinLeafInputsHashMap.size()) {
-            throw new IllegalStateException(
-                    "ETS " + emptyTupleAndDataSourceOps.size() + " != LI " + joinLeafInputsHashMap.size());
-        }
+        collectJoinConditionsVariables(); // will be used for determining which variables will be projected from the base levels
+
+        convertOuterJoinstoJoinsIfPossible(outerJoinsDependencyList);
 
         printPlan(pp, (AbstractLogicalOperator) op, "Original Whole plan2");
+        int numberOfFromTerms = leafInputs.size();
 
-        int numberOfFromTerms = emptyTupleAndDataSourceOps.size();
+        if (LOGGER.isTraceEnabled()) {
+            String viewInPlan = new ALogicalPlanImpl(opRef).toString(); //useful when debugging
+            LOGGER.trace("viewInPlan");
+            LOGGER.trace(viewInPlan);
+        }
 
-        joinEnum.initEnum((AbstractLogicalOperator) op, cboMode, cboTestMode, numberOfFromTerms,
-                emptyTupleAndDataSourceOps, joinLeafInputsHashMap, dataSourceEmptyTupleHashMap, internalEdges, joinOps,
-                context);
+        if (buildSets.size() > 1) {
+            buildSets.sort(Comparator.comparingDouble(o -> o.second)); // sort on the number of tables in each set
+            // we need to build the smaller sets first. So we need to find these first.
+        }
+        joinEnum.initEnum((AbstractLogicalOperator) op, cboMode, cboTestMode, numberOfFromTerms, leafInputs, allJoinOps,
+                assignOps, outerJoinsDependencyList, buildSets, varLeafInputIds, dataScanAndGroupByDistinctOps,
+                rootGroupByDistinctOp, rootOrderByOp, resultAndJoinVars, context);
 
         if (cboMode) {
-            if (!doAllDataSourcesHaveSamples(emptyTupleAndDataSourceOps, context)) {
+            if (!doAllDataSourcesHaveSamples(leafInputs, context)) {
                 return false;
             }
         }
 
-        if (internalEdges.size() > 0) {
-            pushAssignsIntoLeafInputs(joinLeafInputsHashMap, internalEdges);
+        printLeafPlans(pp, leafInputs, "Inputs1");
+
+        if (assignOps.size() > 0) {
+            pushAssignsIntoLeafInputs(pp, leafInputs, assignOps, assignJoinExprs);
         }
 
-        printPlan(pp, (AbstractLogicalOperator) op, "Original Whole plan3");
-        int cheapestPlan = joinEnum.enumerateJoins();
-        printPlan(pp, (AbstractLogicalOperator) op, "After join enumeration. Must return same plan??");
+        printLeafPlans(pp, leafInputs, "Inputs2");
+
+        int cheapestPlan = joinEnum.enumerateJoins(); // MAIN CALL INTO CBO
         if (cheapestPlan == PlanNode.NO_PLAN) {
             return false;
         }
 
         PlanNode cheapestPlanNode = joinEnum.allPlans.get(cheapestPlan);
 
+        generateHintWarnings();
+
         if (numberOfFromTerms > 1) {
-            checkForMultipleUsesOfVariablesInJoinPreds(cheapestPlanNode, joinLeafInputsHashMap, context);
-            buildNewTree(cheapestPlanNode, joinLeafInputsHashMap, joinOps, new MutableInt(0));
-            printPlan(pp, (AbstractLogicalOperator) joinOps.get(0), "New Whole Plan after buildNewTree 1");
-            ILogicalOperator root = addConstantInternalEdgesAtTheTop(joinOps.get(0), internalEdges);
-            printPlan(pp, (AbstractLogicalOperator) joinOps.get(0), "New Whole Plan after buildNewTree 2");
+            getNewJoinOps(cheapestPlanNode, allJoinOps);
+            if (allJoinOps.size() != newJoinOps.size()) {
+                return false; // there are some cases such as R OJ S on true. Here there is an OJ predicate but the code in findJoinConditions
+                // in JoinEnum does not capture this. Will fix later. Just bail for now.
+            }
+            buildNewTree(cheapestPlanNode, newJoinOps, new MutableInt(0), context);
+            opRef.setValue(newJoinOps.get(0));
+
+            if (assignOps.size() > 0) {
+                for (int i = assignOps.size() - 1; i >= 0; i--) {
+                    MutableBoolean removed = new MutableBoolean(false);
+                    removed.setFalse();
+                    pushAssignsAboveJoins(newJoinOps.get(0), assignOps.get(i), assignJoinExprs.get(i), removed);
+                    context.computeAndSetTypeEnvironmentForOperator(newJoinOps.get(i));
+                    context.computeAndSetTypeEnvironmentForOperator(assignOps.get(i));
+                    if (removed.isTrue()) {
+                        assignOps.remove(i);
+                    }
+                }
+            }
+
+            printPlan(pp, (AbstractLogicalOperator) newJoinOps.get(0), "New Whole Plan after buildNewTree 1");
+            ILogicalOperator root = addRemainingAssignsAtTheTop(newJoinOps.get(0), assignOps);
+            printPlan(pp, (AbstractLogicalOperator) newJoinOps.get(0), "New Whole Plan after buildNewTree 2");
             printPlan(pp, (AbstractLogicalOperator) root, "New Whole Plan after buildNewTree");
+
             // this will be the new root
             opRef.setValue(root);
+
+            if (LOGGER.isTraceEnabled()) {
+                String viewOutPlan = new ALogicalPlanImpl(opRef).toString(); //useful when debugging
+                LOGGER.trace("viewOutPlan");
+                LOGGER.trace(viewOutPlan);
+            }
+
             if (LOGGER.isTraceEnabled()) {
                 LOGGER.trace("---------------------------- Printing Leaf Inputs");
-                printLeafPlans(pp, joinLeafInputsHashMap);
+                printLeafPlans(pp, leafInputs, "Inputs");
                 // print joins starting from the bottom
-                for (int i = joinOps.size() - 1; i >= 0; i--) {
-                    printPlan(pp, (AbstractLogicalOperator) joinOps.get(i), "join " + i);
+                for (int i = newJoinOps.size() - 1; i >= 0; i--) {
+                    printPlan(pp, (AbstractLogicalOperator) newJoinOps.get(i), "join " + i);
                 }
-                printPlan(pp, (AbstractLogicalOperator) joinOps.get(0), "New Whole Plan");
+                printPlan(pp, (AbstractLogicalOperator) newJoinOps.get(0), "New Whole Plan");
                 printPlan(pp, (AbstractLogicalOperator) root, "New Whole Plan");
             }
-
             // turn of this rule for all joins in this set (subtree)
-            for (ILogicalOperator joinOp : joinOps) {
+            for (ILogicalOperator joinOp : newJoinOps) {
                 context.addToDontApplySet(this, joinOp);
             }
-
         } else {
-            buildNewTree(cheapestPlanNode, joinLeafInputsHashMap);
+            buildNewTree(cheapestPlanNode);
         }
-
+        context.computeAndSetTypeEnvironmentForOperator(op);
         return true;
+    }
+
+    private void collectJoinConditionsVariables() {
+        for (JoinOperator jOp : allJoinOps) {
+            AbstractBinaryJoinOperator joinOp = jOp.getAbstractJoinOp();
+            ILogicalExpression expr = joinOp.getCondition().getValue();
+            List<LogicalVariable> vars = new ArrayList<>();
+            expr.getUsedVariables(vars);
+            resultAndJoinVars.addAll(vars); // collect all the variables used in join expressions. These will be projected from the base level
+        }
+    }
+
+    private void addAllAssignExprVars(List<LogicalVariable> resultAndJoinVars, AssignOperator op) {
+        for (Mutable<ILogicalExpression> exp : op.getExpressions()) {
+            List<LogicalVariable> vars = new ArrayList<>();
+            exp.getValue().getUsedVariables(vars);
+            resultAndJoinVars.addAll(vars);
+        }
+    }
+
+    private void pushAssignsAboveJoins(ILogicalOperator op, AssignOperator aOp, ILogicalExpression jexpr,
+            MutableBoolean removed) {
+        System.out.println("op " + op.toString());
+        if (!op.getInputs().isEmpty()) {
+            for (int i = 0; i < op.getInputs().size(); i++) {
+                ILogicalOperator oper = op.getInputs().get(i).getValue();
+                if (joinClause(oper)) {
+                    AbstractBinaryJoinOperator abOp = (AbstractBinaryJoinOperator) oper;
+                    ILogicalExpression expr = abOp.getCondition().getValue();
+                    if (expr.equals(jexpr)) {
+                        op.getInputs().get(i).setValue(aOp);
+                        aOp.getInputs().get(0).setValue(oper);
+                        removed.setTrue();
+                        return;
+                    }
+                }
+                pushAssignsAboveJoins(oper, aOp, jexpr, removed);
+            }
+        }
+    }
+
+    private boolean joinClause(ILogicalOperator op) {
+        if (op.getOperatorTag() == LogicalOperatorTag.INNERJOIN)
+            return true;
+        if (op.getOperatorTag() == LogicalOperatorTag.LEFTOUTERJOIN)
+            return true;
+        return false;
+    }
+
+    private void generateHintWarnings() {
+        for (Map.Entry<IExpressionAnnotation, Warning> mapElement : joinEnum.joinHints.entrySet()) {
+            IExpressionAnnotation annotation = mapElement.getKey();
+            Warning warning = mapElement.getValue();
+            if (warning != null) {
+                IWarningCollector warningCollector = joinEnum.optCtx.getWarningCollector();
+                if (warningCollector.shouldWarn()) {
+                    warningCollector.warn(warning);
+                }
+            }
+        }
     }
 
     private boolean getCBOMode(IOptimizationContext context) {
@@ -222,31 +371,269 @@ public class EnumerateJoinsRule implements IAlgebraicRewriteRule {
     /**
      * Check to see if there is only one assign here and nothing below that other than a join.
      * have not seen cases where there is more than one assign in a leafinput.
-    */
-    private boolean onlyOneAssign(ILogicalOperator nextOp) {
-        if (nextOp.getOperatorTag() != LogicalOperatorTag.ASSIGN) {
-            return false;
+     */
+    private boolean onlyOneAssign(ILogicalOperator op, List<AssignOperator> assignOps) {
+        if (op.getOperatorTag() == LogicalOperatorTag.ASSIGN) {
+            AssignOperator aOp = (AssignOperator) op;
+            assignOps.add(aOp);
+            op = op.getInputs().get(0).getValue();
         }
-        List<Mutable<ILogicalOperator>> nextOpInputs = nextOp.getInputs();
-        return nextOpInputs.get(0).getValue().getOperatorTag() == LogicalOperatorTag.INNERJOIN;
+        return (joinClause(op));
     }
 
-    ILogicalOperator findSelect(ILogicalOperator op) {
+    // An internal edge must contain only assigns followed by an inner join. Not sure if there will be other ops between joins
+    private int numVarRefExprs(AssignOperator aOp) {
+        List<Mutable<ILogicalExpression>> exprs = aOp.getExpressions();
+        int count = 0;
+        for (Mutable<ILogicalExpression> exp : exprs) {
+            if (exp.getValue().getExpressionTag() == LogicalExpressionTag.FUNCTION_CALL) {
+                AbstractFunctionCallExpression afcExpr = (AbstractFunctionCallExpression) exp.getValue();
+                for (Mutable<ILogicalExpression> arg : afcExpr.getArguments()) {
+                    if (arg.getValue().getExpressionTag() == LogicalExpressionTag.VARIABLE) {
+                        count++;
+                    }
+                }
+            }
+        }
+
+        return count;
+    }
+
+    private boolean onlyAssigns(ILogicalOperator op, List<AssignOperator> assignOps) {
+        while (op.getOperatorTag() == LogicalOperatorTag.ASSIGN) {
+            AssignOperator aOp = (AssignOperator) op;
+            int count = numVarRefExprs(aOp);
+            if (count > 1) {
+                return false;
+            }
+            assignOps.add(aOp);
+            assignJoinExprs.add(joinExprFound(op));
+            op = op.getInputs().get(0).getValue();
+        }
+        return (joinClause(op));
+    }
+
+    private ILogicalOperator skipPastAssigns(ILogicalOperator nextOp) {
+        while (nextOp.getOperatorTag() == LogicalOperatorTag.ASSIGN) {
+            nextOp = nextOp.getInputs().get(0).getValue();
+        }
+        return nextOp;
+    }
+
+    private ILogicalOperator findSelectOrUnnestOrDataScan(ILogicalOperator op) {
         LogicalOperatorTag tag;
+        ILogicalOperator currentOp = op;
         while (true) {
-            if (op.getInputs().size() > 1) {
+            if (currentOp.getInputs().size() > 1) {
                 return null; // Assuming only a linear plan for single table queries (as leafInputs are linear).
             }
-            tag = op.getOperatorTag();
+            tag = currentOp.getOperatorTag();
             if (tag == LogicalOperatorTag.EMPTYTUPLESOURCE) {
                 return null; // if this happens, there is nothing we can do in CBO code since there is no datasourcescan
             }
-            if (tag == LogicalOperatorTag.SELECT) { // there must be a select operator for CBO to do any optimization.
-                return op;
+            if ((tag == LogicalOperatorTag.SELECT) || (tag == LogicalOperatorTag.UNNEST)
+                    || (tag == LogicalOperatorTag.DATASOURCESCAN)) {
+                return currentOp;
             }
 
-            op = op.getInputs().get(0).getValue();
+            currentOp = currentOp.getInputs().get(0).getValue();
         }
+    }
+
+    private void getDistinctOpsForJoinNodes(ILogicalOperator op, IOptimizationContext context) {
+        if (op.getOperatorTag() != LogicalOperatorTag.DISTRIBUTE_RESULT) {
+            return;
+        }
+        ILogicalOperator grpByDistinctOp = null; // null indicates no DistinctOp or GroupByOp
+        DataSourceScanOperator scanOp;
+        ILogicalOperator currentOp = op;
+        while (true) {
+            LogicalOperatorTag tag = currentOp.getOperatorTag();
+            if (tag == LogicalOperatorTag.DISTINCT || tag == LogicalOperatorTag.GROUP) {
+                grpByDistinctOp = currentOp; // GroupByOp Variable expressions (if any) take over DistinctOp ones
+                this.rootGroupByDistinctOp = grpByDistinctOp;
+            } else if (tag == LogicalOperatorTag.INNERJOIN || tag == LogicalOperatorTag.LEFTOUTERJOIN) {
+                if (grpByDistinctOp != null) {
+                    Pair<List<LogicalVariable>, List<AbstractFunctionCallExpression>> distinctVarsFuncPair =
+                            OperatorUtils.getGroupByDistinctVarFuncPair(grpByDistinctOp);
+                    for (int i = 0; i < currentOp.getInputs().size(); i++) {
+                        ILogicalOperator nextOp = currentOp.getInputs().get(i).getValue();
+                        OperatorUtils.createDistinctOpsForJoinNodes(nextOp, distinctVarsFuncPair, context,
+                                dataScanAndGroupByDistinctOps);
+                    }
+                }
+                return;
+            } else if (tag == LogicalOperatorTag.DATASOURCESCAN) { // single table queries
+                scanOp = (DataSourceScanOperator) currentOp;
+                // will work for any attributes present in GroupByOp or DistinctOp
+                if (grpByDistinctOp != null) {
+                    dataScanAndGroupByDistinctOps.put(scanOp, grpByDistinctOp);
+                }
+                return;
+            }
+            currentOp = currentOp.getInputs().get(0).getValue();
+            if (currentOp.getOperatorTag() == LogicalOperatorTag.EMPTYTUPLESOURCE) {
+                return; // if this happens, there is nothing we can do in CBO code since there is no DataSourceScan
+            }
+        }
+    }
+
+    private void findOrderByOp(ILogicalOperator op) {
+        ILogicalOperator currentOp = op;
+        if (currentOp.getOperatorTag() != LogicalOperatorTag.DISTRIBUTE_RESULT) {
+            return;
+        }
+
+        while (currentOp != null) {
+            LogicalOperatorTag tag = currentOp.getOperatorTag();
+            if (tag == LogicalOperatorTag.ORDER) {
+                this.rootOrderByOp = currentOp;
+                return;
+            }
+            if (tag == LogicalOperatorTag.EMPTYTUPLESOURCE) {
+                return;
+            }
+            currentOp = currentOp.getInputs().get(0).getValue();
+        }
+    }
+
+    private int getLeafInputId(LogicalVariable lv) {
+        if (varLeafInputIds.containsKey(lv))
+            return varLeafInputIds.get(lv);
+        return -1;
+    }
+
+    private boolean addLeafInputNumbersToVars(ILogicalOperator op) throws AlgebricksException {
+        HashSet<LogicalVariable> opVars = new HashSet<>();
+        VariableUtilities.getLiveVariables(op, opVars);
+        for (LogicalVariable lv : opVars) {
+            int id = getLeafInputId(lv);
+            if ((id != -1) && (id != leafInputNumber)) {
+                return false; // this should not happen
+                // the same variable in different leaf Inputs is problematic for CBO
+            }
+            varLeafInputIds.put(lv, leafInputNumber);
+        }
+        return true;
+    }
+
+    private boolean foundVar(LogicalVariable inputLV, ILogicalOperator op) throws AlgebricksException {
+        HashSet<LogicalVariable> opVars = new HashSet<>();
+        VariableUtilities.getLiveVariables(op, opVars);
+        if (opVars.contains(inputLV)) { // note that this will fail if there variables from different leafInputs
+            return true;
+        }
+        return false;
+    }
+
+    // dependencylist is  first, second, op
+    // If we have R outer join S, first is the null extending table as in R, null
+    // In this case, if S is to joined, then R must be present. So S depends on R.
+    // If we have a case of (first, second, LOJ_operator) = (R_leaf_input_id, S_leaf_input_id, LOJop),
+    // and another (S_leaf_input_id, ..., joinOp),
+    // OR (..., S_leaf_input_id, joinOp) then the LOJ can be converted to a join!!
+    private void convertOuterJoinstoJoinsIfPossible(
+            List<Quadruple<Integer, Integer, JoinOperator, Integer>> outerJoinsDependencyList) {
+        int i, j;
+        boolean changes = true;
+        while (changes) {
+            changes = false;
+            for (i = 0; i < outerJoinsDependencyList.size(); i++) {
+                Quadruple<Integer, Integer, JoinOperator, Integer> tr1 = outerJoinsDependencyList.get(i);
+                if (tr1.getThird().getOuterJoin()) {
+                    for (j = 0; j < outerJoinsDependencyList.size(); j++) {
+                        Quadruple<Integer, Integer, JoinOperator, Integer> tr2 = outerJoinsDependencyList.get(j);
+                        if ((i != j) && !(tr2.getThird().getOuterJoin())) {
+                            if ((tr1.getSecond().equals(tr2.getFirst())) || (tr1.getSecond().equals(tr2.getSecond()))) {
+                                outerJoinsDependencyList.get(i).getThird().setOuterJoin(false);
+                                changes = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // now remove all joins from the list, as we do not need them anymore! We only need the outer joins
+        for (i = outerJoinsDependencyList.size() - 1; i >= 0; i--) {
+            if (!outerJoinsDependencyList.get(i).getThird().getOuterJoin()) { // not an outerjoin
+                outerJoinsDependencyList.remove(i);
+            }
+        }
+
+        if (outerJoinsDependencyList.size() == 0) {
+            for (i = buildSets.size() - 1; i >= 0; i--) {
+                buildSets.remove(i); // no need for buildSets if there are no OJs.
+            }
+        }
+    }
+
+    // Each outer join will create one set of dependencies. The right side depends on the left side.
+    private boolean buildDependencyList(ILogicalOperator op, JoinOperator jO,
+            List<Quadruple<Integer, Integer, JoinOperator, Integer>> outerJoinsDependencyList, int rightSideBits)
+            throws AlgebricksException {
+        AbstractBinaryJoinOperator outerJoinOp = (AbstractBinaryJoinOperator) op;
+        ILogicalOperator leftOp = op.getInputs().get(0).getValue();
+        ILogicalExpression expr = outerJoinOp.getCondition().getValue();
+        int leftSideExprBits, rightSideExprBits;
+        List<LogicalVariable> joinExprVars;
+        List<Mutable<ILogicalExpression>> conjs = new ArrayList<>();
+        if (expr.splitIntoConjuncts(conjs)) {
+            for (Mutable<ILogicalExpression> conj : conjs) {
+                joinExprVars = new ArrayList<>();
+                leftSideExprBits = 0;
+                rightSideExprBits = 0;
+                conj.getValue().getUsedVariables(joinExprVars);
+                for (LogicalVariable lv : joinExprVars) {
+                    int id = getLeafInputId(lv);
+                    if (id != -1) {
+                        if (foundVar(lv, leftOp)) {
+                            leftSideExprBits |= 1 << (id - 1);
+                        } else {
+                            rightSideExprBits |= 1 << (id - 1);
+                        }
+                    }
+                }
+                if (leftSideExprBits != 0 && rightSideExprBits != 0) {// avoid expressions like true
+                    outerJoinsDependencyList.add(new Quadruple(leftSideExprBits, rightSideBits, jO, 0));
+                }
+            }
+        } else {
+            leftSideExprBits = 0;
+            rightSideExprBits = 0;
+            joinExprVars = new ArrayList<>();
+            expr.getUsedVariables(joinExprVars);
+            for (LogicalVariable lv : joinExprVars) {
+                int id = getLeafInputId(lv);
+                if (id != -1) {
+                    if (foundVar(lv, leftOp)) {
+                        leftSideExprBits |= 1 << (id - 1);
+                    } else {
+                        rightSideExprBits |= 1 << (id - 1);
+                    }
+                }
+            }
+            if (leftSideExprBits != 0 && rightSideExprBits != 0) {// avoid expressions like true
+                outerJoinsDependencyList.add(new Quadruple(leftSideExprBits, rightSideBits, jO, 0));
+            }
+        }
+        return true;
+    }
+
+    private ILogicalExpression joinExprFound(ILogicalOperator op) {
+        if (!op.getInputs().isEmpty()) {
+            for (int i = 0; i < op.getInputs().size(); i++) {
+                ILogicalOperator oper = op.getInputs().get(i).getValue();
+                if (joinClause(oper)) {
+                    AbstractBinaryJoinOperator abOp = (AbstractBinaryJoinOperator) oper;
+                    return abOp.getCondition().getValue();
+                }
+                return joinExprFound(oper);
+            }
+        } else {
+            return null;
+        }
+        return null;
     }
 
     /**
@@ -254,66 +641,82 @@ public class EnumerateJoinsRule implements IAlgebraicRewriteRule {
      * join operators but switch the leafInputs (see buildNewTree). The whole scheme is based on the assumption that the
      * leafInputs can be switched. The various data structures make the leafInputs accessible efficiently.
      */
-    private boolean getJoinOpsAndLeafInputs(ILogicalOperator op,
-            List<Pair<EmptyTupleSourceOperator, DataSourceScanOperator>> emptyTupleAndDataSourceOps,
-            HashMap<EmptyTupleSourceOperator, ILogicalOperator> joinLeafInputsHashMap,
-            HashMap<DataSourceScanOperator, EmptyTupleSourceOperator> dataSourceEmptyTupleHashMap,
-            List<ILogicalOperator> internalEdges, List<ILogicalOperator> joinOps) {
+    private boolean getJoinOpsAndLeafInputs(ILogicalOperator op) throws AlgebricksException {
+        if (joinClause(op)) {
+            JoinOperator jO = new JoinOperator((AbstractBinaryJoinOperator) op);
+            allJoinOps.add(jO);
+            if (op.getOperatorTag() == LogicalOperatorTag.LEFTOUTERJOIN) {
+                jO.setOuterJoin(true);
+            }
 
-        if (op.getOperatorTag() == LogicalOperatorTag.LEFTOUTERJOIN) {
-            return false;
-        }
-
-        if (op.getOperatorTag() == LogicalOperatorTag.INNERJOIN) {
-            joinOps.add(op);
+            int firstLeafInputNumber, lastLeafInputNumber;
+            int k = 0;
             for (int i = 0; i < 2; i++) {
                 ILogicalOperator nextOp = op.getInputs().get(i).getValue();
-                boolean canTransform = getJoinOpsAndLeafInputs(nextOp, emptyTupleAndDataSourceOps,
-                        joinLeafInputsHashMap, dataSourceEmptyTupleHashMap, internalEdges, joinOps);
+                firstLeafInputNumber = leafInputNumber + 1; // we are interested in the 2nd input only
+                boolean canTransform = getJoinOpsAndLeafInputs(nextOp);
                 if (!canTransform) {
                     return false;
                 }
+                lastLeafInputNumber = leafInputNumber; // we are interested in the 2nd input only
+                k = 0;
+                // now we know the leafInput numbers that occurred on the right side of this join.
+                //if ((op.getOperatorTag() == LogicalOperatorTag.LEFTOUTERJOIN) && (i == 1)) {
+                if ((joinClause(op)) && (i == 1)) {
+                    for (int j = firstLeafInputNumber; j <= lastLeafInputNumber; j++) {
+                        k |= 1 << (j - 1);
+                    }
+                    // buildSets are only for outerjoins.
+                    if ((op.getOperatorTag() == LogicalOperatorTag.LEFTOUTERJOIN)
+                            && (firstLeafInputNumber < lastLeafInputNumber)) { // if more is than one leafInput, only then buildSets make sense.
+                        buildSets.add(new Triple<>(k, lastLeafInputNumber - firstLeafInputNumber + 1, true)); // convert the second to boolean later
+                    }
+                    boolean ret = buildDependencyList(op, jO, outerJoinsDependencyList, k);
+                    if (!ret) {
+                        return false;
+                    }
+                }
             }
         } else {
+            if (op.getOperatorTag() == LogicalOperatorTag.GROUP) { // cannot handle group by's in leaf Inputs.
+                return false;
+            }
             Pair<EmptyTupleSourceOperator, DataSourceScanOperator> etsDataSource = containsLeafInputOnly(op);
             if (etsDataSource != null) { // a leaf input
                 EmptyTupleSourceOperator etsOp = etsDataSource.first;
                 DataSourceScanOperator dataSourceOp = etsDataSource.second;
-                emptyTupleAndDataSourceOps.add(new Pair<>(etsOp, dataSourceOp));
                 if (op.getOperatorTag().equals(LogicalOperatorTag.DISTRIBUTE_RESULT)) {// single table query
-                    ILogicalOperator selectOp = findSelect(op);
+                    ILogicalOperator selectOp = findSelectOrUnnestOrDataScan(op);
                     if (selectOp == null) {
                         return false;
                     } else {
-                        joinLeafInputsHashMap.put(etsOp, selectOp);
+                        leafInputs.add(selectOp);
                     }
                 } else {
-                    joinLeafInputsHashMap.put(etsOp, op);
+                    leafInputNumber++;
+                    leafInputs.add(op);
+                    if (!addLeafInputNumbersToVars(op)) {
+                        return false;
+                    }
                 }
-                dataSourceEmptyTupleHashMap.put(dataSourceOp, etsOp);
             } else { // This must be an internal edge
-                if (onlyOneAssign(op)) {
-                    // currently, will handle only assign statement and nothing else in an internal Edge.
-                    // we can lift this restriction later if the need arises. This just makes some code easier.
-                    internalEdges.add(op);
-                    boolean canTransform =
-                            getJoinOpsAndLeafInputs(op.getInputs().get(0).getValue(), emptyTupleAndDataSourceOps,
-                                    joinLeafInputsHashMap, dataSourceEmptyTupleHashMap, internalEdges, joinOps);
+                if (onlyAssigns(op, assignOps)) {
+                    ILogicalOperator skipAssisgnsOp = skipPastAssigns(op);
+                    boolean canTransform = getJoinOpsAndLeafInputs(skipAssisgnsOp);
                     if (!canTransform) {
                         return false;
                     }
-
-                    //internalEdges.add(op); // better to store the parent; do this soon.
                 } else {
                     return false;
                 }
             }
         }
-
         return true;
     }
 
     private void addCardCostAnnotations(ILogicalOperator op, PlanNode plan) {
+        if (op == null)
+            return;
         op.getAnnotations().put(OperatorAnnotations.OP_OUTPUT_CARDINALITY,
                 (double) Math.round(plan.getJoinNode().getCardinality() * 100) / 100);
         op.getAnnotations().put(OperatorAnnotations.OP_COST_TOTAL,
@@ -348,7 +751,7 @@ public class EnumerateJoinsRule implements IAlgebraicRewriteRule {
             }
             op = op.getInputs().get(0).getValue();
         }
-        return origOp;
+        return null;
     }
 
     private void removeJoinAnnotations(AbstractFunctionCallExpression afcExpr) {
@@ -357,7 +760,7 @@ public class EnumerateJoinsRule implements IAlgebraicRewriteRule {
         afcExpr.removeAnnotation(HashJoinExpressionAnnotation.class);
     }
 
-    private void setAnnotation(AbstractFunctionCallExpression afcExpr, IExpressionAnnotation anno) {
+    protected static void setAnnotation(AbstractFunctionCallExpression afcExpr, IExpressionAnnotation anno) {
         FunctionIdentifier fi = afcExpr.getFunctionIdentifier();
         List<Mutable<ILogicalExpression>> arguments = afcExpr.getArguments();
 
@@ -372,16 +775,14 @@ public class EnumerateJoinsRule implements IAlgebraicRewriteRule {
         }
     }
 
-    //Internal edges are assign statements. The RHS has a variable in it.
-    // We need to find the internal edge that has a variable coming from this leaf leafInput.
-    private int findInternalEdge(ILogicalOperator leafInput, List<ILogicalOperator> internalEdges)
-            throws AlgebricksException {
+    private int findAssignOp(ILogicalOperator leafInput, List<AssignOperator> assignOps,
+            List<ILogicalExpression> assignJoinExprs) throws AlgebricksException {
         int i = -1;
-
-        for (ILogicalOperator ie : internalEdges) {
+        for (AssignOperator aOp : assignOps) {
             i++;
+            if (assignJoinExprs.get(i) != null)
+                continue; // this is an assign associated with a join expression
             // this will be an Assign, so no need to check
-            AssignOperator aOp = (AssignOperator) ie;
             List<LogicalVariable> vars = new ArrayList<>();
             aOp.getExpressions().get(0).getValue().getUsedVariables(vars);
             HashSet<LogicalVariable> vars2 = new HashSet<>();
@@ -390,126 +791,207 @@ public class EnumerateJoinsRule implements IAlgebraicRewriteRule {
                 return i;
             }
         }
-
         return -1;
     }
 
-    private ILogicalOperator addAssignToLeafInput(ILogicalOperator leafInput, ILogicalOperator internalEdge) {
-        ILogicalOperator root = leafInput;
+    private ILogicalOperator addAssignToLeafInput(ILogicalOperator leafInput, AssignOperator aOp) {
         // this will be an Assign, so no need to check
-        AssignOperator aOp = (AssignOperator) internalEdge;
-        aOp.getInputs().get(0).setValue(root);
+        aOp.getInputs().get(0).setValue(leafInput);
         return aOp;
     }
 
-    private void buildNewTree(PlanNode plan,
-            HashMap<EmptyTupleSourceOperator, ILogicalOperator> joinLeafInputsHashMap) {
-        ILogicalOperator leftInput = joinLeafInputsHashMap.get(plan.getEmptyTupleSourceOp());
-        if (leftInput.getOperatorTag() == LogicalOperatorTag.SELECT) {
-            addCardCostAnnotations(leftInput, plan);
+    private void skipAllIndexes(PlanNode plan, ILogicalOperator leafInput) {
+        if (plan.scanOp == PlanNode.ScanMethod.TABLE_SCAN && leafInput.getOperatorTag() == LogicalOperatorTag.SELECT) {
+            SelectOperator selOper = (SelectOperator) leafInput;
+            ILogicalExpression expr = selOper.getCondition().getValue();
+            List<Mutable<ILogicalExpression>> conjs = new ArrayList<>();
+            if (expr.splitIntoConjuncts(conjs)) {
+                conjs.remove(new MutableObject<ILogicalExpression>(ConstantExpression.TRUE));
+                for (Mutable<ILogicalExpression> conj : conjs) {
+                    if (conj.getValue().getExpressionTag().equals(LogicalExpressionTag.FUNCTION_CALL)) {
+                        AbstractFunctionCallExpression afce = (AbstractFunctionCallExpression) conj.getValue();
+                        // remove any annotations that may have been here from other parts of the code. We know we want a datascan.
+                        afce.removeAnnotation(SkipSecondaryIndexSearchExpressionAnnotation.class);
+                        afce.putAnnotation(SkipSecondaryIndexSearchExpressionAnnotation.INSTANCE_ANY_INDEX);
+                    }
+                }
+            } else {
+                if ((expr.getExpressionTag().equals(LogicalExpressionTag.FUNCTION_CALL))) {
+                    AbstractFunctionCallExpression afce = (AbstractFunctionCallExpression) expr;
+                    // remove any annotations that may have been here from other parts of the code. We know we want a datascan.
+                    afce.removeAnnotation(SkipSecondaryIndexSearchExpressionAnnotation.class);
+                    afce.putAnnotation(SkipSecondaryIndexSearchExpressionAnnotation.INSTANCE_ANY_INDEX);
+                }
+            }
         }
     }
 
-    private void buildNewTree(PlanNode plan, HashMap<EmptyTupleSourceOperator, ILogicalOperator> joinLeafInputsHashMap,
-            List<ILogicalOperator> joinOps, MutableInt totalNumberOfJoins) {
+    // This is for single table queries
+    private void buildNewTree(PlanNode plan) {
+        ILogicalOperator leftInput = plan.getLeafInput();
+        skipAllIndexes(plan, leftInput);
+        ILogicalOperator selOp = findSelectOrUnnestOrDataScan(leftInput);
+        if (selOp != null) {
+            addCardCostAnnotations(selOp, plan);
+        }
+        addCardCostAnnotations(findDataSourceScanOperator(leftInput), plan);
+    }
+
+    private void getJoinNode(PlanNode plan, List<JoinOperator> allJoinOps) throws AlgebricksException {
+        AbstractBinaryJoinOperator abjOp;
+        int i;
+
+        if (plan.outerJoin) {
+            for (i = 0; i < allJoinOps.size(); i++) {
+                abjOp = allJoinOps.get(i).getAbstractJoinOp();
+                if (abjOp.getJoinKind() == AbstractBinaryJoinOperator.JoinKind.LEFT_OUTER) {
+                    newJoinOps.add(OperatorManipulationUtil.bottomUpCopyOperators(abjOp));
+                    return;
+                }
+            }
+        } else {
+            for (i = 0; i < allJoinOps.size(); i++) {
+                abjOp = allJoinOps.get(i).getAbstractJoinOp();
+                if (abjOp.getJoinKind() == AbstractBinaryJoinOperator.JoinKind.INNER) {
+                    newJoinOps.add(OperatorManipulationUtil.bottomUpCopyOperators(abjOp));
+                    return;
+                }
+            }
+        }
+    }
+
+    private void getNewJoinOps(PlanNode plan, List<JoinOperator> allJoinOps) throws AlgebricksException {
+        if (plan.IsJoinNode()) {
+            getJoinNode(plan, allJoinOps);
+            getNewJoinOps(plan.getLeftPlanNode(), allJoinOps);
+            getNewJoinOps(plan.getRightPlanNode(), allJoinOps);
+        }
+    }
+
+    private void fillJoinAnnotations(PlanNode plan, ILogicalOperator joinOp) {
+        AbstractBinaryJoinOperator abJoinOp = (AbstractBinaryJoinOperator) joinOp;
+        ILogicalExpression expr = plan.getJoinExpr();
+        abJoinOp.getCondition().setValue(expr);
+        // add the annotations
+        if (plan.getJoinOp() == PlanNode.JoinMethod.INDEX_NESTED_LOOP_JOIN) {
+            // this annotation is needed for the physical optimizer to replace this with the unnest operator later
+            AbstractFunctionCallExpression afcExpr = (AbstractFunctionCallExpression) expr;
+            removeJoinAnnotations(afcExpr);
+            if (plan.joinHint != null) {
+                setAnnotation(afcExpr, plan.joinHint);
+            } else {
+                setAnnotation(plan.exprAndHint.first, plan.exprAndHint.second);
+            }
+            if (LOGGER.isTraceEnabled()) {
+                LOGGER.trace("Added IndexedNLJoinExpressionAnnotation to " + afcExpr.toString());
+            }
+        } else if (plan.getJoinOp() == PlanNode.JoinMethod.HYBRID_HASH_JOIN
+                || plan.getJoinOp() == PlanNode.JoinMethod.BROADCAST_HASH_JOIN
+                || plan.getJoinOp() == PlanNode.JoinMethod.CARTESIAN_PRODUCT_JOIN) {
+            if (plan.getJoinOp() == PlanNode.JoinMethod.BROADCAST_HASH_JOIN) {
+                // Broadcast the right branch.
+                BroadcastExpressionAnnotation bcast =
+                        new BroadcastExpressionAnnotation(plan.side == HashJoinExpressionAnnotation.BuildSide.RIGHT
+                                ? BroadcastExpressionAnnotation.BroadcastSide.RIGHT
+                                : BroadcastExpressionAnnotation.BroadcastSide.LEFT);
+                AbstractFunctionCallExpression afcExpr = (AbstractFunctionCallExpression) expr;
+                removeJoinAnnotations(afcExpr);
+                setAnnotation(afcExpr, bcast);
+                if (LOGGER.isTraceEnabled()) {
+                    LOGGER.trace("Added BroadCastAnnotation to " + afcExpr.toString());
+                }
+            } else if (plan.getJoinOp() == PlanNode.JoinMethod.HYBRID_HASH_JOIN) {
+                HashJoinExpressionAnnotation hjAnnotation = new HashJoinExpressionAnnotation(plan.side);
+                AbstractFunctionCallExpression afcExpr = (AbstractFunctionCallExpression) expr;
+                removeJoinAnnotations(afcExpr);
+                setAnnotation(afcExpr, hjAnnotation);
+                if (LOGGER.isTraceEnabled()) {
+                    LOGGER.trace("Added HashJoinAnnotation to " + afcExpr.toString());
+                }
+            } else {
+                if (expr != ConstantExpression.TRUE) {
+                    AbstractFunctionCallExpression afcExpr = (AbstractFunctionCallExpression) expr;
+                    removeJoinAnnotations(afcExpr);
+                }
+            }
+        }
+        addCardCostAnnotations(joinOp, plan);
+    }
+
+    // This one is for join queries
+    private void buildNewTree(PlanNode plan, List<ILogicalOperator> joinOps, MutableInt totalNumberOfJoins,
+            IOptimizationContext context) throws AlgebricksException {
         // we have to move the inputs in op around so that they match the tree structure in pn
         // we use the existing joinOps and switch the leafInputs appropriately.
         List<PlanNode> allPlans = joinEnum.getAllPlans();
         int leftIndex = plan.getLeftPlanIndex();
         int rightIndex = plan.getRightPlanIndex();
+        //System.out.println("allPlansSize " + allPlans.size() + " leftIndex " + leftIndex + " rightIndex " + rightIndex); // put in trace statements
+        //System.out.println("allPlansSize " + allPlans.size());
         PlanNode leftPlan = allPlans.get(leftIndex);
         PlanNode rightPlan = allPlans.get(rightIndex);
-        ILogicalOperator joinOp = joinOps.get(totalNumberOfJoins.intValue());
+
+        ILogicalOperator joinOp = joinOps.get(totalNumberOfJoins.intValue()); // intValue set to 0 initially
 
         if (plan.IsJoinNode()) {
-            AbstractBinaryJoinOperator abJoinOp = (AbstractBinaryJoinOperator) joinOp;
-            ILogicalExpression expr = plan.getJoinExpr();
-            abJoinOp.getCondition().setValue(expr);
-            // add the annotations
-            if (plan.getJoinOp() == PlanNode.JoinMethod.INDEX_NESTED_LOOP_JOIN) {
-                // this annotation is needed for the physical optimizer to replace this with the unnest operator later
-                AbstractFunctionCallExpression afcExpr = (AbstractFunctionCallExpression) expr;
-                removeJoinAnnotations(afcExpr);
-                setAnnotation(afcExpr, IndexedNLJoinExpressionAnnotation.INSTANCE_ANY_INDEX);
-            } else if (plan.getJoinOp() == PlanNode.JoinMethod.HYBRID_HASH_JOIN
-                    || plan.getJoinOp() == PlanNode.JoinMethod.BROADCAST_HASH_JOIN
-                    || plan.getJoinOp() == PlanNode.JoinMethod.CARTESIAN_PRODUCT_JOIN) {
-                if (plan.getJoinOp() == PlanNode.JoinMethod.BROADCAST_HASH_JOIN) {
-                    // Broadcast the right branch.
-                    BroadcastExpressionAnnotation bcast =
-                            new BroadcastExpressionAnnotation(plan.side == HashJoinExpressionAnnotation.BuildSide.RIGHT
-                                    ? BroadcastExpressionAnnotation.BroadcastSide.RIGHT
-                                    : BroadcastExpressionAnnotation.BroadcastSide.LEFT);
-                    AbstractFunctionCallExpression afcExpr = (AbstractFunctionCallExpression) expr;
-                    removeJoinAnnotations(afcExpr);
-                    setAnnotation(afcExpr, bcast);
-                } else if (plan.getJoinOp() == PlanNode.JoinMethod.HYBRID_HASH_JOIN) {
-                    HashJoinExpressionAnnotation hjAnnotation = new HashJoinExpressionAnnotation(plan.side);
-                    AbstractFunctionCallExpression afcExpr = (AbstractFunctionCallExpression) expr;
-                    removeJoinAnnotations(afcExpr);
-                    setAnnotation(afcExpr, hjAnnotation);
-                } else {
-                    if (expr != ConstantExpression.TRUE) {
-                        AbstractFunctionCallExpression afcExpr = (AbstractFunctionCallExpression) expr;
-                        removeJoinAnnotations(afcExpr);
-                    }
-                }
-            }
-            addCardCostAnnotations(joinOp, plan);
+            fillJoinAnnotations(plan, joinOp);
         }
 
         if (leftPlan.IsScanNode()) {
             // leaf
-            ILogicalOperator leftInput = joinLeafInputsHashMap.get(leftPlan.getEmptyTupleSourceOp());
-            if (leftInput.getOperatorTag() == LogicalOperatorTag.SELECT) {
-                addCardCostAnnotations(leftInput, leftPlan);
+            ILogicalOperator leftInput = leftPlan.getLeafInput();
+            skipAllIndexes(leftPlan, leftInput);
+            ILogicalOperator selOp = findSelectOrUnnestOrDataScan(leftInput);
+            if (selOp != null) {
+                addCardCostAnnotations(selOp, leftPlan);
             }
             joinOp.getInputs().get(0).setValue(leftInput);
+            context.computeAndSetTypeEnvironmentForOperator(joinOp.getInputs().get(0).getValue());
             addCardCostAnnotations(findDataSourceScanOperator(leftInput), leftPlan);
         } else {
             // join
             totalNumberOfJoins.increment();
             ILogicalOperator leftInput = joinOps.get(totalNumberOfJoins.intValue());
             joinOp.getInputs().get(0).setValue(leftInput);
-            buildNewTree(allPlans.get(leftIndex), joinLeafInputsHashMap, joinOps, totalNumberOfJoins);
+            context.computeAndSetTypeEnvironmentForOperator(joinOp.getInputs().get(0).getValue());
+            buildNewTree(leftPlan, joinOps, totalNumberOfJoins, context);
         }
 
         if (rightPlan.IsScanNode()) {
             // leaf
-            ILogicalOperator rightInput = joinLeafInputsHashMap.get(rightPlan.getEmptyTupleSourceOp());
-            if (rightInput.getOperatorTag() == LogicalOperatorTag.SELECT) {
-                addCardCostAnnotations(rightInput, rightPlan);
+            ILogicalOperator rightInput = rightPlan.getLeafInput();
+            skipAllIndexes(rightPlan, rightInput);
+            ILogicalOperator selOp = findSelectOrUnnestOrDataScan(rightInput);
+            if (selOp != null) {
+                addCardCostAnnotations(selOp, rightPlan);
             }
             joinOp.getInputs().get(1).setValue(rightInput);
+            context.computeAndSetTypeEnvironmentForOperator(joinOp.getInputs().get(1).getValue());
             addCardCostAnnotations(findDataSourceScanOperator(rightInput), rightPlan);
         } else {
             // join
             totalNumberOfJoins.increment();
             ILogicalOperator rightInput = joinOps.get(totalNumberOfJoins.intValue());
             joinOp.getInputs().get(1).setValue(rightInput);
-            buildNewTree(allPlans.get(rightIndex), joinLeafInputsHashMap, joinOps, totalNumberOfJoins);
+            context.computeAndSetTypeEnvironmentForOperator(joinOp.getInputs().get(1).getValue());
+            buildNewTree(rightPlan, joinOps, totalNumberOfJoins, context);
         }
     }
 
     // in some very rare cases, there is an internal edge that has an assign statement such as $$var = 20 but this variable
     // is not used anywhere in the current join graph but is used outside the current join graph. So we add this assign to the top of
     // our plan, so the rest of the code will be happy. Strange that this assign appears in the join graph.
-    private ILogicalOperator addConstantInternalEdgesAtTheTop(ILogicalOperator op,
-            List<ILogicalOperator> internalEdges) {
-        if (internalEdges.size() == 0) {
-            return op;
-        }
+
+    private ILogicalOperator addRemainingAssignsAtTheTop(ILogicalOperator op, List<AssignOperator> assignOps) {
         ILogicalOperator root = op;
-        for (ILogicalOperator ie : internalEdges) {
-            // this will be an Assign, so no need to check
-            AssignOperator aOp = (AssignOperator) ie;
+        for (AssignOperator aOp : assignOps) {
             aOp.getInputs().get(0).setValue(root);
             root = aOp;
         }
         return root;
     }
 
-    public static void printPlan(IPlanPrettyPrinter pp, AbstractLogicalOperator op, String text)
+    protected static void printPlan(IPlanPrettyPrinter pp, AbstractLogicalOperator op, String text)
             throws AlgebricksException {
         if (LOGGER.isTraceEnabled()) {
             pp.reset();
@@ -518,156 +1000,44 @@ public class EnumerateJoinsRule implements IAlgebraicRewriteRule {
         }
     }
 
-    private void printLeafPlans(IPlanPrettyPrinter pp,
-            HashMap<EmptyTupleSourceOperator, ILogicalOperator> joinLeafInputsHashMap) throws AlgebricksException {
-        Iterator<Map.Entry<EmptyTupleSourceOperator, ILogicalOperator>> li =
-                joinLeafInputsHashMap.entrySet().iterator();
-        int i = 0;
-        while (li.hasNext()) {
-            Map.Entry<EmptyTupleSourceOperator, ILogicalOperator> pair = li.next();
-            ILogicalOperator element = pair.getValue();
-            printPlan(pp, (AbstractLogicalOperator) element, "Printing Leaf Input" + i);
-            i++;
-        }
-    }
-
-    private boolean allEqualityPreds(ILogicalExpression expr) {
-        List<Mutable<ILogicalExpression>> conjs = new ArrayList<>();
-        // check that the expr is AND(EQ(), EQ(),..)
-        if (expr.splitIntoConjuncts(conjs)) {
-            for (Mutable<ILogicalExpression> conj : conjs) {
-                if (!(((AbstractFunctionCallExpression) conj.getValue()).getFunctionIdentifier()
-                        .equals(AlgebricksBuiltinFunctions.EQ))) {
-                    return false;
-                }
-            }
-            return true;
-        }
-        return false;
-    }
-
-    // This routine should not be needed! When the same variable is used multiple times in a join predicate as in
-    // AND(eq($$25, $$27), eq($$25, $$34)), JoinUtils.isHashJoinCondition() returns false which makes no sense.
-    // Tried changing the above routine but it always lead to some failures. Unable to figure out what the problem was,
-    // we just replace the duplicate occurrence of every variable with a new variable following by appropriate assign.
-    // We do this only once just once before we construct the final plan.
-    private void checkForMultipleUsesOfVariablesInJoinPreds(PlanNode plan,
-            HashMap<EmptyTupleSourceOperator, ILogicalOperator> joinLeafInputsHashMap, IOptimizationContext context)
+    private void printLeafPlans(IPlanPrettyPrinter pp, List<ILogicalOperator> leafInputs, String msg)
             throws AlgebricksException {
-        List<PlanNode> allPlans = joinEnum.getAllPlans();
-        if (plan.IsJoinNode()) {
-            ILogicalExpression exp = plan.getJoinExpr();
-            if (!allEqualityPreds(exp)) {
-                return;
-            }
-            boolean changes = true;
-            while (changes) {
-                changes = false;
-                List<LogicalVariable> vars = new ArrayList<>();
-                exp.getUsedVariables(vars);
-                Set<LogicalVariable> set = new LinkedHashSet<>(vars);
-                if (set.size() < vars.size()) {
-                    // walk thru vars and find the first instance of the duplicate
-                    for (int i = 0; i < vars.size() - 1; i++) {
-                        for (int j = i + 1; j < vars.size(); j++) {
-                            if (vars.get(i) == vars.get(j)) {
-                                /// find the leafInout that contains this vars(i)
-                                for (Map.Entry<EmptyTupleSourceOperator, ILogicalOperator> mapElement : joinLeafInputsHashMap
-                                        .entrySet()) {
-                                    ILogicalOperator joinLeafInput = mapElement.getValue();
-                                    EmptyTupleSourceOperator ets = mapElement.getKey();
-                                    HashSet<LogicalVariable> vars2 = new HashSet<>();
-                                    VariableUtilities.getLiveVariables(joinLeafInput, vars2);
-                                    if (vars2.contains(vars.get(i))) {
-                                        LogicalVariable newVar = context.newVar();
-                                        // replace one occurrence of vars(i) in exp
-                                        substituteVarOnce(exp, vars.get(i), newVar);
-                                        VariableReferenceExpression oldvarExpr =
-                                                new VariableReferenceExpression(vars.get(i));
-                                        AssignOperator assign =
-                                                new AssignOperator(newVar, new MutableObject<>(oldvarExpr));
-                                        // Now add an assign to the joinLeafInput : newvar <-- oldvar
-                                        assign.getInputs().add(new MutableObject<>(joinLeafInput));
-                                        context.computeAndSetTypeEnvironmentForOperator(assign);
-                                        context.addNotToBeInlinedVar(newVar);
-                                        context.addNotToBeInlinedVar(vars.get(i));
-
-                                        // also update the joinLeafInputsHashMap
-                                        joinLeafInputsHashMap.put(ets, assign);
-                                        changes = true;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            // now traverse left and right side plans
-            int leftIndex = plan.getLeftPlanIndex();
-            int rightIndex = plan.getRightPlanIndex();
-            PlanNode leftPlan = allPlans.get(leftIndex);
-            PlanNode rightPlan = allPlans.get(rightIndex);
-            if (leftPlan.IsJoinNode()) {
-                checkForMultipleUsesOfVariablesInJoinPreds(leftPlan, joinLeafInputsHashMap, context);
-            }
-            if (rightPlan.IsJoinNode()) {
-                checkForMultipleUsesOfVariablesInJoinPreds(rightPlan, joinLeafInputsHashMap, context);
+        if (LOGGER.isTraceEnabled()) {
+            LOGGER.trace(msg);
+            int i = 0;
+            for (ILogicalOperator element : leafInputs) {
+                printPlan(pp, (AbstractLogicalOperator) element, "Printing Leaf Input" + i);
+                i++;
             }
         }
     }
 
     // for every internal edge assign (again assuming only 1 for now), find the corresponding leafInput and place the assign
     // on top of that LeafInput. Modify the joinLeafInputsHashMap as well.
-    private void pushAssignsIntoLeafInputs(HashMap<EmptyTupleSourceOperator, ILogicalOperator> joinLeafInputsHashMap,
-            List<ILogicalOperator> internalEdges) throws AlgebricksException {
-
-        for (Map.Entry<EmptyTupleSourceOperator, ILogicalOperator> mapElement : joinLeafInputsHashMap.entrySet()) {
-            ILogicalOperator joinLeafInput = mapElement.getValue();
-            EmptyTupleSourceOperator ets = mapElement.getKey();
-            int internalEdgeNumber = findInternalEdge(joinLeafInput, internalEdges);
-            if (internalEdgeNumber != -1) {
-                joinLeafInput = addAssignToLeafInput(joinLeafInput, internalEdges.get(internalEdgeNumber));
-                joinLeafInputsHashMap.put(ets, joinLeafInput);
-                internalEdges.remove(internalEdgeNumber); // no longer needed
+    private void pushAssignsIntoLeafInputs(IPlanPrettyPrinter pp, List<ILogicalOperator> leafInputs,
+            List<AssignOperator> assignOps, List<ILogicalExpression> assignJoinExprs) throws AlgebricksException {
+        for (ILogicalOperator lo : leafInputs) {
+            ILogicalOperator joinLeafInput = lo;
+            printPlan(pp, (AbstractLogicalOperator) joinLeafInput, "Incoming leaf Input");
+            int assignNumber = findAssignOp(joinLeafInput, assignOps, assignJoinExprs);
+            if (assignNumber != -1) {
+                joinLeafInput = addAssignToLeafInput(joinLeafInput, assignOps.get(assignNumber));
+                printPlan(pp, (AbstractLogicalOperator) joinLeafInput, "Modified leaf Input");
+                assignOps.remove(assignNumber);
             }
-        }
-
-    }
-
-    private boolean substituteVarOnce(ILogicalExpression exp, LogicalVariable oldVar, LogicalVariable newVar) {
-        switch (exp.getExpressionTag()) {
-            case FUNCTION_CALL:
-                AbstractFunctionCallExpression fun = (AbstractFunctionCallExpression) exp;
-                for (int i = 0; i < fun.getArguments().size(); i++) {
-                    ILogicalExpression arg = fun.getArguments().get(i).getValue();
-                    if (substituteVarOnce(arg, oldVar, newVar)) {
-                        return true;
-                    }
-                }
-                return false;
-            case VARIABLE:
-                VariableReferenceExpression varExpr = (VariableReferenceExpression) exp;
-                if (varExpr.getVariableReference().equals(oldVar)) {
-                    varExpr.setVariable(newVar);
-                    return true;
-                }
-                return false;
-            default:
-                return false;
         }
     }
 
     // check to see if every dataset has a sample. If not, CBO code cannot run. A warning message must be issued as well.
-    private boolean doAllDataSourcesHaveSamples(
-            List<Pair<EmptyTupleSourceOperator, DataSourceScanOperator>> emptyTupleAndDataSourceOps,
-            IOptimizationContext context) throws AlgebricksException {
-        for (Pair<EmptyTupleSourceOperator, DataSourceScanOperator> emptyTupleAndDataSourceOp : emptyTupleAndDataSourceOps) {
-            if (emptyTupleAndDataSourceOp.getSecond() != null) {
-                DataSourceScanOperator scanOp = emptyTupleAndDataSourceOp.getSecond();
-                Index index = joinEnum.getStatsHandle().findSampleIndex(scanOp, context);
-                if (index == null) {
-                    return false;
-                }
+    private boolean doAllDataSourcesHaveSamples(List<ILogicalOperator> leafInputs, IOptimizationContext context)
+            throws AlgebricksException {
+        for (ILogicalOperator li : leafInputs) {
+            DataSourceScanOperator scanOp = (DataSourceScanOperator) findDataSourceScanOperator(li);
+            if (scanOp == null)
+                continue;
+            Index index = joinEnum.getStatsHandle().findSampleIndex(scanOp, context);
+            if (index == null) {
+                return false;
             }
         }
         return true;

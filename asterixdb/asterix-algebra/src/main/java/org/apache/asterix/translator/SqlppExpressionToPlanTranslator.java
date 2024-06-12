@@ -18,6 +18,8 @@
  */
 package org.apache.asterix.translator;
 
+import static org.apache.asterix.external.util.ExternalDataConstants.SUBPATH;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -28,6 +30,7 @@ import java.util.Set;
 import java.util.function.Predicate;
 
 import org.apache.asterix.algebra.base.ILangExpressionToPlanTranslator;
+import org.apache.asterix.common.annotations.ExternalSubpathAnnotation;
 import org.apache.asterix.common.exceptions.CompilationException;
 import org.apache.asterix.common.exceptions.ErrorCode;
 import org.apache.asterix.common.functions.FunctionSignature;
@@ -204,7 +207,9 @@ public class SqlppExpressionToPlanTranslator extends LangExpressionToPlanTransla
         }
         Pair<ILogicalOperator, LogicalVariable> select =
                 selectExpression.getSelectSetOperation().accept(this, currentOpRef);
-        currentOpRef = new MutableObject<>(select.first);
+        if (select.first != null) {
+            currentOpRef = new MutableObject<>(select.first);
+        }
         if (selectExpression.hasOrderby()) {
             currentOpRef = new MutableObject<>(selectExpression.getOrderbyClause().accept(this, currentOpRef).first);
         }
@@ -325,6 +330,10 @@ public class SqlppExpressionToPlanTranslator extends LangExpressionToPlanTransla
             unnestOp = new UnnestOperator(fromVar, new MutableObject<>(pUnnestExpr.first), pVar, BuiltinType.AINT64);
         } else {
             unnestOp = new UnnestOperator(fromVar, new MutableObject<>(pUnnestExpr.first));
+        }
+        ExternalSubpathAnnotation hint = ((AbstractExpression) fromExpr).findHint(ExternalSubpathAnnotation.class);
+        if (hint != null) {
+            unnestOp.getAnnotations().put(SUBPATH, hint.getSubPath());
         }
         unnestOp.getInputs().add(pUnnestExpr.second);
         unnestOp.setSourceLocation(sourceLoc);
@@ -577,6 +586,10 @@ public class SqlppExpressionToPlanTranslator extends LangExpressionToPlanTransla
                             outerUnnestMissingValue)
                     : new UnnestOperator(rightVar, new MutableObject<>(pUnnestExpr.first));
         }
+        ExternalSubpathAnnotation hint = ((AbstractExpression) rightExpr).findHint(ExternalSubpathAnnotation.class);
+        if (hint != null) {
+            unnestOp.getAnnotations().put(SUBPATH, hint.getSubPath());
+        }
         unnestOp.getInputs().add(pUnnestExpr.second);
         unnestOp.setSourceLocation(binaryCorrelate.getRightVariable().getSourceLocation());
         return new Pair<>(unnestOp, rightVar);
@@ -758,7 +771,9 @@ public class SqlppExpressionToPlanTranslator extends LangExpressionToPlanTransla
         } else {
             ProjectOperator pr = new ProjectOperator(resVar);
             pr.getInputs().add(returnOpRef);
-            pr.setSourceLocation(returnOpRef.getValue().getSourceLocation());
+            if (returnOpRef.getValue() != null) {
+                pr.setSourceLocation(returnOpRef.getValue().getSourceLocation());
+            }
             return new Pair<>(pr, resVar);
         }
     }
@@ -1212,10 +1227,14 @@ public class SqlppExpressionToPlanTranslator extends LangExpressionToPlanTransla
         boolean isWin = BuiltinFunctions.isWindowFunction(fi);
         boolean isWinAgg = isWin && BuiltinFunctions.builtinFunctionHasProperty(fi,
                 BuiltinFunctions.WindowFunctionProperty.HAS_LIST_ARG);
-        boolean prohibitOrderClause = isWin && BuiltinFunctions.builtinFunctionHasProperty(fi,
-                BuiltinFunctions.WindowFunctionProperty.NO_ORDER_CLAUSE);
-        boolean prohibitFrameClause = isWin && BuiltinFunctions.builtinFunctionHasProperty(fi,
-                BuiltinFunctions.WindowFunctionProperty.NO_FRAME_CLAUSE);
+        boolean prohibitOrderClause = (isWin && BuiltinFunctions.builtinFunctionHasProperty(fi,
+                BuiltinFunctions.WindowFunctionProperty.NO_ORDER_CLAUSE))
+                || (!isWin && BuiltinFunctions.builtinFunctionHasProperty(fi,
+                        BuiltinFunctions.AggregateFunctionProperty.NO_ORDER_CLAUSE));
+        boolean prohibitFrameClause = (isWin && BuiltinFunctions.builtinFunctionHasProperty(fi,
+                BuiltinFunctions.WindowFunctionProperty.NO_FRAME_CLAUSE))
+                || (!isWin && BuiltinFunctions.builtinFunctionHasProperty(fi,
+                        BuiltinFunctions.AggregateFunctionProperty.NO_FRAME_CLAUSE));
         boolean allowRespectIgnoreNulls = isWin && BuiltinFunctions.builtinFunctionHasProperty(fi,
                 BuiltinFunctions.WindowFunctionProperty.ALLOW_RESPECT_IGNORE_NULLS);
         boolean allowFromFirstLast = isWin && BuiltinFunctions.builtinFunctionHasProperty(fi,

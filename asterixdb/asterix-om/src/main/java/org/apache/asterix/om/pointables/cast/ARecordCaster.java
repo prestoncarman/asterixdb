@@ -194,10 +194,12 @@ class ARecordCaster {
 
     private void matchClosedPart(List<IVisitablePointable> fieldNames, List<IVisitablePointable> fieldTypeTags)
             throws HyracksDataException {
-        // sort-merge based match
-        quickSort(fieldNamesSortedIndex, fieldNames, 0, numInputFields - 1);
         int fnStart = 0;
         int reqFnStart = 0;
+        if (fnStart < numInputFields && reqFnStart < reqFieldNames.size()) {
+            // sort-merge based match
+            quickSort(fieldNamesSortedIndex, fieldNames, 0, numInputFields - 1);
+        }
         while (fnStart < numInputFields && reqFnStart < reqFieldNames.size()) {
             int fnPos = fieldNamesSortedIndex[fnStart];
             int reqFnPos = reqFieldNamesSortedIndex[reqFnStart];
@@ -258,7 +260,7 @@ class ARecordCaster {
                 ps.print(typeTag);
 
                 //collect the output message and throw the exception
-                throw new HyracksDataException("type mismatch: including an extra field " + fieldBos.toString());
+                throw new RuntimeDataException(ErrorCode.TYPE_MISMATCH_EXTRA_FIELD, fieldBos.toString());
             }
         }
 
@@ -268,8 +270,8 @@ class ARecordCaster {
                 IAType t = cachedReqType.getFieldTypes()[i];
                 if (!NonTaggedFormatUtil.isOptional(t)) {
                     // no matched field in the input for a required closed field
-                    throw new HyracksDataException("type mismatch: missing a required closed field "
-                            + cachedReqType.getFieldNames()[i] + ": " + t.getTypeName());
+                    throw new RuntimeDataException(ErrorCode.TYPE_MISMATCH_MISSING_FIELD,
+                            cachedReqType.getFieldNames()[i], t.getTypeName());
                 }
             }
         }

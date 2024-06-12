@@ -29,7 +29,10 @@ import org.apache.asterix.lang.common.statement.AnalyzeDropStatement;
 import org.apache.asterix.lang.common.statement.AnalyzeStatement;
 import org.apache.asterix.lang.common.statement.CompactStatement;
 import org.apache.asterix.lang.common.statement.ConnectFeedStatement;
+import org.apache.asterix.lang.common.statement.CopyFromStatement;
+import org.apache.asterix.lang.common.statement.CopyToStatement;
 import org.apache.asterix.lang.common.statement.CreateAdapterStatement;
+import org.apache.asterix.lang.common.statement.CreateDatabaseStatement;
 import org.apache.asterix.lang.common.statement.CreateDataverseStatement;
 import org.apache.asterix.lang.common.statement.CreateFeedPolicyStatement;
 import org.apache.asterix.lang.common.statement.CreateFeedStatement;
@@ -40,6 +43,7 @@ import org.apache.asterix.lang.common.statement.CreateIndexStatement;
 import org.apache.asterix.lang.common.statement.CreateLibraryStatement;
 import org.apache.asterix.lang.common.statement.CreateSynonymStatement;
 import org.apache.asterix.lang.common.statement.CreateViewStatement;
+import org.apache.asterix.lang.common.statement.DatabaseDropStatement;
 import org.apache.asterix.lang.common.statement.DatasetDecl;
 import org.apache.asterix.lang.common.statement.DataverseDecl;
 import org.apache.asterix.lang.common.statement.DataverseDropStatement;
@@ -68,7 +72,6 @@ import org.apache.asterix.lang.common.statement.TypeDropStatement;
 import org.apache.asterix.lang.common.statement.UpdateStatement;
 import org.apache.asterix.lang.common.statement.ViewDecl;
 import org.apache.asterix.lang.common.statement.ViewDropStatement;
-import org.apache.asterix.lang.common.statement.WriteStatement;
 
 public abstract class AbstractQueryExpressionVisitor<R, T> implements ILangVisitor<R, T> {
 
@@ -118,6 +121,16 @@ public abstract class AbstractQueryExpressionVisitor<R, T> implements ILangVisit
     }
 
     @Override
+    public R visit(CopyFromStatement stmtCopy, T arg) throws CompilationException {
+        return null;
+    }
+
+    @Override
+    public R visit(CopyToStatement stmtCopy, T arg) throws CompilationException {
+        return null;
+    }
+
+    @Override
     public R visit(NodegroupDecl ngd, T arg) throws CompilationException {
         return null;
     }
@@ -163,7 +176,7 @@ public abstract class AbstractQueryExpressionVisitor<R, T> implements ILangVisit
     }
 
     @Override
-    public R visit(WriteStatement ws, T arg) throws CompilationException {
+    public R visit(CreateDatabaseStatement cds, T arg) throws CompilationException {
         return null;
     }
 
@@ -179,6 +192,11 @@ public abstract class AbstractQueryExpressionVisitor<R, T> implements ILangVisit
 
     @Override
     public R visit(NodeGroupDropStatement del, T arg) throws CompilationException {
+        return null;
+    }
+
+    @Override
+    public R visit(DatabaseDropStatement dds, T arg) throws CompilationException {
         return null;
     }
 

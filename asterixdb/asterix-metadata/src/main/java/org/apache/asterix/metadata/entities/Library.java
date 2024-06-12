@@ -18,26 +18,35 @@
  */
 package org.apache.asterix.metadata.entities;
 
+import java.util.Objects;
+
 import org.apache.asterix.common.metadata.DataverseName;
 import org.apache.asterix.metadata.MetadataCache;
 import org.apache.asterix.metadata.api.IMetadataEntity;
 
 public class Library implements IMetadataEntity<Library> {
 
-    private static final long serialVersionUID = 2L;
+    private static final long serialVersionUID = 3L;
 
+    private final String databaseName;
     private final DataverseName dataverse;
     private final String name;
     private final String language;
     private final String hash;
     private final int pendingOp;
 
-    public Library(DataverseName dataverseName, String libraryName, String language, String hash, int pendingOp) {
+    public Library(String databaseName, DataverseName dataverseName, String libraryName, String language, String hash,
+            int pendingOp) {
+        this.databaseName = Objects.requireNonNull(databaseName);
         this.dataverse = dataverseName;
         this.name = libraryName;
         this.language = language;
         this.hash = hash;
         this.pendingOp = pendingOp;
+    }
+
+    public String getDatabaseName() {
+        return databaseName;
     }
 
     public DataverseName getDataverseName() {

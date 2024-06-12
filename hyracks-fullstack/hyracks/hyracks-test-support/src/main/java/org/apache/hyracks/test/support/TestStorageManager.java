@@ -19,15 +19,28 @@
 package org.apache.hyracks.test.support;
 
 import org.apache.hyracks.api.application.INCServiceContext;
+import org.apache.hyracks.api.exceptions.HyracksDataException;
+import org.apache.hyracks.api.io.IIOManager;
 import org.apache.hyracks.storage.common.IIndex;
 import org.apache.hyracks.storage.common.ILocalResourceRepository;
 import org.apache.hyracks.storage.common.IResourceLifecycleManager;
 import org.apache.hyracks.storage.common.IStorageManager;
 import org.apache.hyracks.storage.common.buffercache.IBufferCache;
+import org.apache.hyracks.storage.common.disk.IDiskCacheMonitoringService;
+import org.apache.hyracks.storage.common.disk.NoOpDiskCacheMonitoringService;
 import org.apache.hyracks.storage.common.file.ResourceIdFactory;
 
 public class TestStorageManager implements IStorageManager {
     private static final long serialVersionUID = 1L;
+
+    @Override
+    public IIOManager getIoManager(INCServiceContext ctx) {
+        try {
+            return TestStorageManagerComponentHolder.getIOManager();
+        } catch (HyracksDataException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     @Override
     public IBufferCache getBufferCache(INCServiceContext ctx) {
@@ -47,6 +60,11 @@ public class TestStorageManager implements IStorageManager {
     @Override
     public IResourceLifecycleManager<IIndex> getLifecycleManager(INCServiceContext ctx) {
         return TestStorageManagerComponentHolder.getIndexLifecycleManager();
+    }
+
+    @Override
+    public IDiskCacheMonitoringService getDiskCacheMonitoringService(INCServiceContext ctx) {
+        return NoOpDiskCacheMonitoringService.INSTANCE;
     }
 
 }

@@ -22,10 +22,12 @@ import java.util.List;
 
 import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
+import org.apache.hyracks.algebricks.core.algebra.base.DefaultProjectionFiltrationInfo;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalOperatorTag;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import org.apache.hyracks.algebricks.core.algebra.expressions.IVariableTypeEnvironment;
+import org.apache.hyracks.algebricks.core.algebra.metadata.IProjectionFiltrationInfo;
 import org.apache.hyracks.algebricks.core.algebra.typing.ITypingContext;
 import org.apache.hyracks.algebricks.core.algebra.typing.NonPropagatingTypeEnvironment;
 import org.apache.hyracks.algebricks.core.algebra.visitors.ILogicalExpressionReferenceTransform;
@@ -39,17 +41,20 @@ public class UnnestMapOperator extends AbstractUnnestMapOperator {
     // the maximum of number of results output by this operator
     private long outputLimit = -1;
 
+    private IProjectionFiltrationInfo projectionFiltrationInfo;
+
     public UnnestMapOperator(List<LogicalVariable> variables, Mutable<ILogicalExpression> expression,
             List<Object> variableTypes, boolean propagateInput) {
-        this(variables, expression, variableTypes, propagateInput, null, -1);
+        this(variables, expression, variableTypes, propagateInput, null, -1, DefaultProjectionFiltrationInfo.INSTANCE);
     }
 
     public UnnestMapOperator(List<LogicalVariable> variables, Mutable<ILogicalExpression> expression,
             List<Object> variableTypes, boolean propagateInput, Mutable<ILogicalExpression> selectCondition,
-            long outputLimit) {
+            long outputLimit, IProjectionFiltrationInfo projectionFiltrationInfo) {
         super(variables, expression, variableTypes, propagateInput);
         this.selectCondition = selectCondition;
         this.outputLimit = outputLimit;
+        setProjectionFiltrationInfo(projectionFiltrationInfo);
     }
 
     @Override
@@ -99,6 +104,15 @@ public class UnnestMapOperator extends AbstractUnnestMapOperator {
 
     public void setOutputLimit(long outputLimit) {
         this.outputLimit = outputLimit;
+    }
+
+    public void setProjectionFiltrationInfo(IProjectionFiltrationInfo projectionFiltrationInfo) {
+        this.projectionFiltrationInfo =
+                projectionFiltrationInfo == null ? DefaultProjectionFiltrationInfo.INSTANCE : projectionFiltrationInfo;
+    }
+
+    public IProjectionFiltrationInfo getProjectionFiltrationInfo() {
+        return projectionFiltrationInfo;
     }
 
 }

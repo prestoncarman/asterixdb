@@ -25,17 +25,19 @@ import org.apache.hyracks.api.job.JobStatus;
 import org.apache.hyracks.control.common.work.AbstractWork;
 import org.apache.hyracks.control.nc.Joblet;
 import org.apache.hyracks.control.nc.NodeControllerService;
+import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 public class CleanupJobletWork extends AbstractWork {
+
     private static final Logger LOGGER = LogManager.getLogger();
 
     private final NodeControllerService ncs;
 
     private final JobId jobId;
 
-    private JobStatus status;
+    private final JobStatus status;
 
     public CleanupJobletWork(NodeControllerService ncs, JobId jobId, JobStatus status) {
         this.ncs = ncs;
@@ -45,7 +47,7 @@ public class CleanupJobletWork extends AbstractWork {
 
     @Override
     public void run() {
-        LOGGER.debug("cleaning up after job: {}", jobId);
+        LOGGER.debug("cleaning up {}", jobId);
         ncs.removeJobParameterByteStore(jobId);
         ncs.getPartitionManager().jobCompleted(jobId, status);
         Map<JobId, Joblet> jobletMap = ncs.getJobletMap();
@@ -53,5 +55,15 @@ public class CleanupJobletWork extends AbstractWork {
         if (joblet != null) {
             joblet.cleanup(status);
         }
+    }
+
+    @Override
+    public String toString() {
+        return getName() + " jobId:" + jobId + ", status:" + status;
+    }
+
+    @Override
+    public Level logLevel() {
+        return Level.TRACE;
     }
 }

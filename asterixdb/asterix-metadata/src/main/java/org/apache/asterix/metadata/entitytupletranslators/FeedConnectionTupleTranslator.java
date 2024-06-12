@@ -26,7 +26,8 @@ import org.apache.asterix.builders.IARecordBuilder;
 import org.apache.asterix.builders.UnorderedListBuilder;
 import org.apache.asterix.common.functions.FunctionSignature;
 import org.apache.asterix.common.metadata.DataverseName;
-import org.apache.asterix.metadata.bootstrap.MetadataPrimaryIndexes;
+import org.apache.asterix.common.metadata.MetadataUtil;
+import org.apache.asterix.metadata.bootstrap.FeedConnectionEntity;
 import org.apache.asterix.metadata.bootstrap.MetadataRecordTypes;
 import org.apache.asterix.metadata.entities.FeedConnection;
 import org.apache.asterix.om.base.AMissing;
@@ -43,47 +44,52 @@ import org.apache.hyracks.dataflow.common.data.accessors.ITupleReference;
 
 public class FeedConnectionTupleTranslator extends AbstractTupleTranslator<FeedConnection> {
 
-    // Payload field containing serialized ExternalFile.
-    private static final int FEED_CONNECTION_PAYLOAD_TUPLE_FIELD_INDEX = 3;
+    private final FeedConnectionEntity feedConnectionEntity;
 
-    public FeedConnectionTupleTranslator(boolean getTuple) {
-        super(getTuple, MetadataPrimaryIndexes.FEED_CONNECTION_DATASET, FEED_CONNECTION_PAYLOAD_TUPLE_FIELD_INDEX);
+    public FeedConnectionTupleTranslator(boolean getTuple, FeedConnectionEntity feedConnectionEntity) {
+        super(getTuple, feedConnectionEntity.getIndex(), feedConnectionEntity.payloadPosition());
+        this.feedConnectionEntity = feedConnectionEntity;
     }
 
     @Override
     protected FeedConnection createMetadataEntityFromARecord(ARecord feedConnectionRecord) throws AlgebricksException {
         String dataverseCanonicalName =
-                ((AString) feedConnectionRecord.getValueByPos(MetadataRecordTypes.FEED_CONN_DATAVERSE_NAME_FIELD_INDEX))
+                ((AString) feedConnectionRecord.getValueByPos(feedConnectionEntity.dataverseNameIndex()))
                         .getStringValue();
         DataverseName dataverseName = DataverseName.createFromCanonicalForm(dataverseCanonicalName);
+        int databaseNameIndex = feedConnectionEntity.databaseNameIndex();
+        String databaseName;
+        if (databaseNameIndex >= 0) {
+            databaseName = ((AString) feedConnectionRecord.getValueByPos(databaseNameIndex)).getStringValue();
+        } else {
+            databaseName = MetadataUtil.databaseFor(dataverseName);
+        }
         String feedName =
-                ((AString) feedConnectionRecord.getValueByPos(MetadataRecordTypes.FEED_CONN_FEED_NAME_FIELD_INDEX))
-                        .getStringValue();
-        String datasetName =
-                ((AString) feedConnectionRecord.getValueByPos(MetadataRecordTypes.FEED_CONN_DATASET_NAME_FIELD_INDEX))
-                        .getStringValue();
+                ((AString) feedConnectionRecord.getValueByPos(feedConnectionEntity.feedNameIndex())).getStringValue();
+        String datasetName = ((AString) feedConnectionRecord.getValueByPos(feedConnectionEntity.datasetNameIndex()))
+                .getStringValue();
         String outputType =
-                ((AString) feedConnectionRecord.getValueByPos(MetadataRecordTypes.FEED_CONN_OUTPUT_TYPE_INDEX))
-                        .getStringValue();
+                ((AString) feedConnectionRecord.getValueByPos(feedConnectionEntity.outputTypeIndex())).getStringValue();
         String policyName =
-                ((AString) feedConnectionRecord.getValueByPos(MetadataRecordTypes.FEED_CONN_POLICY_FIELD_INDEX))
-                        .getStringValue();
+                ((AString) feedConnectionRecord.getValueByPos(feedConnectionEntity.policyIndex())).getStringValue();
         List<FunctionSignature> appliedFunctions = null;
-        Object o = feedConnectionRecord.getValueByPos(MetadataRecordTypes.FEED_CONN_APPLIED_FUNCTIONS_FIELD_INDEX);
+        Object o = feedConnectionRecord.getValueByPos(feedConnectionEntity.appliedFunctionsIndex());
         IACursor cursor;
 
         if (!(o instanceof ANull) && !(o instanceof AMissing)) {
             appliedFunctions = new ArrayList<>();
-            AUnorderedList afList = (AUnorderedList) feedConnectionRecord
-                    .getValueByPos(MetadataRecordTypes.FEED_CONN_APPLIED_FUNCTIONS_FIELD_INDEX);
+            AUnorderedList afList =
+                    (AUnorderedList) feedConnectionRecord.getValueByPos(feedConnectionEntity.appliedFunctionsIndex());
             cursor = afList.getCursor();
             while (cursor.next()) {
+                //TODO(DB): deal with database
                 String afValue = ((AString) cursor.get()).getStringValue();
                 int pos = afValue.lastIndexOf('.'); //TODO(MULTI_PART_DATAVERSE_NAME):REVISIT
                 String afDataverseCanonicalName = afValue.substring(0, pos);
                 String afName = afValue.substring(pos + 1);
                 DataverseName afDataverseName = DataverseName.createFromCanonicalForm(afDataverseCanonicalName);
-                FunctionSignature functionSignature = new FunctionSignature(afDataverseName, afName, 1);
+                String afDatabaseName = MetadataUtil.databaseFor(afDataverseName);
+                FunctionSignature functionSignature = new FunctionSignature(afDatabaseName, afDataverseName, afName, 1);
                 appliedFunctions.add(functionSignature);
             }
         }
@@ -92,8 +98,8 @@ public class FeedConnectionTupleTranslator extends AbstractTupleTranslator<FeedC
         String whereClauseBody = whereClauseIdx >= 0
                 ? ((AString) feedConnectionRecord.getValueByPos(whereClauseIdx)).getStringValue() : "";
 
-        return new FeedConnection(dataverseName, feedName, datasetName, appliedFunctions, policyName, whereClauseBody,
-                outputType);
+        return new FeedConnection(databaseName, dataverseName, feedName, datasetName, appliedFunctions, policyName,
+                whereClauseBody, outputType);
     }
 
     @Override
@@ -102,6 +108,11 @@ public class FeedConnectionTupleTranslator extends AbstractTupleTranslator<FeedC
 
         tupleBuilder.reset();
 
+        if (feedConnectionEntity.databaseNameIndex() >= 0) {
+            aString.setValue(feedConnection.getDatabaseName());
+            stringSerde.serialize(aString, tupleBuilder.getDataOutput());
+            tupleBuilder.addFieldEndOffset();
+        }
         // key: dataverse
         aString.setValue(dataverseCanonicalName);
         stringSerde.serialize(aString, tupleBuilder.getDataOutput());
@@ -117,31 +128,38 @@ public class FeedConnectionTupleTranslator extends AbstractTupleTranslator<FeedC
         stringSerde.serialize(aString, tupleBuilder.getDataOutput());
         tupleBuilder.addFieldEndOffset();
 
-        recordBuilder.reset(MetadataRecordTypes.FEED_CONNECTION_RECORDTYPE);
+        recordBuilder.reset(feedConnectionEntity.getRecordType());
+
+        if (feedConnectionEntity.databaseNameIndex() >= 0) {
+            fieldValue.reset();
+            aString.setValue(feedConnection.getDatabaseName());
+            stringSerde.serialize(aString, fieldValue.getDataOutput());
+            recordBuilder.addField(feedConnectionEntity.databaseNameIndex(), fieldValue);
+        }
 
         // field dataverse
         fieldValue.reset();
         aString.setValue(dataverseCanonicalName);
         stringSerde.serialize(aString, fieldValue.getDataOutput());
-        recordBuilder.addField(MetadataRecordTypes.FEED_CONN_DATAVERSE_NAME_FIELD_INDEX, fieldValue);
+        recordBuilder.addField(feedConnectionEntity.dataverseNameIndex(), fieldValue);
 
         // field: feedId
         fieldValue.reset();
         aString.setValue(feedConnection.getFeedName());
         stringSerde.serialize(aString, fieldValue.getDataOutput());
-        recordBuilder.addField(MetadataRecordTypes.FEED_CONN_FEED_NAME_FIELD_INDEX, fieldValue);
+        recordBuilder.addField(feedConnectionEntity.feedNameIndex(), fieldValue);
 
         // field: dataset
         fieldValue.reset();
         aString.setValue(feedConnection.getDatasetName());
         stringSerde.serialize(aString, fieldValue.getDataOutput());
-        recordBuilder.addField(MetadataRecordTypes.FEED_CONN_DATASET_NAME_FIELD_INDEX, fieldValue);
+        recordBuilder.addField(feedConnectionEntity.datasetNameIndex(), fieldValue);
 
         // field: outputType
         fieldValue.reset();
         aString.setValue(feedConnection.getOutputType());
         stringSerde.serialize(aString, fieldValue.getDataOutput());
-        recordBuilder.addField(MetadataRecordTypes.FEED_CONN_OUTPUT_TYPE_INDEX, fieldValue);
+        recordBuilder.addField(feedConnectionEntity.outputTypeIndex(), fieldValue);
 
         // field: appliedFunctions
         fieldValue.reset();
@@ -151,7 +169,7 @@ public class FeedConnectionTupleTranslator extends AbstractTupleTranslator<FeedC
         fieldValue.reset();
         aString.setValue(feedConnection.getPolicyName());
         stringSerde.serialize(aString, fieldValue.getDataOutput());
-        recordBuilder.addField(MetadataRecordTypes.FEED_CONN_POLICY_FIELD_INDEX, fieldValue);
+        recordBuilder.addField(feedConnectionEntity.policyIndex(), fieldValue);
 
         // write open fields
         writeOpenFields(feedConnection);
@@ -185,11 +203,12 @@ public class FeedConnectionTupleTranslator extends AbstractTupleTranslator<FeedC
         UnorderedListBuilder listBuilder = new UnorderedListBuilder();
         ArrayBackedValueStorage listEleBuffer = new ArrayBackedValueStorage();
 
-        listBuilder.reset((AUnorderedListType) MetadataRecordTypes.FEED_CONNECTION_RECORDTYPE
-                .getFieldTypes()[MetadataRecordTypes.FEED_CONN_APPLIED_FUNCTIONS_FIELD_INDEX]);
+        listBuilder.reset((AUnorderedListType) feedConnectionEntity.getRecordType().getFieldTypes()[feedConnectionEntity
+                .appliedFunctionsIndex()]);
         if (fc.getAppliedFunctions() != null) {
             List<FunctionSignature> appliedFunctions = fc.getAppliedFunctions();
             for (FunctionSignature af : appliedFunctions) {
+                //TODO(DB): deal with database
                 listEleBuffer.reset();
                 aString.setValue(af.getDataverseName().getCanonicalForm() + '.' + af.getName()); //TODO(MULTI_PART_DATAVERSE_NAME):REVISIT
                 stringSerde.serialize(aString, listEleBuffer.getDataOutput());
@@ -197,6 +216,6 @@ public class FeedConnectionTupleTranslator extends AbstractTupleTranslator<FeedC
             }
         }
         listBuilder.write(buffer.getDataOutput(), true);
-        rb.addField(MetadataRecordTypes.FEED_CONN_APPLIED_FUNCTIONS_FIELD_INDEX, buffer);
+        rb.addField(feedConnectionEntity.appliedFunctionsIndex(), buffer);
     }
 }

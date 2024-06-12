@@ -18,9 +18,14 @@
  */
 package org.apache.asterix.app.nc;
 
+import static org.apache.hyracks.control.common.controllers.ControllerConfig.Option.CLOUD_DEPLOYMENT;
+
 import java.io.IOException;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -28,17 +33,24 @@ import java.util.concurrent.ExecutorService;
 
 import org.apache.asterix.active.ActiveManager;
 import org.apache.asterix.app.result.ResultReader;
+import org.apache.asterix.cloud.CloudConfigurator;
+import org.apache.asterix.cloud.LocalPartitionBootstrapper;
+import org.apache.asterix.cloud.clients.ICloudGuardian;
 import org.apache.asterix.common.api.IConfigValidator;
 import org.apache.asterix.common.api.IConfigValidatorFactory;
 import org.apache.asterix.common.api.ICoordinationService;
 import org.apache.asterix.common.api.IDatasetLifecycleManager;
 import org.apache.asterix.common.api.IDiskWriteRateLimiterProvider;
+import org.apache.asterix.common.api.INamespacePathResolver;
+import org.apache.asterix.common.api.INamespaceResolver;
 import org.apache.asterix.common.api.INcApplicationContext;
 import org.apache.asterix.common.api.IPropertiesFactory;
 import org.apache.asterix.common.api.IReceptionist;
 import org.apache.asterix.common.api.IReceptionistFactory;
+import org.apache.asterix.common.cloud.IPartitionBootstrapper;
 import org.apache.asterix.common.config.ActiveProperties;
 import org.apache.asterix.common.config.BuildProperties;
+import org.apache.asterix.common.config.CloudProperties;
 import org.apache.asterix.common.config.CompilerProperties;
 import org.apache.asterix.common.config.ExternalProperties;
 import org.apache.asterix.common.config.MessagingProperties;
@@ -57,6 +69,7 @@ import org.apache.asterix.common.replication.IReplicationManager;
 import org.apache.asterix.common.replication.IReplicationStrategyFactory;
 import org.apache.asterix.common.storage.IIndexCheckpointManagerProvider;
 import org.apache.asterix.common.storage.IReplicaManager;
+import org.apache.asterix.common.storage.SizeBoundedConcurrentMergePolicyFactory;
 import org.apache.asterix.common.transactions.IRecoveryManager;
 import org.apache.asterix.common.transactions.IRecoveryManager.SystemState;
 import org.apache.asterix.common.transactions.IRecoveryManagerFactory;
@@ -96,17 +109,25 @@ import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperationScheduler;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMMergePolicyFactory;
 import org.apache.hyracks.storage.am.lsm.common.api.IVirtualBufferCache;
 import org.apache.hyracks.storage.am.lsm.common.impls.AsynchronousScheduler;
-import org.apache.hyracks.storage.am.lsm.common.impls.ConcurrentMergePolicyFactory;
 import org.apache.hyracks.storage.am.lsm.common.impls.GreedyScheduler;
 import org.apache.hyracks.storage.common.ILocalResourceRepository;
 import org.apache.hyracks.storage.common.buffercache.BufferCache;
 import org.apache.hyracks.storage.common.buffercache.ClockPageReplacementStrategy;
+import org.apache.hyracks.storage.common.buffercache.DefaultDiskCachedPageAllocator;
 import org.apache.hyracks.storage.common.buffercache.DelayPageCleanerPolicy;
 import org.apache.hyracks.storage.common.buffercache.HeapBufferAllocator;
 import org.apache.hyracks.storage.common.buffercache.IBufferCache;
 import org.apache.hyracks.storage.common.buffercache.ICacheMemoryAllocator;
+import org.apache.hyracks.storage.common.buffercache.IDiskCachedPageAllocator;
 import org.apache.hyracks.storage.common.buffercache.IPageCleanerPolicy;
 import org.apache.hyracks.storage.common.buffercache.IPageReplacementStrategy;
+import org.apache.hyracks.storage.common.buffercache.context.IBufferCacheReadContext;
+import org.apache.hyracks.storage.common.buffercache.context.read.DefaultBufferCacheReadContextProvider;
+import org.apache.hyracks.storage.common.disk.IDiskCacheMonitoringService;
+import org.apache.hyracks.storage.common.disk.IDiskResourceCacheLockNotifier;
+import org.apache.hyracks.storage.common.disk.NoOpDiskCacheMonitoringService;
+import org.apache.hyracks.storage.common.disk.NoOpDiskResourceCacheLockNotifier;
+import org.apache.hyracks.storage.common.file.BufferedFileHandle;
 import org.apache.hyracks.storage.common.file.FileMapManager;
 import org.apache.hyracks.storage.common.file.ILocalResourceRepositoryFactory;
 import org.apache.hyracks.storage.common.file.IResourceIdFactory;
@@ -143,6 +164,7 @@ public class NCAppRuntimeContext implements INcApplicationContext {
     private ILSMIOOperationScheduler lsmIOScheduler;
     private PersistentLocalResourceRepository localResourceRepository;
     private IIOManager ioManager;
+    private IIOManager persistenceIOManager;
     private boolean isShuttingdown;
     private ActiveManager activeManager;
     private IReplicationChannel replicationChannel;
@@ -156,12 +178,18 @@ public class NCAppRuntimeContext implements INcApplicationContext {
     private IIndexCheckpointManagerProvider indexCheckpointManagerProvider;
     private IReplicaManager replicaManager;
     private IReceptionist receptionist;
-    private ICacheManager cacheManager;
+    private final ICacheManager cacheManager;
     private IConfigValidator configValidator;
     private IDiskWriteRateLimiterProvider diskWriteRateLimiterProvider;
+    private final CloudProperties cloudProperties;
+    private IPartitionBootstrapper partitionBootstrapper;
+    private final INamespacePathResolver namespacePathResolver;
+    private final INamespaceResolver namespaceResolver;
+    private IDiskCacheMonitoringService diskCacheService;
 
     public NCAppRuntimeContext(INCServiceContext ncServiceContext, NCExtensionManager extensionManager,
-            IPropertiesFactory propertiesFactory) {
+            IPropertiesFactory propertiesFactory, INamespaceResolver namespaceResolver,
+            INamespacePathResolver namespacePathResolver) {
         this.ncServiceContext = ncServiceContext;
         compilerProperties = propertiesFactory.newCompilerProperties();
         externalProperties = propertiesFactory.newExternalProperties();
@@ -173,11 +201,15 @@ public class NCAppRuntimeContext implements INcApplicationContext {
         replicationProperties = propertiesFactory.newReplicationProperties();
         messagingProperties = propertiesFactory.newMessagingProperties();
         nodeProperties = propertiesFactory.newNodeProperties();
+        cloudProperties = propertiesFactory.newCloudProperties();
         ncExtensionManager = extensionManager;
         componentProvider = new StorageComponentProvider();
-        resourceIdFactory = new GlobalResourceIdFactoryProvider(ncServiceContext).createResourceIdFactory();
+        resourceIdFactory = new GlobalResourceIdFactoryProvider(ncServiceContext, getResourceIdBlockSize())
+                .createResourceIdFactory();
         persistedResourceRegistry = ncServiceContext.getPersistedResourceRegistry();
         cacheManager = new CacheManager();
+        this.namespacePathResolver = namespacePathResolver;
+        this.namespaceResolver = namespaceResolver;
     }
 
     @Override
@@ -185,18 +217,39 @@ public class NCAppRuntimeContext implements INcApplicationContext {
             IConfigValidatorFactory configValidatorFactory, IReplicationStrategyFactory replicationStrategyFactory,
             boolean initialRun) throws IOException {
         ioManager = getServiceContext().getIoManager();
+        CloudConfigurator cloudConfigurator;
+        IDiskResourceCacheLockNotifier lockNotifier;
+        IDiskCachedPageAllocator pageAllocator;
+        IBufferCacheReadContext defaultContext;
+        if (isCloudDeployment()) {
+            cloudConfigurator = CloudConfigurator.of(cloudProperties, ioManager, namespacePathResolver,
+                    getCloudGuardian(cloudProperties));
+            persistenceIOManager = cloudConfigurator.getCloudIoManager();
+            partitionBootstrapper = cloudConfigurator.getPartitionBootstrapper();
+            lockNotifier = cloudConfigurator.getLockNotifier();
+            pageAllocator = cloudConfigurator.getPageAllocator();
+            defaultContext = cloudConfigurator.getDefaultContext();
+        } else {
+            cloudConfigurator = null;
+            persistenceIOManager = ioManager;
+            partitionBootstrapper = new LocalPartitionBootstrapper(ioManager);
+            lockNotifier = NoOpDiskResourceCacheLockNotifier.INSTANCE;
+            pageAllocator = DefaultDiskCachedPageAllocator.INSTANCE;
+            defaultContext = DefaultBufferCacheReadContextProvider.DEFAULT;
+        }
+
         int ioQueueLen = getServiceContext().getAppConfig().getInt(NCConfig.Option.IO_QUEUE_SIZE);
         threadExecutor =
                 MaintainedThreadNameExecutorService.newCachedThreadPool(getServiceContext().getThreadFactory());
-        ICacheMemoryAllocator allocator = new HeapBufferAllocator();
+        ICacheMemoryAllocator bufferAllocator = new HeapBufferAllocator();
         IPageCleanerPolicy pcp = new DelayPageCleanerPolicy(600000);
-        IPageReplacementStrategy prs = new ClockPageReplacementStrategy(allocator,
+        IPageReplacementStrategy prs = new ClockPageReplacementStrategy(bufferAllocator, pageAllocator,
                 storageProperties.getBufferCachePageSize(), storageProperties.getBufferCacheNumPages());
         lsmIOScheduler = createIoScheduler(storageProperties);
-        metadataMergePolicyFactory = new ConcurrentMergePolicyFactory();
-        indexCheckpointManagerProvider = new IndexCheckpointManagerProvider(ioManager);
+        metadataMergePolicyFactory = new SizeBoundedConcurrentMergePolicyFactory();
+        indexCheckpointManagerProvider = new IndexCheckpointManagerProvider(persistenceIOManager);
         ILocalResourceRepositoryFactory persistentLocalResourceRepositoryFactory =
-                new PersistentLocalResourceRepositoryFactory(ioManager, indexCheckpointManagerProvider,
+                new PersistentLocalResourceRepositoryFactory(persistenceIOManager, indexCheckpointManagerProvider,
                         persistedResourceRegistry);
         localResourceRepository =
                 (PersistentLocalResourceRepository) persistentLocalResourceRepositoryFactory.createRepository();
@@ -221,13 +274,13 @@ public class NCAppRuntimeContext implements INcApplicationContext {
                         maxScheduledFlushes);
             }
         }
-        virtualBufferCache = new GlobalVirtualBufferCache(allocator, storageProperties, maxScheduledFlushes);
+        virtualBufferCache = new GlobalVirtualBufferCache(bufferAllocator, storageProperties, maxScheduledFlushes);
         // Must start vbc now instead of by life cycle component manager (lccm) because lccm happens after
         // the metadata bootstrap task
         ((ILifeCycleComponent) virtualBufferCache).start();
-        datasetLifecycleManager =
-                new DatasetLifecycleManager(storageProperties, localResourceRepository, txnSubsystem.getLogManager(),
-                        virtualBufferCache, indexCheckpointManagerProvider, ioManager.getIODevices().size());
+        datasetLifecycleManager = new DatasetLifecycleManager(storageProperties, localResourceRepository,
+                txnSubsystem.getLogManager(), virtualBufferCache, indexCheckpointManagerProvider, lockNotifier);
+        localResourceRepository.setDatasetLifecycleManager(datasetLifecycleManager);
         final String nodeId = getServiceContext().getNodeId();
         final Set<Integer> nodePartitions = metadataProperties.getNodePartitions(nodeId);
         replicaManager = new ReplicaManager(this, nodePartitions);
@@ -237,7 +290,11 @@ public class NCAppRuntimeContext implements INcApplicationContext {
                 this.ncServiceContext);
         receptionist = receptionistFactory.create();
 
+        Map<Integer, BufferedFileHandle> fileInfoMap = new HashMap<>();
         if (replicationProperties.isReplicationEnabled()) {
+            if (LOGGER.isInfoEnabled()) {
+                LOGGER.info("Replication is enabled");
+            }
             replicationManager = new ReplicationManager(this, replicationStrategyFactory, replicationProperties);
 
             //pass replication manager to replication required object
@@ -250,13 +307,23 @@ public class NCAppRuntimeContext implements INcApplicationContext {
             //initialize replication channel
             replicationChannel = new ReplicationChannel(this);
 
-            bufferCache = new BufferCache(ioManager, prs, pcp, new FileMapManager(),
+            bufferCache = new BufferCache(persistenceIOManager, prs, pcp, new FileMapManager(),
                     storageProperties.getBufferCacheMaxOpenFiles(), ioQueueLen, getServiceContext().getThreadFactory(),
-                    replicationManager);
+                    replicationManager, fileInfoMap);
         } else {
-            bufferCache = new BufferCache(ioManager, prs, pcp, new FileMapManager(),
-                    storageProperties.getBufferCacheMaxOpenFiles(), ioQueueLen, getServiceContext().getThreadFactory());
+            bufferCache = new BufferCache(persistenceIOManager, prs, pcp, new FileMapManager(),
+                    storageProperties.getBufferCacheMaxOpenFiles(), ioQueueLen, getServiceContext().getThreadFactory(),
+                    fileInfoMap, defaultContext);
         }
+
+        if (cloudConfigurator != null) {
+            diskCacheService =
+                    cloudConfigurator.createDiskCacheMonitoringService(getServiceContext(), bufferCache, fileInfoMap);
+        } else {
+            diskCacheService = NoOpDiskCacheMonitoringService.INSTANCE;
+        }
+
+        diskCacheService.start();
 
         NodeControllerService ncs = (NodeControllerService) getServiceContext().getControllerService();
         FileReference appDir =
@@ -296,6 +363,10 @@ public class NCAppRuntimeContext implements INcApplicationContext {
         diskWriteRateLimiterProvider = new DiskWriteRateLimiterProvider();
     }
 
+    protected ICloudGuardian getCloudGuardian(CloudProperties cloudProperties) {
+        return ICloudGuardian.NoOpCloudGuardian.INSTANCE;
+    }
+
     @Override
     public boolean isShuttingdown() {
         return isShuttingdown;
@@ -309,6 +380,7 @@ public class NCAppRuntimeContext implements INcApplicationContext {
     @Override
     public synchronized void preStop() throws Exception {
         activeManager.shutdown();
+        diskCacheService.stop();
         if (metadataNodeStub != null) {
             unexportMetadataNodeStub();
         }
@@ -356,6 +428,11 @@ public class NCAppRuntimeContext implements INcApplicationContext {
     @Override
     public IIOManager getIoManager() {
         return ioManager;
+    }
+
+    @Override
+    public IIOManager getPersistenceIoManager() {
+        return persistenceIOManager;
     }
 
     @Override
@@ -439,25 +516,30 @@ public class NCAppRuntimeContext implements INcApplicationContext {
     }
 
     @Override
-    public void initializeMetadata(boolean newUniverse, int partitionId) throws Exception {
-        LOGGER.info("Bootstrapping metadata");
-        MetadataNode.INSTANCE.initialize(this, ncExtensionManager.getMetadataTupleTranslatorProvider(),
-                ncExtensionManager.getMetadataExtensions(), partitionId);
+    public INamespaceResolver getNamespaceResolver() {
+        return namespaceResolver;
+    }
 
-        //noinspection unchecked
-        ConcurrentHashMap<CcId, IAsterixStateProxy> proxyMap =
-                (ConcurrentHashMap<CcId, IAsterixStateProxy>) getServiceContext().getDistributedState();
-        if (proxyMap == null) {
-            throw new IllegalStateException("Metadata node cannot access distributed state");
-        }
+    @Override
+    public INamespacePathResolver getNamespacePathResolver() {
+        return namespacePathResolver;
+    }
+
+    @Override
+    public void initializeMetadata(boolean newUniverse, int partitionId) throws Exception {
+        LOGGER.info("Bootstrapping ({}) metadata in partition {}", newUniverse ? "new" : "existing", partitionId);
+        MetadataNode.INSTANCE.initialize(this, ncExtensionManager.getMetadataIndexesProvider(),
+                ncExtensionManager.getMetadataTupleTranslatorProvider(), ncExtensionManager.getMetadataExtensions(),
+                partitionId);
 
         // This is a special case, we just give the metadataNode directly.
         // This way we can delay the registration of the metadataNode until
         // it is completely initialized.
-        MetadataManager.initialize(proxyMap.values(), MetadataNode.INSTANCE);
-        MetadataBootstrap.startUniverse(getServiceContext(), newUniverse);
+        MetadataManager.initialize(getAsterixStateProxies(), MetadataNode.INSTANCE);
+        MetadataBootstrap.startUniverse(getServiceContext(), newUniverse,
+                ncExtensionManager.getMetadataIndexesProvider());
         MetadataBootstrap.startDDLRecovery();
-        ncExtensionManager.initializeMetadata(getServiceContext());
+        ncExtensionManager.initializeMetadata(getServiceContext(), ncExtensionManager.getMetadataIndexesProvider());
         LOGGER.info("Metadata node bound");
     }
 
@@ -467,18 +549,10 @@ public class NCAppRuntimeContext implements INcApplicationContext {
             final INetworkSecurityManager networkSecurityManager =
                     ncServiceContext.getControllerService().getNetworkSecurityManager();
 
-            // clients need to have the client factory on their classpath- to enable older clients, only use
-            // our client socket factory when SSL is enabled
-            if (networkSecurityManager.getConfiguration().isSslEnabled()) {
-                final RMIServerFactory serverSocketFactory = new RMIServerFactory(networkSecurityManager);
-                final RMIClientFactory clientSocketFactory =
-                        new RMIClientFactory(networkSecurityManager.getConfiguration());
-                metadataNodeStub = (IMetadataNode) UnicastRemoteObject.exportObject(MetadataNode.INSTANCE,
-                        getMetadataProperties().getMetadataPort(), clientSocketFactory, serverSocketFactory);
-            } else {
-                metadataNodeStub = (IMetadataNode) UnicastRemoteObject.exportObject(MetadataNode.INSTANCE,
-                        getMetadataProperties().getMetadataPort());
-            }
+            metadataNodeStub = (IMetadataNode) UnicastRemoteObject.exportObject(MetadataNode.INSTANCE,
+                    getMetadataProperties().getMetadataPort(),
+                    RMIClientFactory.getSocketFactory(networkSecurityManager),
+                    RMIServerFactory.getSocketFactory(networkSecurityManager));
         }
     }
 
@@ -488,6 +562,17 @@ public class NCAppRuntimeContext implements INcApplicationContext {
             UnicastRemoteObject.unexportObject(MetadataNode.INSTANCE, false);
         }
         metadataNodeStub = null;
+    }
+
+    protected Collection<IAsterixStateProxy> getAsterixStateProxies() {
+        //noinspection unchecked
+        ConcurrentHashMap<CcId, IAsterixStateProxy> proxyMap =
+                (ConcurrentHashMap<CcId, IAsterixStateProxy>) getServiceContext().getDistributedState();
+        if (proxyMap == null) {
+            throw new IllegalStateException("Metadata node cannot access distributed state");
+        }
+
+        return proxyMap.values();
     }
 
     @Override
@@ -612,7 +697,7 @@ public class NCAppRuntimeContext implements INcApplicationContext {
         String schedulerName = storageProperties.getIoScheduler();
         int numPartitions = ioManager.getIODevices().size();
 
-        int maxConcurrentFlushes = storageProperties.geMaxConcurrentFlushes(numPartitions);
+        int maxConcurrentFlushes = storageProperties.getMaxConcurrentFlushes(numPartitions);
         int maxScheduledMerges = storageProperties.getMaxScheduledMerges(numPartitions);
         int maxConcurrentMerges = storageProperties.getMaxConcurrentMerges(numPartitions);
 
@@ -637,5 +722,30 @@ public class NCAppRuntimeContext implements INcApplicationContext {
     @Override
     public IDiskWriteRateLimiterProvider getDiskWriteRateLimiterProvider() {
         return diskWriteRateLimiterProvider;
+    }
+
+    @Override
+    public IDiskCacheMonitoringService getDiskCacheService() {
+        return diskCacheService;
+    }
+
+    @Override
+    public boolean isCloudDeployment() {
+        return ncServiceContext.getAppConfig().getBoolean(CLOUD_DEPLOYMENT);
+    }
+
+    @Override
+    public CloudProperties getCloudProperties() {
+        return cloudProperties;
+    }
+
+    @Override
+    public IPartitionBootstrapper getPartitionBootstrapper() {
+        return partitionBootstrapper;
+    }
+
+    private int getResourceIdBlockSize() {
+        return isCloudDeployment() ? storageProperties.getStoragePartitionsCount()
+                : ncServiceContext.getIoManager().getIODevices().size();
     }
 }

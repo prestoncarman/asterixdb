@@ -23,6 +23,7 @@ import java.util.Set;
 
 import org.apache.asterix.algebra.base.ILangExpressionToPlanTranslatorFactory;
 import org.apache.asterix.algebra.base.ILangExtension;
+import org.apache.asterix.common.api.INamespaceResolver;
 import org.apache.asterix.common.config.CompilerProperties;
 import org.apache.asterix.external.feed.watch.FeedActivityDetails;
 import org.apache.asterix.lang.common.base.IAstPrintVisitorFactory;
@@ -37,11 +38,18 @@ import org.apache.asterix.lang.sqlpp.visitor.SqlppAstPrintVisitorFactory;
 import org.apache.asterix.optimizer.base.FuzzyUtils;
 import org.apache.asterix.optimizer.rules.DisjunctivePredicateToJoinRule;
 import org.apache.asterix.optimizer.rules.SetAsterixPhysicalOperatorsRule;
+import org.apache.asterix.optimizer.rules.cbo.JoinEnum;
 import org.apache.asterix.optimizer.rules.util.EquivalenceClassUtils;
 import org.apache.asterix.translator.SqlppExpressionToPlanTranslator;
 import org.apache.asterix.translator.SqlppExpressionToPlanTranslatorFactory;
 
 public class SqlppCompilationProvider implements ILangCompilationProvider {
+
+    protected final INamespaceResolver namespaceResolver;
+
+    public SqlppCompilationProvider(INamespaceResolver namespaceResolver) {
+        this.namespaceResolver = namespaceResolver;
+    }
 
     @Override
     public ILangExtension.Language getLanguage() {
@@ -50,7 +58,7 @@ public class SqlppCompilationProvider implements ILangCompilationProvider {
 
     @Override
     public IParserFactory getParserFactory() {
-        return new SqlppParserFactory();
+        return new SqlppParserFactory(namespaceResolver);
     }
 
     @Override
@@ -85,13 +93,15 @@ public class SqlppCompilationProvider implements ILangCompilationProvider {
                 CompilerProperties.COMPILER_SUBPLAN_NESTEDPUSHDOWN_KEY, CompilerProperties.COMPILER_ARRAYINDEX_KEY,
                 CompilerProperties.COMPILER_CBO_KEY, CompilerProperties.COMPILER_CBO_TEST_KEY,
                 CompilerProperties.COMPILER_FORCE_JOIN_ORDER_KEY, CompilerProperties.COMPILER_QUERY_PLAN_SHAPE_KEY,
-                CompilerProperties.COMPILER_MIN_MEMORY_ALLOCATION_KEY, FunctionUtil.IMPORT_PRIVATE_FUNCTIONS,
+                CompilerProperties.COMPILER_MIN_MEMORY_ALLOCATION_KEY, CompilerProperties.COMPILER_COLUMN_FILTER_KEY,
+                CompilerProperties.COMPILER_BATCH_LOOKUP_KEY, FunctionUtil.IMPORT_PRIVATE_FUNCTIONS,
                 FuzzyUtils.SIM_FUNCTION_PROP_NAME, FuzzyUtils.SIM_THRESHOLD_PROP_NAME,
                 StartFeedStatement.WAIT_FOR_COMPLETION, FeedActivityDetails.FEED_POLICY_NAME,
                 FeedActivityDetails.COLLECT_LOCATIONS, SqlppQueryRewriter.INLINE_WITH_OPTION,
                 SqlppExpressionToPlanTranslator.REWRITE_IN_AS_OR_OPTION, "hash_merge", "output-record-type",
                 DisjunctivePredicateToJoinRule.REWRITE_OR_AS_JOIN_OPTION,
                 SetAsterixPhysicalOperatorsRule.REWRITE_ATTEMPT_BATCH_ASSIGN,
-                EquivalenceClassUtils.REWRITE_INTERNAL_QUERYUID_PK, SqlppQueryRewriter.SQL_COMPAT_OPTION));
+                EquivalenceClassUtils.REWRITE_INTERNAL_QUERYUID_PK, SqlppQueryRewriter.SQL_COMPAT_OPTION,
+                JoinEnum.CBO_FULL_ENUM_LEVEL_KEY, JoinEnum.CBO_CP_ENUM_KEY));
     }
 }

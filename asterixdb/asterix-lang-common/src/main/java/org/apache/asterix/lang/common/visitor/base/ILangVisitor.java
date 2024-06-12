@@ -47,7 +47,10 @@ import org.apache.asterix.lang.common.statement.AnalyzeDropStatement;
 import org.apache.asterix.lang.common.statement.AnalyzeStatement;
 import org.apache.asterix.lang.common.statement.CompactStatement;
 import org.apache.asterix.lang.common.statement.ConnectFeedStatement;
+import org.apache.asterix.lang.common.statement.CopyFromStatement;
+import org.apache.asterix.lang.common.statement.CopyToStatement;
 import org.apache.asterix.lang.common.statement.CreateAdapterStatement;
+import org.apache.asterix.lang.common.statement.CreateDatabaseStatement;
 import org.apache.asterix.lang.common.statement.CreateDataverseStatement;
 import org.apache.asterix.lang.common.statement.CreateFeedPolicyStatement;
 import org.apache.asterix.lang.common.statement.CreateFeedStatement;
@@ -58,6 +61,7 @@ import org.apache.asterix.lang.common.statement.CreateIndexStatement;
 import org.apache.asterix.lang.common.statement.CreateLibraryStatement;
 import org.apache.asterix.lang.common.statement.CreateSynonymStatement;
 import org.apache.asterix.lang.common.statement.CreateViewStatement;
+import org.apache.asterix.lang.common.statement.DatabaseDropStatement;
 import org.apache.asterix.lang.common.statement.DatasetDecl;
 import org.apache.asterix.lang.common.statement.DataverseDecl;
 import org.apache.asterix.lang.common.statement.DataverseDropStatement;
@@ -86,7 +90,6 @@ import org.apache.asterix.lang.common.statement.TypeDropStatement;
 import org.apache.asterix.lang.common.statement.UpdateStatement;
 import org.apache.asterix.lang.common.statement.ViewDecl;
 import org.apache.asterix.lang.common.statement.ViewDropStatement;
-import org.apache.asterix.lang.common.statement.WriteStatement;
 
 public interface ILangVisitor<R, T> {
 
@@ -101,6 +104,10 @@ public interface ILangVisitor<R, T> {
     R visit(DatasetDecl dd, T arg) throws CompilationException;
 
     R visit(LoadStatement stmtLoad, T arg) throws CompilationException;
+
+    R visit(CopyFromStatement stmtCopy, T arg) throws CompilationException;
+
+    R visit(CopyToStatement cto, T arg) throws CompilationException;
 
     R visit(DropDatasetStatement del, T arg) throws CompilationException;
 
@@ -152,6 +159,8 @@ public interface ILangVisitor<R, T> {
 
     R visit(CreateIndexStatement cis, T arg) throws CompilationException;
 
+    R visit(CreateDatabaseStatement cds, T arg) throws CompilationException;
+
     R visit(CreateDataverseStatement del, T arg) throws CompilationException;
 
     R visit(CreateFullTextFilterStatement cis, T arg) throws CompilationException;
@@ -166,11 +175,11 @@ public interface ILangVisitor<R, T> {
 
     R visit(NodeGroupDropStatement del, T arg) throws CompilationException;
 
+    R visit(DatabaseDropStatement dds, T arg) throws CompilationException;
+
     R visit(DataverseDropStatement del, T arg) throws CompilationException;
 
     R visit(TypeDropStatement del, T arg) throws CompilationException;
-
-    R visit(WriteStatement ws, T arg) throws CompilationException;
 
     R visit(SetStatement ss, T arg) throws CompilationException;
 

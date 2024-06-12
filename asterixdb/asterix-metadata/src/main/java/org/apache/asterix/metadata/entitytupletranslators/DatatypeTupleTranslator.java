@@ -22,11 +22,11 @@ package org.apache.asterix.metadata.entitytupletranslators;
 import java.util.Calendar;
 
 import org.apache.asterix.common.metadata.DataverseName;
+import org.apache.asterix.common.metadata.MetadataUtil;
 import org.apache.asterix.common.transactions.TxnId;
 import org.apache.asterix.metadata.MetadataNode;
-import org.apache.asterix.metadata.bootstrap.MetadataPrimaryIndexes;
+import org.apache.asterix.metadata.bootstrap.DatatypeEntity;
 import org.apache.asterix.metadata.bootstrap.MetadataRecordTypes;
-import org.apache.asterix.metadata.entities.BuiltinTypeMap;
 import org.apache.asterix.metadata.entities.Datatype;
 import org.apache.asterix.metadata.utils.TypeUtil;
 import org.apache.asterix.om.base.ABoolean;
@@ -38,6 +38,7 @@ import org.apache.asterix.om.types.AOrderedListType;
 import org.apache.asterix.om.types.ARecordType;
 import org.apache.asterix.om.types.AUnorderedListType;
 import org.apache.asterix.om.types.AbstractComplexType;
+import org.apache.asterix.om.types.BuiltinTypeMap;
 import org.apache.asterix.om.types.IAType;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
@@ -48,28 +49,32 @@ import org.apache.hyracks.dataflow.common.data.accessors.ITupleReference;
  */
 public class DatatypeTupleTranslator extends AbstractDatatypeTupleTranslator<Datatype> {
 
-    // Payload field containing serialized Datatype.
-    private static final int DATATYPE_PAYLOAD_TUPLE_FIELD_INDEX = 2;
+    private final DatatypeEntity datatypeEntity;
 
-    protected DatatypeTupleTranslator(TxnId txnId, MetadataNode metadataNode, boolean getTuple) {
-        super(txnId, metadataNode, getTuple, MetadataPrimaryIndexes.DATATYPE_DATASET,
-                DATATYPE_PAYLOAD_TUPLE_FIELD_INDEX);
+    protected DatatypeTupleTranslator(TxnId txnId, MetadataNode metadataNode, boolean getTuple,
+            DatatypeEntity datatypeEntity) {
+        super(txnId, metadataNode, getTuple, datatypeEntity.getIndex(), datatypeEntity.payloadPosition());
+        this.datatypeEntity = datatypeEntity;
     }
 
     @Override
     protected Datatype createMetadataEntityFromARecord(ARecord datatypeRecord) throws AlgebricksException {
         String dataverseCanonicalName =
-                ((AString) datatypeRecord.getValueByPos(MetadataRecordTypes.DATATYPE_ARECORD_DATAVERSENAME_FIELD_INDEX))
-                        .getStringValue();
+                ((AString) datatypeRecord.getValueByPos(datatypeEntity.dataverseNameIndex())).getStringValue();
         DataverseName dataverseName = DataverseName.createFromCanonicalForm(dataverseCanonicalName);
+        int databaseNameIndex = datatypeEntity.databaseNameIndex();
+        String databaseName;
+        if (databaseNameIndex >= 0) {
+            databaseName = ((AString) datatypeRecord.getValueByPos(databaseNameIndex)).getStringValue();
+        } else {
+            databaseName = MetadataUtil.databaseFor(dataverseName);
+        }
         String datatypeName =
-                ((AString) datatypeRecord.getValueByPos(MetadataRecordTypes.DATATYPE_ARECORD_DATATYPENAME_FIELD_INDEX))
-                        .getStringValue();
+                ((AString) datatypeRecord.getValueByPos(datatypeEntity.datatypeNameIndex())).getStringValue();
         IAType type = BuiltinTypeMap.getBuiltinType(datatypeName);
         if (type == null) {
             // Derived Type
-            ARecord derivedTypeRecord =
-                    (ARecord) datatypeRecord.getValueByPos(MetadataRecordTypes.DATATYPE_ARECORD_DERIVED_FIELD_INDEX);
+            ARecord derivedTypeRecord = (ARecord) datatypeRecord.getValueByPos(datatypeEntity.derivedIndex());
             DerivedTypeTag tag = DerivedTypeTag.valueOf(
                     ((AString) derivedTypeRecord.getValueByPos(MetadataRecordTypes.DERIVEDTYPE_ARECORD_TAG_FIELD_INDEX))
                             .getStringValue());
@@ -111,20 +116,20 @@ public class DatatypeTupleTranslator extends AbstractDatatypeTupleTranslator<Dat
                             isMissable = isNullable;
                         }
 
-                        IAType fieldType =
-                                BuiltinTypeMap.getTypeFromTypeName(metadataNode, txnId, dataverseName, fieldTypeName);
+                        IAType fieldType = Datatype.getTypeFromTypeName(metadataNode, txnId, databaseName,
+                                dataverseName, fieldTypeName);
                         fieldTypes[fieldId] = TypeUtil.createQuantifiedType(fieldType, isNullable, isMissable);
                         fieldId++;
                     }
-                    return new Datatype(dataverseName, datatypeName,
+                    return new Datatype(databaseName, dataverseName, datatypeName,
                             new ARecordType(datatypeName, fieldNames, fieldTypes, isOpen), isAnonymous);
                 }
                 case UNORDEREDLIST: {
                     String unorderedlistTypeName = ((AString) derivedTypeRecord
                             .getValueByPos(MetadataRecordTypes.DERIVEDTYPE_ARECORD_UNORDEREDLIST_FIELD_INDEX))
                                     .getStringValue();
-                    return new Datatype(dataverseName, datatypeName,
-                            new AUnorderedListType(BuiltinTypeMap.getTypeFromTypeName(metadataNode, txnId,
+                    return new Datatype(databaseName, dataverseName, datatypeName,
+                            new AUnorderedListType(Datatype.getTypeFromTypeName(metadataNode, txnId, databaseName,
                                     dataverseName, unorderedlistTypeName), datatypeName),
                             isAnonymous);
                 }
@@ -132,15 +137,16 @@ public class DatatypeTupleTranslator extends AbstractDatatypeTupleTranslator<Dat
                     String orderedlistTypeName = ((AString) derivedTypeRecord
                             .getValueByPos(MetadataRecordTypes.DERIVEDTYPE_ARECORD_ORDEREDLIST_FIELD_INDEX))
                                     .getStringValue();
-                    return new Datatype(dataverseName, datatypeName, new AOrderedListType(
-                            BuiltinTypeMap.getTypeFromTypeName(metadataNode, txnId, dataverseName, orderedlistTypeName),
-                            datatypeName), isAnonymous);
+                    return new Datatype(databaseName,
+                            dataverseName, datatypeName, new AOrderedListType(Datatype.getTypeFromTypeName(metadataNode,
+                                    txnId, databaseName, dataverseName, orderedlistTypeName), datatypeName),
+                            isAnonymous);
                 }
                 default:
                     throw new UnsupportedOperationException("Unsupported derived type: " + tag);
             }
         }
-        return new Datatype(dataverseName, datatypeName, type, false);
+        return new Datatype(databaseName, dataverseName, datatypeName, type, false);
     }
 
     @Override
@@ -149,6 +155,11 @@ public class DatatypeTupleTranslator extends AbstractDatatypeTupleTranslator<Dat
 
         // write the key in the first two fields of the tuple
         tupleBuilder.reset();
+        if (datatypeEntity.databaseNameIndex() >= 0) {
+            aString.setValue(dataType.getDatabaseName());
+            stringSerde.serialize(aString, tupleBuilder.getDataOutput());
+            tupleBuilder.addFieldEndOffset();
+        }
         aString.setValue(dataverseCanonicalName);
         stringSerde.serialize(aString, tupleBuilder.getDataOutput());
         tupleBuilder.addFieldEndOffset();
@@ -157,34 +168,40 @@ public class DatatypeTupleTranslator extends AbstractDatatypeTupleTranslator<Dat
         tupleBuilder.addFieldEndOffset();
 
         // write the payload in the third field of the tuple
-        recordBuilder.reset(MetadataRecordTypes.DATATYPE_RECORDTYPE);
+        recordBuilder.reset(datatypeEntity.getRecordType());
 
+        if (datatypeEntity.databaseNameIndex() >= 0) {
+            fieldValue.reset();
+            aString.setValue(dataType.getDatabaseName());
+            stringSerde.serialize(aString, fieldValue.getDataOutput());
+            recordBuilder.addField(datatypeEntity.databaseNameIndex(), fieldValue);
+        }
         // write field 0
         fieldValue.reset();
         aString.setValue(dataverseCanonicalName);
         stringSerde.serialize(aString, fieldValue.getDataOutput());
-        recordBuilder.addField(MetadataRecordTypes.DATATYPE_ARECORD_DATAVERSENAME_FIELD_INDEX, fieldValue);
+        recordBuilder.addField(datatypeEntity.dataverseNameIndex(), fieldValue);
 
         // write field 1
         fieldValue.reset();
         aString.setValue(dataType.getDatatypeName());
         stringSerde.serialize(aString, fieldValue.getDataOutput());
-        recordBuilder.addField(MetadataRecordTypes.DATATYPE_ARECORD_DATATYPENAME_FIELD_INDEX, fieldValue);
+        recordBuilder.addField(datatypeEntity.datatypeNameIndex(), fieldValue);
 
         // write field 2
         IAType fieldType = dataType.getDatatype();
         if (fieldType.getTypeTag().isDerivedType()) {
             fieldValue.reset();
-            writeDerivedTypeRecord(dataType.getDataverseName(), (AbstractComplexType) fieldType,
-                    fieldValue.getDataOutput(), dataType.getIsAnonymous());
-            recordBuilder.addField(MetadataRecordTypes.DATATYPE_ARECORD_DERIVED_FIELD_INDEX, fieldValue);
+            writeDerivedTypeRecord(dataType.getDatabaseName(), dataType.getDataverseName(),
+                    (AbstractComplexType) fieldType, fieldValue.getDataOutput(), dataType.getIsAnonymous());
+            recordBuilder.addField(datatypeEntity.derivedIndex(), fieldValue);
         }
 
         // write field 3
         fieldValue.reset();
         aString.setValue(Calendar.getInstance().getTime().toString());
         stringSerde.serialize(aString, fieldValue.getDataOutput());
-        recordBuilder.addField(MetadataRecordTypes.DATATYPE_ARECORD_TIMESTAMP_FIELD_INDEX, fieldValue);
+        recordBuilder.addField(datatypeEntity.timestampIndex(), fieldValue);
 
         // write record
         recordBuilder.write(tupleBuilder.getDataOutput(), true);

@@ -148,7 +148,7 @@ public class ConfigManager implements IConfigManager, Serializable {
             if (configured) {
                 throw new IllegalStateException("configuration already processed");
             }
-            LOGGER.debug("registering option: " + option.toIniString());
+            LOGGER.trace("registering option: {}", option::toIniString);
             Map<String, IOption> optionMap = sectionMap.computeIfAbsent(option.section(), section -> new HashMap<>());
             IOption prev = optionMap.put(option.ini(), option);
             if (prev != null) {
@@ -160,8 +160,13 @@ public class ConfigManager implements IConfigManager, Serializable {
                 registeredOptions.add(option);
                 optionSetters.put(option, (node, value, isDefault) -> correctedMap(node, isDefault).put(option, value));
                 if (LOGGER.isDebugEnabled()) {
-                    optionSetters.put(option, (node, value, isDefault) -> LOGGER.debug("{} {} to {} for node {}",
-                            isDefault ? "defaulting" : "setting", option.toIniString(), value, node));
+                    optionSetters.put(option, (node, value, isDefault) -> {
+                        if (isDefault) {
+                            LOGGER.trace("defaulting {} to {} for node {}", option.toIniString(), value, node);
+                        } else {
+                            LOGGER.debug("setting {} to {} for node {}", option.toIniString(), value, node);
+                        }
+                    });
                 }
             }
         }
@@ -451,6 +456,23 @@ public class ConfigManager implements IConfigManager, Serializable {
             optionNames.add(option.ini());
         }
         return optionNames;
+    }
+
+    public Set<String> getExtensionKeys(String sectionName) {
+        Set<String> extensionKeys = new HashSet<>();
+        for (Map.Entry<String, String> entry : extensionOptions.get(sectionName)) {
+            extensionKeys.add(entry.getKey());
+        }
+        return extensionKeys;
+    }
+
+    public Object getExtensionValue(String sectionName, String entryKey) {
+        for (Map.Entry<String, String> entry : extensionOptions.get(sectionName)) {
+            if (entry.getKey().equals(entryKey)) {
+                return entry.getValue();
+            }
+        }
+        return null;
     }
 
     @Override

@@ -31,7 +31,10 @@ import java.util.Map;
 import org.apache.asterix.common.config.DatasetConfig.DatasetType;
 import org.apache.asterix.common.config.DatasetConfig.IndexType;
 import org.apache.asterix.common.metadata.DataverseName;
+import org.apache.asterix.common.metadata.MetadataUtil;
 import org.apache.asterix.metadata.MetadataNode;
+import org.apache.asterix.metadata.bootstrap.IndexEntity;
+import org.apache.asterix.metadata.dataset.DatasetFormatInfo;
 import org.apache.asterix.metadata.entities.Dataset;
 import org.apache.asterix.metadata.entities.Datatype;
 import org.apache.asterix.metadata.entities.Index;
@@ -67,22 +70,29 @@ public class IndexTupleTranslatorTest {
             DataverseName dvTest = DataverseName.createSinglePartName("test");
             DataverseName dvFoo = DataverseName.createSinglePartName("foo");
             DataverseName dvCB = DataverseName.createSinglePartName("CB");
-            Dataset dataset = new Dataset(dvTest, "d1", dvFoo, "LogType", dvCB, "MetaType", "DEFAULT_NG_ALL_NODES",
-                    "prefix", compactionPolicyProperties, details, Collections.emptyMap(), DatasetType.INTERNAL, 115, 0,
-                    CompressionManager.NONE);
+            String dvTestDatabase = MetadataUtil.databaseFor(dvTest);
+            String itemTypeDatabase = MetadataUtil.databaseFor(dvFoo);
+            String metaTypeDatabase = MetadataUtil.databaseFor(dvCB);
+            Dataset dataset = new Dataset(dvTestDatabase, dvTest, "d1", itemTypeDatabase, dvFoo, "LogType",
+                    metaTypeDatabase, dvCB, "MetaType", "DEFAULT_NG_ALL_NODES", "prefix", compactionPolicyProperties,
+                    details, Collections.emptyMap(), DatasetType.INTERNAL, 115, 0, CompressionManager.NONE,
+                    DatasetFormatInfo.SYSTEM_DEFAULT);
 
-            Index index = new Index(dvTest, "d1", "i1", IndexType.BTREE,
+            Index index = new Index(dvTestDatabase, dvTest, "d1", "i1", IndexType.BTREE,
                     Collections.singletonList(Collections.singletonList("row_id")),
                     indicator == null ? null : Collections.singletonList(indicator),
                     Collections.singletonList(BuiltinType.AINT64), false, false, false, 0, OptionalBoolean.of(false));
 
             MetadataNode mockMetadataNode = mock(MetadataNode.class);
-            when(mockMetadataNode.getDatatype(any(), any(DataverseName.class), anyString())).thenReturn(new Datatype(
-                    dvTest, "d1",
-                    new ARecordType("", new String[] { "row_id" }, new IAType[] { BuiltinType.AINT64 }, true), true));
-            when(mockMetadataNode.getDataset(any(), any(DataverseName.class), anyString())).thenReturn(dataset);
+            when(mockMetadataNode.getDatatype(any(), anyString(), any(DataverseName.class), anyString()))
+                    .thenReturn(new Datatype(dvTestDatabase, dvTest, "d1",
+                            new ARecordType("", new String[] { "row_id" }, new IAType[] { BuiltinType.AINT64 }, true),
+                            true));
+            when(mockMetadataNode.getDataset(any(), anyString(), any(DataverseName.class), anyString()))
+                    .thenReturn(dataset);
 
-            IndexTupleTranslator idxTranslator = new IndexTupleTranslator(null, mockMetadataNode, true);
+            IndexTupleTranslator idxTranslator =
+                    new IndexTupleTranslator(null, mockMetadataNode, true, IndexEntity.of(false));
             ITupleReference tuple = idxTranslator.getTupleFromMetadataEntity(index);
             Index deserializedIndex = idxTranslator.getMetadataEntityFromTuple(tuple);
             if (indicator == null) {

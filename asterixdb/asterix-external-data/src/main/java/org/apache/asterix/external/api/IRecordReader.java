@@ -26,7 +26,7 @@ import java.util.function.Supplier;
 import org.apache.asterix.active.message.ActiveManagerMessage;
 import org.apache.asterix.external.dataflow.AbstractFeedDataFlowController;
 import org.apache.asterix.external.util.ExternalDataConstants;
-import org.apache.asterix.external.util.FeedLogManager;
+import org.apache.asterix.external.util.IFeedLogManager;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 
 /**
@@ -38,8 +38,7 @@ public interface IRecordReader<T> extends Closeable {
 
     /**
      * @return true if the reader has more records remaining, false, otherwise.
-     * @throws Exception
-     *             if an error takes place
+     * @throws Exception if an error takes place
      */
     public boolean hasNext() throws Exception;
 
@@ -58,6 +57,7 @@ public interface IRecordReader<T> extends Closeable {
     public boolean stop();
 
     // TODO: Find a better way to do flushes, this doesn't fit here
+
     /**
      * set a pointer to the controller of the feed. the controller can be used to flush()
      * parsed records when waiting for more records to be pushed
@@ -65,13 +65,14 @@ public interface IRecordReader<T> extends Closeable {
     public void setController(AbstractFeedDataFlowController controller);
 
     // TODO: Find a better way to perform logging. this doesn't fit here
+
     /**
      * set a pointer to the log manager of the feed. the log manager can be used to log
      * progress and errors
      *
      * @throws HyracksDataException
      */
-    public void setFeedLogManager(FeedLogManager feedLogManager) throws HyracksDataException;
+    public void setFeedLogManager(IFeedLogManager feedLogManager) throws HyracksDataException;
 
     /**
      * gives the record reader a chance to recover from IO errors during feed intake

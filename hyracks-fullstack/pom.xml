@@ -21,7 +21,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>org.apache.hyracks</groupId>
   <artifactId>apache-hyracks</artifactId>
-  <version>0.3.8-SNAPSHOT</version>
+  <version>0.3.10-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>hyracks-ecosystem-full-stack</name>
   <url>${implementation.url}</url>
@@ -49,8 +49,7 @@
     <root.dir>${basedir}</root.dir>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <file.encoding>UTF-8</file.encoding>
-    <source.jdk.version>11</source.jdk.version>
-    <target.jdk.version>11</target.jdk.version>
+    <maven.compiler.release>17</maven.compiler.release>
     <javac.xlint.value>all</javac.xlint.value>
     <jvm.extraargs />
     <sonar.jacoco.reportPath>${env.PWD}/target/jacoco-merged.exec</sonar.jacoco.reportPath>
@@ -70,13 +69,14 @@
     <test.includes>${global.test.includes}</test.includes>
     <test.excludes>${global.test.excludes}</test.excludes>
     <!-- Versions under dependencymanagement or used in many projects via properties -->
-    <hadoop.version>3.3.1</hadoop.version>
+    <hadoop.version>3.3.6</hadoop.version>
     <jacoco.version>0.7.6.201602180812</jacoco.version>
-    <log4j.version>2.19.0</log4j.version>
-    <snappy.version>1.1.8.4</snappy.version>
-    <jackson.version>2.14.1</jackson.version>
+    <log4j.version>2.22.1</log4j.version>
+    <snappy.version>1.1.10.5</snappy.version>
+    <jackson.version>2.14.3</jackson.version>
     <jackson-databind.version>${jackson.version}</jackson-databind.version>
-    <netty.version>4.1.87.Final</netty.version>
+    <netty.version>4.1.101.Final</netty.version>
+    <asm.version>9.3</asm.version>
 
     <implementation.title>Apache Hyracks and Algebricks - ${project.name}</implementation.title>
     <implementation.url>https://asterixdb.apache.org/</implementation.url>
@@ -112,12 +112,32 @@
       </dependency>
       <dependency>
         <groupId>io.netty</groupId>
+        <artifactId>netty-codec-dns</artifactId>
+        <version>${netty.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.netty</groupId>
+        <artifactId>netty-codec-socks</artifactId>
+        <version>${netty.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.netty</groupId>
         <artifactId>netty-handler</artifactId>
         <version>${netty.version}</version>
       </dependency>
       <dependency>
         <groupId>io.netty</groupId>
+        <artifactId>netty-handler-proxy</artifactId>
+        <version>${netty.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.netty</groupId>
         <artifactId>netty-transport-classes-epoll</artifactId>
+        <version>${netty.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.netty</groupId>
+        <artifactId>netty-resolver</artifactId>
         <version>${netty.version}</version>
       </dependency>
       <dependency>
@@ -134,6 +154,12 @@
         <groupId>io.netty</groupId>
         <artifactId>netty-transport-native-unix-common</artifactId>
         <version>${netty.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.netty</groupId>
+        <artifactId>netty-all</artifactId>
+        <version>${netty.version}</version>
+        <scope>test</scope>
       </dependency>
       <dependency>
         <groupId>junit</groupId>
@@ -156,6 +182,10 @@
         <version>${hadoop.version}</version>
         <exclusions>
           <exclusion>
+            <groupId>net.minidev</groupId>
+            <artifactId>json-smart</artifactId>
+          </exclusion>
+          <exclusion>
             <groupId>com.nimbusds</groupId>
             <artifactId>nimbus-jose-jwt</artifactId>
           </exclusion>
@@ -172,25 +202,12 @@
             <artifactId>jdk.tools</artifactId>
           </exclusion>
           <exclusion>
-            <groupId>log4j</groupId>
-            <artifactId>log4j</artifactId>
-          </exclusion>
-          <exclusion>
             <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-api</artifactId>
+            <artifactId>slf4j-reload4j</artifactId>
           </exclusion>
           <exclusion>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-log4j12</artifactId>
-          </exclusion>
-          <!-- TODO(htowaileb): Remove after updating to hadoop 3.3.4 -->
-          <exclusion>
-            <groupId>org.eclipse.jetty</groupId>
-            <artifactId>jetty-util</artifactId>
-          </exclusion>
-          <exclusion>
-            <groupId>org.eclipse.jetty</groupId>
-            <artifactId>jetty-util-ajax</artifactId>
           </exclusion>
         </exclusions>
       </dependency>
@@ -204,17 +221,12 @@
             <artifactId>netty-all</artifactId>
           </exclusion>
           <exclusion>
-            <groupId>log4j</groupId>
-            <artifactId>log4j</artifactId>
-          </exclusion>
-          <!-- TODO(htowaileb): Remove after updating to hadoop 3.3.4 -->
-          <exclusion>
-            <groupId>org.eclipse.jetty</groupId>
-            <artifactId>jetty-util</artifactId>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-reload4j</artifactId>
           </exclusion>
           <exclusion>
-            <groupId>org.eclipse.jetty</groupId>
-            <artifactId>jetty-util-ajax</artifactId>
+            <groupId>ch.qos.reload4j</groupId>
+            <artifactId>reload4j</artifactId>
           </exclusion>
         </exclusions>
       </dependency>
@@ -224,17 +236,16 @@
         <version>${hadoop.version}</version>
         <exclusions>
           <exclusion>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-reload4j</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>ch.qos.reload4j</groupId>
+            <artifactId>reload4j</artifactId>
+          </exclusion>
+          <exclusion>
             <groupId>log4j</groupId>
             <artifactId>log4j</artifactId>
-          </exclusion>
-          <!-- TODO(htowaileb): Remove after updating to hadoop 3.3.4 -->
-          <exclusion>
-            <groupId>org.eclipse.jetty</groupId>
-            <artifactId>jetty-util</artifactId>
-          </exclusion>
-          <exclusion>
-            <groupId>org.eclipse.jetty</groupId>
-            <artifactId>jetty-util-ajax</artifactId>
           </exclusion>
         </exclusions>
       </dependency>
@@ -242,13 +253,6 @@
         <groupId>org.apache.hadoop</groupId>
         <artifactId>hadoop-mapreduce-client-core</artifactId>
         <version>${hadoop.version}</version>
-        <!-- TODO(htowaileb): Remove after updating to hadoop 3.3.4 -->
-        <exclusions>
-          <exclusion>
-            <groupId>org.eclipse.jetty</groupId>
-            <artifactId>jetty-util</artifactId>
-          </exclusion>
-        </exclusions>
       </dependency>
       <dependency>
         <groupId>org.apache.hadoop</groupId>
@@ -258,13 +262,12 @@
         <scope>test</scope>
         <exclusions>
           <exclusion>
-            <groupId>log4j</groupId>
-            <artifactId>log4j</artifactId>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-reload4j</artifactId>
           </exclusion>
-          <!-- TODO(htowaileb): Remove after updating to hadoop 3.3.4 -->
           <exclusion>
-            <groupId>org.eclipse.jetty</groupId>
-            <artifactId>jetty-util</artifactId>
+            <groupId>ch.qos.reload4j</groupId>
+            <artifactId>reload4j</artifactId>
           </exclusion>
         </exclusions>
       </dependency>
@@ -276,12 +279,12 @@
       <dependency>
         <groupId>commons-io</groupId>
         <artifactId>commons-io</artifactId>
-        <version>2.11.0</version>
+        <version>2.15.1</version>
       </dependency>
       <dependency>
         <groupId>org.apache.commons</groupId>
         <artifactId>commons-text</artifactId>
-        <version>1.10.0</version>
+        <version>1.11.0</version>
       </dependency>
       <dependency>
         <groupId>com.fasterxml.jackson.core</groupId>
@@ -301,7 +304,7 @@
       <dependency>
         <groupId>com.google.guava</groupId>
         <artifactId>guava</artifactId>
-        <version>31.1-jre</version>
+        <version>32.1.2-jre</version>
         <exclusions>
           <exclusion>
             <groupId>com.google.code.findbugs</groupId>
@@ -328,7 +331,7 @@
       <dependency>
         <groupId>org.apache.commons</groupId>
         <artifactId>commons-lang3</artifactId>
-        <version>3.12.0</version>
+        <version>3.14.0</version>
       </dependency>
       <dependency>
         <groupId>org.apache.commons</groupId>
@@ -338,12 +341,17 @@
       <dependency>
         <groupId>org.apache.httpcomponents</groupId>
         <artifactId>httpcore</artifactId>
-        <version>4.4.15</version>
+        <version>4.4.16</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.httpcomponents</groupId>
+        <artifactId>httpcore-nio</artifactId>
+        <version>4.4.16</version>
       </dependency>
       <dependency>
         <groupId>org.apache.httpcomponents</groupId>
         <artifactId>httpclient</artifactId>
-        <version>4.5.13</version>
+        <version>4.5.14</version>
       </dependency>
       <dependency>
         <groupId>org.apache.rat</groupId>
@@ -428,7 +436,7 @@
       <dependency>
         <groupId>org.slf4j</groupId>
         <artifactId>slf4j-simple</artifactId>
-        <version>1.7.33</version>
+        <version>1.7.36</version>
       </dependency>
       <dependency>
         <groupId>org.apache.logging.log4j</groupId>
@@ -460,17 +468,36 @@
         <artifactId>snappy-java</artifactId>
         <version>${snappy.version}</version>
       </dependency>
-      <!-- TODO(htowaileb): removed from hadoop transitively and added separately to avoid CVEs, can
-           be removed once upgraded to hadoop 3.3.4 as it addresses the CVEs -->
+      <!-- Manually included to avoid CVE-2023-1370 -->
       <dependency>
-        <groupId>org.eclipse.jetty</groupId>
-        <artifactId>jetty-util</artifactId>
-        <version>9.4.48.v20220622</version>
+        <groupId>net.minidev</groupId>
+        <artifactId>json-smart</artifactId>
+        <version>2.4.11</version>
       </dependency>
       <dependency>
-        <groupId>org.eclipse.jetty</groupId>
-        <artifactId>jetty-util-ajax</artifactId>
-        <version>9.4.48.v20220622</version>
+        <groupId>org.ow2.asm</groupId>
+        <artifactId>asm</artifactId>
+        <version>${asm.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.ow2.asm</groupId>
+        <artifactId>asm-commons</artifactId>
+        <version>${asm.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.ow2.asm</groupId>
+        <artifactId>asm-analysis</artifactId>
+        <version>${asm.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.ow2.asm</groupId>
+        <artifactId>asm-tree</artifactId>
+        <version>${asm.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.ow2.asm</groupId>
+        <artifactId>asm-util</artifactId>
+        <version>${asm.version}</version>
       </dependency>
     </dependencies>
   </dependencyManagement>
@@ -549,6 +576,7 @@
           <reuseForks>false</reuseForks>
           <argLine>-enableassertions -Xmx2048m -Dfile.encoding=UTF-8 -Xdebug
             -Xrunjdwp:transport=dt_socket,server=y,address=8000,suspend=n ${coverageArgLine}
+            --add-opens=jdk.management/com.sun.management.internal=ALL-UNNAMED --add-opens=java.management/sun.management=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED
           </argLine>
           <systemPropertyVariables>
             <log4j.configurationFile>${testLog4jConfigFile}</log4j.configurationFile>
@@ -575,8 +603,6 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
         <configuration>
-          <source>${source.jdk.version}</source>
-          <target>${target.jdk.version}</target>
           <compilerArgument>-Xlint:${javac.xlint.value}</compilerArgument>
         </configuration>
       </plugin>
@@ -602,7 +628,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-checkstyle-plugin</artifactId>
-        <version>3.0.0</version>
+        <version>3.3.1</version>
         <executions>
           <execution>
             <id>verify-style</id>
@@ -686,7 +712,7 @@
                   <version>[3.3.9,)</version>
                 </requireMavenVersion>
                 <requireJavaVersion>
-                  <version>[11,)</version>
+                  <version>[${maven.compiler.release},)</version>
                 </requireJavaVersion>
               </rules>
             </configuration>
@@ -771,7 +797,14 @@
         <plugin>
           <groupId>net.revelc.code</groupId>
           <artifactId>impsort-maven-plugin</artifactId>
-          <version>1.2.0</version>
+          <version>1.9.0</version>
+          <dependencies>
+            <dependency>
+              <groupId>com.github.javaparser</groupId>
+              <artifactId>javaparser-core</artifactId>
+              <version>3.25.5</version>
+            </dependency>
+          </dependencies>
         </plugin>
         <!--This plugin's configuration is used to store Eclipse m2e settings only. It has no influence on the Maven build itself.-->
         <plugin>
@@ -895,7 +928,7 @@
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-dependency-plugin</artifactId>
-          <version>3.1.2</version>
+          <version>3.6.0</version>
         </plugin>
         <plugin>
           <groupId>org.apache.maven.doxia</groupId>

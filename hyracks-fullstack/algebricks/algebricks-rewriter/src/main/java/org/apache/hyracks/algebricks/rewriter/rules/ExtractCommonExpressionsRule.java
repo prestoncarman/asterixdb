@@ -77,17 +77,17 @@ import org.apache.hyracks.api.exceptions.SourceLocation;
  */
 public class ExtractCommonExpressionsRule implements IAlgebraicRewriteRule {
 
-    private final List<ILogicalExpression> originalAssignExprs = new ArrayList<ILogicalExpression>();
+    private final List<ILogicalExpression> originalAssignExprs = new ArrayList<>();
 
     private final CommonExpressionSubstitutionVisitor substVisitor = new CommonExpressionSubstitutionVisitor();
-    private final Map<ILogicalExpression, ExprEquivalenceClass> exprEqClassMap =
-            new HashMap<ILogicalExpression, ExprEquivalenceClass>();
+    private final Map<ILogicalExpression, ExprEquivalenceClass> exprEqClassMap = new HashMap<>();
 
     private final List<LogicalVariable> tmpLiveVars = new ArrayList<>();
     private final List<LogicalVariable> tmpProducedVars = new ArrayList<>();
+    private boolean enteredNestedPlan = false;
 
     // Set of operators for which common subexpression elimination should not be performed.
-    private static final Set<LogicalOperatorTag> ignoreOps = new HashSet<LogicalOperatorTag>(6);
+    private static final Set<LogicalOperatorTag> ignoreOps = new HashSet<>(6);
 
     static {
         ignoreOps.add(LogicalOperatorTag.UNNEST);
@@ -97,6 +97,12 @@ public class ExtractCommonExpressionsRule implements IAlgebraicRewriteRule {
         ignoreOps.add(LogicalOperatorTag.AGGREGATE);
         ignoreOps.add(LogicalOperatorTag.RUNNINGAGGREGATE);
         ignoreOps.add(LogicalOperatorTag.WINDOW); //TODO: can extract from partition/order/frame expressions
+        ignoreOps.add(LogicalOperatorTag.INSERT_DELETE_UPSERT);
+    }
+
+    @Override
+    public void enteredNestedPlan(boolean enteredNestedPlanRoot) {
+        this.enteredNestedPlan = enteredNestedPlanRoot;
     }
 
     @Override
@@ -108,6 +114,20 @@ public class ExtractCommonExpressionsRule implements IAlgebraicRewriteRule {
     @Override
     public boolean rewritePre(Mutable<ILogicalOperator> opRef, IOptimizationContext context)
             throws AlgebricksException {
+        ILogicalOperator op = opRef.getValue();
+        if (enteredNestedPlan) {
+            enteredNestedPlan = false;
+        } else if (op.getOperatorTag() != LogicalOperatorTag.DISTRIBUTE_RESULT
+                && op.getOperatorTag() != LogicalOperatorTag.SINK
+                && op.getOperatorTag() != LogicalOperatorTag.DELEGATE_OPERATOR) {
+            return false;
+        }
+        if (!op.getInputs().isEmpty()) {
+            AbstractLogicalOperator childOp = (AbstractLogicalOperator) op.getInputs().get(0).getValue();
+            if (childOp.getOperatorTag() == LogicalOperatorTag.INSERT_DELETE_UPSERT) {
+                return false;
+            }
+        }
         exprEqClassMap.clear();
         substVisitor.setContext(context);
         boolean modified = removeCommonExpressions(opRef, context);
@@ -155,9 +175,6 @@ public class ExtractCommonExpressionsRule implements IAlgebraicRewriteRule {
     private boolean removeCommonExpressions(Mutable<ILogicalOperator> opRef, IOptimizationContext context)
             throws AlgebricksException {
         AbstractLogicalOperator op = (AbstractLogicalOperator) opRef.getValue();
-        if (context.checkIfInDontApplySet(this, opRef.getValue())) {
-            return false;
-        }
 
         boolean modified = false;
         // Recurse into children.
@@ -166,7 +183,9 @@ public class ExtractCommonExpressionsRule implements IAlgebraicRewriteRule {
                 modified = true;
             }
         }
-
+        if (context.checkIfInDontApplySet(this, opRef.getValue())) {
+            return modified;
+        }
         // TODO: Deal with replicate properly. Currently, we just clear the expr equivalence map,
         // since we want to avoid incorrect expression replacement
         // (the resulting new variables should be assigned live below a replicate/split).

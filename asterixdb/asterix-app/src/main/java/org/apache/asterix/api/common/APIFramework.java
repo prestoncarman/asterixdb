@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -70,6 +71,7 @@ import org.apache.asterix.om.base.IAObject;
 import org.apache.asterix.optimizer.base.AsterixOptimizationContext;
 import org.apache.asterix.runtime.job.listener.JobEventListenerFactory;
 import org.apache.asterix.translator.CompiledStatements.ICompiledDmlStatement;
+import org.apache.asterix.translator.CompiledStatements.ICompiledStatement;
 import org.apache.asterix.translator.ExecutionPlans;
 import org.apache.asterix.translator.IRequestParameters;
 import org.apache.asterix.translator.ResultMetadata;
@@ -107,6 +109,7 @@ import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.exceptions.HyracksException;
 import org.apache.hyracks.api.exceptions.IWarningCollector;
 import org.apache.hyracks.api.exceptions.SourceLocation;
+import org.apache.hyracks.api.job.JobFlag;
 import org.apache.hyracks.api.job.JobId;
 import org.apache.hyracks.api.job.JobSpecification;
 import org.apache.hyracks.api.job.resource.IClusterCapacity;
@@ -114,6 +117,7 @@ import org.apache.hyracks.control.common.config.OptionTypes;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectWriter;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /**
  * Provides helper methods for compilation of a query into a JobSpec and submission
@@ -131,6 +135,7 @@ public class APIFramework {
     private final IRuleSetFactory ruleSetFactory;
     private final Set<String> configurableParameterNames;
     private final ExecutionPlans executionPlans;
+    private PlanInfo lastPlan;
 
     public APIFramework(ILangCompilationProvider compilationProvider) {
         this.rewriterFactory = compilationProvider.getRewriterFactory();
@@ -139,6 +144,22 @@ public class APIFramework {
         this.ruleSetFactory = compilationProvider.getRuleSetFactory();
         this.configurableParameterNames = compilationProvider.getCompilerOptions();
         executionPlans = new ExecutionPlans();
+        lastPlan = null;
+    }
+
+    private class PlanInfo {
+        ILogicalPlan plan;
+        Map<Object, String> log2Phys;
+        boolean printOptimizerEstimates;
+        SessionConfig.PlanFormat format;
+
+        public PlanInfo(ILogicalPlan plan, Map<Object, String> log2Phys, boolean printOptimizerEstimates,
+                SessionConfig.PlanFormat format) {
+            this.plan = plan;
+            this.log2Phys = log2Phys;
+            this.printOptimizerEstimates = printOptimizerEstimates;
+            this.format = format;
+        }
     }
 
     private static class OptimizationContextFactory implements IOptimizationContextFactory {
@@ -184,14 +205,15 @@ public class APIFramework {
     }
 
     public JobSpecification compileQuery(IClusterInfoCollector clusterInfoCollector, MetadataProvider metadataProvider,
-            Query query, int varCounter, String outputDatasetName, SessionOutput output,
-            ICompiledDmlStatement statement, Map<VarIdentifier, IAObject> externalVars, IResponsePrinter printer,
-            IWarningCollector warningCollector, IRequestParameters requestParameters)
+            Query query, int varCounter, String outputDatasetName, SessionOutput output, ICompiledStatement statement,
+            Map<VarIdentifier, IAObject> externalVars, IResponsePrinter printer, IWarningCollector warningCollector,
+            IRequestParameters requestParameters, EnumSet<JobFlag> runtimeFlags)
             throws AlgebricksException, ACIDException {
 
         // establish facts
         final boolean isQuery = query != null;
         final boolean isLoad = statement != null && statement.getKind() == Statement.Kind.LOAD;
+        final boolean isCopy = statement != null && statement.getKind() == Statement.Kind.COPY_FROM;
         final SourceLocation sourceLoc =
                 query != null ? query.getSourceLocation() : statement != null ? statement.getSourceLocation() : null;
         final boolean isExplainOnly = isQuery && query.isExplain();
@@ -207,19 +229,15 @@ public class APIFramework {
         ILangExpressionToPlanTranslator t =
                 translatorFactory.createExpressionToPlanTranslator(metadataProvider, varCounter, externalVars);
         ResultMetadata resultMetadata = new ResultMetadata(output.config().fmt());
-        ILogicalPlan plan =
-                isLoad ? t.translateLoad(statement) : t.translate(query, outputDatasetName, statement, resultMetadata);
+        ILogicalPlan plan = isLoad || isCopy ? t.translateCopyOrLoad((ICompiledDmlStatement) statement)
+                : t.translate(query, outputDatasetName, statement, resultMetadata);
 
-        if ((isQuery || isLoad) && !conf.is(SessionConfig.FORMAT_ONLY_PHYSICAL_OPS)
-                && conf.is(SessionConfig.OOB_LOGICAL_PLAN)) {
-            generateLogicalPlan(plan, output.config().getPlanFormat(), isExplainOnly);
-        }
         ICcApplicationContext ccAppContext = metadataProvider.getApplicationContext();
         CompilerProperties compilerProperties = ccAppContext.getCompilerProperties();
         Map<String, Object> querySpecificConfig = validateConfig(metadataProvider.getConfig(), sourceLoc);
-        final PhysicalOptimizationConfig physOptConf =
-                OptimizationConfUtil.createPhysicalOptimizationConf(compilerProperties, querySpecificConfig, sourceLoc);
-
+        final PhysicalOptimizationConfig physOptConf = OptimizationConfUtil.createPhysicalOptimizationConf(
+                compilerProperties, querySpecificConfig, configurableParameterNames, sourceLoc);
+        boolean cboMode = physOptConf.getCBOMode() || physOptConf.getCBOTestMode();
         HeuristicCompilerFactoryBuilder builder =
                 new HeuristicCompilerFactoryBuilder(OptimizationContextFactory.INSTANCE);
         builder.setPhysicalOptimizationConfig(physOptConf);
@@ -236,6 +254,11 @@ public class APIFramework {
         builder.setConflictingTypeResolver(ConflictingTypeResolver.INSTANCE);
         builder.setWarningCollector(warningCollector);
         builder.setMaxWarnings(conf.getMaxWarnings());
+
+        if ((isQuery || isLoad || isCopy) && !conf.is(SessionConfig.FORMAT_ONLY_PHYSICAL_OPS)
+                && conf.is(SessionConfig.OOB_LOGICAL_PLAN)) {
+            generateLogicalPlan(plan, output.config().getPlanFormat(), cboMode);
+        }
 
         int parallelism = getParallelism((String) querySpecificConfig.get(CompilerProperties.COMPILER_PARALLELISM_KEY),
                 compilerProperties.getParallelism());
@@ -270,6 +293,10 @@ public class APIFramework {
                     AlgebricksStringBuilderWriter buf = new AlgebricksStringBuilderWriter(PlanPrettyPrinter.INIT_SIZE);
                     PlanPrettyPrinter.printPhysicalOps(plan, buf, 0, true);
                     output.out().write(buf.toString());
+                } else {
+                    if (isQuery || isLoad || isCopy) {
+                        generateOptimizedLogicalPlan(plan, output.config().getPlanFormat(), cboMode);
+                    }
                 }
             }
         }
@@ -294,34 +321,41 @@ public class APIFramework {
         }
 
         if (!conf.isGenerateJobSpec()) {
-            if (isQuery || isLoad) {
-                generateOptimizedLogicalPlan(plan, output.config().getPlanFormat(), isExplainOnly);
+            if (isQuery || isLoad || isCopy) {
+                generateOptimizedLogicalPlan(plan, output.config().getPlanFormat(), cboMode);
             }
             return null;
         }
 
         JobEventListenerFactory jobEventListenerFactory =
                 new JobEventListenerFactory(txnId, metadataProvider.isWriteTransaction());
-        JobSpecification spec = compiler.createJob(ccAppContext, jobEventListenerFactory);
+        JobSpecification spec = compiler.createJob(ccAppContext, jobEventListenerFactory, runtimeFlags);
 
-        if (isQuery) {
-            if (requestParameters == null || !requestParameters.isSkipAdmissionPolicy()) {
-                // Sets a required capacity, only for read-only queries.
-                // DDLs and DMLs are considered not that frequent.
-                // limit the computation locations to the locations that will be used in the query
-                final INodeJobTracker nodeJobTracker = ccAppContext.getNodeJobTracker();
-                final AlgebricksAbsolutePartitionConstraint jobLocations =
-                        getJobLocations(spec, nodeJobTracker, computationLocations);
-                final IClusterCapacity jobRequiredCapacity =
-                        ResourceUtils.getRequiredCapacity(plan, jobLocations, physOptConf);
-                spec.setRequiredClusterCapacity(jobRequiredCapacity);
+        if (isQuery || isCopy) {
+            if (!compiler.skipJobCapacityAssignment()) {
+                if (requestParameters == null || !requestParameters.isSkipAdmissionPolicy()) {
+                    // Sets a required capacity, only for read-only queries.
+                    // DDLs and DMLs are considered not that frequent.
+                    // limit the computation locations to the locations that will be used in the query
+                    final INodeJobTracker nodeJobTracker = ccAppContext.getNodeJobTracker();
+                    final AlgebricksAbsolutePartitionConstraint jobLocations =
+                            getJobLocations(spec, nodeJobTracker, computationLocations);
+                    final IClusterCapacity jobRequiredCapacity =
+                            ResourceUtils.getRequiredCapacity(plan, jobLocations, physOptConf, compilerProperties);
+                    addRuntimeMemoryOverhead(jobRequiredCapacity, compilerProperties);
+                    spec.setRequiredClusterCapacity(jobRequiredCapacity);
+                }
             }
         }
 
         if (conf.is(SessionConfig.OOB_OPTIMIZED_LOGICAL_PLAN) || isExplainOnly) {
-            if (isQuery || isLoad) {
+            if (isQuery || isLoad || isCopy) {
                 generateOptimizedLogicalPlan(plan, spec.getLogical2PhysicalMap(), output.config().getPlanFormat(),
-                        isExplainOnly);
+                        cboMode);
+                if (runtimeFlags.contains(JobFlag.PROFILE_RUNTIME)) {
+                    lastPlan =
+                            new PlanInfo(plan, spec.getLogical2PhysicalMap(), cboMode, output.config().getPlanFormat());
+                }
             }
         }
 
@@ -376,8 +410,9 @@ public class APIFramework {
                 : PlanPrettyPrinter.createStringPlanPrettyPrinter();
     }
 
-    private byte getStatementCategory(Query query, ICompiledDmlStatement statement) {
-        return statement != null ? statement.getCategory()
+    private byte getStatementCategory(Query query, ICompiledStatement statement) {
+        return statement != null && statement.getKind() != Statement.Kind.COPY_TO
+                ? ((ICompiledDmlStatement) statement).getCategory()
                 : query != null ? Statement.Category.QUERY : Statement.Category.DDL;
     }
 
@@ -530,6 +565,20 @@ public class APIFramework {
                 getPrettyPrintVisitor(format).printPlan(plan, log2phys, printOptimizerEstimates).toString());
     }
 
+    public void generateOptimizedLogicalPlanWithProfile(ObjectNode profile) throws HyracksDataException {
+        /*TODO(ian): we call this and overwrite the non-annotated plan, but there should be some way to skip initial
+                     plan printing if both profiling and plan printing are requested. */
+        try {
+            if (lastPlan != null) {
+                executionPlans.setOptimizedLogicalPlan(getPrettyPrintVisitor(lastPlan.format)
+                        .printPlan(lastPlan.plan, lastPlan.log2Phys, lastPlan.printOptimizerEstimates, profile)
+                        .toString());
+            }
+        } catch (AlgebricksException e) {
+            throw HyracksDataException.create(e);
+        }
+    }
+
     private void generateOptimizedLogicalPlan(ILogicalPlan plan, SessionConfig.PlanFormat format,
             boolean printOptimizerEstimates) throws AlgebricksException {
         executionPlans.setOptimizedLogicalPlan(
@@ -548,8 +597,18 @@ public class APIFramework {
 
     public static AlgebricksAbsolutePartitionConstraint getJobLocations(JobSpecification spec,
             INodeJobTracker jobTracker, AlgebricksAbsolutePartitionConstraint clusterLocations) {
-        final Set<String> jobParticipatingNodes = jobTracker.getJobParticipatingNodes(spec);
+        final Set<String> jobParticipatingNodes = jobTracker.getJobParticipatingNodes(spec, null);
         return new AlgebricksAbsolutePartitionConstraint(Arrays.stream(clusterLocations.getLocations())
                 .filter(jobParticipatingNodes::contains).toArray(String[]::new));
+    }
+
+    private static void addRuntimeMemoryOverhead(IClusterCapacity jobRequiredCapacity,
+            CompilerProperties compilerProperties) {
+        int runtimeMemoryOverheadPercentage = compilerProperties.getRuntimeMemoryOverheadPercentage();
+        if (runtimeMemoryOverheadPercentage > 0) {
+            double multiplier = 1 + runtimeMemoryOverheadPercentage / 100.0;
+            long aggregatedMemoryByteSize = jobRequiredCapacity.getAggregatedMemoryByteSize();
+            jobRequiredCapacity.setAggregatedMemoryByteSize((long) (aggregatedMemoryByteSize * multiplier));
+        }
     }
 }

@@ -26,7 +26,9 @@ import java.util.Map;
 
 import org.apache.asterix.common.exceptions.CompilationException;
 import org.apache.asterix.common.exceptions.ErrorCode;
+import org.apache.asterix.common.external.IExternalFilterEvaluatorFactory;
 import org.apache.asterix.external.api.AsterixInputStream;
+import org.apache.asterix.external.api.IExternalDataRuntimeContext;
 import org.apache.asterix.external.api.IInputStreamFactory;
 import org.apache.asterix.external.input.stream.SocketServerInputStream;
 import org.apache.asterix.external.util.ExternalDataConstants;
@@ -34,7 +36,6 @@ import org.apache.asterix.external.util.FeedUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.hyracks.algebricks.common.constraints.AlgebricksAbsolutePartitionConstraint;
 import org.apache.hyracks.api.application.IServiceContext;
-import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.exceptions.IWarningCollector;
 
@@ -45,7 +46,8 @@ public class SocketServerInputStreamFactory implements IInputStreamFactory {
 
     @Override
     public void configure(IServiceContext serviceCtx, Map<String, String> configuration,
-            IWarningCollector warningCollector) throws CompilationException {
+            IWarningCollector warningCollector, IExternalFilterEvaluatorFactory filterEvaluatorFactory)
+            throws CompilationException {
         try {
             sockets = FeedUtils.extractHostsPorts(configuration.get(ExternalDataConstants.KEY_MODE), serviceCtx,
                     configuration.get(ExternalDataConstants.KEY_SOCKETS));
@@ -57,10 +59,10 @@ public class SocketServerInputStreamFactory implements IInputStreamFactory {
     }
 
     @Override
-    public synchronized AsterixInputStream createInputStream(IHyracksTaskContext ctx, int partition)
+    public synchronized AsterixInputStream createInputStream(IExternalDataRuntimeContext context)
             throws HyracksDataException {
         try {
-            Pair<String, Integer> socket = sockets.get(partition);
+            Pair<String, Integer> socket = sockets.get(context.getPartition());
             ServerSocket server;
             server = new ServerSocket();
             server.bind(new InetSocketAddress(socket.getRight()));
@@ -82,10 +84,5 @@ public class SocketServerInputStreamFactory implements IInputStreamFactory {
     @Override
     public DataSourceType getDataSourceType() {
         return DataSourceType.STREAM;
-    }
-
-    @Override
-    public boolean isIndexible() {
-        return false;
     }
 }

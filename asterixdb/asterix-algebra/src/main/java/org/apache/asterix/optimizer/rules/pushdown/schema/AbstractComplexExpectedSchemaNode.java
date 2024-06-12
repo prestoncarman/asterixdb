@@ -28,6 +28,11 @@ public abstract class AbstractComplexExpectedSchemaNode extends AbstractExpected
     }
 
     @Override
+    public boolean allowsReplacing() {
+        return true;
+    }
+
+    @Override
     public IExpectedSchemaNode replaceIfNeeded(ExpectedSchemaNodeType expectedNodeType, SourceLocation sourceLocation,
             String functionName) {
         //If no change is required, return the same node
@@ -42,7 +47,7 @@ public abstract class AbstractComplexExpectedSchemaNode extends AbstractExpected
              * In this case, we first saw (t.hashtags[*].text), but the next expression (t.hashtags) requested
              * the entire hashtags. So, the expected type for hashtags should be ANY
              */
-            node = new AnyExpectedSchemaNode(getParent(), getSourceLocation(), getFunctionName());
+            node = new AnyExpectedSchemaNode(getParent(), getSourceLocation(), getFunctionName(), false);
             getParent().replaceChild(this, node);
         } else if (expectedNodeType != getType()) {
             /*
@@ -79,7 +84,26 @@ public abstract class AbstractComplexExpectedSchemaNode extends AbstractExpected
         return node;
     }
 
-    protected abstract void replaceChild(IExpectedSchemaNode oldNode, IExpectedSchemaNode newNode);
+    protected abstract IExpectedSchemaNode replaceChild(IExpectedSchemaNode oldNode, IExpectedSchemaNode newNode);
+
+    /**
+     * A child is replaceable if
+     * - child is allowed to be replaced
+     * - AND either of the following is satisfied:
+     * - - child is of type {@link ExpectedSchemaNodeType#ANY}
+     * - - OR the newNode is of type {@link ExpectedSchemaNodeType#UNION}
+     * - - OR the newNode is not replaceable
+     *
+     * @param child   current child
+     * @param newNode the new node to replace the current child
+     * @return true if child is replaceable, false otherwise
+     */
+    protected boolean isChildReplaceable(IExpectedSchemaNode child, IExpectedSchemaNode newNode) {
+        ExpectedSchemaNodeType childType = child.getType();
+        ExpectedSchemaNodeType newType = newNode.getType();
+        return child.allowsReplacing() && (childType == ExpectedSchemaNodeType.ANY
+                || newType == ExpectedSchemaNodeType.UNION || !newNode.allowsReplacing());
+    }
 
     public static AbstractComplexExpectedSchemaNode createNestedNode(ExpectedSchemaNodeType type,
             AbstractComplexExpectedSchemaNode parent, SourceLocation sourceLocation, String functionName) {

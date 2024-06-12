@@ -133,7 +133,7 @@ public class NCQueryServiceServlet extends QueryServiceServlet {
                     new NcResultPrinter(appCtx, responseMsg, getResultSet(), delivery, sessionOutput, stats));
         }
         warnings.addAll(responseMsg.getWarnings());
-        buildResponseResults(responsePrinter, sessionOutput, responseMsg.getExecutionPlans(), warnings);
+        buildResponseResults(responsePrinter, sessionOutput, responseMsg.getExecutionPlans(), warnings, executionState);
     }
 
     protected void ensureOptionalParameters(Map<String, String> optionalParameters) throws HyracksDataException {
@@ -165,7 +165,8 @@ public class NCQueryServiceServlet extends QueryServiceServlet {
             CancelQueryRequest cancelQueryMessage =
                     new CancelQueryRequest(nodeId, cancelQueryFuture.getFutureId(), uuid, clientContextID);
             // TODO(mblow): multicc -- need to send cancellation to the correct cc
-            LOGGER.info("Cancelling query due to {}", exception.getClass().getSimpleName());
+            LOGGER.info("Cancelling query with uuid:{}, clientContextID:{} due to {}", uuid, clientContextID,
+                    exception.getClass().getSimpleName());
             messageBroker.sendMessageToPrimaryCC(cancelQueryMessage);
             if (wait) {
                 cancelQueryFuture.get(ExecuteStatementRequestMessage.DEFAULT_QUERY_CANCELLATION_WAIT_MILLIS,
@@ -205,6 +206,9 @@ public class NCQueryServiceServlet extends QueryServiceServlet {
         stats.setProcessedObjects(responseStats.getProcessedObjects());
         stats.updateTotalWarningsCount(responseStats.getTotalWarningsCount());
         stats.setCompileTime(responseStats.getCompileTime());
+        stats.setQueueWaitTime(responseStats.getQueueWaitTime());
+        stats.setBufferCacheHitRatio(responseStats.getBufferCacheHitRatio());
+        stats.setBufferCachePageReadCount(responseStats.getBufferCachePageReadCount());
     }
 
     private static void updatePropertiesFromCC(IStatementExecutor.StatementProperties statementProperties,

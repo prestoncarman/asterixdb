@@ -50,6 +50,7 @@ public class CancelQueryRequest implements ICcAddressedMessage {
         final IRequestTracker requestTracker = appCtx.getRequestTracker();
         IClientRequest req = uuid != null ? requestTracker.get(uuid) : requestTracker.getByClientContextId(contextId);
         RequestStatus status;
+        String requestId = "";
 
         if (req == null) {
             LOGGER.log(Level.INFO, "No request found for uuid {} or context id {}", uuid, contextId);
@@ -59,7 +60,8 @@ public class CancelQueryRequest implements ICcAddressedMessage {
                 status = RequestStatus.REJECTED;
             } else {
                 try {
-                    requestTracker.cancel(req.getId());
+                    requestId = req.getId();
+                    requestTracker.cancel(requestId);
                     status = RequestStatus.SUCCESS;
                 } catch (Exception e) {
                     LOGGER.log(Level.WARN, "unexpected exception thrown from cancel", e);
@@ -67,6 +69,8 @@ public class CancelQueryRequest implements ICcAddressedMessage {
                 }
             }
         }
+        LOGGER.debug("sending CancelQueryResponse to {}. reqId:{}, uuid:{}, contextId:{}, status:{}", nodeId, requestId,
+                uuid, contextId, status);
         CancelQueryResponse response = new CancelQueryResponse(reqId, status);
         CCMessageBroker messageBroker = (CCMessageBroker) appCtx.getServiceContext().getMessageBroker();
         try {
@@ -76,4 +80,9 @@ public class CancelQueryRequest implements ICcAddressedMessage {
         }
     }
 
+    @Override
+    public String toString() {
+        return "CancelQueryRequest{from='" + nodeId + "', reqId=" + reqId + ", uuid='" + uuid + "', contextId='"
+                + contextId + "'}";
+    }
 }

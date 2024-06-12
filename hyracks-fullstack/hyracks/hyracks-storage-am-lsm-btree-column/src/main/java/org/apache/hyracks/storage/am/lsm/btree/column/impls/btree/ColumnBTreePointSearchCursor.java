@@ -20,7 +20,11 @@ package org.apache.hyracks.storage.am.lsm.btree.column.impls.btree;
 
 import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.storage.am.btree.api.IDiskBTreeStatefulPointSearchCursor;
+import org.apache.hyracks.storage.am.btree.impls.RangePredicate;
 import org.apache.hyracks.storage.am.common.api.ITreeIndexFrame;
+import org.apache.hyracks.storage.am.common.ophelpers.FindTupleMode;
+import org.apache.hyracks.storage.am.common.ophelpers.FindTupleNoExactMatchPolicy;
+import org.apache.hyracks.storage.am.lsm.btree.column.cloud.buffercache.IColumnReadContext;
 import org.apache.hyracks.storage.common.IIndexCursorStats;
 import org.apache.hyracks.storage.common.ISearchPredicate;
 import org.apache.hyracks.storage.common.buffercache.IBufferCache;
@@ -28,8 +32,20 @@ import org.apache.hyracks.storage.common.buffercache.IBufferCache;
 public class ColumnBTreePointSearchCursor extends ColumnBTreeRangeSearchCursor
         implements IDiskBTreeStatefulPointSearchCursor {
 
-    public ColumnBTreePointSearchCursor(ColumnBTreeReadLeafFrame frame, IIndexCursorStats stats, int index) {
-        super(frame, stats, index);
+    public ColumnBTreePointSearchCursor(ColumnBTreeReadLeafFrame frame, IIndexCursorStats stats, int index,
+            IColumnReadContext context) {
+        super(frame, stats, index, context);
+    }
+
+    @Override
+    public boolean doHasNext() {
+        // If we found the exact key, return true
+        return yieldFirstCall;
+    }
+
+    @Override
+    protected boolean shouldYieldFirstCall() throws HyracksDataException {
+        return pred.getLowKeyComparator().compare(lowKey, frameTuple) == 0;
     }
 
     @Override
@@ -45,7 +61,29 @@ public class ColumnBTreePointSearchCursor extends ColumnBTreeRangeSearchCursor
 
     @Override
     public void setCursorToNextKey(ISearchPredicate searchPred) throws HyracksDataException {
-        initCursorPosition(searchPred);
+        int index = getLowKeyIndex();
+        if (index == frame.getTupleCount()) {
+            frameTuple.consume();
+            yieldFirstCall = false;
+            return;
+        }
+        frameTuple.setAt(index);
+        yieldFirstCall = true;
+    }
+
+    @Override
+    protected void setSearchPredicate(ISearchPredicate searchPred) {
+        pred = (RangePredicate) searchPred;
+        lowKey = pred.getLowKey();
+        lowKeyFtm = FindTupleMode.EXACT;
+        lowKeyFtp = FindTupleNoExactMatchPolicy.NONE;
+        reusablePredicate.setLowKeyComparator(originalKeyCmp);
+    }
+
+    @Override
+    protected int getLowKeyIndex() throws HyracksDataException {
+        int index = frameTuple.findTupleIndex(pred.getLowKey(), pred.getLowKeyComparator(), lowKeyFtm, lowKeyFtp);
+        return index < 0 ? frame.getTupleCount() : index;
     }
 
     @Override

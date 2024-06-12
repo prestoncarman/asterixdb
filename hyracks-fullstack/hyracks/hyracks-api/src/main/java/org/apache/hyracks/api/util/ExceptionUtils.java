@@ -100,7 +100,7 @@ public class ExceptionUtils {
      *            the subsequent failure
      * @return the root exception, or null if both parameters are null
      */
-    public static Throwable suppress(Throwable first, Throwable second) {
+    public static <T extends Throwable> T suppress(T first, T second) {
         if (second instanceof InterruptedException) {
             Thread.currentThread().interrupt();
         }
@@ -206,5 +206,17 @@ public class ExceptionUtils {
      */
     public static String getMessageOrToString(Throwable e) {
         return e instanceof IFormattedException ? e.getMessage() : e.toString();
+    }
+
+    /**
+     * Checks if the error code of the throwable is of the provided type
+     *
+     * @param throwable throwable with error code
+     * @param code error code to match against
+     *
+     * @return true if error code matches, false otherwise
+     */
+    public static boolean isErrorCode(HyracksDataException throwable, ErrorCode code) {
+        return throwable.getError().isPresent() && throwable.getError().get() == code;
     }
 }

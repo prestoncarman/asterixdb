@@ -27,6 +27,7 @@ import org.apache.asterix.common.exceptions.CompilationException;
 import org.apache.asterix.common.exceptions.ErrorCode;
 import org.apache.asterix.common.metadata.DataverseName;
 import org.apache.asterix.metadata.declared.DataSource;
+import org.apache.asterix.metadata.declared.DataSourceId;
 import org.apache.asterix.metadata.declared.MetadataProvider;
 import org.apache.asterix.metadata.entities.Dataset;
 import org.apache.asterix.om.functions.BuiltinFunctions;
@@ -37,6 +38,7 @@ import org.apache.asterix.optimizer.base.AnalysisUtil;
 import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.common.utils.Pair;
+import org.apache.hyracks.algebricks.common.utils.Triple;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalExpressionTag;
@@ -265,6 +267,7 @@ public class OptimizableOperatorSubTree {
 
         for (int i = 0; i < sourceOpRefs.size(); i++) {
             List<LogicalVariable> vars;
+            String database;
             DataverseName dataverseName;
             String datasetName;
             switch (dsTypes.get(i)) {
@@ -277,9 +280,10 @@ public class OptimizableOperatorSubTree {
                             return false;
                         }
                     }
-                    Pair<DataverseName, String> datasetInfo = AnalysisUtil.getDatasetInfo(dataSourceScan);
-                    dataverseName = datasetInfo.first;
-                    datasetName = datasetInfo.second;
+                    DataSourceId srcId = (DataSourceId) dataSourceScan.getDataSource().getId();
+                    database = srcId.getDatabaseName();
+                    dataverseName = srcId.getDataverseName();
+                    datasetName = srcId.getDatasourceName();
                     vars = dataSourceScan.getScanVariables();
                     break;
                 case PRIMARY_INDEX_LOOKUP:
@@ -291,13 +295,16 @@ public class OptimizableOperatorSubTree {
                     jobGenParams.readFromFuncArgs(f.getArguments());
                     datasetName = jobGenParams.getDatasetName();
                     dataverseName = jobGenParams.getDataverseName();
+                    database = jobGenParams.getDatabaseName();
                     vars = unnestMapOp.getScanVariables();
                     break;
                 case EXTERNAL_SCAN:
                     UnnestMapOperator externalScan = (UnnestMapOperator) sourceOpRefs.get(i).getValue();
-                    datasetInfo = AnalysisUtil.getExternalDatasetInfo(externalScan);
+                    Triple<DataverseName, String, String> datasetInfo =
+                            AnalysisUtil.getExternalDatasetInfo(externalScan);
                     dataverseName = datasetInfo.first;
                     datasetName = datasetInfo.second;
+                    database = datasetInfo.third;
                     vars = externalScan.getScanVariables();
                     break;
                 case COLLECTION_SCAN:
@@ -314,13 +321,14 @@ public class OptimizableOperatorSubTree {
                 return false;
             }
             // Find the dataset corresponding to the datasource in the metadata.
-            Dataset ds = metadataProvider.findDataset(dataverseName, datasetName);
+            Dataset ds = metadataProvider.findDataset(database, dataverseName, datasetName);
             if (ds == null) {
                 throw new CompilationException(ErrorCode.NO_METADATA_FOR_DATASET, root.getSourceLocation(),
                         datasetName);
             }
             // Get the record type for that dataset.
-            IAType itemType = metadataProvider.findType(ds.getItemTypeDataverseName(), ds.getItemTypeName());
+            IAType itemType = metadataProvider.findType(ds.getItemTypeDatabaseName(), ds.getItemTypeDataverseName(),
+                    ds.getItemTypeName());
             if (itemType.getTypeTag() != ATypeTag.OBJECT) {
                 if (i == 0) {
                     return false;
@@ -332,8 +340,10 @@ public class OptimizableOperatorSubTree {
             ARecordType rType = (ARecordType) itemType;
 
             // Get the meta record type for that dataset.
-            ARecordType metaItemType = (ARecordType) metadataProvider.findType(ds.getMetaItemTypeDataverseName(),
-                    ds.getMetaItemTypeName());
+            ARecordType metaItemType = (ARecordType) metadataProvider.findType(ds.getMetaItemTypeDatabaseName(),
+                    ds.getMetaItemTypeDataverseName(), ds.getMetaItemTypeName());
+
+            rType = (ARecordType) metadataProvider.findTypeForDatasetWithoutType(rType, metaItemType, ds);
 
             // First index is always the primary datasource in this subtree.
             if (i == 0) {

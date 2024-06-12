@@ -27,22 +27,32 @@ import org.apache.asterix.metadata.api.IMetadataEntity;
 
 public class Synonym implements IMetadataEntity<Synonym> {
 
-    private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 2L;
+
+    private final String databaseName;
 
     private final DataverseName dataverseName;
 
     private final String synonymName;
 
+    private final String objectDatabaseName;
+
     private final DataverseName objectDataverseName;
 
     private final String objectName;
 
-    public Synonym(DataverseName dataverseName, String synonymName, DataverseName objectDataverseName,
-            String objectName) {
+    public Synonym(String databaseName, DataverseName dataverseName, String synonymName, String objectDatabaseName,
+            DataverseName objectDataverseName, String objectName) {
+        this.databaseName = Objects.requireNonNull(databaseName);
         this.dataverseName = Objects.requireNonNull(dataverseName);
         this.synonymName = Objects.requireNonNull(synonymName);
+        this.objectDatabaseName = Objects.requireNonNull(objectDatabaseName);
         this.objectDataverseName = Objects.requireNonNull(objectDataverseName);
         this.objectName = Objects.requireNonNull(objectName);
+    }
+
+    public String getDatabaseName() {
+        return databaseName;
     }
 
     public DataverseName getDataverseName() {
@@ -51,6 +61,10 @@ public class Synonym implements IMetadataEntity<Synonym> {
 
     public String getSynonymName() {
         return synonymName;
+    }
+
+    public String getObjectDatabaseName() {
+        return objectDatabaseName;
     }
 
     public DataverseName getObjectDataverseName() {
@@ -68,13 +82,16 @@ public class Synonym implements IMetadataEntity<Synonym> {
         if (o == null || getClass() != o.getClass())
             return false;
         Synonym synonym = (Synonym) o;
-        return dataverseName.equals(synonym.dataverseName) && synonymName.equals(synonym.synonymName)
+        return Objects.equals(databaseName, synonym.databaseName) && dataverseName.equals(synonym.dataverseName)
+                && synonymName.equals(synonym.synonymName)
+                && Objects.equals(objectDatabaseName, synonym.objectDatabaseName)
                 && objectDataverseName.equals(synonym.objectDataverseName) && objectName.equals(synonym.objectName);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(dataverseName, synonymName, objectDataverseName, objectName);
+        return Objects.hash(databaseName, dataverseName, synonymName, objectDatabaseName, objectDataverseName,
+                objectName);
     }
 
     @Override

@@ -21,7 +21,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>org.apache.asterix</groupId>
   <artifactId>apache-asterixdb</artifactId>
-  <version>0.9.8-SNAPSHOT</version>
+  <version>0.9.10-SNAPSHOT</version>
   <packaging>pom</packaging>
   <url>${implementation.url}</url>
 
@@ -46,8 +46,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <file.encoding>UTF-8</file.encoding>
     <jvm.extraargs />
-    <source.jdk.version>11</source.jdk.version>
-    <target.jdk.version>11</target.jdk.version>
+    <maven.compiler.release>11</maven.compiler.release>
     <javac.xlint.value>all</javac.xlint.value>
     <source-format.goal>format</source-format.goal>
     <source-format.skip>false</source-format.skip>
@@ -62,6 +61,8 @@
     <skip.surefire.tests>${skipTests}</skip.surefire.tests>
     <skip.testResources>${maven.test.skip}</skip.testResources>
     <testLog4jConfigFile>${root.dir}/asterix-app/src/test/resources/log4j2-asterixdb-test.xml</testLog4jConfigFile>
+    <extraSurefireArgLine/>
+    <extraFailsafeArgLine/>
 
     <!-- Definition of tests in various categories which may be excluded -->
     <repeated.tests>**/RepeatedTest.java</repeated.tests>
@@ -80,19 +81,28 @@
     <shim.stage>none</shim.stage>
     <pytestlib.stage>none</pytestlib.stage>
     <skip-npm-touch.stage>none</skip-npm-touch.stage>
+    <azurite.npm.install.stage>none</azurite.npm.install.stage>
+    <azurite.install.stage>none</azurite.install.stage>
+    <azurite.stage>none</azurite.stage>
+    <gcs.download.stage>none</gcs.download.stage>
+    <gcs.install.stage>none</gcs.install.stage>
+    <gcs.stage>none</gcs.stage>
 
     <!-- Versions under dependencymanagement or used in many projects via properties -->
-    <algebricks.version>0.3.8-SNAPSHOT</algebricks.version>
-    <hyracks.version>0.3.8-SNAPSHOT</hyracks.version>
-    <hadoop.version>3.3.4</hadoop.version>
+    <algebricks.version>0.3.10-SNAPSHOT</algebricks.version>
+    <hyracks.version>0.3.10-SNAPSHOT</hyracks.version>
+    <hadoop.version>3.3.6</hadoop.version>
     <jacoco.version>0.7.6.201602180812</jacoco.version>
-    <log4j.version>2.19.0</log4j.version>
-    <awsjavasdk.version>2.17.218</awsjavasdk.version>
+    <log4j.version>2.22.1</log4j.version>
+    <awsjavasdk.version>2.24.9</awsjavasdk.version>
+    <awsjavasdk.crt.version>0.29.10</awsjavasdk.crt.version>
     <parquet.version>1.12.3</parquet.version>
-    <hadoop-awsjavasdk.version>1.12.109</hadoop-awsjavasdk.version>
-    <azureblobjavasdk.version>12.14.2</azureblobjavasdk.version>
-    <azuredatalakejavasdk.version>12.7.2</azuredatalakejavasdk.version>
-    <gcsjavasdk.version>2.9.0</gcsjavasdk.version>
+    <hadoop-awsjavasdk.version>1.12.637</hadoop-awsjavasdk.version>
+    <azureblobjavasdk.version>12.25.1</azureblobjavasdk.version>
+    <azurecommonjavasdk.version>12.24.1</azurecommonjavasdk.version>
+    <azureidentity.version>1.11.1</azureidentity.version>
+    <azuredatalakejavasdk.version>12.18.1</azuredatalakejavasdk.version>
+    <gcsjavasdk.version>2.26.0</gcsjavasdk.version>
     <hadoop-azuresdk.version>8.6.6</hadoop-azuresdk.version>
     <hadoop-gcs.version>hadoop3-2.2.6</hadoop-gcs.version>
 
@@ -143,7 +153,9 @@
             -DrunSlowAQLTests=${runSlowAQLTests}
             -Xdebug
             -Xrunjdwp:transport=dt_socket,server=y,address=8000,suspend=${debug.suspend.flag}
+            --add-opens=jdk.management/com.sun.management.internal=ALL-UNNAMED --add-opens=java.management/sun.management=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED
             ${coverageArgLine}
+            ${extraSurefireArgLine}
           </argLine>
           <includes>
             <include>${test.includes}</include>
@@ -161,7 +173,10 @@
           <runOrder>alphabetical</runOrder>
           <forkCount>1</forkCount>
           <reuseForks>false</reuseForks>
-          <argLine>${coverageArgLine}</argLine>
+          <argLine>
+            ${coverageArgLine}
+            ${extraFailsafeArgLine}
+          </argLine>
           <systemProperties>
             <log4j.configurationFile>${testLog4jConfigFile}</log4j.configurationFile>
           </systemProperties>
@@ -218,8 +233,6 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
         <configuration>
-          <source>${source.jdk.version}</source>
-          <target>${target.jdk.version}</target>
           <compilerArgument>-Xlint:${javac.xlint.value}</compilerArgument>
         </configuration>
       </plugin>
@@ -245,7 +258,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-checkstyle-plugin</artifactId>
-        <version>3.0.0</version>
+        <version>3.3.1</version>
         <executions>
           <execution>
             <id>verify-style</id>
@@ -330,7 +343,7 @@
                   <version>[3.3.9,)</version>
                 </requireMavenVersion>
                 <requireJavaVersion>
-                  <version>[11,)</version>
+                  <version>[${maven.compiler.release},)</version>
                 </requireJavaVersion>
               </rules>
             </configuration>
@@ -597,7 +610,7 @@
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-dependency-plugin</artifactId>
-          <version>3.1.2</version>
+          <version>3.6.0</version>
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
@@ -607,7 +620,7 @@
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-plugin-plugin</artifactId>
-          <version>3.6.0</version>
+          <version>3.9.0</version>
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
@@ -651,7 +664,14 @@
         <plugin>
           <groupId>net.revelc.code</groupId>
           <artifactId>impsort-maven-plugin</artifactId>
-          <version>1.2.0</version>
+          <version>1.9.0</version>
+          <dependencies>
+            <dependency>
+              <groupId>com.github.javaparser</groupId>
+              <artifactId>javaparser-core</artifactId>
+              <version>3.25.5</version>
+            </dependency>
+          </dependencies>
         </plugin>
         <plugin>
           <groupId>org.codehaus.mojo</groupId>
@@ -721,6 +741,38 @@
         <shim.stage>none</shim.stage>
         <pytestlib.stage>generate-test-resources</pytestlib.stage>
         <global.itest.excludes/>
+      </properties>
+    </profile>
+    <profile>
+      <id>azurite-tests</id>
+      <activation>
+        <os>
+          <family>unix</family>
+        </os>
+        <property>
+          <name>!skipTests</name>
+        </property>
+      </activation>
+      <properties>
+        <azurite.npm.install.stage>process-classes</azurite.npm.install.stage>
+        <azurite.install.stage>generate-test-resources</azurite.install.stage>
+        <azurite.stage>process-test-resources</azurite.stage>
+      </properties>
+    </profile>
+    <profile>
+      <id>gcs-tests</id>
+      <activation>
+        <os>
+          <family>unix</family>
+        </os>
+        <property>
+          <name>!skipTests</name>
+        </property>
+      </activation>
+      <properties>
+        <gcs.download.stage>process-classes</gcs.download.stage>
+        <gcs.install.stage>generate-test-resources</gcs.install.stage>
+        <gcs.stage>process-test-resources</gcs.stage>
       </properties>
     </profile>
     <profile>
@@ -942,6 +994,8 @@
     <module>asterix-license</module>
     <module>asterix-geo</module>
     <module>asterix-spidersilk</module>
+    <module>asterix-column</module>
+    <module>asterix-cloud</module>
   </modules>
 
   <dependencyManagement>
@@ -956,7 +1010,7 @@
       <dependency>
         <groupId>org.slf4j</groupId>
         <artifactId>slf4j-simple</artifactId>
-        <version>1.7.33</version>
+        <version>1.7.36</version>
       </dependency>
       <dependency>
         <groupId>org.apache.maven</groupId>
@@ -974,16 +1028,12 @@
         <version>${hadoop.version}</version>
         <exclusions>
           <exclusion>
-            <groupId>log4j</groupId>
-            <artifactId>log4j</artifactId>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-reload4j</artifactId>
           </exclusion>
           <exclusion>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-api</artifactId>
-          </exclusion>
-          <exclusion>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-log4j12</artifactId>
+            <groupId>ch.qos.reload4j</groupId>
+            <artifactId>reload4j</artifactId>
           </exclusion>
         </exclusions>
       </dependency>
@@ -993,25 +1043,16 @@
         <version>${hadoop.version}</version>
         <exclusions>
           <exclusion>
-            <groupId>log4j</groupId>
-            <artifactId>log4j</artifactId>
-          </exclusion>
-          <exclusion>
             <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-api</artifactId>
+            <artifactId>slf4j-reload4j</artifactId>
           </exclusion>
           <exclusion>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-log4j12</artifactId>
           </exclusion>
-          <!-- TODO(htowaileb): Remove after updating to hadoop 3.3.4 -->
           <exclusion>
-            <groupId>org.eclipse.jetty</groupId>
-            <artifactId>jetty-util</artifactId>
-          </exclusion>
-          <exclusion>
-            <groupId>org.eclipse.jetty</groupId>
-            <artifactId>jetty-util-ajax</artifactId>
+            <groupId>ch.qos.reload4j</groupId>
+            <artifactId>reload4j</artifactId>
           </exclusion>
         </exclusions>
       </dependency>
@@ -1021,12 +1062,24 @@
         <version>${hadoop.version}</version>
         <exclusions>
           <exclusion>
+            <groupId>org.codehaus.jettison</groupId>
+            <artifactId>jettison</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>net.minidev</groupId>
+            <artifactId>json-smart</artifactId>
+          </exclusion>
+          <exclusion>
             <groupId>com.nimbusds</groupId>
             <artifactId>nimbus-jose-jwt</artifactId>
           </exclusion>
           <exclusion>
             <groupId>commons-logging</groupId>
             <artifactId>commons-logging</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.apache.avro</groupId>
+            <artifactId>avro</artifactId>
           </exclusion>
           <exclusion>
             <groupId>org.codehaus.woodstox</groupId>
@@ -1045,16 +1098,12 @@
             <artifactId>jdk.tools</artifactId>
           </exclusion>
           <exclusion>
-            <groupId>log4j</groupId>
-            <artifactId>log4j</artifactId>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-reload4j</artifactId>
           </exclusion>
           <exclusion>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-api</artifactId>
-          </exclusion>
-          <exclusion>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-log4j12</artifactId>
+            <groupId>ch.qos.reload4j</groupId>
+            <artifactId>reload4j</artifactId>
           </exclusion>
           <exclusion>
             <groupId>com.fasterxml</groupId>
@@ -1076,15 +1125,6 @@
             <groupId>javax.ws.rs</groupId>
             <artifactId>jsr311-api</artifactId>
           </exclusion>
-          <!-- TODO(htowaileb): Remove after updating to hadoop 3.3.4 -->
-          <exclusion>
-            <groupId>org.eclipse.jetty</groupId>
-            <artifactId>jetty-util</artifactId>
-          </exclusion>
-          <exclusion>
-            <groupId>org.eclipse.jetty</groupId>
-            <artifactId>jetty-util-ajax</artifactId>
-          </exclusion>
         </exclusions>
       </dependency>
       <dependency>
@@ -1093,16 +1133,12 @@
         <version>${hadoop.version}</version>
         <exclusions>
           <exclusion>
-            <groupId>log4j</groupId>
-            <artifactId>log4j</artifactId>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-reload4j</artifactId>
           </exclusion>
           <exclusion>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-api</artifactId>
-          </exclusion>
-          <exclusion>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-log4j12</artifactId>
+            <groupId>ch.qos.reload4j</groupId>
+            <artifactId>reload4j</artifactId>
           </exclusion>
         </exclusions>
       </dependency>
@@ -1113,29 +1149,24 @@
         <classifier>tests</classifier>
         <exclusions>
           <exclusion>
+            <groupId>net.minidev</groupId>
+            <artifactId>json-smart</artifactId>
+          </exclusion>
+          <exclusion>
             <groupId>com.nimbusds</groupId>
             <artifactId>nimbus-jose-jwt</artifactId>
           </exclusion>
           <exclusion>
-            <groupId>log4j</groupId>
-            <artifactId>log4j</artifactId>
-          </exclusion>
-          <exclusion>
             <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-api</artifactId>
+            <artifactId>slf4j-reload4j</artifactId>
           </exclusion>
           <exclusion>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-log4j12</artifactId>
           </exclusion>
-          <!-- TODO(htowaileb): Remove after updating to hadoop 3.3.4 -->
           <exclusion>
-            <groupId>org.eclipse.jetty</groupId>
-            <artifactId>jetty-util</artifactId>
-          </exclusion>
-          <exclusion>
-            <groupId>org.eclipse.jetty</groupId>
-            <artifactId>jetty-util-ajax</artifactId>
+            <groupId>ch.qos.reload4j</groupId>
+            <artifactId>reload4j</artifactId>
           </exclusion>
         </exclusions>
       </dependency>
@@ -1149,25 +1180,16 @@
             <artifactId>jdk.tools</artifactId>
           </exclusion>
           <exclusion>
-            <groupId>log4j</groupId>
-            <artifactId>log4j</artifactId>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-reload4j</artifactId>
           </exclusion>
           <exclusion>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-api</artifactId>
-          </exclusion>
-          <exclusion>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-log4j12</artifactId>
+            <groupId>ch.qos.reload4j</groupId>
+            <artifactId>reload4j</artifactId>
           </exclusion>
           <exclusion>
             <groupId>org.jline</groupId>
             <artifactId>jline</artifactId>
-          </exclusion>
-          <!-- TODO(htowaileb): Remove after updating to hadoop 3.3.4 -->
-          <exclusion>
-            <groupId>org.eclipse.jetty</groupId>
-            <artifactId>jetty-util</artifactId>
           </exclusion>
         </exclusions>
       </dependency>
@@ -1177,16 +1199,12 @@
         <version>${hadoop.version}</version>
         <exclusions>
           <exclusion>
-            <groupId>log4j</groupId>
-            <artifactId>log4j</artifactId>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-reload4j</artifactId>
           </exclusion>
           <exclusion>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-api</artifactId>
-          </exclusion>
-          <exclusion>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-log4j12</artifactId>
+            <groupId>ch.qos.reload4j</groupId>
+            <artifactId>reload4j</artifactId>
           </exclusion>
         </exclusions>
       </dependency>
@@ -1196,25 +1214,16 @@
         <version>${hadoop.version}</version>
         <exclusions>
           <exclusion>
-            <groupId>log4j</groupId>
-            <artifactId>log4j</artifactId>
-          </exclusion>
-          <exclusion>
             <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-api</artifactId>
+            <artifactId>slf4j-reload4j</artifactId>
           </exclusion>
           <exclusion>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-log4j12</artifactId>
           </exclusion>
-          <!-- TODO(htowaileb): Remove after updating to hadoop 3.3.4 -->
           <exclusion>
-            <groupId>org.eclipse.jetty</groupId>
-            <artifactId>jetty-util</artifactId>
-          </exclusion>
-          <exclusion>
-            <groupId>org.eclipse.jetty</groupId>
-            <artifactId>jetty-util-ajax</artifactId>
+            <groupId>ch.qos.reload4j</groupId>
+            <artifactId>reload4j</artifactId>
           </exclusion>
         </exclusions>
       </dependency>
@@ -1229,32 +1238,23 @@
             <artifactId>commons-logging</artifactId>
           </exclusion>
           <exclusion>
-            <groupId>log4j</groupId>
-            <artifactId>log4j</artifactId>
-          </exclusion>
-          <exclusion>
             <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-api</artifactId>
+            <artifactId>slf4j-reload4j</artifactId>
           </exclusion>
           <exclusion>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-log4j12</artifactId>
           </exclusion>
-          <!-- TODO(htowaileb): Remove after updating to hadoop 3.3.4 -->
           <exclusion>
-            <groupId>org.eclipse.jetty</groupId>
-            <artifactId>jetty-util</artifactId>
-          </exclusion>
-          <exclusion>
-            <groupId>org.eclipse.jetty</groupId>
-            <artifactId>jetty-util-ajax</artifactId>
+            <groupId>ch.qos.reload4j</groupId>
+            <artifactId>reload4j</artifactId>
           </exclusion>
         </exclusions>
       </dependency>
       <dependency>
         <groupId>org.apache.commons</groupId>
         <artifactId>commons-compress</artifactId>
-        <version>1.22</version>
+        <version>1.25.0</version>
       </dependency>
       <dependency>
         <groupId>commons-logging</groupId>
@@ -1264,7 +1264,7 @@
       <dependency>
         <groupId>commons-logging</groupId>
         <artifactId>commons-logging</artifactId>
-        <version>1.2</version>
+        <version>1.3.0</version>
       </dependency>
       <dependency>
         <groupId>org.apache.hyracks</groupId>
@@ -1364,7 +1364,7 @@
       </dependency>
       <dependency>
         <groupId>org.apache.hyracks</groupId>
-        <artifactId>hyracks-server</artifactId>
+        <artifactId>hyracks-server-test</artifactId>
         <version>${hyracks.version}</version>
         <type>test-jar</type>
       </dependency>
@@ -1416,6 +1416,11 @@
       <dependency>
         <groupId>org.apache.hyracks</groupId>
         <artifactId>hyracks-storage-am-lsm-btree</artifactId>
+        <version>${hyracks.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.hyracks</groupId>
+        <artifactId>hyracks-storage-am-lsm-btree-column</artifactId>
         <version>${hyracks.version}</version>
       </dependency>
       <dependency>
@@ -1504,7 +1509,7 @@
       <dependency>
         <groupId>commons-codec</groupId>
         <artifactId>commons-codec</artifactId>
-        <version>1.15</version>
+        <version>1.16.0</version>
       </dependency>
       <dependency>
         <groupId>it.unimi.dsi</groupId>
@@ -1627,6 +1632,21 @@
         <artifactId>http-client-spi</artifactId>
         <version>${awsjavasdk.version}</version>
       </dependency>
+      <dependency>
+        <groupId>software.amazon.awssdk</groupId>
+        <artifactId>s3-transfer-manager</artifactId>
+        <version>${awsjavasdk.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>software.amazon.awssdk</groupId>
+        <artifactId>sts</artifactId>
+        <version>${awsjavasdk.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>software.amazon.awssdk.crt</groupId>
+        <artifactId>aws-crt</artifactId>
+        <version>${awsjavasdk.crt.version}</version>
+      </dependency>
       <!-- Mock for AWS S3 -->
       <dependency>
         <groupId>io.findify</groupId>
@@ -1643,8 +1663,12 @@
       <dependency>
         <groupId>com.azure</groupId>
         <artifactId>azure-identity</artifactId>
-        <version>1.4.1</version>
+        <version>${azureidentity.version}</version>
         <exclusions>
+          <exclusion>
+            <groupId>net.minidev</groupId>
+            <artifactId>json-smart</artifactId>
+          </exclusion>
           <exclusion>
             <groupId>io.netty</groupId>
             <artifactId>netty-handler</artifactId>
@@ -1714,7 +1738,7 @@
       <dependency>
         <groupId>com.azure</groupId>
         <artifactId>azure-storage-blob</artifactId>
-        <version>12.14.3</version>
+        <version>${azureblobjavasdk.version}</version>
         <exclusions>
           <exclusion>
             <groupId>io.netty</groupId>
@@ -1785,7 +1809,7 @@
       <dependency>
         <groupId>com.azure</groupId>
         <artifactId>azure-storage-common</artifactId>
-        <version>12.14.2</version>
+        <version>${azurecommonjavasdk.version}</version>
         <exclusions>
           <exclusion>
             <groupId>io.netty</groupId>
@@ -1859,18 +1883,6 @@
         <groupId>com.google.cloud</groupId>
         <artifactId>google-cloud-storage</artifactId>
         <version>${gcsjavasdk.version}</version>
-        <exclusions>
-          <!-- substitute org.apache.tomcat:tomcat-annotations-api, as it has a nicer license -->
-          <exclusion>
-            <groupId>javax.annotation</groupId>
-            <artifactId>javax.annotation-api</artifactId>
-          </exclusion>
-        </exclusions>
-      </dependency>
-      <dependency>
-        <groupId>org.apache.tomcat</groupId>
-        <artifactId>tomcat-annotations-api</artifactId>
-        <version>10.0.22</version>
       </dependency>
       <!-- Google Cloud Storage end -->
       <!-- Azure Data Lake start -->
@@ -1888,7 +1900,7 @@
       <dependency>
         <groupId>org.apache.commons</groupId>
         <artifactId>commons-csv</artifactId>
-        <version>1.9.0</version>
+        <version>1.10.0</version>
       </dependency>
       <dependency>
         <groupId>org.testcontainers</groupId>
@@ -1903,7 +1915,7 @@
       <dependency>
         <groupId>org.apache.httpcomponents</groupId>
         <artifactId>httpmime</artifactId>
-        <version>4.5.11</version>
+        <version>4.5.14</version>
       </dependency>
       <dependency>
         <groupId>org.msgpack</groupId>
@@ -1933,9 +1945,26 @@
         </exclusions>
       </dependency>
       <dependency>
-        <groupId>org.kitesdk</groupId>
-        <artifactId>kite-data-core</artifactId>
-        <version>1.1.0</version>
+        <groupId>org.apache.parquet</groupId>
+        <artifactId>parquet-common</artifactId>
+        <version>${parquet.version}</version>
+        <exclusions>
+          <exclusion>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+          </exclusion>
+        </exclusions>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.parquet</groupId>
+        <artifactId>parquet-encoding</artifactId>
+        <version>${parquet.version}</version>
+        <exclusions>
+          <exclusion>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+          </exclusion>
+        </exclusions>
       </dependency>
       <!-- Hadoop AWS start -->
       <dependency>
@@ -1990,17 +2019,6 @@
         <groupId>org.apache.hadoop</groupId>
         <artifactId>hadoop-azure</artifactId>
         <version>${hadoop.version}</version>
-        <exclusions>
-          <!-- TODO(htowaileb): Remove after updating to hadoop 3.3.4 -->
-          <exclusion>
-            <groupId>org.eclipse.jetty</groupId>
-            <artifactId>jetty-util</artifactId>
-          </exclusion>
-          <exclusion>
-            <groupId>org.eclipse.jetty</groupId>
-            <artifactId>jetty-util-ajax</artifactId>
-          </exclusion>
-        </exclusions>
       </dependency>
       <!-- Hadoop Azure end -->
       <!-- Hadoop GCS start -->
@@ -2013,21 +2031,32 @@
             <groupId>org.checkerframework</groupId>
             <artifactId>checker-compat-qual</artifactId>
           </exclusion>
+          <!-- exclude transitive grpc-api,grpc-census dependencies, as they are bringing in older versions -->
+          <exclusion>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-api</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-census</artifactId>
+          </exclusion>
         </exclusions>
       </dependency>
       <!-- Hadoop GCS end -->
-
-      <!-- TODO(htowaileb): removed from hadoop transitively and added separately to avoid CVEs, can
-           be removed once upgraded to hadoop 3.3.4 as it addresses the CVEs -->
       <dependency>
-        <groupId>org.eclipse.jetty</groupId>
-        <artifactId>jetty-util</artifactId>
-        <version>9.4.48.v20220622</version>
+        <groupId>org.codehaus.jettison</groupId>
+        <artifactId>jettison</artifactId>
+        <version>1.5.4</version>
       </dependency>
       <dependency>
-        <groupId>org.eclipse.jetty</groupId>
-        <artifactId>jetty-util-ajax</artifactId>
-        <version>9.4.48.v20220622</version>
+        <groupId>io.grpc</groupId>
+        <artifactId>grpc-census</artifactId>
+        <version>1.56.1</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.avro</groupId>
+        <artifactId>avro</artifactId>
+        <version>1.11.3</version>
       </dependency>
     </dependencies>
   </dependencyManagement>

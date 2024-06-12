@@ -27,7 +27,9 @@ import org.apache.asterix.common.exceptions.AsterixException;
 import org.apache.asterix.common.exceptions.CompilationException;
 import org.apache.asterix.common.exceptions.ErrorCode;
 import org.apache.asterix.common.metadata.DataverseName;
+import org.apache.asterix.common.metadata.MetadataUtil;
 import org.apache.asterix.external.api.ITypedAdapterFactory;
+import org.apache.asterix.external.input.filter.NoOpExternalFilterEvaluatorFactory;
 import org.apache.asterix.metadata.entities.Dataset;
 import org.apache.asterix.metadata.entities.InternalDatasetDetails;
 import org.apache.asterix.om.types.ARecordType;
@@ -40,7 +42,7 @@ import org.apache.hyracks.algebricks.common.utils.Pair;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import org.apache.hyracks.algebricks.core.algebra.expressions.IVariableTypeEnvironment;
 import org.apache.hyracks.algebricks.core.algebra.metadata.IDataSource;
-import org.apache.hyracks.algebricks.core.algebra.metadata.IProjectionInfo;
+import org.apache.hyracks.algebricks.core.algebra.metadata.IProjectionFiltrationInfo;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.IOperatorSchema;
 import org.apache.hyracks.algebricks.core.jobgen.impl.JobGenContext;
 import org.apache.hyracks.algebricks.core.jobgen.impl.JobGenHelper;
@@ -63,8 +65,9 @@ public class LoadableDataSource extends DataSource {
 
     public LoadableDataSource(Dataset targetDataset, IAType itemType, IAType metaItemType, String adapter,
             Map<String, String> properties) throws AlgebricksException, IOException {
-        super(new DataSourceId(DataverseName.createSinglePartName(LOADABLE_DV), LOADABLE_DS), itemType, metaItemType,
-                Type.LOADABLE, null);
+        super(new DataSourceId(MetadataUtil.databaseFor(DataverseName.createSinglePartName(LOADABLE_DV)),
+                DataverseName.createSinglePartName(LOADABLE_DV), LOADABLE_DS), itemType, metaItemType, Type.LOADABLE,
+                null);
         this.targetDataset = targetDataset;
         this.adapter = adapter;
         this.adapterProperties = properties;
@@ -136,7 +139,7 @@ public class LoadableDataSource extends DataSource {
             List<LogicalVariable> minFilterVars, List<LogicalVariable> maxFilterVars,
             ITupleFilterFactory tupleFilterFactory, long outputLimit, IOperatorSchema opSchema,
             IVariableTypeEnvironment typeEnv, JobGenContext context, JobSpecification jobSpec, Object implConfig,
-            IProjectionInfo<?> projectionInfo) throws AlgebricksException {
+            IProjectionFiltrationInfo projectionFiltrationInfo) throws AlgebricksException {
         if (tupleFilterFactory != null || outputLimit >= 0) {
             throw CompilationException.create(ErrorCode.COMPILATION_ILLEGAL_STATE,
                     "tuple filter and limit are not supported by LoadableDataSource");
@@ -144,9 +147,10 @@ public class LoadableDataSource extends DataSource {
         LoadableDataSource alds = (LoadableDataSource) dataSource;
         ARecordType itemType = (ARecordType) alds.getLoadedType();
         ITypedAdapterFactory adapterFactory = metadataProvider.getConfiguredAdapterFactory(alds.getTargetDataset(),
-                alds.getAdapter(), alds.getAdapterProperties(), itemType, null, context.getWarningCollector());
+                alds.getAdapter(), alds.getAdapterProperties(), itemType, context.getWarningCollector(),
+                NoOpExternalFilterEvaluatorFactory.INSTANCE);
         RecordDescriptor rDesc = JobGenHelper.mkRecordDescriptor(typeEnv, opSchema, context);
-        return metadataProvider.buildLoadableDatasetScan(jobSpec, adapterFactory, rDesc);
+        return metadataProvider.getLoadableDatasetScanRuntime(jobSpec, adapterFactory, rDesc);
     }
 
     @Override

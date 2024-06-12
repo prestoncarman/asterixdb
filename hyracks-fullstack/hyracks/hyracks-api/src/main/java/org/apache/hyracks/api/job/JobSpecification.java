@@ -82,6 +82,8 @@ public class JobSpecification implements Serializable, IOperatorDescriptorRegist
 
     private long maxWarnings;
 
+    private String requestId;
+
     private IJobletEventListenerFactory jobletEventListenerFactory;
 
     private IGlobalJobDataFactory globalJobDataFactory;
@@ -258,6 +260,14 @@ public class JobSpecification implements Serializable, IOperatorDescriptorRegist
         this.connectorPolicyAssignmentPolicy = connectorPolicyAssignmentPolicy;
     }
 
+    public void setRequestId(String requestId) {
+        this.requestId = requestId;
+    }
+
+    public String getRequestId() {
+        return requestId;
+    }
+
     public void setFrameSize(int frameSize) {
         this.frameSize = frameSize;
     }
@@ -354,16 +364,14 @@ public class JobSpecification implements Serializable, IOperatorDescriptorRegist
             if (inputs != null && !inputs.isEmpty()) {
                 buffer.append("   Inputs:\n");
                 for (IConnectorDescriptor c : inputs) {
-                    buffer.append("      ").append(c.getConnectorId().getId()).append(" : ").append(c.toString())
-                            .append("\n");
+                    buffer.append("      ").append(c.getConnectorId().getId()).append(" : ").append(c).append("\n");
                 }
             }
             List<IConnectorDescriptor> outputs = opOutputMap.get(key);
             if (outputs != null && !outputs.isEmpty()) {
                 buffer.append("   Outputs:\n");
                 for (IConnectorDescriptor c : outputs) {
-                    buffer.append("      ").append(c.getConnectorId().getId()).append(" : ").append(c.toString())
-                            .append("\n");
+                    buffer.append("      ").append(c.getConnectorId().getId()).append(" : ").append(c).append("\n");
                 }
             }
         });

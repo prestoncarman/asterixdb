@@ -31,6 +31,7 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiPredicate;
 import java.util.stream.Stream;
 
@@ -61,9 +62,9 @@ import org.apache.hyracks.control.nc.NodeControllerService;
 import org.apache.hyracks.ipc.impl.HyracksConnection;
 import org.apache.hyracks.storage.am.lsm.btree.impl.TestLsmBtreeLocalResource;
 import org.apache.hyracks.test.support.TestUtils;
-import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.jetbrains.annotations.NotNull;
 import org.kohsuke.args4j.CmdLineException;
 
 @SuppressWarnings({ "squid:ClassVariableVisibilityCheck", "squid:S00112" })
@@ -101,17 +102,16 @@ public class AsterixHyracksIntegrationUtil {
      * main method to run a simple 2 node cluster in-process
      * suggested VM arguments: <code>-enableassertions -Xmx2048m -Dfile.encoding=UTF-8</code>
      *
-     * @param args
-     *            unused
+     * @param args unused
      */
     public static void main(String[] args) throws Exception {
         TestUtils.redirectLoggingToConsole();
         AsterixHyracksIntegrationUtil integrationUtil = new AsterixHyracksIntegrationUtil();
         try {
             integrationUtil.run(Boolean.getBoolean("cleanup.start"), Boolean.getBoolean("cleanup.shutdown"),
-                    System.getProperty("conf.path", DEFAULT_CONF_FILE));
-        } catch (Exception e) {
-            LOGGER.fatal("Unexpected exception", e);
+                    getConfPath());
+        } catch (Throwable t) {
+            LOGGER.fatal("Unexpected exception", t);
             System.exit(1);
         }
     }
@@ -130,7 +130,7 @@ public class AsterixHyracksIntegrationUtil {
         configManager.processConfig();
         ccConfig.setKeyStorePath(joinPath(RESOURCES_PATH, ccConfig.getKeyStorePath()));
         ccConfig.setTrustStorePath(joinPath(RESOURCES_PATH, ccConfig.getTrustStorePath()));
-        cc = new ClusterControllerService(ccConfig, ccApplication);
+        cc = createCC(ccApplication, ccConfig);
 
         nodeNames = ccConfig.getConfigManager().getNodeNames();
         if (deleteOldInstanceData && nodeNames != null) {
@@ -151,24 +151,31 @@ public class AsterixHyracksIntegrationUtil {
             }
             ncApplication.registerConfig(ncConfigManager);
             opts.forEach(opt -> ncConfigManager.set(nodeId, opt.getLeft(), opt.getRight()));
-            nodeControllers
-                    .add(new NodeControllerService(fixupPaths(createNCConfig(nodeId, ncConfigManager)), ncApplication));
+            nodeControllers.add(createNC(fixupPaths(createNCConfig(nodeId, ncConfigManager)), ncApplication));
         }
 
         opts.forEach(opt -> configManager.set(opt.getLeft(), opt.getRight()));
-        cc.start();
+        try {
+            cc.start();
+        } catch (Throwable t) {
+            LOGGER.error("failed to start cc", t);
+            throw t;
+        }
 
         // Starts ncs.
         nodeNames = ccConfig.getConfigManager().getNodeNames();
         List<Thread> startupThreads = new ArrayList<>();
+        AtomicBoolean ncFailedToStart = new AtomicBoolean(false);
         for (NodeControllerService nc : nodeControllers) {
             Thread ncStartThread = new Thread("IntegrationUtil-" + nc.getId()) {
                 @Override
                 public void run() {
                     try {
                         nc.start();
-                    } catch (Exception e) {
-                        LOGGER.log(Level.ERROR, e.getMessage(), e);
+                        LOGGER.info("started node {}", nc.getId());
+                    } catch (Throwable t) {
+                        LOGGER.error("failed to start node {}", nc.getId(), t);
+                        ncFailedToStart.set(true);
                     }
                 }
             };
@@ -179,13 +186,17 @@ public class AsterixHyracksIntegrationUtil {
         for (Thread thread : startupThreads) {
             thread.join();
         }
+        if (ncFailedToStart.get()) {
+            throw new Exception("some node failed to start");
+        }
         // Wait until cluster becomes active
         ((ICcApplicationContext) cc.getApplicationContext()).getClusterStateManager().waitForState(ClusterState.ACTIVE);
         hcc = new HyracksConnection(cc.getConfig().getClientListenAddress(), cc.getConfig().getClientListenPort(),
                 cc.getNetworkSecurityManager().getSocketChannelFactory());
-        this.ncs = nodeControllers.toArray(new NodeControllerService[nodeControllers.size()]);
+        this.ncs = nodeControllers.toArray(new NodeControllerService[0]);
     }
 
+    @NotNull
     private void configureExternalLibDir() {
         // hack to ensure we have a unique location for external libraries in our tests (asterix cluster has a shared
         // home directory)-- TODO: rework this once the external lib dir can be configured explicitly
@@ -224,8 +235,18 @@ public class AsterixHyracksIntegrationUtil {
         return ccConfig;
     }
 
+    protected ClusterControllerService createCC(ICCApplication ccApplication, CCConfig ccConfig) throws Exception {
+        return new ClusterControllerService(ccConfig, ccApplication);
+    }
+
     protected ICCApplication createCCApplication() {
         return new CCApplication();
+    }
+
+    @NotNull
+    protected NodeControllerService createNC(NCConfig config, INCApplication ncApplication)
+            throws IOException, CmdLineException, AsterixException {
+        return new NodeControllerService(config, ncApplication);
     }
 
     protected NCConfig createNCConfig(String ncName, ConfigManager configManager) {
@@ -287,8 +308,8 @@ public class AsterixHyracksIntegrationUtil {
                     public void run() {
                         try {
                             nodeControllerService.stop();
-                        } catch (Exception e) {
-                            e.printStackTrace();
+                        } catch (Throwable t) {
+                            LOGGER.error("failed to stop node {}", nodeControllerService.getId(), t);
                         }
                     }
                 };
@@ -357,8 +378,8 @@ public class AsterixHyracksIntegrationUtil {
             public void run() {
                 try {
                     deinit(cleanupOnShutdown);
-                } catch (Exception e) {
-                    LOGGER.log(Level.WARN, "Unexpected exception on shutdown", e);
+                } catch (Throwable t) {
+                    LOGGER.warn("Unexpected exception on shutdown", t);
                 }
             }
         });
@@ -375,8 +396,8 @@ public class AsterixHyracksIntegrationUtil {
             public void run() {
                 try {
                     deinit(cleanupOnShutdown);
-                } catch (Exception e) {
-                    LOGGER.log(Level.WARN, "Unexpected exception on shutdown", e);
+                } catch (Throwable t) {
+                    LOGGER.warn("Unexpected exception on shutdown", t);
                 }
             }
         });
@@ -398,7 +419,7 @@ public class AsterixHyracksIntegrationUtil {
     /**
      * @return the asterix-app absolute path if found, otherwise the default user path.
      */
-    private static Path getProjectPath() {
+    static Path getProjectPath() {
         final String targetDir = "asterix-app";
         final BiPredicate<Path, BasicFileAttributes> matcher =
                 (path, attributes) -> path.getFileName().toString().equals(targetDir) && path.toFile().isDirectory()
@@ -443,5 +464,13 @@ public class AsterixHyracksIntegrationUtil {
             registeredClasses.put("TestPrimaryIndexOperationTrackerFactory",
                     TestPrimaryIndexOperationTrackerFactory.class);
         }
+    }
+
+    private static String getConfPath() {
+        String providedPath = System.getProperty("conf.path");
+        if (providedPath == null) {
+            return DEFAULT_CONF_FILE;
+        }
+        return joinPath(RESOURCES_PATH, providedPath);
     }
 }

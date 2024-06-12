@@ -22,6 +22,9 @@ import static org.apache.asterix.transaction.management.service.transaction.Tran
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.file.Paths;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -34,13 +37,22 @@ import org.apache.asterix.common.transactions.ITransactionSubsystem;
 import org.apache.asterix.common.transactions.LogRecord;
 import org.apache.asterix.common.transactions.TransactionOptions;
 import org.apache.asterix.common.transactions.TxnId;
+import org.apache.asterix.common.utils.StorageConstants;
 import org.apache.asterix.common.utils.TransactionUtil;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
+import org.apache.hyracks.api.io.FileReference;
+import org.apache.hyracks.api.io.IIOManager;
 import org.apache.hyracks.api.lifecycle.ILifeCycleComponent;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMComponentId;
+import org.apache.hyracks.storage.am.lsm.common.impls.LSMComponentId;
 import org.apache.hyracks.util.annotations.ThreadSafe;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 @ThreadSafe
 public class TransactionManager implements ITransactionManager, ILifeCycleComponent {
@@ -61,7 +73,7 @@ public class TransactionManager implements ITransactionManager, ILifeCycleCompon
         if (txnCtx != null) {
             throw new ACIDException("Transaction with the same (" + txnId + ") already exists");
         }
-        txnCtx = TransactionContextFactory.create(txnId, options);
+        txnCtx = TransactionContextFactory.create(txnId, options, txnSubsystem.getApplicationContext());
         txnCtxRepository.put(txnId, txnCtx);
         ensureMaxTxnId(txnId.getId());
         return txnCtx;
@@ -81,9 +93,11 @@ public class TransactionManager implements ITransactionManager, ILifeCycleCompon
         final ITransactionContext txnCtx = getTransactionContext(txnId);
         try {
             if (txnCtx.isWriteTxn()) {
-                LogRecord logRecord = new LogRecord();
-                TransactionUtil.formJobTerminateLogRecord(txnCtx, logRecord, true);
-                txnSubsystem.getLogManager().log(logRecord);
+                if (txnCtx.hasWAL()) {
+                    LogRecord logRecord = new LogRecord();
+                    TransactionUtil.formJobTerminateLogRecord(txnCtx, logRecord, true);
+                    txnSubsystem.getLogManager().log(logRecord);
+                }
                 txnCtx.setTxnState(ITransactionManager.COMMITTED);
             }
         } catch (Exception e) {
@@ -103,13 +117,15 @@ public class TransactionManager implements ITransactionManager, ILifeCycleCompon
         final ITransactionContext txnCtx = getTransactionContext(txnId);
         try {
             if (txnCtx.isWriteTxn()) {
-                if (txnCtx.getFirstLSN() != TERMINAL_LSN) {
-                    LogRecord logRecord = new LogRecord();
-                    TransactionUtil.formJobTerminateLogRecord(txnCtx, logRecord, false);
-                    txnSubsystem.getLogManager().log(logRecord);
-                    txnSubsystem.getCheckpointManager().secure(txnId);
+                if (txnCtx.hasWAL()) {
+                    if (txnCtx.getFirstLSN() != TERMINAL_LSN) {
+                        LogRecord logRecord = new LogRecord();
+                        TransactionUtil.formJobTerminateLogRecord(txnCtx, logRecord, false);
+                        txnSubsystem.getLogManager().log(logRecord);
+                        txnSubsystem.getCheckpointManager().secure(txnId);
+                    }
+                    txnSubsystem.getRecoveryManager().rollbackTransaction(txnCtx);
                 }
-                txnSubsystem.getRecoveryManager().rollbackTransaction(txnCtx);
                 txnCtx.setTxnState(ITransactionManager.ABORTED);
             }
         } catch (HyracksDataException e) {
@@ -182,5 +198,43 @@ public class TransactionManager implements ITransactionManager, ILifeCycleCompon
         } catch (IOException e) {
             LOGGER.log(Level.WARN, "exception while dumping state", e);
         }
+    }
+
+    @Override
+    public void rollbackMetadataTransactionsWithoutWAL() {
+        IIOManager ioManager = txnSubsystem.getApplicationContext().getPersistenceIoManager();
+        try {
+            Set<FileReference> txnLogFileRefs =
+                    ioManager.list(ioManager.resolve(Paths
+                            .get(StorageConstants.METADATA_TXN_NOWAL_DIR_NAME,
+                                    StorageConstants.PARTITION_DIR_PREFIX + StorageConstants.METADATA_PARTITION)
+                            .toString()));
+            ObjectMapper objectMapper = new ObjectMapper();
+            for (FileReference txnLogFileRef : txnLogFileRefs) {
+                ObjectNode atomicTransactionLog =
+                        objectMapper.readValue(new String(ioManager.readAllBytes(txnLogFileRef)), ObjectNode.class);
+                TxnId txnId = new TxnId(atomicTransactionLog.get("txnId").asInt());
+                JsonNode jsonNode = atomicTransactionLog.get("resourceMap");
+                Map<String, ILSMComponentId> resourceMap = getResourceMapFromJson(jsonNode);
+                AtomicNoWALTransactionContext context =
+                        new AtomicNoWALTransactionContext(txnId, txnSubsystem.getApplicationContext());
+                context.rollback(resourceMap);
+                context.deleteLogFile();
+            }
+        } catch (Exception e) {
+            throw new ACIDException(e);
+        }
+    }
+
+    private Map<String, ILSMComponentId> getResourceMapFromJson(JsonNode jsonNode) {
+        Map<String, ILSMComponentId> resourceMap = new HashMap<>();
+        for (Iterator<String> it = jsonNode.fieldNames(); it.hasNext();) {
+            String resourcePath = it.next();
+            JsonNode componentIdNode = jsonNode.get(resourcePath);
+            ILSMComponentId componentId =
+                    new LSMComponentId(componentIdNode.get("minId").asLong(), componentIdNode.get("maxId").asLong());
+            resourceMap.put(resourcePath, componentId);
+        }
+        return resourceMap;
     }
 }

@@ -19,6 +19,7 @@
 
 package org.apache.asterix.metadata.entities;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -36,17 +37,17 @@ import org.apache.asterix.common.context.IStorageComponentProvider;
 import org.apache.asterix.common.dataflow.NoOpFrameOperationCallbackFactory;
 import org.apache.asterix.common.exceptions.CompilationException;
 import org.apache.asterix.common.exceptions.ErrorCode;
+import org.apache.asterix.common.ioopcallbacks.AtomicLSMIndexIOOperationCallbackFactory;
 import org.apache.asterix.common.ioopcallbacks.LSMIndexIOOperationCallbackFactory;
 import org.apache.asterix.common.ioopcallbacks.LSMIndexPageWriteCallbackFactory;
 import org.apache.asterix.common.metadata.DatasetFullyQualifiedName;
 import org.apache.asterix.common.metadata.DataverseName;
 import org.apache.asterix.common.metadata.IDataset;
+import org.apache.asterix.common.metadata.MetadataUtil;
 import org.apache.asterix.common.transactions.IRecoveryManager.ResourceType;
 import org.apache.asterix.common.utils.JobUtils;
 import org.apache.asterix.common.utils.JobUtils.ProgressState;
 import org.apache.asterix.common.utils.StoragePathUtil;
-import org.apache.asterix.external.feed.management.FeedConnectionId;
-import org.apache.asterix.external.indexing.IndexingConstants;
 import org.apache.asterix.formats.nontagged.BinaryHashFunctionFactoryProvider;
 import org.apache.asterix.formats.nontagged.SerializerDeserializerProvider;
 import org.apache.asterix.formats.nontagged.TypeTraitProvider;
@@ -55,15 +56,13 @@ import org.apache.asterix.metadata.MetadataCache;
 import org.apache.asterix.metadata.MetadataManager;
 import org.apache.asterix.metadata.MetadataTransactionContext;
 import org.apache.asterix.metadata.api.IMetadataEntity;
+import org.apache.asterix.metadata.dataset.DatasetFormatInfo;
 import org.apache.asterix.metadata.declared.ArrayBTreeResourceFactoryProvider;
 import org.apache.asterix.metadata.declared.BTreeResourceFactoryProvider;
 import org.apache.asterix.metadata.declared.MetadataProvider;
-import org.apache.asterix.metadata.lock.ExternalDatasetsRegistry;
 import org.apache.asterix.metadata.utils.DatasetUtil;
-import org.apache.asterix.metadata.utils.ExternalIndexingOperations;
 import org.apache.asterix.metadata.utils.IndexUtil;
 import org.apache.asterix.metadata.utils.InvertedIndexResourceFactoryProvider;
-import org.apache.asterix.metadata.utils.MetadataUtil;
 import org.apache.asterix.metadata.utils.RTreeResourceFactoryProvider;
 import org.apache.asterix.metadata.utils.TypeUtil;
 import org.apache.asterix.om.functions.BuiltinFunctions;
@@ -82,11 +81,11 @@ import org.apache.asterix.transaction.management.opcallbacks.SecondaryIndexSearc
 import org.apache.asterix.transaction.management.opcallbacks.UpsertOperationCallbackFactory;
 import org.apache.asterix.transaction.management.resource.DatasetLocalResourceFactory;
 import org.apache.asterix.transaction.management.runtime.CommitRuntimeFactory;
+import org.apache.asterix.transaction.management.runtime.NoOpCommitRuntimeFactory;
 import org.apache.asterix.transaction.management.service.transaction.DatasetIdFactory;
 import org.apache.commons.lang3.mutable.MutableBoolean;
 import org.apache.commons.lang3.mutable.MutableObject;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
-import org.apache.hyracks.algebricks.common.utils.Pair;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalExpressionTag;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalOperatorTag;
@@ -100,11 +99,13 @@ import org.apache.hyracks.api.client.IHyracksClientConnection;
 import org.apache.hyracks.api.dataflow.value.IBinaryComparatorFactory;
 import org.apache.hyracks.api.dataflow.value.IBinaryHashFunctionFactory;
 import org.apache.hyracks.api.dataflow.value.ISerializerDeserializer;
+import org.apache.hyracks.api.dataflow.value.ITuplePartitionerFactory;
 import org.apache.hyracks.api.dataflow.value.ITypeTraits;
 import org.apache.hyracks.api.dataflow.value.RecordDescriptor;
 import org.apache.hyracks.api.exceptions.SourceLocation;
 import org.apache.hyracks.api.io.FileSplit;
 import org.apache.hyracks.api.job.JobSpecification;
+import org.apache.hyracks.dataflow.common.data.partition.FieldHashPartitionerFactory;
 import org.apache.hyracks.storage.am.common.api.IModificationOperationCallbackFactory;
 import org.apache.hyracks.storage.am.common.api.ISearchOperationCallbackFactory;
 import org.apache.hyracks.storage.am.common.dataflow.IndexDropOperatorDescriptor.DropOption;
@@ -115,6 +116,7 @@ import org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperationCallbackFacto
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMMergePolicyFactory;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMOperationTrackerFactory;
 import org.apache.hyracks.storage.am.lsm.common.api.ILSMPageWriteCallbackFactory;
+import org.apache.hyracks.storage.am.lsm.common.api.ILSMTupleFilterCallbackFactory;
 import org.apache.hyracks.storage.common.IResourceFactory;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
@@ -131,7 +133,7 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
     /*
      * Constants
      */
-    private static final long serialVersionUID = 2L;
+    private static final long serialVersionUID = 3L;
     private static final Logger LOGGER = LogManager.getLogger();
     private static final RTreeResourceFactoryProvider rTreeResourceFactoryProvider =
             RTreeResourceFactoryProvider.INSTANCE;
@@ -141,8 +143,10 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
      * Members
      */
     private final int datasetId;
+    private final String databaseName;
     private final DataverseName dataverseName;
     private final String datasetName;
+    private final String recordTypeDatabaseName;
     private final DataverseName recordTypeDataverseName;
     private final String recordTypeName;
     private final String nodeGroupName;
@@ -151,49 +155,59 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
     private final Map<String, String> compactionPolicyProperties;
     private final DatasetType datasetType;
     private final IDatasetDetails datasetDetails;
+    private final String metaTypeDatabaseName;
     private final DataverseName metaTypeDataverseName;
     private final String metaTypeName;
     private final long rebalanceCount;
     private int pendingOp;
     private final String compressionScheme;
     private final DatasetFullyQualifiedName datasetFullyQualifiedName;
+    private final DatasetFormatInfo datasetFormatInfo;
 
-    public Dataset(DataverseName dataverseName, String datasetName, DataverseName recordTypeDataverseName,
-            String recordTypeName, String nodeGroupName, String compactionPolicy,
+    public Dataset(String databaseName, DataverseName dataverseName, String datasetName, String recordTypeDatabaseName,
+            DataverseName recordTypeDataverseName, String recordTypeName, String nodeGroupName, String compactionPolicy,
             Map<String, String> compactionPolicyProperties, IDatasetDetails datasetDetails, Map<String, String> hints,
             DatasetType datasetType, int datasetId, int pendingOp) {
-        this(dataverseName, datasetName, recordTypeDataverseName, recordTypeName, /*metaTypeDataverseName*/null,
-                /*metaTypeName*/null, nodeGroupName, compactionPolicy, compactionPolicyProperties, datasetDetails,
-                hints, datasetType, datasetId, pendingOp, CompressionManager.NONE);
+        this(databaseName, dataverseName, datasetName, recordTypeDatabaseName, recordTypeDataverseName, recordTypeName,
+                null, /*metaTypeDataverseName*/null, /*metaTypeName*/null, nodeGroupName, compactionPolicy,
+                compactionPolicyProperties, datasetDetails, hints, datasetType, datasetId, pendingOp,
+                CompressionManager.NONE, DatasetFormatInfo.SYSTEM_DEFAULT);
     }
 
-    public Dataset(DataverseName dataverseName, String datasetName, DataverseName itemTypeDataverseName,
-            String itemTypeName, DataverseName metaItemTypeDataverseName, String metaItemTypeName, String nodeGroupName,
+    public Dataset(String databaseName, DataverseName dataverseName, String datasetName, String itemTypeDatabaseName,
+            DataverseName itemTypeDataverseName, String itemTypeName, String metaItemTypeDatabaseName,
+            DataverseName metaItemTypeDataverseName, String metaItemTypeName, String nodeGroupName,
             String compactionPolicy, Map<String, String> compactionPolicyProperties, IDatasetDetails datasetDetails,
-            Map<String, String> hints, DatasetType datasetType, int datasetId, int pendingOp,
-            String compressionScheme) {
-        this(dataverseName, datasetName, itemTypeDataverseName, itemTypeName, metaItemTypeDataverseName,
-                metaItemTypeName, nodeGroupName, compactionPolicy, compactionPolicyProperties, datasetDetails, hints,
-                datasetType, datasetId, pendingOp, 0L, compressionScheme);
+            Map<String, String> hints, DatasetType datasetType, int datasetId, int pendingOp, String compressionScheme,
+            DatasetFormatInfo datasetFormatInfo) {
+        this(databaseName, dataverseName, datasetName, itemTypeDatabaseName, itemTypeDataverseName, itemTypeName,
+                metaItemTypeDatabaseName, metaItemTypeDataverseName, metaItemTypeName, nodeGroupName, compactionPolicy,
+                compactionPolicyProperties, datasetDetails, hints, datasetType, datasetId, pendingOp, 0L,
+                compressionScheme, datasetFormatInfo);
     }
 
     public Dataset(Dataset dataset) {
-        this(dataset.dataverseName, dataset.datasetName, dataset.recordTypeDataverseName, dataset.recordTypeName,
+        this(dataset.databaseName, dataset.dataverseName, dataset.datasetName, dataset.recordTypeDatabaseName,
+                dataset.recordTypeDataverseName, dataset.recordTypeName, dataset.metaTypeDatabaseName,
                 dataset.metaTypeDataverseName, dataset.metaTypeName, dataset.nodeGroupName,
                 dataset.compactionPolicyFactory, dataset.compactionPolicyProperties, dataset.datasetDetails,
                 dataset.hints, dataset.datasetType, dataset.datasetId, dataset.pendingOp, dataset.rebalanceCount,
-                dataset.compressionScheme);
+                dataset.compressionScheme, dataset.datasetFormatInfo);
     }
 
-    public Dataset(DataverseName dataverseName, String datasetName, DataverseName itemTypeDataverseName,
-            String itemTypeName, DataverseName metaItemTypeDataverseName, String metaItemTypeName, String nodeGroupName,
+    public Dataset(String databaseName, DataverseName dataverseName, String datasetName, String itemTypeDatabaseName,
+            DataverseName itemTypeDataverseName, String itemTypeName, String metaItemTypeDatabaseName,
+            DataverseName metaItemTypeDataverseName, String metaItemTypeName, String nodeGroupName,
             String compactionPolicy, Map<String, String> compactionPolicyProperties, IDatasetDetails datasetDetails,
             Map<String, String> hints, DatasetType datasetType, int datasetId, int pendingOp, long rebalanceCount,
-            String compressionScheme) {
+            String compressionScheme, DatasetFormatInfo datasetFormatInfo) {
+        this.databaseName = Objects.requireNonNull(databaseName);
         this.dataverseName = dataverseName;
         this.datasetName = datasetName;
         this.recordTypeName = itemTypeName;
+        this.recordTypeDatabaseName = itemTypeDatabaseName;
         this.recordTypeDataverseName = itemTypeDataverseName;
+        this.metaTypeDatabaseName = metaItemTypeDatabaseName;
         this.metaTypeDataverseName = metaItemTypeDataverseName;
         this.metaTypeName = metaItemTypeName;
         this.nodeGroupName = nodeGroupName;
@@ -206,7 +220,12 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
         this.hints = hints;
         this.rebalanceCount = rebalanceCount;
         this.compressionScheme = compressionScheme;
-        datasetFullyQualifiedName = new DatasetFullyQualifiedName(dataverseName, datasetName);
+        this.datasetFullyQualifiedName = new DatasetFullyQualifiedName(databaseName, dataverseName, datasetName);
+        this.datasetFormatInfo = datasetFormatInfo;
+    }
+
+    public String getDatabaseName() {
+        return databaseName;
     }
 
     @Override
@@ -221,6 +240,10 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
 
     public String getItemTypeName() {
         return recordTypeName;
+    }
+
+    public String getItemTypeDatabaseName() {
+        return recordTypeDatabaseName;
     }
 
     public DataverseName getItemTypeDataverseName() {
@@ -257,6 +280,10 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
 
     public int getPendingOp() {
         return pendingOp;
+    }
+
+    public String getMetaItemTypeDatabaseName() {
+        return metaTypeDatabaseName;
     }
 
     public DataverseName getMetaItemTypeDataverseName() {
@@ -298,7 +325,8 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
             return false;
         }
         Dataset otherDataset = (Dataset) other;
-        return Objects.equals(dataverseName, otherDataset.dataverseName)
+        return Objects.equals(databaseName, otherDataset.databaseName)
+                && Objects.equals(dataverseName, otherDataset.dataverseName)
                 && Objects.equals(datasetName, otherDataset.datasetName);
     }
 
@@ -332,31 +360,23 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
     /**
      * Drop this dataset
      *
-     * @param metadataProvider
-     *            metadata provider that can be used to get metadata info and runtimes
-     * @param mdTxnCtx
-     *            the transaction context
-     * @param jobsToExecute
-     *            a list of jobs to be executed as part of the drop operation
-     * @param bActiveTxn
-     *            whether the metadata transaction is ongoing
-     * @param progress
-     *            a mutable progress state used for error handling during the drop operation
-     * @param hcc
-     *            a client connection to hyracks master for job execution
+     * @param metadataProvider metadata provider that can be used to get metadata info and runtimes
+     * @param mdTxnCtx         the transaction context
+     * @param jobsToExecute    a list of jobs to be executed as part of the drop operation
+     * @param bActiveTxn       whether the metadata transaction is ongoing
+     * @param progress         a mutable progress state used for error handling during the drop operation
+     * @param hcc              a client connection to hyracks master for job execution
      * @param sourceLoc
-     * @throws Exception
-     *             if an error occur during the drop process or if the dataset can't be dropped for any reason
+     * @throws Exception if an error occur during the drop process or if the dataset can't be dropped for any reason
      */
     public void drop(MetadataProvider metadataProvider, MutableObject<MetadataTransactionContext> mdTxnCtx,
             List<JobSpecification> jobsToExecute, MutableBoolean bActiveTxn, MutableObject<ProgressState> progress,
             IHyracksClientConnection hcc, boolean dropCorrespondingNodeGroup, SourceLocation sourceLoc,
             Set<DropOption> options, boolean force) throws Exception {
-        Map<FeedConnectionId, Pair<JobSpecification, Boolean>> disconnectJobList = new HashMap<>();
         if (getDatasetType() == DatasetType.INTERNAL) {
             // #. prepare jobs to drop the datatset and the indexes in NC
-            List<Index> indexes =
-                    MetadataManager.INSTANCE.getDatasetIndexes(mdTxnCtx.getValue(), dataverseName, datasetName);
+            List<Index> indexes = MetadataManager.INSTANCE.getDatasetIndexes(mdTxnCtx.getValue(), databaseName,
+                    dataverseName, datasetName);
             for (int j = 0; j < indexes.size(); j++) {
                 if (indexes.get(j).isSecondaryIndex()) {
                     jobsToExecute.add(IndexUtil.buildDropIndexJobSpec(indexes.get(j), metadataProvider, this, options,
@@ -365,21 +385,18 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
             }
             jobsToExecute.add(DatasetUtil.dropDatasetJobSpec(this, metadataProvider, options));
             // #. mark the existing dataset as PendingDropOp
-            MetadataManager.INSTANCE.dropDataset(mdTxnCtx.getValue(), dataverseName, datasetName, force);
+            MetadataManager.INSTANCE.dropDataset(mdTxnCtx.getValue(), databaseName, dataverseName, datasetName, force);
             MetadataManager.INSTANCE.addDataset(mdTxnCtx.getValue(),
-                    new Dataset(dataverseName, datasetName, getItemTypeDataverseName(), getItemTypeName(),
+                    new Dataset(databaseName, dataverseName, datasetName, getItemTypeDatabaseName(),
+                            getItemTypeDataverseName(), getItemTypeName(), getMetaItemTypeDatabaseName(),
                             getMetaItemTypeDataverseName(), getMetaItemTypeName(), getNodeGroupName(),
                             getCompactionPolicy(), getCompactionPolicyProperties(), getDatasetDetails(), getHints(),
-                            getDatasetType(), getDatasetId(), MetadataUtil.PENDING_DROP_OP, getCompressionScheme()));
+                            getDatasetType(), getDatasetId(), MetadataUtil.PENDING_DROP_OP, getCompressionScheme(),
+                            getDatasetFormatInfo()));
 
             MetadataManager.INSTANCE.commitTransaction(mdTxnCtx.getValue());
             bActiveTxn.setValue(false);
             progress.setValue(ProgressState.ADDED_PENDINGOP_RECORD_TO_METADATA);
-
-            // # disconnect the feeds
-            for (Pair<JobSpecification, Boolean> p : disconnectJobList.values()) {
-                JobUtils.runJob(hcc, p.first, true);
-            }
 
             // #. run the jobs
             for (JobSpecification jobSpec : jobsToExecute) {
@@ -390,53 +407,20 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
             bActiveTxn.setValue(true);
             metadataProvider.setMetadataTxnContext(mdTxnCtx.getValue());
         } else if (getDatasetType() == DatasetType.EXTERNAL) {
-            // External dataset
-            ExternalDatasetsRegistry.INSTANCE.removeDatasetInfo(this);
-            // #. prepare jobs to drop the datatset and the indexes in NC
-            List<Index> indexes =
-                    MetadataManager.INSTANCE.getDatasetIndexes(mdTxnCtx.getValue(), dataverseName, datasetName);
-            for (int j = 0; j < indexes.size(); j++) {
-                if (ExternalIndexingOperations.isFileIndex(indexes.get(j))) {
-                    jobsToExecute
-                            .add(IndexUtil.buildDropIndexJobSpec(indexes.get(j), metadataProvider, this, sourceLoc));
-                } else {
-                    jobsToExecute.add(DatasetUtil.buildDropFilesIndexJobSpec(metadataProvider, this));
-                }
-            }
-
-            // #. mark the existing dataset as PendingDropOp
-            MetadataManager.INSTANCE.dropDataset(mdTxnCtx.getValue(), dataverseName, datasetName, force);
-            MetadataManager.INSTANCE.addDataset(mdTxnCtx.getValue(),
-                    new Dataset(dataverseName, datasetName, getItemTypeDataverseName(), getItemTypeName(),
-                            getNodeGroupName(), getCompactionPolicy(), getCompactionPolicyProperties(),
-                            getDatasetDetails(), getHints(), getDatasetType(), getDatasetId(),
-                            MetadataUtil.PENDING_DROP_OP));
-
-            MetadataManager.INSTANCE.commitTransaction(mdTxnCtx.getValue());
-            bActiveTxn.setValue(false);
-            progress.setValue(ProgressState.ADDED_PENDINGOP_RECORD_TO_METADATA);
-
-            // #. run the jobs
-            for (JobSpecification jobSpec : jobsToExecute) {
-                JobUtils.runJob(hcc, jobSpec, true);
-            }
-            if (!indexes.isEmpty()) {
-                ExternalDatasetsRegistry.INSTANCE.removeDatasetInfo(this);
-            }
-            mdTxnCtx.setValue(MetadataManager.INSTANCE.beginTransaction());
-            bActiveTxn.setValue(true);
-            metadataProvider.setMetadataTxnContext(mdTxnCtx.getValue());
         }
 
         // #. finally, delete the dataset.
-        MetadataManager.INSTANCE.dropDataset(mdTxnCtx.getValue(), dataverseName, datasetName, force);
+        MetadataManager.INSTANCE.dropDataset(mdTxnCtx.getValue(), databaseName, dataverseName, datasetName, force);
 
         // drop inline types
-        if (TypeUtil.isDatasetInlineTypeName(this, recordTypeDataverseName, recordTypeName)) {
-            MetadataManager.INSTANCE.dropDatatype(mdTxnCtx.getValue(), recordTypeDataverseName, recordTypeName);
+        if (TypeUtil.isDatasetInlineTypeName(this, recordTypeDatabaseName, recordTypeDataverseName, recordTypeName)) {
+            MetadataManager.INSTANCE.dropDatatype(mdTxnCtx.getValue(), recordTypeDatabaseName, recordTypeDataverseName,
+                    recordTypeName);
         }
-        if (hasMetaPart() && TypeUtil.isDatasetInlineTypeName(this, metaTypeDataverseName, metaTypeName)) {
-            MetadataManager.INSTANCE.dropDatatype(mdTxnCtx.getValue(), metaTypeDataverseName, metaTypeName);
+        if (hasMetaPart()
+                && TypeUtil.isDatasetInlineTypeName(this, metaTypeDatabaseName, metaTypeDataverseName, metaTypeName)) {
+            MetadataManager.INSTANCE.dropDatatype(mdTxnCtx.getValue(), metaTypeDatabaseName, metaTypeDataverseName,
+                    metaTypeName);
         }
 
         // Drops the associated nodegroup if it is no longer used by any other dataset.
@@ -450,22 +434,15 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
     /**
      * Create the index dataflow helper factory for a particular index on the dataset
      *
-     * @param mdProvider
-     *            metadata provider to get metadata information, components, and runtimes
-     * @param index
-     *            the index to get the dataflow helper factory for
-     * @param recordType
-     *            the record type for the dataset
-     * @param metaType
-     *            the meta type for the dataset
-     * @param mergePolicyFactory
-     *            the merge policy factory of the dataset
-     * @param mergePolicyProperties
-     *            the merge policy properties for the dataset
+     * @param mdProvider            metadata provider to get metadata information, components, and runtimes
+     * @param index                 the index to get the dataflow helper factory for
+     * @param recordType            the record type for the dataset
+     * @param metaType              the meta type for the dataset
+     * @param mergePolicyFactory    the merge policy factory of the dataset
+     * @param mergePolicyProperties the merge policy properties for the dataset
      * @return indexDataflowHelperFactory
-     *         an instance of {@link org.apache.hyracks.storage.am.common.dataflow.IIndexDataflowHelperFactory}
-     * @throws AlgebricksException
-     *             if dataflow helper factory could not be created
+     * an instance of {@link org.apache.hyracks.storage.am.common.dataflow.IIndexDataflowHelperFactory}
+     * @throws AlgebricksException if dataflow helper factory could not be created
      */
     public IResourceFactory getResourceFactory(MetadataProvider mdProvider, Index index, ARecordType recordType,
             ARecordType metaType, ILSMMergePolicyFactory mergePolicyFactory, Map<String, String> mergePolicyProperties)
@@ -511,17 +488,20 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
     /**
      * Get the IO Operation callback factory for the index which belongs to this dataset
      *
-     * @param index
-     *            the index
+     * @param index the index
      * @return ioOperationCallbackFactory
-     *         an instance of {@link org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperationCallbackFactory}
-     *         to be used with IO operations
-     * @throws AlgebricksException
-     *             if the factory could not be created for the index/dataset combination
+     * an instance of {@link org.apache.hyracks.storage.am.lsm.common.api.ILSMIOOperationCallbackFactory}
+     * to be used with IO operations
+     * @throws AlgebricksException if the factory could not be created for the index/dataset combination
      */
     @SuppressWarnings("squid:S1172")
     public ILSMIOOperationCallbackFactory getIoOperationCallbackFactory(Index index) throws AlgebricksException {
-        return new LSMIndexIOOperationCallbackFactory(getComponentIdGeneratorFactory(), getDatasetInfoProvider());
+        if (isAtomic()) {
+            return new AtomicLSMIndexIOOperationCallbackFactory(getComponentIdGeneratorFactory(),
+                    getDatasetInfoProvider());
+        } else {
+            return new LSMIndexIOOperationCallbackFactory(getComponentIdGeneratorFactory(), getDatasetInfoProvider());
+        }
     }
 
     public ILSMPageWriteCallbackFactory getPageWriteCallbackFactory() throws AlgebricksException {
@@ -531,8 +511,7 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
     /**
      * get the IndexOperationTrackerFactory for a particular index on the dataset
      *
-     * @param index
-     *            the index
+     * @param index the index
      * @return an instance of {@link org.apache.hyracks.storage.am.lsm.common.api.ILSMOperationTrackerFactory}
      */
     public ILSMOperationTrackerFactory getIndexOperationTrackerFactory(Index index) {
@@ -548,29 +527,30 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
         return new DatasetInfoProvider(getDatasetId());
     }
 
+    public boolean isAtomic() {
+        return datasetType == DatasetType.INTERNAL
+                && ((InternalDatasetDetails) getDatasetDetails()).isDatasetWithoutTypeSpecification();
+    }
+
     /**
      * Get search callback factory for this dataset with the passed index and operation
      *
-     * @param storageComponentProvider
-     *            storage component provider
-     * @param index
-     *            the index
-     * @param op
-     *            the operation this search is part of
-     * @param primaryKeyFields
-     *            the primary key fields indexes for locking purposes
-     * @param primaryKeyFieldsInSecondaryIndex
-     *            the primary key fields indexes in the given secondary index (used for index-only plan)
-     * @param proceedIndexOnlyPlan
-     *            the given plan is an index-only plan? (used for index-only plan)
-     * @return
-     *         an instance of {@link org.apache.hyracks.storage.am.common.api.ISearchOperationCallbackFactory}
-     * @throws AlgebricksException
-     *             if the callback factory could not be created
+     * @param storageComponentProvider         storage component provider
+     * @param index                            the index
+     * @param op                               the operation this search is part of
+     * @param primaryKeyFields                 the primary key fields indexes for locking purposes
+     * @param primaryKeyFieldsInSecondaryIndex the primary key fields indexes in the given secondary index (used for index-only plan)
+     * @param proceedIndexOnlyPlan             the given plan is an index-only plan? (used for index-only plan)
+     * @return an instance of {@link org.apache.hyracks.storage.am.common.api.ISearchOperationCallbackFactory}
+     * @throws AlgebricksException if the callback factory could not be created
      */
     public ISearchOperationCallbackFactory getSearchCallbackFactory(IStorageComponentProvider storageComponentProvider,
             Index index, IndexOperation op, int[] primaryKeyFields, int[] primaryKeyFieldsInSecondaryIndex,
             boolean proceedIndexOnlyPlan) throws AlgebricksException {
+        if (isAtomic()) {
+            return NoOpOperationCallbackFactory.INSTANCE;
+        }
+
         if (index.isPrimaryIndex()) {
             /**
              * Due to the read-committed isolation level,
@@ -599,18 +579,12 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
     /**
      * Get search callback factory for this dataset with the passed index and operation
      *
-     * @param storageComponentProvider
-     *            storage component provider
-     * @param index
-     *            the index
-     * @param op
-     *            the operation this search is part of
-     * @param primaryKeyFields
-     *            the primary key fields indexes for locking purposes
-     * @return
-     *         an instance of {@link org.apache.hyracks.storage.am.common.api.ISearchOperationCallbackFactory}
-     * @throws AlgebricksException
-     *             if the callback factory could not be created
+     * @param storageComponentProvider storage component provider
+     * @param index                    the index
+     * @param op                       the operation this search is part of
+     * @param primaryKeyFields         the primary key fields indexes for locking purposes
+     * @return an instance of {@link org.apache.hyracks.storage.am.common.api.ISearchOperationCallbackFactory}
+     * @throws AlgebricksException if the callback factory could not be created
      */
     public ISearchOperationCallbackFactory getSearchCallbackFactory(IStorageComponentProvider storageComponentProvider,
             Index index, IndexOperation op, int[] primaryKeyFields) throws AlgebricksException {
@@ -620,20 +594,19 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
     /**
      * Get the modification callback factory associated with this dataset, the passed index, and operation.
      *
-     * @param index
-     *            the index
-     * @param op
-     *            the operation performed for this callback
-     * @param primaryKeyFields
-     *            the indexes of the primary keys (used for lock operations)
-     * @return
-     *         an instance of {@link org.apache.hyracks.storage.am.common.api.IModificationOperationCallbackFactory}
-     * @throws AlgebricksException
-     *             If the callback factory could not be created
+     * @param index            the index
+     * @param op               the operation performed for this callback
+     * @param primaryKeyFields the indexes of the primary keys (used for lock operations)
+     * @return an instance of {@link org.apache.hyracks.storage.am.common.api.IModificationOperationCallbackFactory}
+     * @throws AlgebricksException If the callback factory could not be created
      */
     public IModificationOperationCallbackFactory getModificationCallbackFactory(
             IStorageComponentProvider componentProvider, Index index, IndexOperation op, int[] primaryKeyFields)
             throws AlgebricksException {
+        if (isAtomic()) {
+            return NoOpOperationCallbackFactory.INSTANCE;
+        }
+
         if (index.isPrimaryIndex()) {
             return op == IndexOperation.UPSERT || op == IndexOperation.INSERT
                     ? new UpsertOperationCallbackFactory(getDatasetId(),
@@ -664,6 +637,7 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
 
     public Map<String, Object> toMap() {
         Map<String, Object> tree = new HashMap<>();
+        //TODO(DB):
         tree.put("datasetId", Integer.toString(datasetId));
         tree.put("dataverseName", dataverseName);
         tree.put("datasetName", datasetName);
@@ -680,31 +654,36 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
         tree.put("pendingOp", MetadataUtil.pendingOpToString(pendingOp));
         tree.put("rebalanceCount", rebalanceCount);
         tree.put("compressionScheme", compressionScheme);
+        tree.put("datasetFormatInfo", datasetFormatInfo.toString());
         return tree;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(dataverseName, datasetName);
+        return Objects.hash(databaseName, dataverseName, datasetName);
     }
 
     /**
      * Gets the commit runtime factory for inserting/upserting/deleting operations on this dataset.
      *
-     * @param metadataProvider,
-     *            the metadata provider.
-     * @param primaryKeyFieldPermutation,
-     *            the primary key field permutation according to the input.
-     * @param isSink,
-     *            whether this commit runtime is the last operator in the pipeline.
+     * @param metadataProvider,           the metadata provider.
+     * @param primaryKeyFieldPermutation, the primary key field permutation according to the input.
+     * @param isSink,                     whether this commit runtime is the last operator in the pipeline.
      * @return the commit runtime factory for inserting/upserting/deleting operations on this dataset.
      * @throws AlgebricksException
      */
     public IPushRuntimeFactory getCommitRuntimeFactory(MetadataProvider metadataProvider,
             int[] primaryKeyFieldPermutation, boolean isSink) throws AlgebricksException {
         int[] datasetPartitions = getDatasetPartitions(metadataProvider);
+        IBinaryHashFunctionFactory[] pkHashFunFactories = getPrimaryHashFunctionFactories(metadataProvider);
+        ITuplePartitionerFactory partitionerFactory = new FieldHashPartitionerFactory(primaryKeyFieldPermutation,
+                pkHashFunFactories, datasetPartitions.length);
+        if (isAtomic()) {
+            return new NoOpCommitRuntimeFactory(datasetId, primaryKeyFieldPermutation,
+                    metadataProvider.isWriteTransaction(), datasetPartitions, isSink, partitionerFactory);
+        }
         return new CommitRuntimeFactory(datasetId, primaryKeyFieldPermutation, metadataProvider.isWriteTransaction(),
-                datasetPartitions, isSink);
+                datasetPartitions, isSink, partitionerFactory);
     }
 
     public IFrameOperationCallbackFactory getFrameOpCallbackFactory(MetadataProvider mdProvider) {
@@ -718,16 +697,16 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
     @Override
     public List<List<String>> getPrimaryKeys() {
         if (getDatasetType() == DatasetType.EXTERNAL) {
-            return IndexingConstants.getRIDKeys(((ExternalDatasetDetails) getDatasetDetails()).getProperties());
+            return Collections.emptyList();
         }
         return ((InternalDatasetDetails) getDatasetDetails()).getPartitioningKey();
     }
 
     /**
-     @return the array of type traits that contains the following type traits in order
-      1) the primary keys,
-      2) the query record type,
-      3) the metadata type trait if the dataset has metadata
+     * @return the array of type traits that contains the following type traits in order
+     * 1) the primary keys,
+     * 2) the query record type,
+     * 3) the metadata type trait if the dataset has metadata
      */
     // ToDo: returning such an array can be confusing because it may contain the metadata type or not.
     // instead of returning an array, create a new class that contains 1) a type trait array for the primary keys,
@@ -744,7 +723,7 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
             indicators = ((InternalDatasetDetails) getDatasetDetails()).getKeySourceIndicator();
         }
         for (int i = 0; i < numPrimaryKeys; i++) {
-            IAType keyType = datasetType == DatasetType.EXTERNAL ? IndexingConstants.getFieldType(i)
+            IAType keyType = datasetType == DatasetType.EXTERNAL ? null
                     : (indicators == null || indicators.get(i) == 0)
                             ? recordType.getSubFieldType(partitioningKeys.get(i))
                             : metaType.getSubFieldType(partitioningKeys.get(i));
@@ -760,8 +739,7 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
     /**
      * Gets the record descriptor for primary records of this dataset.
      *
-     * @param metadataProvider,
-     *            the metadata provider.
+     * @param metadataProvider, the metadata provider.
      * @return the record descriptor for primary records of this dataset.
      * @throws AlgebricksException
      */
@@ -778,11 +756,12 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
         }
         ARecordType itemType = (ARecordType) metadataProvider.findType(this);
         ARecordType metaType = (ARecordType) metadataProvider.findMetaType(this);
+        itemType = (ARecordType) metadataProvider.findTypeForDatasetWithoutType(itemType, metaType, this);
 
         // Set the serde/traits for primary keys
         for (int i = 0; i < numPrimaryKeys; i++) {
             IAType keyType =
-                    datasetType == DatasetType.EXTERNAL ? IndexingConstants.getFieldType(i)
+                    datasetType == DatasetType.EXTERNAL ? null
                             : (indicators == null || indicators.get(i) == 0)
                                     ? itemType.getSubFieldType(partitioningKeys.get(i))
                                     : metaType.getSubFieldType(partitioningKeys.get(i));
@@ -805,8 +784,7 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
     /**
      * Gets the comparator factories for the primary key fields of this dataset.
      *
-     * @param metadataProvider,
-     *            the metadata provider.
+     * @param metadataProvider, the metadata provider.
      * @return the comparator factories for the primary key fields of this dataset.
      * @throws AlgebricksException
      */
@@ -822,7 +800,7 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
             indicators = ((InternalDatasetDetails) getDatasetDetails()).getKeySourceIndicator();
         }
         for (int i = 0; i < numPrimaryKeys; i++) {
-            IAType keyType = datasetType == DatasetType.EXTERNAL ? IndexingConstants.getFieldType(i)
+            IAType keyType = datasetType == DatasetType.EXTERNAL ? null
                     : (indicators == null || indicators.get(i) == 0)
                             ? recordType.getSubFieldType(partitioningKeys.get(i))
                             : metaType.getSubFieldType(partitioningKeys.get(i));
@@ -834,8 +812,7 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
     /**
      * Gets the hash function factories for the primary key fields of this dataset.
      *
-     * @param metadataProvider,
-     *            the metadata provider.
+     * @param metadataProvider, the metadata provider.
      * @return the hash function factories for the primary key fields of this dataset.
      * @throws AlgebricksException
      */
@@ -843,6 +820,8 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
             throws AlgebricksException {
         ARecordType recordType = (ARecordType) metadataProvider.findType(this);
         ARecordType metaType = (ARecordType) metadataProvider.findMetaType(this);
+        recordType = (ARecordType) metadataProvider.findTypeForDatasetWithoutType(recordType, metaType, this);
+
         List<List<String>> partitioningKeys = getPrimaryKeys();
         int numPrimaryKeys = partitioningKeys.size();
         IBinaryHashFunctionFactory[] hashFuncFactories = new IBinaryHashFunctionFactory[numPrimaryKeys];
@@ -851,7 +830,7 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
             indicators = ((InternalDatasetDetails) getDatasetDetails()).getKeySourceIndicator();
         }
         for (int i = 0; i < numPrimaryKeys; i++) {
-            IAType keyType = datasetType == DatasetType.EXTERNAL ? IndexingConstants.getFieldType(i)
+            IAType keyType = datasetType == DatasetType.EXTERNAL ? null
                     : (indicators == null || indicators.get(i) == 0)
                             ? recordType.getSubFieldType(partitioningKeys.get(i))
                             : metaType.getSubFieldType(partitioningKeys.get(i));
@@ -869,11 +848,12 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
 
     // Gets the target dataset for the purpose of rebalance.
     public Dataset getTargetDatasetForRebalance(String targetNodeGroupName) {
-        return new Dataset(this.dataverseName, this.datasetName, this.recordTypeDataverseName, this.recordTypeName,
+        return new Dataset(this.databaseName, this.dataverseName, this.datasetName, this.recordTypeDatabaseName,
+                this.recordTypeDataverseName, this.recordTypeName, this.metaTypeDatabaseName,
                 this.metaTypeDataverseName, this.metaTypeName, targetNodeGroupName, this.compactionPolicyFactory,
                 this.compactionPolicyProperties, this.datasetDetails, this.hints, this.datasetType,
                 DatasetIdFactory.generateAlternatingDatasetId(this.datasetId), this.pendingOp, this.rebalanceCount + 1,
-                this.compressionScheme);
+                this.compressionScheme, this.datasetFormatInfo);
     }
 
     // Gets an array of partition numbers for this dataset.
@@ -895,4 +875,11 @@ public class Dataset implements IMetadataEntity<Dataset>, IDataset {
         return datasetFullyQualifiedName;
     }
 
+    public DatasetFormatInfo getDatasetFormatInfo() {
+        return datasetFormatInfo;
+    }
+
+    public ILSMTupleFilterCallbackFactory getTupleFilterCallbackFactory() {
+        return NoOpLSMTupleFilterCallbackFactory.INSTANCE;
+    }
 }

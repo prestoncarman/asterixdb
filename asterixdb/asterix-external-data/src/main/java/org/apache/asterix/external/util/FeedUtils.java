@@ -28,12 +28,10 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 
-import org.apache.asterix.common.cluster.ClusterPartition;
 import org.apache.asterix.common.dataflow.ICcApplicationContext;
 import org.apache.asterix.common.exceptions.AsterixException;
 import org.apache.asterix.common.exceptions.CompilationException;
 import org.apache.asterix.common.exceptions.ErrorCode;
-import org.apache.asterix.common.metadata.DataverseName;
 import org.apache.asterix.common.utils.StoragePathUtil;
 import org.apache.asterix.runtime.utils.RuntimeUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -45,11 +43,8 @@ import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.api.application.IServiceContext;
 import org.apache.hyracks.api.comm.FrameHelper;
 import org.apache.hyracks.api.comm.VSizeFrame;
-import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.exceptions.HyracksDataException;
-import org.apache.hyracks.api.io.FileReference;
 import org.apache.hyracks.api.io.FileSplit;
-import org.apache.hyracks.api.io.IIOManager;
 import org.apache.hyracks.dataflow.common.comm.io.FrameTupleAccessor;
 import org.apache.hyracks.util.IntSerDeUtils;
 
@@ -84,44 +79,26 @@ public class FeedUtils {
     private FeedUtils() {
     }
 
-    public static FileSplit splitsForAdapter(DataverseName dataverseName, String feedName, String nodeName,
-            ClusterPartition partition) {
-        String relPathFile = StoragePathUtil.prepareDataverseComponentName(dataverseName, feedName);
-        String storagePartitionPath = StoragePathUtil.prepareStoragePartitionPath(partition.getPartitionId());
+    private static FileSplit splitsForAdapter(String namespacePath, String feedName, String nodeName) {
+        String relPathFile = StoragePathUtil.prepareNamespaceComponentName(namespacePath, feedName);
+        String storagePartitionPath = StoragePathUtil.prepareIngestionLogPath();
         // Note: feed adapter instances in a single node share the feed logger
-        // format: 'storage dir name'/partition_#/dataverse_part1[^dataverse_part2[...]]/feed/node
+        // format: 'ingestion logs dir name'/dataverse_part1[^dataverse_part2[...]]/feed/node
         File f = new File(storagePartitionPath + File.separator + relPathFile + File.separator + nodeName);
-        return StoragePathUtil.getFileSplitForClusterPartition(partition, f.getPath());
+        return StoragePathUtil.getDefaultIoDeviceFileSpiltForNode(nodeName, f.getPath());
     }
 
-    public static FileSplit[] splitsForAdapter(ICcApplicationContext appCtx, DataverseName dataverseName,
-            String feedName, AlgebricksPartitionConstraint partitionConstraints) throws AsterixException {
+    public static FileSplit[] splitsForAdapter(String namespacePath, String feedName,
+            AlgebricksPartitionConstraint partitionConstraints) throws AsterixException {
         if (partitionConstraints.getPartitionConstraintType() == PartitionConstraintType.COUNT) {
             throw new AsterixException("Can't create file splits for adapter with count partitioning constraints");
         }
         String[] locations = ((AlgebricksAbsolutePartitionConstraint) partitionConstraints).getLocations();
         List<FileSplit> splits = new ArrayList<>();
         for (String nd : locations) {
-            splits.add(splitsForAdapter(dataverseName, feedName, nd,
-                    appCtx.getClusterStateManager().getNodePartitions(nd)[0]));
+            splits.add(splitsForAdapter(namespacePath, feedName, nd));
         }
         return splits.toArray(new FileSplit[] {});
-    }
-
-    public static FileReference getAbsoluteFileRef(String relativePath, int ioDeviceId, IIOManager ioManager) {
-        return ioManager.getFileReference(ioDeviceId, relativePath);
-    }
-
-    public static FeedLogManager getFeedLogManager(IHyracksTaskContext ctx, int partition,
-            FileSplit[] feedLogFileSplits) throws HyracksDataException {
-        return new FeedLogManager(
-                FeedUtils.getAbsoluteFileRef(feedLogFileSplits[partition].getPath(), 0, ctx.getIoManager()).getFile());
-    }
-
-    public static FeedLogManager getFeedLogManager(IHyracksTaskContext ctx, FileSplit feedLogFileSplit)
-            throws HyracksDataException {
-        return new FeedLogManager(
-                FeedUtils.getAbsoluteFileRef(feedLogFileSplit.getPath(), 0, ctx.getIoManager()).getFile());
     }
 
     public static void processFeedMessage(ByteBuffer input, VSizeFrame message, FrameTupleAccessor fta)

@@ -29,13 +29,13 @@ import org.apache.hyracks.algebricks.core.algebra.base.LogicalOperatorTag;
 import org.apache.hyracks.algebricks.core.algebra.base.OperatorAnnotations;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractOperatorWithNestedPlans;
+import org.apache.hyracks.algebricks.core.algebra.operators.logical.DataSourceScanOperator;
 import org.apache.hyracks.algebricks.core.algebra.visitors.ILogicalExpressionVisitor;
 import org.apache.hyracks.algebricks.core.algebra.visitors.ILogicalOperatorVisitor;
 
 public abstract class AbstractLogicalOperatorPrettyPrintVisitor<T> implements ILogicalOperatorVisitor<Void, T> {
 
     protected static final String CARDINALITY = "cardinality";
-    protected static final String PLAN_COST = "cost";
     protected static final String OP_COST_LOCAL = "op-cost";
     protected static final String OP_COST_TOTAL = "total-cost";
     protected final ILogicalExpressionVisitor<String, T> exprVisitor;
@@ -77,7 +77,11 @@ public abstract class AbstractLogicalOperatorPrettyPrintVisitor<T> implements IL
         Double opCard;
 
         if (op.getOperatorTag() == LogicalOperatorTag.DATASOURCESCAN) {
-            opCard = (Double) getAnnotationValue(op, OperatorAnnotations.OP_INPUT_CARDINALITY);
+            if (((DataSourceScanOperator) op).getSelectCondition() != null) {
+                opCard = (Double) getAnnotationValue(op, OperatorAnnotations.OP_OUTPUT_CARDINALITY);
+            } else {
+                opCard = (Double) getAnnotationValue(op, OperatorAnnotations.OP_INPUT_CARDINALITY);
+            }
         } else {
             opCard = (Double) getAnnotationValue(op, OperatorAnnotations.OP_OUTPUT_CARDINALITY);
         }

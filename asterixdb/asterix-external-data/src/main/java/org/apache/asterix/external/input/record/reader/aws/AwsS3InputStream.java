@@ -29,6 +29,7 @@ import java.util.zip.GZIPInputStream;
 import org.apache.asterix.common.exceptions.CompilationException;
 import org.apache.asterix.common.exceptions.ErrorCode;
 import org.apache.asterix.common.exceptions.RuntimeDataException;
+import org.apache.asterix.external.input.filter.embedder.IExternalFilterValueEmbedder;
 import org.apache.asterix.external.input.record.reader.abstracts.AbstractExternalInputStream;
 import org.apache.asterix.external.util.ExternalDataConstants;
 import org.apache.asterix.external.util.aws.s3.S3Utils;
@@ -37,6 +38,7 @@ import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.util.CleanupUtils;
 import org.apache.hyracks.util.LogRedactionUtil;
 
+import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
@@ -48,10 +50,12 @@ public class AwsS3InputStream extends AbstractExternalInputStream {
     // Configuration
     private final String bucket;
     private final S3Client s3Client;
+    private ResponseInputStream<?> s3InStream;
     private static final int MAX_RETRIES = 5; // We will retry 5 times in case of internal error from AWS S3 service
 
-    public AwsS3InputStream(Map<String, String> configuration, List<String> filePaths) throws HyracksDataException {
-        super(configuration, filePaths);
+    public AwsS3InputStream(Map<String, String> configuration, List<String> filePaths,
+            IExternalFilterValueEmbedder valueEmbedder) throws HyracksDataException {
+        super(configuration, filePaths, valueEmbedder);
         this.s3Client = buildAwsS3Client(configuration);
         this.bucket = configuration.get(ExternalDataConstants.CONTAINER_NAME_FIELD_NAME);
     }
@@ -82,7 +86,8 @@ public class AwsS3InputStream extends AbstractExternalInputStream {
         int retries = 0;
         while (retries < MAX_RETRIES) {
             try {
-                in = s3Client.getObject(request);
+                s3InStream = s3Client.getObject(request);
+                in = s3InStream;
                 break;
             } catch (NoSuchKeyException ex) {
                 LOGGER.debug(() -> "Key " + LogRedactionUtil.userData(request.key()) + " was not found in bucket "
@@ -90,7 +95,7 @@ public class AwsS3InputStream extends AbstractExternalInputStream {
                 return false;
             } catch (S3Exception ex) {
                 if (!shouldRetry(ex.awsErrorDetails().errorCode(), retries++)) {
-                    throw new RuntimeDataException(ErrorCode.EXTERNAL_SOURCE_ERROR, getMessageOrToString(ex));
+                    throw new RuntimeDataException(ErrorCode.EXTERNAL_SOURCE_ERROR, ex, getMessageOrToString(ex));
                 }
                 LOGGER.debug(() -> "S3 retryable error: " + LogRedactionUtil.userData(ex.getMessage()));
 
@@ -101,7 +106,7 @@ public class AwsS3InputStream extends AbstractExternalInputStream {
                     Thread.currentThread().interrupt();
                 }
             } catch (SdkException ex) {
-                throw new RuntimeDataException(ErrorCode.EXTERNAL_SOURCE_ERROR, getMessageOrToString(ex));
+                throw new RuntimeDataException(ErrorCode.EXTERNAL_SOURCE_ERROR, ex, getMessageOrToString(ex));
             }
         }
         return true;
@@ -114,6 +119,9 @@ public class AwsS3InputStream extends AbstractExternalInputStream {
     @Override
     public void close() throws IOException {
         if (in != null) {
+            if (s3InStream != null) {
+                s3InStream.abort();
+            }
             CleanupUtils.close(in, null);
         }
         if (s3Client != null) {

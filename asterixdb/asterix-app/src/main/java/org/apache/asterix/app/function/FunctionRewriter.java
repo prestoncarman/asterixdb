@@ -61,7 +61,7 @@ public abstract class FunctionRewriter implements IFunctionToDataSourceRewriter 
             throws AlgebricksException {
         AbstractFunctionCallExpression f = UnnestToDataScanRule.getFunctionCall(opRef);
         List<Mutable<ILogicalExpression>> args = f.getArguments();
-        if (args.size() != functionId.getArity()) {
+        if (invalidArgs(args)) {
             throw new CompilationException(ErrorCode.COMPILATION_ERROR, f.getSourceLocation(),
                     "Function " + functionId.getNamespace() + "." + functionId.getName() + " expects "
                             + functionId.getArity() + " arguments");
@@ -80,6 +80,16 @@ public abstract class FunctionRewriter implements IFunctionToDataSourceRewriter 
             throw new CompilationException(ErrorCode.COMPILATION_ERROR, unnest.getSourceLocation(),
                     "No positional variables are allowed over datasource functions");
         }
+        createDataScanOp(opRef, unnest, context, f);
+        return true;
+    }
+
+    protected boolean invalidArgs(List<Mutable<ILogicalExpression>> args) {
+        return args.size() != functionId.getArity();
+    }
+
+    protected void createDataScanOp(Mutable<ILogicalOperator> opRef, UnnestOperator unnest,
+            IOptimizationContext context, AbstractFunctionCallExpression f) throws AlgebricksException {
         FunctionDataSource datasource = toDatasource(context, f);
         List<LogicalVariable> variables = new ArrayList<>();
         variables.add(unnest.getVariable());
@@ -89,7 +99,6 @@ public abstract class FunctionRewriter implements IFunctionToDataSourceRewriter 
         scanInpList.addAll(unnest.getInputs());
         opRef.setValue(scan);
         context.computeAndSetTypeEnvironmentForOperator(scan);
-        return true;
     }
 
     protected abstract FunctionDataSource toDatasource(IOptimizationContext context, AbstractFunctionCallExpression f)

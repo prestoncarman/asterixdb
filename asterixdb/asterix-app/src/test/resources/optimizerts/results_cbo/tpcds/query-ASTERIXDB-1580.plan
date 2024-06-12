@@ -26,19 +26,19 @@
                                   -- STREAM_PROJECT  |PARTITIONED|
                                     -- ONE_TO_ONE_EXCHANGE  |PARTITIONED|
                                       -- HYBRID_HASH_JOIN [$$129][$$132]  |PARTITIONED|
-                                        -- HASH_PARTITION_EXCHANGE [$$129]  |PARTITIONED|
+                                        -- ONE_TO_ONE_EXCHANGE  |PARTITIONED|
                                           -- STREAM_PROJECT  |PARTITIONED|
                                             -- ONE_TO_ONE_EXCHANGE  |PARTITIONED|
                                               -- HYBRID_HASH_JOIN [$$137][$$131]  |PARTITIONED|
-                                                -- HASH_PARTITION_EXCHANGE [$$137]  |PARTITIONED|
+                                                -- ONE_TO_ONE_EXCHANGE  |PARTITIONED|
                                                   -- STREAM_PROJECT  |PARTITIONED|
                                                     -- ONE_TO_ONE_EXCHANGE  |PARTITIONED|
                                                       -- HYBRID_HASH_JOIN [$$128][$$142]  |PARTITIONED|
-                                                        -- HASH_PARTITION_EXCHANGE [$$128]  |PARTITIONED|
+                                                        -- ONE_TO_ONE_EXCHANGE  |PARTITIONED|
                                                           -- STREAM_PROJECT  |PARTITIONED|
                                                             -- ONE_TO_ONE_EXCHANGE  |PARTITIONED|
                                                               -- HYBRID_HASH_JOIN [$$127][$$140]  |PARTITIONED|
-                                                                -- ONE_TO_ONE_EXCHANGE  |PARTITIONED|
+                                                                -- HASH_PARTITION_EXCHANGE [$$127]  |PARTITIONED|
                                                                   -- ASSIGN  |PARTITIONED|
                                                                     -- ONE_TO_ONE_EXCHANGE  |PARTITIONED|
                                                                       -- DATASOURCE_SCAN (tpcds.customer_address)  |PARTITIONED|
@@ -51,7 +51,7 @@
                                                                         -- DATASOURCE_SCAN (tpcds.customer)  |PARTITIONED|
                                                                           -- ONE_TO_ONE_EXCHANGE  |PARTITIONED|
                                                                             -- EMPTY_TUPLE_SOURCE  |PARTITIONED|
-                                                        -- HASH_PARTITION_EXCHANGE [$$142]  |PARTITIONED|
+                                                        -- BROADCAST_EXCHANGE  |PARTITIONED|
                                                           -- STREAM_PROJECT  |PARTITIONED|
                                                             -- ASSIGN  |PARTITIONED|
                                                               -- STREAM_PROJECT  |PARTITIONED|
@@ -59,13 +59,13 @@
                                                                   -- DATASOURCE_SCAN (tpcds.store_sales)  |PARTITIONED|
                                                                     -- ONE_TO_ONE_EXCHANGE  |PARTITIONED|
                                                                       -- EMPTY_TUPLE_SOURCE  |PARTITIONED|
-                                                -- ONE_TO_ONE_EXCHANGE  |PARTITIONED|
+                                                -- BROADCAST_EXCHANGE  |PARTITIONED|
                                                   -- STREAM_PROJECT  |PARTITIONED|
                                                     -- ONE_TO_ONE_EXCHANGE  |PARTITIONED|
                                                       -- DATASOURCE_SCAN (tpcds.date_dim)  |PARTITIONED|
                                                         -- ONE_TO_ONE_EXCHANGE  |PARTITIONED|
                                                           -- EMPTY_TUPLE_SOURCE  |PARTITIONED|
-                                        -- ONE_TO_ONE_EXCHANGE  |PARTITIONED|
+                                        -- BROADCAST_EXCHANGE  |PARTITIONED|
                                           -- STREAM_PROJECT  |PARTITIONED|
                                             -- ONE_TO_ONE_EXCHANGE  |PARTITIONED|
                                               -- DATASOURCE_SCAN (tpcds.item)  |PARTITIONED|

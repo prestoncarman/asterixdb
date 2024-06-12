@@ -18,20 +18,23 @@
  */
 package org.apache.asterix.test.external_dataset.parquet;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileReader;
+import java.io.FilenameFilter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.Collection;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData.Record;
 import org.apache.hadoop.fs.Path;
 import org.apache.hyracks.api.util.IoUtil;
-import org.kitesdk.data.spi.JsonUtil;
-import org.kitesdk.data.spi.filesystem.JSONFileReader;
+import org.apache.parquet.avro.AvroParquetWriter;
 
-import parquet.avro.AvroParquetWriter;
+import tech.allegro.schema.json2avro.converter.JsonAvroConverter;
 
 public class BinaryFileConverterUtil {
     public static final String DEFAULT_PARQUET_SRC_PATH = "data/hdfs/parquet";
@@ -68,17 +71,35 @@ public class BinaryFileConverterUtil {
         ParquetFileExampleGeneratorUtil.writeExample();
     }
 
+    public static void convertToParquetRecursively(File localDataRoot, String src, String dest, FilenameFilter filter,
+            int startIndex) throws IOException {
+        File destPath = new File(localDataRoot, dest);
+
+        File dir = new File(src);
+        if (!dir.exists() || !dir.isDirectory()) {
+            return;
+        }
+
+        Collection<File> files = IoUtil.getMatchingFiles(dir.toPath(), filter);
+        for (File file : files) {
+            String fileName = file.getName().substring(0, file.getName().indexOf(".")) + ".parquet";
+            Path outputPath = new Path(
+                    Paths.get(destPath.getAbsolutePath(), file.getParent().substring(startIndex), fileName).toString());
+            writeParquetFile(file, outputPath);
+        }
+    }
+
     private static void writeParquetFile(File jsonInputPath, Path parquetOutputPath) throws IOException {
         FileInputStream schemaInputStream = new FileInputStream(jsonInputPath);
-        FileInputStream jsonInputStream = new FileInputStream(jsonInputPath);
         //Infer Avro schema
         Schema inputSchema = JsonUtil.inferSchema(schemaInputStream, "parquet_schema", NUM_OF_RECORDS_SCHEMA);
-        try (JSONFileReader<Record> reader = new JSONFileReader<>(jsonInputStream, inputSchema, Record.class)) {
-            reader.initialize();
-            try (AvroParquetWriter<Record> writer = new AvroParquetWriter<>(parquetOutputPath, inputSchema)) {
-                for (Record record : reader) {
-                    writer.write(record);
-                }
+        try (BufferedReader reader = new BufferedReader(new FileReader(jsonInputPath));
+                AvroParquetWriter<Record> writer = new AvroParquetWriter<>(parquetOutputPath, inputSchema)) {
+            JsonAvroConverter converter = new JsonAvroConverter();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                Record record = converter.convertToGenericDataRecord(line.getBytes(), inputSchema);
+                writer.write(record);
             }
         }
     }

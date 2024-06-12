@@ -70,6 +70,9 @@ public class RegistrationTasksResponseMessage extends CcIdentifiedMessage
             }
             NcLocalCounters localCounter = success ? NcLocalCounters.collect(getCcId(),
                     (NodeControllerService) appCtx.getServiceContext().getControllerService()) : null;
+            if (localCounter != null) {
+                LOGGER.debug("returning local counters to cc: {}", localCounter);
+            }
             // wrap the returned partitions in a hash set to make it serializable
             Set<Integer> nodeActivePartitions = new HashSet<>(appCtx.getReplicaManager().getPartitions());
             NCLifecycleTaskReportMessage result =
@@ -96,5 +99,10 @@ public class RegistrationTasksResponseMessage extends CcIdentifiedMessage
     @Override
     public MessageType getType() {
         return MessageType.REGISTRATION_TASKS_RESPONSE;
+    }
+
+    @Override
+    public String toString() {
+        return "RegistrationTasksResponseMessage{from='" + nodeId + '}';
     }
 }

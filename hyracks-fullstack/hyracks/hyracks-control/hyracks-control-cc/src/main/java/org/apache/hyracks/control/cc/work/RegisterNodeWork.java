@@ -18,6 +18,7 @@
  */
 package org.apache.hyracks.control.cc.work;
 
+import java.net.InetSocketAddress;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -30,6 +31,7 @@ import org.apache.hyracks.control.common.controllers.NodeParameters;
 import org.apache.hyracks.control.common.controllers.NodeRegistration;
 import org.apache.hyracks.control.common.ipc.NodeControllerRemoteProxy;
 import org.apache.hyracks.control.common.work.SynchronizableWork;
+import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -50,8 +52,9 @@ public class RegisterNodeWork extends SynchronizableWork {
     protected void doRun() throws Exception {
         String id = reg.getNodeId();
         LOGGER.info("registering node: {}", id);
-        NodeControllerRemoteProxy nc = new NodeControllerRemoteProxy(ccs.getCcId(),
-                ccs.getClusterIPC().getReconnectingHandle(reg.getNodeControllerAddress().resolveInetSocketAddress()));
+        InetSocketAddress ncAddress = reg.getNodeControllerAddress().toInetSocketAddress();
+        NodeControllerRemoteProxy nc =
+                new NodeControllerRemoteProxy(ccs.getCcId(), ccs.getClusterIPC().getReconnectingHandle(ncAddress));
         INodeManager nodeManager = ccs.getNodeManager();
         NodeParameters params = new NodeParameters();
         params.setClusterControllerInfo(ccs.getClusterControllerInfo());
@@ -80,5 +83,10 @@ public class RegisterNodeWork extends SynchronizableWork {
             nodeManager.removeNode(id);
             nc.sendRegistrationResult(params, e);
         }
+    }
+
+    @Override
+    public Level logLevel() {
+        return Level.TRACE;
     }
 }

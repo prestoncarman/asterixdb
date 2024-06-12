@@ -19,6 +19,7 @@
 package org.apache.asterix.external.dataset.adapter;
 
 import java.io.Serializable;
+import java.util.Objects;
 
 import org.apache.asterix.common.metadata.DataverseName;
 
@@ -27,14 +28,20 @@ import org.apache.asterix.common.metadata.DataverseName;
  */
 public class AdapterIdentifier implements Serializable {
 
-    private static final long serialVersionUID = 2L;
+    private static final long serialVersionUID = 3L;
 
+    private final String databaseName;
     private final DataverseName dataverseName;
     private final String adapterName;
 
-    public AdapterIdentifier(DataverseName dataverse, String name) {
+    public AdapterIdentifier(String databaseName, DataverseName dataverse, String name) {
+        this.databaseName = Objects.requireNonNull(databaseName);
         this.dataverseName = dataverse;
         this.adapterName = name;
+    }
+
+    public String getDatabaseName() {
+        return databaseName;
     }
 
     public DataverseName getDataverseName() {
@@ -47,7 +54,7 @@ public class AdapterIdentifier implements Serializable {
 
     @Override
     public int hashCode() {
-        return (dataverseName + "@" + adapterName).hashCode();
+        return Objects.hash(databaseName, dataverseName + "@" + adapterName);
 
     }
 
@@ -63,6 +70,7 @@ public class AdapterIdentifier implements Serializable {
             return false;
         }
         AdapterIdentifier a = (AdapterIdentifier) o;
-        return dataverseName.equals(a.dataverseName) && adapterName.equals(a.adapterName);
+        return Objects.equals(databaseName, a.databaseName) && dataverseName.equals(a.dataverseName)
+                && adapterName.equals(a.adapterName);
     }
 }

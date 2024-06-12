@@ -19,7 +19,9 @@
 package org.apache.hyracks.api.dataflow;
 
 import java.util.HashMap;
+import java.util.Map;
 
+import org.apache.hyracks.api.com.job.profiling.counters.Counter;
 import org.apache.hyracks.api.comm.IFrameWriter;
 import org.apache.hyracks.api.context.IHyracksTaskContext;
 import org.apache.hyracks.api.dataflow.value.RecordDescriptor;
@@ -27,43 +29,41 @@ import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.job.profiling.IOperatorStats;
 import org.apache.hyracks.api.job.profiling.IStatsCollector;
 import org.apache.hyracks.api.job.profiling.OperatorStats;
+import org.apache.hyracks.api.job.profiling.counters.ICounter;
 import org.apache.hyracks.api.rewriter.runtime.SuperActivityOperatorNodePushable;
 
-public class ProfiledOperatorNodePushable extends ProfiledFrameWriter implements IOperatorNodePushable, IPassableTimer {
+public class ProfiledOperatorNodePushable implements IOperatorNodePushable, IStatsContainingNodePushable {
 
-    IOperatorNodePushable op;
-    ProfiledOperatorNodePushable parentOp;
-    ActivityId acId;
-    HashMap<Integer, IFrameWriter> inputs;
-    long frameStart;
+    private final IOperatorNodePushable op;
+    private final Map<Integer, ITimedWriter> inputs;
+    private final Map<Integer, ITimedWriter> outputs;
+    private final IOperatorStats stats;
+    private final ICounter totalTime;
 
-    ProfiledOperatorNodePushable(IOperatorNodePushable op, ActivityId acId, IStatsCollector collector,
-            IOperatorStats stats, ActivityId parent, ProfiledOperatorNodePushable parentOp)
-            throws HyracksDataException {
-        super(null, collector, acId.toString() + " - " + op.getDisplayName(), stats,
-                parentOp != null ? parentOp.getStats() : null);
-        this.parentOp = parentOp;
+    ProfiledOperatorNodePushable(IOperatorNodePushable op, IOperatorStats stats) {
+        this.stats = stats;
         this.op = op;
-        this.acId = acId;
         inputs = new HashMap<>();
+        outputs = new HashMap<>();
+        this.totalTime = new Counter("totalTime");
     }
 
     @Override
     public void initialize() throws HyracksDataException {
-        synchronized (collector) {
-            startClock();
-            op.initialize();
-            stopClock();
-        }
+        ProfiledFrameWriter.timeMethod(op::initialize, totalTime);
     }
 
     @Override
     public void deinitialize() throws HyracksDataException {
-        synchronized (collector) {
-            startClock();
-            op.deinitialize();
-            stopClock();
+        long ownTime = totalTime.get();
+        for (ITimedWriter i : inputs.values()) {
+            ownTime += i.getTotalTime();
         }
+        for (ITimedWriter w : outputs.values()) {
+            ownTime -= w.getTotalTime();
+        }
+        op.deinitialize();
+        stats.getTimeCounter().set(ownTime);
     }
 
     @Override
@@ -74,17 +74,27 @@ public class ProfiledOperatorNodePushable extends ProfiledFrameWriter implements
     @Override
     public void setOutputFrameWriter(int index, IFrameWriter writer, RecordDescriptor recordDesc)
             throws HyracksDataException {
+        if (writer instanceof ITimedWriter) {
+            ITimedWriter wrapper = (ITimedWriter) writer;
+            if (op instanceof ISelfProfilingNodePushable) {
+                wrapper.setUpstreamStats(((ISelfProfilingNodePushable) op).getStats());
+            } else {
+                wrapper.setUpstreamStats(stats);
+            }
+            outputs.put(index, wrapper);
+        }
         op.setOutputFrameWriter(index, writer, recordDesc);
     }
 
     @Override
     public IFrameWriter getInputFrameWriter(int index) {
-        IFrameWriter ifw = op.getInputFrameWriter(index);
-        if (!(op instanceof ProfiledFrameWriter) && ifw.equals(op)) {
-            return new ProfiledFrameWriter(op.getInputFrameWriter(index), collector,
-                    acId.toString() + "-" + op.getDisplayName(), stats, parentStats);
+        if (inputs.get(index) == null) {
+            ProfiledFrameWriter pfw = new ProfiledFrameWriter(op.getInputFrameWriter(index));
+            inputs.put(index, pfw);
+            return pfw;
+        } else {
+            return inputs.get(index);
         }
-        return op.getInputFrameWriter(index);
     }
 
     @Override
@@ -92,56 +102,26 @@ public class ProfiledOperatorNodePushable extends ProfiledFrameWriter implements
         return op.getDisplayName();
     }
 
-    private void stopClock() {
-        pause();
-        collector.giveClock(this);
-    }
-
-    private void startClock() {
-        if (frameStart > 0) {
-            return;
-        }
-        frameStart = collector.takeClock(this);
-    }
-
-    @Override
-    public void resume() {
-        if (frameStart > 0) {
-            return;
-        }
-        long nt = System.nanoTime();
-        frameStart = nt;
-    }
-
-    @Override
-    public void pause() {
-        if (frameStart > 0) {
-            long nt = System.nanoTime();
-            long delta = nt - frameStart;
-            timeCounter.update(delta);
-            frameStart = -1;
-        }
-    }
-
     public IOperatorStats getStats() {
         return stats;
     }
 
-    public IOperatorStats getParentStats() {
-        return parentStats;
-    }
-
-    public static IOperatorNodePushable time(IOperatorNodePushable op, IHyracksTaskContext ctx, ActivityId acId,
-            ProfiledOperatorNodePushable source) throws HyracksDataException {
+    public static IOperatorNodePushable time(IOperatorNodePushable op, IHyracksTaskContext ctx, ActivityId acId)
+            throws HyracksDataException {
         String name = acId.toString() + " - " + op.getDisplayName();
         IStatsCollector statsCollector = ctx.getStatsCollector();
-        IOperatorStats stats = new OperatorStats(name, acId.getOperatorDescriptorId());
-        statsCollector.add(stats);
+        IOperatorStats stats = new OperatorStats(name, acId.getOperatorDescriptorId().toString());
+        if (!(op instanceof ISelfProfilingNodePushable)) {
+            statsCollector.add(stats);
+        }
         if (op instanceof IIntrospectingOperator) {
             ((IIntrospectingOperator) op).setOperatorStats(stats);
         }
+        if (op instanceof ISelfProfilingNodePushable) {
+            ((ISelfProfilingNodePushable) op).addStats(stats);
+        }
         if (!(op instanceof ProfiledOperatorNodePushable) && !(op instanceof SuperActivityOperatorNodePushable)) {
-            return new ProfiledOperatorNodePushable(op, acId, ctx.getStatsCollector(), stats, acId, source);
+            return new ProfiledOperatorNodePushable(op, stats);
         }
         return op;
     }
@@ -150,7 +130,7 @@ public class ProfiledOperatorNodePushable extends ProfiledFrameWriter implements
             throws HyracksDataException {
         String name = acId.toString() + " - " + op.getDisplayName();
         IStatsCollector statsCollector = ctx.getStatsCollector();
-        IOperatorStats stats = new OperatorStats(name, acId.getOperatorDescriptorId());
+        IOperatorStats stats = new OperatorStats(name, acId.getOperatorDescriptorId().toString());
         if (op instanceof IIntrospectingOperator) {
             ((IIntrospectingOperator) op).setOperatorStats(stats);
             statsCollector.add(stats);

@@ -20,6 +20,7 @@
 package org.apache.asterix.metadata.entities;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -38,6 +39,7 @@ import org.apache.asterix.om.types.ARecordType;
 import org.apache.asterix.om.types.AUnionType;
 import org.apache.asterix.om.types.IAType;
 import org.apache.asterix.om.utils.NonTaggedFormatUtil;
+import org.apache.asterix.om.utils.ProjectionFiltrationTypeUtil;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
 import org.apache.hyracks.algebricks.common.utils.Pair;
 import org.apache.hyracks.api.job.profiling.IndexStats;
@@ -48,10 +50,11 @@ import org.apache.hyracks.util.OptionalBoolean;
  */
 public class Index implements IMetadataEntity<Index>, Comparable<Index> {
 
-    private static final long serialVersionUID = 3L;
+    private static final long serialVersionUID = 4L;
     public static final int RECORD_INDICATOR = 0;
     public static final int META_RECORD_INDICATOR = 1;
 
+    private final String databaseName;
     private final DataverseName dataverseName;
     // Enforced to be unique within a dataverse.
     private final String datasetName;
@@ -64,14 +67,16 @@ public class Index implements IMetadataEntity<Index>, Comparable<Index> {
     // Type of pending operations with respect to atomic DDL operation
     private int pendingOp;
 
-    public Index(DataverseName dataverseName, String datasetName, String indexName, IndexType indexType,
-            IIndexDetails indexDetails, boolean isEnforced, boolean isPrimaryIndex, int pendingOp) {
+    public Index(String databaseName, DataverseName dataverseName, String datasetName, String indexName,
+            IndexType indexType, IIndexDetails indexDetails, boolean isEnforced, boolean isPrimaryIndex,
+            int pendingOp) {
         boolean categoryOk = (indexType == null && indexDetails == null) || (IndexCategory
                 .of(Objects.requireNonNull(indexType)) == ((AbstractIndexDetails) Objects.requireNonNull(indexDetails))
                         .getIndexCategory());
         if (!categoryOk) {
             throw new IllegalArgumentException();
         }
+        this.databaseName = Objects.requireNonNull(databaseName);
         this.dataverseName = Objects.requireNonNull(dataverseName);
         this.datasetName = Objects.requireNonNull(datasetName);
         this.indexName = Objects.requireNonNull(indexName);
@@ -83,23 +88,27 @@ public class Index implements IMetadataEntity<Index>, Comparable<Index> {
     }
 
     @Deprecated
-    public Index(DataverseName dataverseName, String datasetName, String indexName, IndexType indexType,
-            List<List<String>> keyFieldNames, List<Integer> keyFieldSourceIndicators, List<IAType> keyFieldTypes,
-            boolean overrideKeyFieldTypes, boolean isEnforced, boolean isPrimaryIndex, int pendingOp,
-            OptionalBoolean excludeUnknownKey) {
-        this(dataverseName, datasetName,
+    public Index(String database, DataverseName dataverseName, String datasetName, String indexName,
+            IndexType indexType, List<List<String>> keyFieldNames, List<Integer> keyFieldSourceIndicators,
+            List<IAType> keyFieldTypes, boolean overrideKeyFieldTypes, boolean isEnforced, boolean isPrimaryIndex,
+            int pendingOp, OptionalBoolean excludeUnknownKey) {
+        this(database, dataverseName, datasetName,
                 indexName, indexType, createSimpleIndexDetails(indexType, keyFieldNames, keyFieldSourceIndicators,
                         keyFieldTypes, overrideKeyFieldTypes, excludeUnknownKey),
                 isEnforced, isPrimaryIndex, pendingOp);
     }
 
-    public static Index createPrimaryIndex(DataverseName dataverseName, String datasetName,
+    public static Index createPrimaryIndex(String database, DataverseName dataverseName, String datasetName,
             List<List<String>> keyFieldNames, List<Integer> keyFieldSourceIndicators, List<IAType> keyFieldTypes,
             int pendingOp) {
-        return new Index(dataverseName, datasetName,
+        return new Index(database, dataverseName, datasetName,
                 datasetName, IndexType.BTREE, new ValueIndexDetails(keyFieldNames, keyFieldSourceIndicators,
                         keyFieldTypes, false, OptionalBoolean.empty(), OptionalBoolean.empty(), null, null, null),
                 false, true, pendingOp);
+    }
+
+    public String getDatabaseName() {
+        return databaseName;
     }
 
     public DataverseName getDataverseName() {
@@ -138,6 +147,10 @@ public class Index implements IMetadataEntity<Index>, Comparable<Index> {
         this.pendingOp = pendingOp;
     }
 
+    public boolean isSampleIndex() {
+        return indexType == IndexType.SAMPLE;
+    }
+
     public boolean isSecondaryIndex() {
         return !isPrimaryIndex();
     }
@@ -150,6 +163,7 @@ public class Index implements IMetadataEntity<Index>, Comparable<Index> {
     public static Pair<IAType, Boolean> getNonNullableType(IAType keyType) {
         boolean nullable = false;
         IAType actualKeyType = keyType;
+        // check open field whose type is ANY?
         if (NonTaggedFormatUtil.isOptional(keyType)) {
             actualKeyType = ((AUnionType) keyType).getActualType();
             nullable = true;
@@ -159,6 +173,7 @@ public class Index implements IMetadataEntity<Index>, Comparable<Index> {
 
     public static Pair<IAType, Boolean> getNonNullableOpenFieldType(Index index, IAType fieldType,
             List<String> fieldName, ARecordType recType) throws AlgebricksException {
+        // check open field whose type is ANY?
         if (IndexUtil.castDefaultNull(index)) {
             Pair<IAType, Boolean> nonNullableType = getNonNullableType(fieldType);
             nonNullableType.second = true;
@@ -193,6 +208,7 @@ public class Index implements IMetadataEntity<Index>, Comparable<Index> {
     public static Pair<IAType, Boolean> getNonNullableKeyFieldType(List<String> expr, ARecordType recType)
             throws AlgebricksException {
         IAType keyType = Index.keyFieldType(expr, recType);
+        // check open field whose type is ANY?
         Pair<IAType, Boolean> pair = getNonNullableType(keyType);
         pair.second = pair.second || recType.isSubFieldNullable(expr);
         return pair;
@@ -204,7 +220,7 @@ public class Index implements IMetadataEntity<Index>, Comparable<Index> {
 
     @Override
     public int hashCode() {
-        return indexName.hashCode() ^ datasetName.hashCode() ^ dataverseName.hashCode();
+        return Objects.hash(indexName, datasetName, dataverseName, databaseName);
     }
 
     @Override
@@ -219,10 +235,8 @@ public class Index implements IMetadataEntity<Index>, Comparable<Index> {
         if (!datasetName.equals(otherIndex.getDatasetName())) {
             return false;
         }
-        if (!dataverseName.equals(otherIndex.getDataverseName())) {
-            return false;
-        }
-        return true;
+        return Objects.equals(databaseName, otherIndex.databaseName)
+                && dataverseName.equals(otherIndex.getDataverseName());
     }
 
     @Override
@@ -270,7 +284,11 @@ public class Index implements IMetadataEntity<Index>, Comparable<Index> {
         if (result != 0) {
             return result;
         }
-        return dataverseName.compareTo(otherIndex.getDataverseName());
+        result = dataverseName.compareTo(otherIndex.getDataverseName());
+        if (result != 0) {
+            return result;
+        }
+        return databaseName.compareTo(otherIndex.getDatabaseName());
     }
 
     public byte resourceType() throws CompilationException {
@@ -293,6 +311,7 @@ public class Index implements IMetadataEntity<Index>, Comparable<Index> {
 
     @Override
     public String toString() {
+        //TODO(DB)
         return dataverseName + "." + datasetName + "." + indexName;
     }
 
@@ -411,6 +430,10 @@ public class Index implements IMetadataEntity<Index>, Comparable<Index> {
         public boolean isOverridingKeyFieldTypes() {
             return overrideKeyFieldTypes;
         }
+
+        public ARecordType getIndexExpectedType() throws AlgebricksException {
+            return ProjectionFiltrationTypeUtil.getRecordType(getKeyFieldNames());
+        }
     }
 
     public static final class TextIndexDetails extends AbstractIndexDetails {
@@ -499,6 +522,15 @@ public class Index implements IMetadataEntity<Index>, Comparable<Index> {
         @Override
         public boolean isOverridingKeyFieldTypes() {
             return overrideKeyFieldTypes;
+        }
+
+        public ARecordType getIndexExpectedType() throws AlgebricksException {
+            List<ARecordType> types = new ArrayList<>();
+            for (Index.ArrayIndexElement element : elementList) {
+                types.add(
+                        ProjectionFiltrationTypeUtil.getRecordType(element.getUnnestList(), element.getProjectList()));
+            }
+            return ProjectionFiltrationTypeUtil.merge(types);
         }
     }
 

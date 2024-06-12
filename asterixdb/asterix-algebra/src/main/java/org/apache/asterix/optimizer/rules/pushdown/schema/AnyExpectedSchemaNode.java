@@ -21,10 +21,27 @@ package org.apache.asterix.optimizer.rules.pushdown.schema;
 import org.apache.hyracks.api.exceptions.SourceLocation;
 
 public class AnyExpectedSchemaNode extends AbstractExpectedSchemaNode {
+    private boolean replaceable;
 
     public AnyExpectedSchemaNode(AbstractComplexExpectedSchemaNode parent, SourceLocation sourceLocation,
             String functionName) {
         super(parent, sourceLocation, functionName);
+        replaceable = true;
+    }
+
+    protected AnyExpectedSchemaNode(AbstractComplexExpectedSchemaNode parent, SourceLocation sourceLocation,
+            String functionName, boolean replaceable) {
+        super(parent, sourceLocation, functionName);
+        this.replaceable = replaceable;
+    }
+
+    @Override
+    public boolean allowsReplacing() {
+        return replaceable;
+    }
+
+    public void preventReplacing() {
+        replaceable = false;
     }
 
     @Override
@@ -42,8 +59,7 @@ public class AnyExpectedSchemaNode extends AbstractExpectedSchemaNode {
         AbstractComplexExpectedSchemaNode parent = getParent();
         AbstractComplexExpectedSchemaNode nestedNode = AbstractComplexExpectedSchemaNode
                 .createNestedNode(expectedNodeType, parent, getSourceLocation(), functionName);
-        parent.replaceChild(this, nestedNode);
-        return nestedNode;
+        return parent.replaceChild(this, nestedNode);
     }
 
     @Override

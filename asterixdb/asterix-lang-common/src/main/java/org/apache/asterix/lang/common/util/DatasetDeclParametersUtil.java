@@ -62,6 +62,17 @@ public class DatasetDeclParametersUtil {
      */
     public static final String NODE_GROUP_NAME = "node-group";
     public static final String NODE_GROUP_NAME_PARAMETER_NAME = "name";
+
+    /* ***********************************************
+     * Dataset Format Type
+     * ***********************************************
+     */
+    public static final String DATASET_FORMAT_PARAMETER_NAME = "storage-format";
+    public static final String DATASET_FORMAT_FORMAT_PARAMETER_NAME = "format";
+    public static final String DATASET_FORMAT_MAX_TUPLE_COUNT_PARAMETER_NAME = "max-tuple-count";
+    public static final String DATASET_FORMAT_FREE_SPACE_TOLERANCE_PARAMETER_NAME = "free-space-tolerance";
+    public static final String DATASET_FORMAT_FREE_MAX_LEAF_NODE_SIZE = "max-leaf-node-size";
+
     /* ***********************************************
      * Private members
      * ***********************************************
@@ -90,11 +101,12 @@ public class DatasetDeclParametersUtil {
     }
 
     private static ARecordType getWithObjectType() {
-        final String[] withNames =
-                { MERGE_POLICY_PARAMETER_NAME, STORAGE_BLOCK_COMPRESSION_PARAMETER_NAME, NODE_GROUP_NAME };
+        final String[] withNames = { MERGE_POLICY_PARAMETER_NAME, STORAGE_BLOCK_COMPRESSION_PARAMETER_NAME,
+                NODE_GROUP_NAME, DATASET_FORMAT_PARAMETER_NAME };
         final IAType[] withTypes = { AUnionType.createUnknownableType(getMergePolicyType()),
                 AUnionType.createUnknownableType(getStorageBlockCompressionType()),
-                AUnionType.createUnknownableType(getNodeGroupType()) };
+                AUnionType.createUnknownableType(getNodeGroupType()),
+                AUnionType.createUnknownableType(getDatasetFormatType()) };
         return new ARecordType("withObject", withNames, withTypes, false);
     }
 
@@ -110,7 +122,7 @@ public class DatasetDeclParametersUtil {
                 AUnionType.createUnknownableType(BuiltinType.ADOUBLE),
                 AUnionType.createUnknownableType(BuiltinType.AINT64),
                 AUnionType.createUnknownableType(BuiltinType.AINT64),
-                AUnionType.createUnknownableType(BuiltinType.AINT64) };
+                AUnionType.createUnknownableType(BuiltinType.AINT64), };
         final ARecordType parameters =
                 new ARecordType(MERGE_POLICY_PARAMETERS_PARAMETER_NAME, parameterNames, parametersTypes, false);
 
@@ -134,8 +146,8 @@ public class DatasetDeclParametersUtil {
     }
 
     /**
-     *  Adjusts dataset inline type definition if it has primary key specification:
-     *  forces NOT UNKNOWN on fields that are part of primary key.
+     * Adjusts dataset inline type definition if it has primary key specification:
+     * forces NOT UNKNOWN on fields that are part of primary key.
      */
     public static void adjustInlineTypeDecl(TypeExpression typeDecl, List<List<String>> primaryKeyFields,
             List<Integer> primaryKeySources, boolean isMeta) {
@@ -165,5 +177,15 @@ public class DatasetDeclParametersUtil {
             default:
                 throw new IllegalStateException(typeDecl.getTypeKind().toString());
         }
+    }
+
+    private static ARecordType getDatasetFormatType() {
+        final String[] formatFieldNames =
+                { DATASET_FORMAT_FORMAT_PARAMETER_NAME, DATASET_FORMAT_MAX_TUPLE_COUNT_PARAMETER_NAME,
+                        DATASET_FORMAT_FREE_SPACE_TOLERANCE_PARAMETER_NAME, DATASET_FORMAT_FREE_MAX_LEAF_NODE_SIZE };
+        final IAType[] formatFieldTypes = { BuiltinType.ASTRING, AUnionType.createUnknownableType(BuiltinType.AINT64),
+                AUnionType.createUnknownableType(BuiltinType.ADOUBLE),
+                AUnionType.createUnknownableType(BuiltinType.ASTRING) };
+        return new ARecordType(DATASET_FORMAT_PARAMETER_NAME, formatFieldNames, formatFieldTypes, false);
     }
 }

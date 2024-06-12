@@ -18,8 +18,6 @@
  */
 package org.apache.asterix.lang.common.util;
 
-import static org.apache.asterix.lang.common.base.Literal.Type.DOUBLE;
-
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -32,7 +30,7 @@ import org.apache.asterix.common.exceptions.CompilationException;
 import org.apache.asterix.common.exceptions.ErrorCode;
 import org.apache.asterix.common.functions.FunctionSignature;
 import org.apache.asterix.common.metadata.DatasetFullyQualifiedName;
-import org.apache.asterix.common.metadata.DataverseName;
+import org.apache.asterix.common.metadata.DependencyFullyQualifiedName;
 import org.apache.asterix.lang.common.base.AbstractStatement;
 import org.apache.asterix.lang.common.base.Expression;
 import org.apache.asterix.lang.common.base.IQueryRewriter;
@@ -42,6 +40,7 @@ import org.apache.asterix.lang.common.expression.FieldBinding;
 import org.apache.asterix.lang.common.expression.ListConstructor;
 import org.apache.asterix.lang.common.expression.LiteralExpr;
 import org.apache.asterix.lang.common.expression.RecordConstructor;
+import org.apache.asterix.lang.common.expression.UnaryExpr;
 import org.apache.asterix.lang.common.literal.DoubleLiteral;
 import org.apache.asterix.lang.common.literal.FloatLiteral;
 import org.apache.asterix.lang.common.literal.IntegerLiteral;
@@ -50,7 +49,10 @@ import org.apache.asterix.lang.common.literal.StringLiteral;
 import org.apache.asterix.lang.common.statement.FunctionDecl;
 import org.apache.asterix.lang.common.statement.Query;
 import org.apache.asterix.lang.common.statement.ViewDecl;
+import org.apache.asterix.lang.common.struct.UnaryExprType;
 import org.apache.asterix.lang.common.visitor.GatherFunctionCallsVisitor;
+import org.apache.asterix.metadata.declared.MetadataProvider;
+import org.apache.asterix.metadata.entities.EntityDetails;
 import org.apache.asterix.object.base.AdmArrayNode;
 import org.apache.asterix.object.base.AdmBigIntNode;
 import org.apache.asterix.object.base.AdmBooleanNode;
@@ -80,6 +82,26 @@ public class ExpressionUtils {
                 return toNode((LiteralExpr) expr);
             case RECORD_CONSTRUCTOR_EXPRESSION:
                 return toNode((RecordConstructor) expr);
+            case UNARY_EXPRESSION:
+                UnaryExpr unaryExpr = (UnaryExpr) expr;
+                UnaryExprType unaryExprType = unaryExpr.getExprType();
+                if (unaryExprType == UnaryExprType.POSITIVE || unaryExprType == UnaryExprType.NEGATIVE) {
+                    Expression uexpr = unaryExpr.getExpr();
+                    if (uexpr.getKind() == Expression.Kind.LITERAL_EXPRESSION) {
+                        if (unaryExprType == UnaryExprType.POSITIVE) {
+                            return toNode(uexpr);
+                        } else {
+                            Literal lit = ((LiteralExpr) uexpr).getValue();
+                            return toNode(new LiteralExpr(reverseSign(lit)));
+                        }
+                    } else {
+                        throw new CompilationException(ErrorCode.LITERAL_TYPE_NOT_SUPPORTED_IN_CONSTANT_RECORD,
+                                uexpr.getKind());
+                    }
+                } else {
+                    throw new CompilationException(ErrorCode.EXPRESSION_NOT_SUPPORTED_IN_CONSTANT_RECORD,
+                            unaryExprType);
+                }
             default:
                 throw new CompilationException(ErrorCode.EXPRESSION_NOT_SUPPORTED_IN_CONSTANT_RECORD, expr.getKind());
         }
@@ -221,10 +243,10 @@ public class ExpressionUtils {
         }
     }
 
-    public static void collectDependencies(Expression expression, IQueryRewriter rewriter,
-            List<Triple<DataverseName, String, String>> outDatasetDependencies,
-            List<Triple<DataverseName, String, String>> outSynonymDependencies,
-            List<Triple<DataverseName, String, String>> outFunctionDependencies) throws CompilationException {
+    public static void collectDependencies(MetadataProvider metadataProvider, Expression expression,
+            IQueryRewriter rewriter, List<DependencyFullyQualifiedName> outDatasetDependencies,
+            List<DependencyFullyQualifiedName> outSynonymDependencies,
+            List<DependencyFullyQualifiedName> outFunctionDependencies) throws CompilationException {
         // Duplicate elimination
         Set<DatasetFullyQualifiedName> seenDatasets = new HashSet<>();
         Set<DatasetFullyQualifiedName> seenSynonyms = new HashSet<>();
@@ -240,25 +262,38 @@ public class ExpressionUtils {
                         if (FunctionUtil.isBuiltinDatasetFunction(signature)) {
                             Triple<DatasetFullyQualifiedName, Boolean, DatasetFullyQualifiedName> dsArgs =
                                     FunctionUtil.parseDatasetFunctionArguments(functionCall);
+                            DatasetFullyQualifiedName datasetFullyQualifiedName = dsArgs.first;
+                            EntityDetails.EntityType entityType =
+                                    dsArgs.second ? EntityDetails.EntityType.VIEW : EntityDetails.EntityType.DATASET;
+                            metadataProvider
+                                    .addAccessedEntity(new EntityDetails(datasetFullyQualifiedName.getDatabaseName(),
+                                            datasetFullyQualifiedName.getDataverseName(),
+                                            datasetFullyQualifiedName.getDatasetName(), entityType));
                             DatasetFullyQualifiedName synonymReference = dsArgs.third;
                             if (synonymReference != null) {
                                 // resolved via synonym -> store synonym name as a dependency
                                 if (seenSynonyms.add(synonymReference)) {
-                                    outSynonymDependencies.add(new Triple<>(synonymReference.getDataverseName(),
+                                    outSynonymDependencies.add(new DependencyFullyQualifiedName(
+                                            synonymReference.getDatabaseName(), synonymReference.getDataverseName(),
                                             synonymReference.getDatasetName(), null));
                                 }
                             } else {
                                 // resolved directly -> store dataset (or view) name as a dependency
                                 DatasetFullyQualifiedName datasetReference = dsArgs.first;
                                 if (seenDatasets.add(datasetReference)) {
-                                    outDatasetDependencies.add(new Triple<>(datasetReference.getDataverseName(),
+                                    outDatasetDependencies.add(new DependencyFullyQualifiedName(
+                                            datasetReference.getDatabaseName(), datasetReference.getDataverseName(),
                                             datasetReference.getDatasetName(), null));
                                 }
                             }
                         }
                     } else {
                         if (seenFunctions.add(signature)) {
-                            outFunctionDependencies.add(new Triple<>(signature.getDataverseName(), signature.getName(),
+                            String functionName = signature.getName() + "(" + signature.getArity() + ")";
+                            metadataProvider.addAccessedEntity(new EntityDetails(signature.getDatabaseName(),
+                                    signature.getDataverseName(), functionName, EntityDetails.EntityType.FUNCTION));
+                            outFunctionDependencies.add(new DependencyFullyQualifiedName(signature.getDatabaseName(),
+                                    signature.getDataverseName(), signature.getName(),
                                     Integer.toString(signature.getArity())));
                         }
                     }

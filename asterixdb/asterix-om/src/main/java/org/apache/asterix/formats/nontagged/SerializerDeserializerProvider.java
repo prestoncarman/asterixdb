@@ -72,10 +72,10 @@ import org.apache.hyracks.util.string.UTF8StringWriter;
 
 public class SerializerDeserializerProvider implements ISerializerDeserializerProvider, Serializable {
 
-    private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 2L;
     public static final SerializerDeserializerProvider INSTANCE = new SerializerDeserializerProvider();
 
-    private SerializerDeserializerProvider() {
+    protected SerializerDeserializerProvider() {
     }
 
     // Can't be shared among threads <Stateful>
@@ -98,6 +98,24 @@ public class SerializerDeserializerProvider implements ISerializerDeserializerPr
                 return AObjectSerializerDeserializer.INSTANCE;
             default:
                 return addTag(getNonTaggedSerializerDeserializer(type));
+        }
+    }
+
+    @SuppressWarnings("rawtypes")
+    @Override
+    public ISerializerDeserializer getSerializerDeserializer(Object typeInfo,
+            ISerializerDeserializer nonTaggedSerializerDeserializer) {
+        IAType type = (IAType) typeInfo;
+        if (type == null) {
+            return null;
+        }
+        switch (type.getTypeTag()) {
+            case ANY:
+            case UNION:
+                // we could do smth better for nullable fields
+                return AObjectSerializerDeserializer.INSTANCE;
+            default:
+                return addTag(nonTaggedSerializerDeserializer);
         }
     }
 

@@ -25,6 +25,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
@@ -35,11 +36,9 @@ import org.apache.hyracks.algebricks.core.algebra.base.ILogicalExpression;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.base.ILogicalPlan;
 import org.apache.hyracks.algebricks.core.algebra.base.IPhysicalOperator;
-import org.apache.hyracks.algebricks.core.algebra.base.LogicalOperatorTag;
 import org.apache.hyracks.algebricks.core.algebra.base.LogicalVariable;
 import org.apache.hyracks.algebricks.core.algebra.base.PhysicalOperatorTag;
 import org.apache.hyracks.algebricks.core.algebra.expressions.IAlgebricksConstantValue;
-import org.apache.hyracks.algebricks.core.algebra.metadata.IProjectionInfo;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractBinaryJoinOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractLogicalOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.AbstractOperatorWithNestedPlans;
@@ -82,13 +81,15 @@ import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnnestMapOpe
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.UnnestOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.WindowOperator;
 import org.apache.hyracks.algebricks.core.algebra.operators.logical.WriteOperator;
-import org.apache.hyracks.algebricks.core.algebra.operators.logical.WriteResultOperator;
+import org.apache.hyracks.api.dataflow.OperatorDescriptorId;
 import org.apache.hyracks.api.exceptions.ErrorCode;
 
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.util.DefaultIndenter;
 import com.fasterxml.jackson.core.util.DefaultPrettyPrinter;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 public class LogicalOperatorPrettyPrintVisitorJson extends AbstractLogicalOperatorPrettyPrintVisitor<Void>
         implements IPlanPrettyPrinter {
@@ -103,9 +104,9 @@ public class LogicalOperatorPrettyPrintVisitorJson extends AbstractLogicalOperat
     private static final String CONDITION_FIELD = "condition";
     private static final String MISSING_VALUE_FIELD = "missing-value";
     private static final String OPTIMIZER_ESTIMATES = "optimizer-estimates";
-    private static final String QUERY_PLAN = "plan";
     private final Map<AbstractLogicalOperator, String> operatorIdentity = new HashMap<>();
     private Map<Object, String> log2odid = Collections.emptyMap();
+    private Map<String, OperatorProfile> profile = Collections.emptyMap();
     private final IdCounter idCounter = new IdCounter();
     private final JsonGenerator jsonGenerator;
 
@@ -153,6 +154,142 @@ public class LogicalOperatorPrettyPrintVisitorJson extends AbstractLogicalOperat
         }
     }
 
+    private class ExtendedActivityId {
+        private final OperatorDescriptorId odId;
+        private final int id;
+        private final int microId;
+        private final int subPipe;
+        private final int subId;
+
+        ExtendedActivityId(String str) {
+            if (str.startsWith("ANID:")) {
+                str = str.substring(5);
+                int idIdx = str.lastIndexOf(':');
+                this.odId = OperatorDescriptorId.parse(str.substring(0, idIdx));
+                String[] parts = str.substring(idIdx + 1).split("\\.");
+                this.id = Integer.parseInt(parts[0]);
+                if (parts.length >= 2) {
+                    this.microId = Integer.parseInt(parts[1]);
+                } else {
+                    this.microId = -1;
+                }
+                if (parts.length >= 4) {
+                    this.subPipe = Integer.parseInt(parts[2]);
+                    this.subId = Integer.parseInt(parts[3]);
+                } else {
+                    this.subPipe = -1;
+                    this.subId = -1;
+                }
+            } else {
+                throw new IllegalArgumentException("Unable to parse: " + str);
+            }
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(values());
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            return (o instanceof ExtendedActivityId) && Objects.equals(((ExtendedActivityId) o).values(), values());
+        }
+
+        private List<?> values() {
+            return List.of(odId, id, microId, subPipe, subId);
+        }
+
+        @Override
+        public String toString() {
+            return "ANID:" + odId + ":" + getLocalId();
+        }
+
+        private void catenateId(StringBuilder sb, int i) {
+            if (sb.length() == 0) {
+                sb.append(i);
+                return;
+            }
+            sb.append(".");
+            sb.append(i);
+        }
+
+        public String getLocalId() {
+            StringBuilder sb = new StringBuilder();
+            catenateId(sb, odId.getId());
+            if (microId > 0) {
+                catenateId(sb, microId);
+            }
+            if (subId > 0) {
+                catenateId(sb, subPipe);
+                catenateId(sb, subId);
+            }
+            return sb.toString();
+        }
+    }
+
+    private class OperatorProfile {
+        Map<String, Pair<Double, Double>> activityTimes;
+        Map<String, Pair<Long, Long>> activityCards;
+
+        OperatorProfile() {
+            activityTimes = new HashMap<>();
+            activityCards = new HashMap<>();
+        }
+
+        void updateOperator(String extendedOpId, double time, long cardinality) {
+            updateMinMax(time, extendedOpId, activityTimes);
+            if (cardinality > 0) {
+                updateMinMax(cardinality, extendedOpId, activityCards);
+            }
+        }
+
+        void updateOperator(String extendedOpId, double time) {
+            updateMinMax(time, extendedOpId, activityTimes);
+        }
+
+        private <T extends Comparable<T>> void updateMinMax(T comp, String id, Map<String, Pair<T, T>> opMap) {
+            Pair<T, T> times = opMap.computeIfAbsent(id, i -> new Pair(comp, comp));
+            if (times.getFirst().compareTo(comp) > 0) {
+                times.setFirst(comp);
+            }
+            if (times.getSecond().compareTo(comp) < 0) {
+                times.setSecond(comp);
+            }
+        }
+    }
+
+    private ExtendedActivityId acIdFromName(String name) {
+        String[] parts = name.split(" - ");
+        return new ExtendedActivityId(parts[0]);
+    }
+
+    Map<String, OperatorProfile> processProfile(ObjectNode profile) {
+        Map<String, OperatorProfile> profiledOps = new HashMap<>();
+        for (JsonNode joblet : profile.get("joblets")) {
+            for (JsonNode task : joblet.get("tasks")) {
+                for (JsonNode counters : task.get("counters")) {
+                    OperatorProfile info = profiledOps.computeIfAbsent(counters.get("runtime-id").asText(),
+                            i -> new OperatorProfile());
+                    JsonNode card = counters.get("cardinality-out");
+                    if (card != null) {
+                        info.updateOperator(acIdFromName(counters.get("name").asText()).getLocalId(),
+                                counters.get("run-time").asDouble(), counters.get("cardinality-out").asLong(-1));
+                    }
+                    info.updateOperator(acIdFromName(counters.get("name").asText()).getLocalId(),
+                            counters.get("run-time").asDouble());
+                }
+                for (JsonNode partition : task.get("partition-send-profile")) {
+                    String id = partition.get("partition-id").get("connector-id").asText();
+                    OperatorProfile info = profiledOps.computeIfAbsent(id, i -> new OperatorProfile());
+                    //CDIDs are unique
+                    info.updateOperator("0",
+                            partition.get("close-time").asDouble() - partition.get("open-time").asDouble());
+                }
+            }
+        }
+        return profiledOps;
+    }
+
     @Override
     public final IPlanPrettyPrinter reset() throws AlgebricksException {
         flushContentToWriter();
@@ -173,6 +310,16 @@ public class LogicalOperatorPrettyPrintVisitorJson extends AbstractLogicalOperat
     public final IPlanPrettyPrinter printPlan(ILogicalPlan plan, Map<Object, String> log2phys,
             boolean printOptimizerEstimates) throws AlgebricksException {
         this.log2odid = log2phys;
+        printPlanImpl(plan, printOptimizerEstimates);
+        flushContentToWriter();
+        return this;
+    }
+
+    @Override
+    public IPlanPrettyPrinter printPlan(ILogicalPlan plan, Map<Object, String> log2phys,
+            boolean printOptimizerEstimates, ObjectNode profile) throws AlgebricksException {
+        this.log2odid = log2phys;
+        this.profile = processProfile(profile);
         printPlanImpl(plan, printOptimizerEstimates);
         flushContentToWriter();
         return this;
@@ -206,13 +353,40 @@ public class LogicalOperatorPrettyPrintVisitorJson extends AbstractLogicalOperat
     private void printOperatorImpl(AbstractLogicalOperator op, boolean printInputs, boolean printOptimizerEstimates)
             throws AlgebricksException {
         try {
-            boolean nestPlanInPlanField = nestPlanInPlanField(op, printOptimizerEstimates);
             jsonGenerator.writeStartObject();
             op.accept(this, null);
             jsonGenerator.writeStringField("operatorId", idCounter.printOperatorId(op));
             String od = log2odid.get(op);
             if (od != null) {
                 jsonGenerator.writeStringField("runtime-id", od);
+                OperatorProfile info = profile.get(od);
+                if (info != null) {
+                    if (info.activityTimes.size() == 1) {
+                        Pair<Double, Double> minMax = info.activityTimes.values().iterator().next();
+                        jsonGenerator.writeNumberField("min-time", minMax.first);
+                        jsonGenerator.writeNumberField("max-time", minMax.second);
+                        if (info.activityCards.size() > 0) {
+                            Pair<Long, Long> minMaxCard = info.activityCards.values().iterator().next();
+                            jsonGenerator.writeNumberField("min-cardinality", minMaxCard.first);
+                            jsonGenerator.writeNumberField("max-cardinality", minMaxCard.second);
+                        }
+                    } else {
+                        jsonGenerator.writeObjectFieldStart("times");
+                        for (String acId : info.activityTimes.keySet()) {
+                            jsonGenerator.writeObjectFieldStart(acId);
+                            jsonGenerator.writeNumberField("min-time", info.activityTimes.get(acId).first);
+                            jsonGenerator.writeNumberField("max-time", info.activityTimes.get(acId).second);
+                            Pair<Long, Long> cards = info.activityCards.get(acId);
+                            if (cards != null) {
+                                jsonGenerator.writeNumberField("min-cardinality", info.activityCards.get(acId).first);
+                                jsonGenerator.writeNumberField("max-cardinality", info.activityCards.get(acId).second);
+                            }
+                            jsonGenerator.writeEndObject();
+                        }
+                        jsonGenerator.writeEndObject();
+                    }
+
+                }
             }
             IPhysicalOperator pOp = op.getPhysicalOperator();
             if (pOp != null) {
@@ -227,9 +401,6 @@ public class LogicalOperatorPrettyPrintVisitorJson extends AbstractLogicalOperat
                 printInputs(op, inputs, printOptimizerEstimates);
             }
             jsonGenerator.writeEndObject();
-            if (nestPlanInPlanField) {
-                jsonGenerator.writeEndObject();
-            }
         } catch (IOException e) {
             throw AlgebricksException.create(ErrorCode.ERROR_PRINTING_PLAN, e, String.valueOf(e));
         }
@@ -249,21 +420,6 @@ public class LogicalOperatorPrettyPrintVisitorJson extends AbstractLogicalOperat
             }
         }
         jsonGenerator.writeEndArray();
-    }
-
-    private boolean nestPlanInPlanField(AbstractLogicalOperator op, boolean printOptimizerEstimates)
-            throws IOException {
-        double planCard, planCost;
-        if (op.getOperatorTag() == LogicalOperatorTag.DISTRIBUTE_RESULT && printOptimizerEstimates) {
-            planCard = getPlanCardinality(op);
-            planCost = getPlanCost(op);
-            jsonGenerator.writeStartObject();
-            jsonGenerator.writeNumberField(CARDINALITY, planCard);
-            jsonGenerator.writeNumberField(PLAN_COST, planCost);
-            jsonGenerator.writeFieldName(QUERY_PLAN);
-            return true;
-        }
-        return false;
     }
 
     private void generateCardCostFields(AbstractLogicalOperator op, boolean printOptimizerEstimates)
@@ -430,9 +586,20 @@ public class LogicalOperatorPrettyPrintVisitorJson extends AbstractLogicalOperat
     public Void visitWriteOperator(WriteOperator op, Void indent) throws AlgebricksException {
         try {
             jsonGenerator.writeStringField(OPERATOR_FIELD, "write");
-            List<Mutable<ILogicalExpression>> expressions = op.getExpressions();
-            if (!expressions.isEmpty()) {
-                writeArrayFieldOfExpressions(EXPRESSIONS_FIELD, expressions, indent);
+
+            writeStringFieldExpression("value", op.getSourceExpression(), indent);
+            writeStringFieldExpression("path", op.getPathExpression(), indent);
+
+            List<Mutable<ILogicalExpression>> partitionExpressions = op.getPartitionExpressions();
+            if (!partitionExpressions.isEmpty()) {
+                writeObjectFieldWithExpressions("partition-by", partitionExpressions, indent);
+
+                List<Pair<OrderOperator.IOrder, Mutable<ILogicalExpression>>> orderExpressions =
+                        op.getOrderExpressions();
+                if (!orderExpressions.isEmpty()) {
+                    writeArrayFieldOfOrderExprList("order-by", orderExpressions, indent);
+                }
+
             }
             return null;
         } catch (IOException e) {
@@ -448,19 +615,6 @@ public class LogicalOperatorPrettyPrintVisitorJson extends AbstractLogicalOperat
             if (!expressions.isEmpty()) {
                 writeArrayFieldOfExpressions(EXPRESSIONS_FIELD, expressions, indent);
             }
-            return null;
-        } catch (IOException e) {
-            throw AlgebricksException.create(ErrorCode.ERROR_PRINTING_PLAN, e, String.valueOf(e));
-        }
-    }
-
-    @Override
-    public Void visitWriteResultOperator(WriteResultOperator op, Void indent) throws AlgebricksException {
-        try {
-            jsonGenerator.writeStringField(OPERATOR_FIELD, "load");
-            jsonGenerator.writeStringField("data-source", String.valueOf(op.getDataSource()));
-            writeStringFieldExpression("from", op.getPayloadExpression(), indent);
-            writeObjectFieldWithExpressions("partitioned-by", op.getKeyExpressions(), indent);
             return null;
         } catch (IOException e) {
             throw AlgebricksException.create(ErrorCode.ERROR_PRINTING_PLAN, e, String.valueOf(e));
@@ -566,6 +720,7 @@ public class LogicalOperatorPrettyPrintVisitorJson extends AbstractLogicalOperat
         try {
             writeUnnestMapOperator(op, indent, "unnest-map", null);
             writeSelectLimitInformation(op.getSelectCondition(), op.getOutputLimit(), indent);
+            op.getProjectionFiltrationInfo().print(jsonGenerator);
             return null;
         } catch (IOException e) {
             throw AlgebricksException.create(ErrorCode.ERROR_PRINTING_PLAN, e, String.valueOf(e));
@@ -574,8 +729,13 @@ public class LogicalOperatorPrettyPrintVisitorJson extends AbstractLogicalOperat
 
     @Override
     public Void visitLeftOuterUnnestMapOperator(LeftOuterUnnestMapOperator op, Void indent) throws AlgebricksException {
-        writeUnnestMapOperator(op, indent, "left-outer-unnest-map", op.getMissingValue());
-        return null;
+        try {
+            writeUnnestMapOperator(op, indent, "left-outer-unnest-map", op.getMissingValue());
+            op.getProjectionFiltrationInfo().print(jsonGenerator);
+            return null;
+        } catch (IOException e) {
+            throw AlgebricksException.create(ErrorCode.ERROR_PRINTING_PLAN, e, String.valueOf(e));
+        }
     }
 
     @Override
@@ -595,7 +755,7 @@ public class LogicalOperatorPrettyPrintVisitorJson extends AbstractLogicalOperat
             }
             writeFilterInformation(op.getMinFilterVars(), op.getMaxFilterVars());
             writeSelectLimitInformation(op.getSelectCondition(), op.getOutputLimit(), indent);
-            writeProjectInformation(op.getProjectionInfo());
+            op.getProjectionFiltrationInfo().print(jsonGenerator);
             return null;
         } catch (IOException e) {
             throw AlgebricksException.create(ErrorCode.ERROR_PRINTING_PLAN, e, String.valueOf(e));
@@ -924,13 +1084,6 @@ public class LogicalOperatorPrettyPrintVisitorJson extends AbstractLogicalOperat
         }
     }
 
-    private void writeProjectInformation(IProjectionInfo<?> projectionInfo) throws IOException {
-        final String projectedFields = projectionInfo == null ? "" : projectionInfo.toString();
-        if (!projectedFields.isEmpty()) {
-            jsonGenerator.writeStringField("project", projectedFields);
-        }
-    }
-
     private void writeVariablesAndExpressions(List<LogicalVariable> variables,
             List<Mutable<ILogicalExpression>> expressions, Void indent) throws IOException, AlgebricksException {
         if (!variables.isEmpty()) {
@@ -942,8 +1095,9 @@ public class LogicalOperatorPrettyPrintVisitorJson extends AbstractLogicalOperat
     }
 
     private void writeBuildSide(AbstractBinaryJoinOperator op) throws IOException {
-        int buildInputIndex = printInputsInReverse(op) ? 0 : 1;
-        jsonGenerator.writeNumberField("build-side", buildInputIndex);
+        if (isHashJoin(op)) {
+            jsonGenerator.writeNumberField("build-side", 0);
+        }
     }
 
     private static boolean printInputsInReverse(AbstractLogicalOperator op) {

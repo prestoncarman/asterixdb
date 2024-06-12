@@ -20,26 +20,28 @@ package org.apache.asterix.optimizer.rules.pushdown.schema;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
 
 import org.apache.hyracks.api.exceptions.SourceLocation;
 
 public class ObjectExpectedSchemaNode extends AbstractComplexExpectedSchemaNode {
     private final Map<String, IExpectedSchemaNode> children;
 
-    ObjectExpectedSchemaNode(AbstractComplexExpectedSchemaNode parent, SourceLocation sourceLocation,
+    public ObjectExpectedSchemaNode(AbstractComplexExpectedSchemaNode parent, SourceLocation sourceLocation,
             String functionName) {
         super(parent, sourceLocation, functionName);
         children = new HashMap<>();
     }
 
-    public Set<Map.Entry<String, IExpectedSchemaNode>> getChildren() {
-        return children.entrySet();
+    public boolean isRoot() {
+        return false;
     }
 
-    public IExpectedSchemaNode addChild(String fieldName, IExpectedSchemaNode child) {
+    public Map<String, IExpectedSchemaNode> getChildren() {
+        return children;
+    }
+
+    public void addChild(String fieldName, IExpectedSchemaNode child) {
         children.put(fieldName, child);
-        return child;
     }
 
     @Override
@@ -53,10 +55,25 @@ public class ObjectExpectedSchemaNode extends AbstractComplexExpectedSchemaNode 
     }
 
     @Override
-    public void replaceChild(IExpectedSchemaNode oldNode, IExpectedSchemaNode newNode) {
+    public IExpectedSchemaNode replaceChild(IExpectedSchemaNode oldNode, IExpectedSchemaNode newNode) {
+        String fieldName = getChildFieldName(oldNode);
+        IExpectedSchemaNode child = children.get(fieldName);
+        if (child.getType() == newNode.getType()) {
+            // We are trying to replace with the same node type
+            return child;
+        } else if (isChildReplaceable(child, newNode)) {
+            children.replace(fieldName, newNode);
+            return newNode;
+        }
+
+        // This should never happen, but safeguard against unexpected behavior
+        throw new IllegalStateException("Cannot replace " + child.getType() + " with " + newNode.getType());
+    }
+
+    public String getChildFieldName(IExpectedSchemaNode requestedChild) {
         String key = null;
         for (Map.Entry<String, IExpectedSchemaNode> child : children.entrySet()) {
-            if (child.getValue() == oldNode) {
+            if (child.getValue() == requestedChild) {
                 key = child.getKey();
                 break;
             }
@@ -64,8 +81,8 @@ public class ObjectExpectedSchemaNode extends AbstractComplexExpectedSchemaNode 
 
         if (key == null) {
             //this should not happen
-            throw new IllegalStateException("Node " + oldNode.getType() + " is not a child");
+            throw new IllegalStateException("Node " + requestedChild.getType() + " is not a child");
         }
-        children.replace(key, newNode);
+        return key;
     }
 }

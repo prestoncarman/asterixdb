@@ -19,8 +19,11 @@
 package org.apache.asterix.external.util.google.gcs;
 
 import static org.apache.asterix.common.exceptions.ErrorCode.EXTERNAL_SOURCE_ERROR;
+import static org.apache.asterix.common.exceptions.ErrorCode.INVALID_PARAM_VALUE_ALLOWED_VALUE;
+import static org.apache.asterix.common.exceptions.ErrorCode.PARAM_NOT_ALLOWED_IF_PARAM_IS_PRESENT;
 import static org.apache.asterix.external.util.ExternalDataUtils.getPrefix;
 import static org.apache.asterix.external.util.ExternalDataUtils.validateIncludeExclude;
+import static org.apache.asterix.external.util.google.gcs.GCSConstants.APPLICATION_DEFAULT_CREDENTIALS_FIELD_NAME;
 import static org.apache.asterix.external.util.google.gcs.GCSConstants.ENDPOINT_FIELD_NAME;
 import static org.apache.asterix.external.util.google.gcs.GCSConstants.HADOOP_AUTH_SERVICE_ACCOUNT_JSON_KEY_FILE;
 import static org.apache.asterix.external.util.google.gcs.GCSConstants.HADOOP_AUTH_SERVICE_ACCOUNT_JSON_KEY_FILE_PATH;
@@ -43,18 +46,23 @@ import java.util.regex.Matcher;
 
 import org.apache.asterix.common.exceptions.CompilationException;
 import org.apache.asterix.common.exceptions.ErrorCode;
+import org.apache.asterix.common.external.IExternalFilterEvaluator;
 import org.apache.asterix.external.input.record.reader.abstracts.AbstractExternalInputStreamFactory.IncludeExcludeMatcher;
 import org.apache.asterix.external.util.ExternalDataConstants;
+import org.apache.asterix.external.util.ExternalDataPrefix;
 import org.apache.asterix.external.util.ExternalDataUtils;
 import org.apache.asterix.external.util.HDFSUtils;
 import org.apache.hadoop.mapred.JobConf;
+import org.apache.hyracks.algebricks.common.exceptions.AlgebricksException;
+import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.api.exceptions.IWarningCollector;
 import org.apache.hyracks.api.exceptions.SourceLocation;
 import org.apache.hyracks.api.exceptions.Warning;
 
 import com.google.api.gax.paging.Page;
-import com.google.auth.oauth2.ServiceAccountCredentials;
+import com.google.auth.oauth2.GoogleCredentials;
 import com.google.cloud.BaseServiceException;
+import com.google.cloud.NoCredentials;
 import com.google.cloud.storage.Blob;
 import com.google.cloud.storage.Storage;
 import com.google.cloud.storage.StorageOptions;
@@ -73,18 +81,39 @@ public class GCSUtils {
      * @throws CompilationException CompilationException
      */
     public static Storage buildClient(Map<String, String> configuration) throws CompilationException {
+        String applicationDefaultCredentials = configuration.get(APPLICATION_DEFAULT_CREDENTIALS_FIELD_NAME);
         String jsonCredentials = configuration.get(JSON_CREDENTIALS_FIELD_NAME);
         String endpoint = configuration.get(ENDPOINT_FIELD_NAME);
 
         StorageOptions.Builder builder = StorageOptions.newBuilder();
 
-        // Use credentials if available
-        if (jsonCredentials != null) {
-            try (InputStream credentialsStream = new ByteArrayInputStream(jsonCredentials.getBytes())) {
-                builder.setCredentials(ServiceAccountCredentials.fromStream(credentialsStream));
-            } catch (IOException ex) {
-                throw new CompilationException(EXTERNAL_SOURCE_ERROR, getMessageOrToString(ex));
+        // default credentials provider
+        if (applicationDefaultCredentials != null) {
+            // only "true" value is allowed
+            if (!applicationDefaultCredentials.equalsIgnoreCase("true")) {
+                throw new CompilationException(INVALID_PARAM_VALUE_ALLOWED_VALUE,
+                        APPLICATION_DEFAULT_CREDENTIALS_FIELD_NAME, "true");
             }
+
+            // no other authentication parameters are allowed
+            if (jsonCredentials != null) {
+                throw new CompilationException(PARAM_NOT_ALLOWED_IF_PARAM_IS_PRESENT, JSON_CREDENTIALS_FIELD_NAME,
+                        APPLICATION_DEFAULT_CREDENTIALS_FIELD_NAME);
+            }
+
+            try {
+                builder.setCredentials(GoogleCredentials.getApplicationDefault());
+            } catch (IOException ex) {
+                throw CompilationException.create(EXTERNAL_SOURCE_ERROR, ex, getMessageOrToString(ex));
+            }
+        } else if (jsonCredentials != null) {
+            try (InputStream credentialsStream = new ByteArrayInputStream(jsonCredentials.getBytes())) {
+                builder.setCredentials(GoogleCredentials.fromStream(credentialsStream));
+            } catch (IOException ex) {
+                throw new CompilationException(EXTERNAL_SOURCE_ERROR, ex, getMessageOrToString(ex));
+            }
+        } else {
+            builder.setCredentials(NoCredentials.getInstance());
         }
 
         if (endpoint != null) {
@@ -109,6 +138,13 @@ public class GCSUtils {
         }
 
         validateIncludeExclude(configuration);
+        try {
+            // TODO(htowaileb): maybe something better, this will check to ensure type is supported before creation
+            new ExternalDataPrefix(configuration);
+        } catch (AlgebricksException ex) {
+            throw new CompilationException(ErrorCode.FAILED_TO_CALCULATE_COMPUTED_FIELDS, ex);
+        }
+
         String container = configuration.get(ExternalDataConstants.CONTAINER_NAME_FIELD_NAME);
 
         try {
@@ -124,12 +160,13 @@ public class GCSUtils {
         } catch (CompilationException ex) {
             throw ex;
         } catch (Exception ex) {
-            throw new CompilationException(ErrorCode.EXTERNAL_SOURCE_ERROR, getMessageOrToString(ex));
+            throw new CompilationException(ErrorCode.EXTERNAL_SOURCE_ERROR, ex, getMessageOrToString(ex));
         }
     }
 
     public static List<Blob> listItems(Map<String, String> configuration, IncludeExcludeMatcher includeExcludeMatcher,
-            IWarningCollector warningCollector) throws CompilationException {
+            IWarningCollector warningCollector, ExternalDataPrefix externalDataPrefix,
+            IExternalFilterEvaluator evaluator) throws CompilationException, HyracksDataException {
         // Prepare to retrieve the objects
         List<Blob> filesOnly = new ArrayList<>();
         String container = configuration.get(ExternalDataConstants.CONTAINER_NAME_FIELD_NAME);
@@ -140,12 +177,12 @@ public class GCSUtils {
         try {
             items = gcs.list(container, options);
         } catch (BaseServiceException ex) {
-            throw new CompilationException(ErrorCode.EXTERNAL_SOURCE_ERROR, getMessageOrToString(ex));
+            throw new CompilationException(ErrorCode.EXTERNAL_SOURCE_ERROR, ex, getMessageOrToString(ex));
         }
 
         // Collect the paths to files only
         collectAndFilterFiles(items, includeExcludeMatcher.getPredicate(), includeExcludeMatcher.getMatchersList(),
-                filesOnly);
+                filesOnly, externalDataPrefix, evaluator, warningCollector);
 
         // Warn if no files are returned
         if (filesOnly.isEmpty() && warningCollector.shouldWarn()) {
@@ -162,15 +199,11 @@ public class GCSUtils {
      * @param items List of returned objects
      */
     private static void collectAndFilterFiles(Page<Blob> items, BiPredicate<List<Matcher>, String> predicate,
-            List<Matcher> matchers, List<Blob> filesOnly) {
+            List<Matcher> matchers, List<Blob> filesOnly, ExternalDataPrefix externalDataPrefix,
+            IExternalFilterEvaluator evaluator, IWarningCollector warningCollector) throws HyracksDataException {
         for (Blob item : items.iterateAll()) {
-            // skip folders
-            if (item.getName().endsWith("/")) {
-                continue;
-            }
-
-            // No filter, add file
-            if (predicate.test(matchers, item.getName())) {
+            if (ExternalDataUtils.evaluate(item.getName(), predicate, matchers, externalDataPrefix, evaluator,
+                    warningCollector)) {
                 filesOnly.add(item);
             }
         }

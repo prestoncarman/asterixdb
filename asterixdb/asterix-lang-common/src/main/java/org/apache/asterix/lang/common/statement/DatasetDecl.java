@@ -20,9 +20,11 @@ package org.apache.asterix.lang.common.statement;
 
 import java.util.Map;
 
+import org.apache.asterix.common.config.DatasetConfig;
 import org.apache.asterix.common.config.DatasetConfig.DatasetType;
 import org.apache.asterix.common.exceptions.CompilationException;
 import org.apache.asterix.common.metadata.DataverseName;
+import org.apache.asterix.common.metadata.Namespace;
 import org.apache.asterix.lang.common.base.AbstractStatement;
 import org.apache.asterix.lang.common.base.Statement;
 import org.apache.asterix.lang.common.expression.RecordConstructor;
@@ -31,25 +33,35 @@ import org.apache.asterix.lang.common.struct.Identifier;
 import org.apache.asterix.lang.common.util.ConfigurationUtil;
 import org.apache.asterix.lang.common.util.DatasetDeclParametersUtil;
 import org.apache.asterix.lang.common.visitor.base.ILangVisitor;
+import org.apache.asterix.metadata.dataset.DatasetFormatInfo;
 import org.apache.asterix.object.base.AdmObjectNode;
 import org.apache.asterix.object.base.IAdmNode;
 import org.apache.asterix.runtime.compression.CompressionManager;
+import org.apache.hyracks.util.StorageUtil;
 
 public class DatasetDecl extends AbstractStatement {
+
     protected final Identifier name;
-    protected final DataverseName dataverse;
+    protected final Namespace namespace;
     protected final TypeExpression itemType;
     protected final TypeExpression metaItemType;
     protected final DatasetType datasetType;
     protected final IDatasetDetailsDecl datasetDetailsDecl;
     protected final Map<String, String> hints;
-    private AdmObjectNode withObjectNode;
+    private final AdmObjectNode withObjectNode;
     protected final boolean ifNotExists;
+    protected final Query query;
 
-    public DatasetDecl(DataverseName dataverse, Identifier name, TypeExpression itemType, TypeExpression metaItemType,
+    public DatasetDecl(Namespace namespace, Identifier name, TypeExpression itemType, TypeExpression metaItemType,
             Map<String, String> hints, DatasetType datasetType, IDatasetDetailsDecl idd, RecordConstructor withRecord,
             boolean ifNotExists) throws CompilationException {
-        this.dataverse = dataverse;
+        this(namespace, name, itemType, metaItemType, hints, datasetType, idd, withRecord, ifNotExists, null);
+    }
+
+    public DatasetDecl(Namespace namespace, Identifier name, TypeExpression itemType, TypeExpression metaItemType,
+            Map<String, String> hints, DatasetType datasetType, IDatasetDetailsDecl idd, RecordConstructor withRecord,
+            boolean ifNotExists, Query query) throws CompilationException {
+        this.namespace = namespace;
         this.name = name;
         this.itemType = itemType;
         this.metaItemType = metaItemType;
@@ -58,6 +70,7 @@ public class DatasetDecl extends AbstractStatement {
         this.ifNotExists = ifNotExists;
         this.datasetType = datasetType;
         this.datasetDetailsDecl = idd;
+        this.query = query;
     }
 
     public boolean getIfNotExists() {
@@ -72,8 +85,12 @@ public class DatasetDecl extends AbstractStatement {
         return name;
     }
 
+    public Namespace getNamespace() {
+        return namespace;
+    }
+
     public DataverseName getDataverse() {
-        return dataverse;
+        return namespace == null ? null : namespace.getDataverseName();
     }
 
     public TypeExpression getItemType() {
@@ -82,6 +99,10 @@ public class DatasetDecl extends AbstractStatement {
 
     public TypeExpression getMetaItemType() {
         return metaItemType;
+    }
+
+    public Query getQuery() {
+        return query;
     }
 
     public String getNodegroupName() {
@@ -130,6 +151,34 @@ public class DatasetDecl extends AbstractStatement {
         }
         return storageBlockCompression
                 .getOptionalString(DatasetDeclParametersUtil.STORAGE_BLOCK_COMPRESSION_SCHEME_PARAMETER_NAME);
+    }
+
+    public DatasetFormatInfo getDatasetFormatInfo(String defaultFormat, int defaultMaxTupleCount,
+            double defaultFreeSpaceTolerance, int defaultMaxLeafNodeSize) throws CompilationException {
+        if (datasetType != DatasetType.INTERNAL) {
+            return DatasetFormatInfo.SYSTEM_DEFAULT;
+        }
+
+        AdmObjectNode datasetFormatNode = (AdmObjectNode) withObjectNode
+                .getOrDefault(DatasetDeclParametersUtil.DATASET_FORMAT_PARAMETER_NAME, AdmObjectNode.EMPTY);
+        DatasetConfig.DatasetFormat datasetFormat = DatasetConfig.DatasetFormat.getFormat(datasetFormatNode
+                .getOptionalString(DatasetDeclParametersUtil.DATASET_FORMAT_FORMAT_PARAMETER_NAME, defaultFormat));
+
+        if (datasetFormat == DatasetConfig.DatasetFormat.ROW) {
+            return DatasetFormatInfo.SYSTEM_DEFAULT;
+        }
+
+        int maxTupleCount = datasetFormatNode.getOptionalInt(
+                DatasetDeclParametersUtil.DATASET_FORMAT_MAX_TUPLE_COUNT_PARAMETER_NAME, defaultMaxTupleCount);
+        double freeSpaceTolerance = datasetFormatNode.getOptionalDouble(
+                DatasetDeclParametersUtil.DATASET_FORMAT_FREE_SPACE_TOLERANCE_PARAMETER_NAME,
+                defaultFreeSpaceTolerance);
+        String maxLeafNodeSizeString =
+                datasetFormatNode.getOptionalString(DatasetDeclParametersUtil.DATASET_FORMAT_FREE_MAX_LEAF_NODE_SIZE);
+        int maxLeafNodeSize = maxLeafNodeSizeString == null ? defaultMaxLeafNodeSize
+                : (int) StorageUtil.getByteValue(maxLeafNodeSizeString);
+
+        return new DatasetFormatInfo(datasetFormat, maxTupleCount, freeSpaceTolerance, maxLeafNodeSize);
     }
 
     public Map<String, String> getHints() {

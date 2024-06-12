@@ -95,7 +95,7 @@ public class TestLsmBtree extends LSMBTree {
                 diskBufferCache, fileManager, componentFactory, bulkLoadComponentFactory, filterHelper,
                 filterFrameFactory, filterManager, bloomFilterFalsePositiveRate, fieldCount, cmpFactories, mergePolicy,
                 opTracker, ioScheduler, ioOperationCallbackFactory, pageWriteCallbackFactory, needKeyDupCheck,
-                hasBloomFilter, btreeFields, filterFields, durable, updateAware, tracer);
+                hasBloomFilter, btreeFields, filterFields, durable, updateAware, tracer, false);
         addModifyCallback(AllowTestOpCallback.INSTANCE);
         addSearchCallback(AllowTestOpCallback.INSTANCE);
         addFlushCallback(AllowTestOpCallback.INSTANCE);
@@ -183,20 +183,20 @@ public class TestLsmBtree extends LSMBTree {
         }
     }
 
-    public void allowModify(int permits) {
-        modifySemaphore.release(permits);
+    public void allowModify(int numOfPermits) {
+        modifySemaphore.release(numOfPermits);
     }
 
-    public void allowSearch(int permits) {
-        searchSemaphore.release(permits);
+    public void allowSearch(int numOfPermits) {
+        searchSemaphore.release(numOfPermits);
     }
 
-    public void allowFlush(int permits) {
-        flushSemaphore.release(permits);
+    public void allowFlush(int numOfPermits) {
+        flushSemaphore.release(numOfPermits);
     }
 
-    public void allowMerge(int permits) {
-        mergeSemaphore.release(permits);
+    public void allowMerge(int numOfPermits) {
+        mergeSemaphore.release(numOfPermits);
     }
 
     @Override

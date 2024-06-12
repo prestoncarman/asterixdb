@@ -27,10 +27,9 @@ import java.util.Calendar;
 
 import org.apache.asterix.common.functions.ExternalFunctionLanguage;
 import org.apache.asterix.common.metadata.DataverseName;
-import org.apache.asterix.metadata.bootstrap.MetadataPrimaryIndexes;
-import org.apache.asterix.metadata.bootstrap.MetadataRecordTypes;
+import org.apache.asterix.common.metadata.MetadataUtil;
+import org.apache.asterix.metadata.bootstrap.LibraryEntity;
 import org.apache.asterix.metadata.entities.Library;
-import org.apache.asterix.metadata.utils.MetadataUtil;
 import org.apache.asterix.om.base.AInt32;
 import org.apache.asterix.om.base.ARecord;
 import org.apache.asterix.om.base.AString;
@@ -44,22 +43,26 @@ import org.apache.hyracks.dataflow.common.data.accessors.ITupleReference;
  */
 public class LibraryTupleTranslator extends AbstractTupleTranslator<Library> {
 
-    // Payload field containing serialized Library.
-    private static final int LIBRARY_PAYLOAD_TUPLE_FIELD_INDEX = 2;
+    private final LibraryEntity libraryEntity;
 
-    protected LibraryTupleTranslator(boolean getTuple) {
-        super(getTuple, MetadataPrimaryIndexes.LIBRARY_DATASET, LIBRARY_PAYLOAD_TUPLE_FIELD_INDEX);
+    protected LibraryTupleTranslator(boolean getTuple, LibraryEntity libraryEntity) {
+        super(getTuple, libraryEntity.getIndex(), libraryEntity.payloadPosition());
+        this.libraryEntity = libraryEntity;
     }
 
     @Override
     protected Library createMetadataEntityFromARecord(ARecord libraryRecord) throws AlgebricksException {
         String dataverseCanonicalName =
-                ((AString) libraryRecord.getValueByPos(MetadataRecordTypes.LIBRARY_ARECORD_DATAVERSENAME_FIELD_INDEX))
-                        .getStringValue();
+                ((AString) libraryRecord.getValueByPos(libraryEntity.dataverseNameIndex())).getStringValue();
         DataverseName dataverseName = DataverseName.createFromCanonicalForm(dataverseCanonicalName);
-        String libraryName =
-                ((AString) libraryRecord.getValueByPos(MetadataRecordTypes.LIBRARY_ARECORD_NAME_FIELD_INDEX))
-                        .getStringValue();
+        int databaseNameIndex = libraryEntity.databaseNameIndex();
+        String databaseName;
+        if (databaseNameIndex >= 0) {
+            databaseName = ((AString) libraryRecord.getValueByPos(databaseNameIndex)).getStringValue();
+        } else {
+            databaseName = MetadataUtil.databaseFor(dataverseName);
+        }
+        String libraryName = ((AString) libraryRecord.getValueByPos(libraryEntity.libraryNameIndex())).getStringValue();
 
         ARecordType libraryRecordType = libraryRecord.getType();
         int pendingOpIdx = libraryRecordType.getFieldIndex(FIELD_NAME_PENDING_OP);
@@ -73,7 +76,7 @@ public class LibraryTupleTranslator extends AbstractTupleTranslator<Library> {
         int hashIdx = libraryRecordType.getFieldIndex(FIELD_NAME_HASH);
         String hash = hashIdx >= 0 ? ((AString) libraryRecord.getValueByPos(hashIdx)).getStringValue() : null;
 
-        return new Library(dataverseName, libraryName, language, hash, pendingOp);
+        return new Library(databaseName, dataverseName, libraryName, language, hash, pendingOp);
     }
 
     @Override
@@ -82,6 +85,11 @@ public class LibraryTupleTranslator extends AbstractTupleTranslator<Library> {
 
         // write the key in the first 2 fields of the tuple
         tupleBuilder.reset();
+        if (libraryEntity.databaseNameIndex() >= 0) {
+            aString.setValue(library.getDatabaseName());
+            stringSerde.serialize(aString, tupleBuilder.getDataOutput());
+            tupleBuilder.addFieldEndOffset();
+        }
         aString.setValue(dataverseCanonicalName);
         stringSerde.serialize(aString, tupleBuilder.getDataOutput());
         tupleBuilder.addFieldEndOffset();
@@ -90,26 +98,32 @@ public class LibraryTupleTranslator extends AbstractTupleTranslator<Library> {
         tupleBuilder.addFieldEndOffset();
 
         // write the pay-load in the third field of the tuple
+        recordBuilder.reset(libraryEntity.getRecordType());
 
-        recordBuilder.reset(MetadataRecordTypes.LIBRARY_RECORDTYPE);
+        if (libraryEntity.databaseNameIndex() >= 0) {
+            fieldValue.reset();
+            aString.setValue(library.getDatabaseName());
+            stringSerde.serialize(aString, fieldValue.getDataOutput());
+            recordBuilder.addField(libraryEntity.databaseNameIndex(), fieldValue);
+        }
 
         // write field 0
         fieldValue.reset();
         aString.setValue(dataverseCanonicalName);
         stringSerde.serialize(aString, fieldValue.getDataOutput());
-        recordBuilder.addField(MetadataRecordTypes.LIBRARY_ARECORD_DATAVERSENAME_FIELD_INDEX, fieldValue);
+        recordBuilder.addField(libraryEntity.dataverseNameIndex(), fieldValue);
 
         // write field 1
         fieldValue.reset();
         aString.setValue(library.getName());
         stringSerde.serialize(aString, fieldValue.getDataOutput());
-        recordBuilder.addField(MetadataRecordTypes.LIBRARY_ARECORD_NAME_FIELD_INDEX, fieldValue);
+        recordBuilder.addField(libraryEntity.libraryNameIndex(), fieldValue);
 
         // write field 2
         fieldValue.reset();
         aString.setValue(Calendar.getInstance().getTime().toString());
         stringSerde.serialize(aString, fieldValue.getDataOutput());
-        recordBuilder.addField(MetadataRecordTypes.LIBRARY_ARECORD_TIMESTAMP_FIELD_INDEX, fieldValue);
+        recordBuilder.addField(libraryEntity.timestampIndex(), fieldValue);
 
         writeOpenFields(library);
 

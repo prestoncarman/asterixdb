@@ -20,6 +20,7 @@
 package org.apache.asterix.metadata.entities;
 
 import java.util.List;
+import java.util.Objects;
 
 import org.apache.asterix.active.EntityId;
 import org.apache.asterix.common.functions.FunctionSignature;
@@ -33,20 +34,22 @@ import org.apache.asterix.metadata.api.IMetadataEntity;
  */
 public class FeedConnection implements IMetadataEntity<FeedConnection> {
 
-    private static final long serialVersionUID = 2L;
+    private static final long serialVersionUID = 3L;
 
-    private EntityId feedId;
-    private String connectionId;
-    private DataverseName dataverseName;
-    private String feedName;
-    private String datasetName;
-    private String policyName;
-    private String whereClauseBody;
-    private String outputType;
-    private List<FunctionSignature> appliedFunctions;
+    private final EntityId feedId;
+    private final String connectionId;
+    private final String databaseName;
+    private final DataverseName dataverseName;
+    private final String feedName;
+    private final String datasetName;
+    private final String policyName;
+    private final String whereClauseBody;
+    private final String outputType;
+    private final List<FunctionSignature> appliedFunctions;
 
-    public FeedConnection(DataverseName dataverseName, String feedName, String datasetName,
+    public FeedConnection(String databaseName, DataverseName dataverseName, String feedName, String datasetName,
             List<FunctionSignature> appliedFunctions, String policyName, String whereClauseBody, String outputType) {
+        this.databaseName = Objects.requireNonNull(databaseName);
         this.dataverseName = dataverseName;
         this.feedName = feedName;
         this.datasetName = datasetName;
@@ -55,7 +58,7 @@ public class FeedConnection implements IMetadataEntity<FeedConnection> {
         this.policyName = policyName;
         this.whereClauseBody = whereClauseBody == null ? "" : whereClauseBody;
         this.outputType = outputType;
-        this.feedId = new EntityId(FeedUtils.FEED_EXTENSION_NAME, dataverseName, feedName);
+        this.feedId = new EntityId(FeedUtils.FEED_EXTENSION_NAME, databaseName, dataverseName, feedName);
     }
 
     public List<FunctionSignature> getAppliedFunctions() {
@@ -86,6 +89,10 @@ public class FeedConnection implements IMetadataEntity<FeedConnection> {
     @Override
     public FeedConnection dropFromCache(MetadataCache cache) {
         return null;
+    }
+
+    public String getDatabaseName() {
+        return databaseName;
     }
 
     public DataverseName getDataverseName() {

@@ -45,6 +45,7 @@ import org.apache.asterix.lang.common.expression.QuantifiedExpression;
 import org.apache.asterix.lang.common.expression.RecordConstructor;
 import org.apache.asterix.lang.common.expression.UnaryExpr;
 import org.apache.asterix.lang.common.expression.VariableExpr;
+import org.apache.asterix.lang.common.statement.CopyToStatement;
 import org.apache.asterix.lang.common.statement.FunctionDecl;
 import org.apache.asterix.lang.common.statement.InsertStatement;
 import org.apache.asterix.lang.common.statement.Query;
@@ -355,6 +356,16 @@ public class AbstractSqlppSimpleExpressionVisitor
                 field.first = visit(field.first, arg);
             }
         }
+    }
+
+    @Override
+    public Expression visit(CopyToStatement stmtCopy, ILangExpression arg) throws CompilationException {
+        stmtCopy.setBody(stmtCopy.getBody().accept(this, arg));
+        stmtCopy.setPathExpressions(visit(stmtCopy.getPathExpressions(), arg));
+        stmtCopy.setPartitionExpressions(visit(stmtCopy.getPartitionExpressions(), arg));
+        stmtCopy.setOrderByList(visit(stmtCopy.getOrderByList(), arg));
+        stmtCopy.setKeyExpressions(visit(stmtCopy.getKeyExpressions(), arg));
+        return null;
     }
 
     @Override

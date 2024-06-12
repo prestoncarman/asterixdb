@@ -34,6 +34,7 @@ import org.apache.asterix.common.exceptions.CompilationException;
 import org.apache.asterix.common.exceptions.ErrorCode;
 import org.apache.asterix.common.functions.FunctionSignature;
 import org.apache.asterix.common.metadata.DataverseName;
+import org.apache.asterix.common.metadata.MetadataConstants;
 import org.apache.asterix.lang.common.base.Expression;
 import org.apache.asterix.lang.common.base.Literal;
 import org.apache.asterix.lang.common.clause.LetClause;
@@ -69,7 +70,10 @@ import org.apache.asterix.lang.common.statement.AnalyzeDropStatement;
 import org.apache.asterix.lang.common.statement.AnalyzeStatement;
 import org.apache.asterix.lang.common.statement.CompactStatement;
 import org.apache.asterix.lang.common.statement.ConnectFeedStatement;
+import org.apache.asterix.lang.common.statement.CopyFromStatement;
+import org.apache.asterix.lang.common.statement.CopyToStatement;
 import org.apache.asterix.lang.common.statement.CreateAdapterStatement;
+import org.apache.asterix.lang.common.statement.CreateDatabaseStatement;
 import org.apache.asterix.lang.common.statement.CreateDataverseStatement;
 import org.apache.asterix.lang.common.statement.CreateFeedPolicyStatement;
 import org.apache.asterix.lang.common.statement.CreateFeedStatement;
@@ -80,6 +84,7 @@ import org.apache.asterix.lang.common.statement.CreateIndexStatement;
 import org.apache.asterix.lang.common.statement.CreateLibraryStatement;
 import org.apache.asterix.lang.common.statement.CreateSynonymStatement;
 import org.apache.asterix.lang.common.statement.CreateViewStatement;
+import org.apache.asterix.lang.common.statement.DatabaseDropStatement;
 import org.apache.asterix.lang.common.statement.DatasetDecl;
 import org.apache.asterix.lang.common.statement.DataverseDecl;
 import org.apache.asterix.lang.common.statement.DataverseDropStatement;
@@ -110,13 +115,11 @@ import org.apache.asterix.lang.common.statement.TypeDropStatement;
 import org.apache.asterix.lang.common.statement.UpdateStatement;
 import org.apache.asterix.lang.common.statement.ViewDecl;
 import org.apache.asterix.lang.common.statement.ViewDropStatement;
-import org.apache.asterix.lang.common.statement.WriteStatement;
 import org.apache.asterix.lang.common.struct.Identifier;
 import org.apache.asterix.lang.common.struct.OperatorType;
 import org.apache.asterix.lang.common.struct.QuantifiedPair;
 import org.apache.asterix.lang.common.struct.UnaryExprType;
 import org.apache.asterix.lang.common.visitor.base.ILangVisitor;
-import org.apache.asterix.metadata.utils.MetadataConstants;
 import org.apache.hyracks.algebricks.common.utils.Pair;
 import org.apache.hyracks.algebricks.core.algebra.expressions.IExpressionAnnotation;
 
@@ -406,7 +409,8 @@ public abstract class FormatPrintVisitor implements ILangVisitor<Void, Integer> 
     @Override
     public Void visit(TypeReferenceExpression t, Integer arg) throws CompilationException {
         if (t.getIdent().first != null && t.getIdent().first != null) {
-            out.print(generateDataverseName(t.getIdent().first));
+            //TODO(DB): include database
+            out.print(generateDataverseName(t.getIdent().first.getDataverseName()));
             out.print('.');
         }
         out.print(normalize(t.getIdent().second.getValue()));
@@ -510,16 +514,6 @@ public abstract class FormatPrintVisitor implements ILangVisitor<Void, Integer> 
     }
 
     @Override
-    public Void visit(WriteStatement ws, Integer step) throws CompilationException {
-        out.print(skip(step) + "write output to " + ws.getNcName() + ":" + revertStringToQuoted(ws.getFileName()));
-        if (ws.getWriterClassName() != null) {
-            out.print(" using " + ws.getWriterClassName());
-        }
-        out.println();
-        return null;
-    }
-
-    @Override
     public Void visit(SetStatement ss, Integer step) throws CompilationException {
         out.println(skip(step) + "set " + revertStringToQuoted(ss.getPropName()) + " "
                 + revertStringToQuoted(ss.getPropValue()) + ";\n");
@@ -553,6 +547,87 @@ public abstract class FormatPrintVisitor implements ILangVisitor<Void, Integer> 
         out.println(stmtLoad.dataIsAlreadySorted() ? " pre-sorted" + SEMICOLON : SEMICOLON);
         out.println();
         return null;
+    }
+
+    @Override
+    public Void visit(CopyFromStatement stmtCopy, Integer step) throws CompilationException {
+        out.print(skip(step) + "copy " + datasetSymbol
+                + generateFullName(stmtCopy.getDataverseName(), stmtCopy.getDatasetName()) + " from "
+                + revertStringToQuoted(stmtCopy.getExternalDetails().getAdapter()) + " with ");
+        printConfiguration(stmtCopy.getExternalDetails().getProperties());
+        out.println();
+        return null;
+    }
+
+    @Override
+    public Void visit(CopyToStatement cto, Integer step) throws CompilationException {
+        out.println(skip(step) + "copy ");
+        if (cto.getQuery() != null) {
+            out.print("(");
+            cto.getQuery().accept(this, step + 2);
+            out.print(")");
+        } else {
+            out.print(datasetSymbol + generateFullName(cto.getNamespace().getDataverseName(), cto.getDatasetName()));
+        }
+        out.print(" as ");
+        cto.getSourceVariable().accept(this, step);
+        out.println();
+
+        if (cto.isFileStoreSink()) {
+            formatPrintCopyToFileStore(cto, step);
+        } else {
+            formatPrintCopyToDatabaseWithKey(cto, step);
+        }
+
+        out.println("with ");
+        printConfiguration(cto.getExternalDetailsDecl().getProperties());
+        return null;
+    }
+
+    private void formatPrintCopyToFileStore(CopyToStatement cto, Integer step) throws CompilationException {
+        out.print("path (");
+        printDelimitedExpressions(cto.getPathExpressions(), COMMA, step + 1);
+        out.print(")");
+
+        out.println();
+
+        if (cto.hasOverClause()) {
+            out.print("over (");
+            if (cto.hasPartitionClause()) {
+                List<Expression> partitionExprs = cto.getPartitionExpressions();
+                Map<Integer, VariableExpr> partitionVars = cto.getPartitionsVariables();
+                out.print(skip(step + 1) + "partition ");
+                for (int i = 0; i < partitionExprs.size(); i++) {
+                    if (i > 0) {
+                        out.print(COMMA + " ");
+                    }
+                    partitionExprs.get(i).accept(this, step + 2);
+                    VariableExpr partVar = partitionVars.get(i);
+                    if (partVar != null) {
+                        out.print(" as ");
+                        partVar.accept(this, step);
+                    }
+                }
+            }
+            out.println();
+            if (cto.hasOrderClause()) {
+                out.print(skip(step + 1) + "order ");
+                printDelimitedObyExpressions(cto.getOrderByList(), cto.getOrderByModifiers(),
+                        cto.getOrderByNullModifierList(), step + 1);
+                out.println();
+            }
+            out.println(')');
+        }
+    }
+
+    private void formatPrintCopyToDatabaseWithKey(CopyToStatement cto, Integer step) throws CompilationException {
+        out.print("key ");
+        if (!cto.getKeyExpressions().isEmpty()) {
+            printDelimitedExpressions(cto.getKeyExpressions(), COMMA, step + 1);
+        } else {
+            out.print("autogenerated");
+        }
+        out.println();
     }
 
     @Override
@@ -713,6 +788,13 @@ public abstract class FormatPrintVisitor implements ILangVisitor<Void, Integer> 
     }
 
     @Override
+    public Void visit(CreateDatabaseStatement cds, Integer step) throws CompilationException {
+        out.println(skip(step) + "create database " + normalize(cds.getDatabaseName().getValue())
+                + generateIfNotExists(cds.ifNotExists()) + SEMICOLON);
+        return null;
+    }
+
+    @Override
     public Void visit(CreateDataverseStatement del, Integer step) throws CompilationException {
         out.print(CREATE + dataverseSymbol);
         out.print(generateDataverseName(del.getDataverseName()));
@@ -755,6 +837,13 @@ public abstract class FormatPrintVisitor implements ILangVisitor<Void, Integer> 
         out.print(skip(step) + "drop nodegroup ");
         out.print(del.getNodeGroupName());
         out.println(generateIfExists(del.getIfExists()) + SEMICOLON);
+        return null;
+    }
+
+    @Override
+    public Void visit(DatabaseDropStatement dds, Integer step) throws CompilationException {
+        out.println(skip(step) + "drop database " + normalize(dds.getDatabaseName().getValue())
+                + generateIfExists(dds.ifExists()) + SEMICOLON);
         return null;
     }
 

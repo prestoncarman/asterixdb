@@ -63,7 +63,7 @@ public class LSMSecondaryIndexBulkLoadNodePushable extends AbstractLSMSecondaryI
             IIndexDataflowHelperFactory secondaryIndexHelperFactory, int[] fieldPermutation, int numTagFields,
             int numSecondaryKeys, int numPrimaryKeys, boolean hasBuddyBTree) throws HyracksDataException {
         super(ctx, partition, inputRecDesc, numTagFields, numSecondaryKeys, numPrimaryKeys, hasBuddyBTree);
-
+        //TODO(partitioning) correlated
         this.primaryIndexHelper =
                 primaryIndexHelperFactory.create(ctx.getJobletContext().getServiceContext(), partition);
         this.secondaryIndexHelper =
@@ -86,6 +86,7 @@ public class LSMSecondaryIndexBulkLoadNodePushable extends AbstractLSMSecondaryI
     @Override
     public void open() throws HyracksDataException {
         super.open();
+        //TODO(ali): ensure open()/close()
         primaryIndexHelper.open();
         primaryIndex = (ILSMIndex) primaryIndexHelper.getIndexInstance();
         secondaryIndexHelper.open();

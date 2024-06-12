@@ -22,6 +22,7 @@ import static org.apache.hyracks.control.common.config.OptionTypes.BOOLEAN;
 import static org.apache.hyracks.control.common.config.OptionTypes.INTEGER;
 import static org.apache.hyracks.control.common.config.OptionTypes.INTEGER_BYTE_UNIT;
 import static org.apache.hyracks.control.common.config.OptionTypes.LONG_BYTE_UNIT;
+import static org.apache.hyracks.control.common.config.OptionTypes.NONNEGATIVE_INTEGER;
 import static org.apache.hyracks.control.common.config.OptionTypes.POSITIVE_INTEGER;
 import static org.apache.hyracks.control.common.config.OptionTypes.STRING;
 import static org.apache.hyracks.util.StorageUtil.StorageUnit.KILOBYTE;
@@ -118,7 +119,17 @@ public class CompilerProperties extends AbstractProperties {
         COMPILER_QUERYPLANSHAPE(
                 STRING,
                 AlgebricksConfig.QUERY_PLAN_SHAPE_DEFAULT,
-                "Set the mode for forcing the shape of the query plan");
+                "Set the mode for forcing the shape of the query plan"),
+        COMPILER_COLUMN_FILTER(
+                BOOLEAN,
+                AlgebricksConfig.COLUMN_FILTER_DEFAULT,
+                "Enable/disable the use of column min/max filters"),
+        //TODO(DB): remove after
+        COMPILER_ENABLE_DB_RESOLUTION(BOOLEAN, true, "Enable/disable the resolution of namespaces to database"),
+        COMPILER_RUNTIME_MEMORY_OVERHEAD(
+                NONNEGATIVE_INTEGER,
+                5,
+                "A percentage of the job's required memory to be added to account for runtime memory overhead");
 
         private final IOptionType type;
         private final Object defaultValue;
@@ -152,7 +163,8 @@ public class CompilerProperties extends AbstractProperties {
 
         @Override
         public boolean hidden() {
-            return this == COMPILER_EXTERNALSCANMEMORY;
+            return this == COMPILER_EXTERNALSCANMEMORY || this == COMPILER_CBOTEST
+                    || this == COMPILER_ENABLE_DB_RESOLUTION;
         }
     }
 
@@ -188,7 +200,7 @@ public class CompilerProperties extends AbstractProperties {
 
     public static final String COMPILER_EXTERNALSCANMEMORY_KEY = Option.COMPILER_EXTERNALSCANMEMORY.ini();
 
-    public static final String COMPILER_BATCHED_LOOKUP_KEY = Option.COMPILER_BATCH_LOOKUP.ini();
+    public static final String COMPILER_BATCH_LOOKUP_KEY = Option.COMPILER_BATCH_LOOKUP.ini();
 
     public static final String COMPILER_CBO_KEY = Option.COMPILER_CBO.ini();
 
@@ -197,6 +209,8 @@ public class CompilerProperties extends AbstractProperties {
     public static final String COMPILER_FORCE_JOIN_ORDER_KEY = Option.COMPILER_FORCEJOINORDER.ini();
 
     public static final String COMPILER_QUERY_PLAN_SHAPE_KEY = Option.COMPILER_QUERYPLANSHAPE.ini();
+
+    public static final String COMPILER_COLUMN_FILTER_KEY = Option.COMPILER_COLUMN_FILTER.ini();
 
     public static final int COMPILER_PARALLELISM_AS_STORAGE = 0;
 
@@ -295,5 +309,18 @@ public class CompilerProperties extends AbstractProperties {
                 || queryPlanShapeMode.equals(AlgebricksConfig.QUERY_PLAN_SHAPE_RIGHTDEEP)))
             return AlgebricksConfig.QUERY_PLAN_SHAPE_DEFAULT;
         return queryPlanShapeMode;
+    }
+
+    public int getSortMemoryFrames() {
+        int numFrames = (int) getSortMemorySize() / getFrameSize();
+        return Math.max(numFrames, OptimizationConfUtil.MIN_FRAME_LIMIT_FOR_SORT);
+    }
+
+    public boolean isColumnFilter() {
+        return accessor.getBoolean(Option.COMPILER_COLUMN_FILTER);
+    }
+
+    public int getRuntimeMemoryOverheadPercentage() {
+        return accessor.getInt(Option.COMPILER_RUNTIME_MEMORY_OVERHEAD);
     }
 }

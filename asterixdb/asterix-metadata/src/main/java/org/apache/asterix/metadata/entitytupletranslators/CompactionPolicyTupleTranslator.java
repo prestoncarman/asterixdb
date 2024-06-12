@@ -20,8 +20,8 @@
 package org.apache.asterix.metadata.entitytupletranslators;
 
 import org.apache.asterix.common.metadata.DataverseName;
-import org.apache.asterix.metadata.bootstrap.MetadataPrimaryIndexes;
-import org.apache.asterix.metadata.bootstrap.MetadataRecordTypes;
+import org.apache.asterix.common.metadata.MetadataUtil;
+import org.apache.asterix.metadata.bootstrap.CompactionPolicyEntity;
 import org.apache.asterix.metadata.entities.CompactionPolicy;
 import org.apache.asterix.om.base.ARecord;
 import org.apache.asterix.om.base.AString;
@@ -30,30 +30,37 @@ import org.apache.hyracks.api.exceptions.HyracksDataException;
 import org.apache.hyracks.dataflow.common.data.accessors.ITupleReference;
 
 /**
- * Translates a Dataset metadata entity to an ITupleReference and vice versa.
+ * Translates a CompactionPolicy metadata entity to an ITupleReference and vice versa.
  */
 public class CompactionPolicyTupleTranslator extends AbstractTupleTranslator<CompactionPolicy> {
 
-    // Payload field containing serialized compactionPolicy.
-    private static final int COMPACTION_POLICY_PAYLOAD_TUPLE_FIELD_INDEX = 2;
+    private final CompactionPolicyEntity compactionPolicyEntity;
 
-    protected CompactionPolicyTupleTranslator(boolean getTuple) {
-        super(getTuple, MetadataPrimaryIndexes.COMPACTION_POLICY_DATASET, COMPACTION_POLICY_PAYLOAD_TUPLE_FIELD_INDEX);
+    protected CompactionPolicyTupleTranslator(boolean getTuple, CompactionPolicyEntity compactionPolicyEntity) {
+        super(getTuple, compactionPolicyEntity.getIndex(), compactionPolicyEntity.payloadPosition());
+        this.compactionPolicyEntity = compactionPolicyEntity;
     }
 
     @Override
     protected CompactionPolicy createMetadataEntityFromARecord(ARecord compactionPolicyRecord)
             throws AlgebricksException {
-        String dataverseCanonicalName = ((AString) compactionPolicyRecord
-                .getValueByPos(MetadataRecordTypes.COMPACTION_POLICY_ARECORD_DATAVERSE_NAME_FIELD_INDEX))
+        String dataverseCanonicalName =
+                ((AString) compactionPolicyRecord.getValueByPos(compactionPolicyEntity.dataverseNameIndex()))
                         .getStringValue();
         DataverseName dataverseName = DataverseName.createFromCanonicalForm(dataverseCanonicalName);
-        String policyName = ((AString) compactionPolicyRecord
-                .getValueByPos(MetadataRecordTypes.COMPACTION_POLICY_ARECORD_POLICY_NAME_FIELD_INDEX)).getStringValue();
-        String className = ((AString) compactionPolicyRecord
-                .getValueByPos(MetadataRecordTypes.COMPACTION_POLICY_ARECORD_CLASSNAME_FIELD_INDEX)).getStringValue();
+        String databaseName;
+        int databaseNameIndex = compactionPolicyEntity.databaseNameIndex();
+        if (databaseNameIndex >= 0) {
+            databaseName = ((AString) compactionPolicyRecord.getValueByPos(databaseNameIndex)).getStringValue();
+        } else {
+            databaseName = MetadataUtil.databaseFor(dataverseName);
+        }
+        String policyName = ((AString) compactionPolicyRecord.getValueByPos(compactionPolicyEntity.policyNameIndex()))
+                .getStringValue();
+        String className = ((AString) compactionPolicyRecord.getValueByPos(compactionPolicyEntity.classNameIndex()))
+                .getStringValue();
 
-        return new CompactionPolicy(dataverseName, policyName, className);
+        return new CompactionPolicy(databaseName, dataverseName, policyName, className);
     }
 
     @Override
@@ -61,6 +68,11 @@ public class CompactionPolicyTupleTranslator extends AbstractTupleTranslator<Com
         String dataverseCanonicalName = compactionPolicy.getDataverseName().getCanonicalForm();
 
         tupleBuilder.reset();
+        if (compactionPolicyEntity.databaseNameIndex() >= 0) {
+            aString.setValue(compactionPolicy.getDatabaseName());
+            stringSerde.serialize(aString, tupleBuilder.getDataOutput());
+            tupleBuilder.addFieldEndOffset();
+        }
         aString.setValue(dataverseCanonicalName);
         stringSerde.serialize(aString, tupleBuilder.getDataOutput());
         tupleBuilder.addFieldEndOffset();
@@ -69,25 +81,31 @@ public class CompactionPolicyTupleTranslator extends AbstractTupleTranslator<Com
         stringSerde.serialize(aString, tupleBuilder.getDataOutput());
         tupleBuilder.addFieldEndOffset();
 
-        recordBuilder.reset(MetadataRecordTypes.COMPACTION_POLICY_RECORDTYPE);
+        recordBuilder.reset(compactionPolicyEntity.getRecordType());
 
+        if (compactionPolicyEntity.databaseNameIndex() >= 0) {
+            fieldValue.reset();
+            aString.setValue(compactionPolicy.getDatabaseName());
+            stringSerde.serialize(aString, fieldValue.getDataOutput());
+            recordBuilder.addField(compactionPolicyEntity.databaseNameIndex(), fieldValue);
+        }
         // write field 0
         fieldValue.reset();
         aString.setValue(dataverseCanonicalName);
         stringSerde.serialize(aString, fieldValue.getDataOutput());
-        recordBuilder.addField(MetadataRecordTypes.COMPACTION_POLICY_ARECORD_DATAVERSE_NAME_FIELD_INDEX, fieldValue);
+        recordBuilder.addField(compactionPolicyEntity.dataverseNameIndex(), fieldValue);
 
         // write field 1
         fieldValue.reset();
         aString.setValue(compactionPolicy.getPolicyName());
         stringSerde.serialize(aString, fieldValue.getDataOutput());
-        recordBuilder.addField(MetadataRecordTypes.COMPACTION_POLICY_ARECORD_POLICY_NAME_FIELD_INDEX, fieldValue);
+        recordBuilder.addField(compactionPolicyEntity.policyNameIndex(), fieldValue);
 
         // write field 2
         fieldValue.reset();
         aString.setValue(compactionPolicy.getClassName());
         stringSerde.serialize(aString, fieldValue.getDataOutput());
-        recordBuilder.addField(MetadataRecordTypes.COMPACTION_POLICY_ARECORD_CLASSNAME_FIELD_INDEX, fieldValue);
+        recordBuilder.addField(compactionPolicyEntity.classNameIndex(), fieldValue);
 
         // write record
         recordBuilder.write(tupleBuilder.getDataOutput(), true);

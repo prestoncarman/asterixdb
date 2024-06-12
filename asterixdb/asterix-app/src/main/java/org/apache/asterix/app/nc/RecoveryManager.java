@@ -135,10 +135,7 @@ public class RecoveryManager implements IRecoveryManager, ILifeCycleComponent {
         //read checkpoint file
         Checkpoint checkpointObject = checkpointManager.getLatest();
         if (checkpointObject == null) {
-            //The checkpoint file doesn't exist => Failure happened during NC initialization.
-            //Retry to initialize the NC by setting the state to PERMANENT_DATA_LOSS
-            state = SystemState.PERMANENT_DATA_LOSS;
-            LOGGER.info("The checkpoint file doesn't exist: systemState = PERMANENT_DATA_LOSS");
+            state = appCtx.getPartitionBootstrapper().getSystemStateOnMissingCheckpoint();
             return state;
         }
         long readableSmallestLSN = logMgr.getReadableSmallestLSN();
@@ -520,6 +517,31 @@ public class RecoveryManager implements IRecoveryManager, ILifeCycleComponent {
             }
         }
         return minRemoteLSN;
+    }
+
+    @Override
+    public long getPartitionsMaxLSN(Set<Integer> partitions) throws HyracksDataException {
+        final IIndexCheckpointManagerProvider idxCheckpointMgrProvider = appCtx.getIndexCheckpointManagerProvider();
+        long maxLSN = 0;
+        for (Integer partition : partitions) {
+            final List<DatasetResourceReference> partitionResources = localResourceRepository.getResources(resource -> {
+                DatasetLocalResource dsResource = (DatasetLocalResource) resource.getResource();
+                return dsResource.getPartition() == partition;
+            }, Collections.singleton(partition)).values().stream().map(DatasetResourceReference::of)
+                    .collect(Collectors.toList());
+            for (DatasetResourceReference indexRef : partitionResources) {
+                try {
+                    final IIndexCheckpointManager idxCheckpointMgr = idxCheckpointMgrProvider.get(indexRef);
+                    if (idxCheckpointMgr.isValidIndex()) {
+                        long indexMaxLsn = idxCheckpointMgrProvider.get(indexRef).getLowWatermark();
+                        maxLSN = Math.max(maxLSN, indexMaxLsn);
+                    }
+                } catch (Exception e) {
+                    LOGGER.warn("Failed to get max LSN of resource {}", indexRef, e);
+                }
+            }
+        }
+        return maxLSN;
     }
 
     @Override
